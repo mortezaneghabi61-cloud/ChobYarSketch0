@@ -6,11 +6,33 @@ android {
     namespace 'ir.chobyar.sketch'
     compileSdk 35
 
+    def ciVersionCode = System.getenv('CHOBYAR_VERSION_CODE') ?: '1'
+    def ciVersionName = System.getenv('CHOBYAR_VERSION_NAME') ?: '0.0.1'
+
     defaultConfig {
         applicationId 'ir.chobyar.sketch'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.0.1'
+        versionCode ciVersionCode.toInteger()
+        versionName ciVersionName
+    }
+
+    signingConfigs {
+        chobyarDev {
+            storeFile file('../chobyar-dev.jks')
+            storePassword 'ChobYarDev123'
+            keyAlias 'chobyar'
+            keyPassword 'ChobYarDev123'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.chobyarDev
+        }
+        release {
+            signingConfig signingConfigs.chobyarDev
+            minifyEnabled false
+        }
     }
 }
