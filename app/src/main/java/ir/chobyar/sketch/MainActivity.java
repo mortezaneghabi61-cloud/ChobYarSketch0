@@ -141,7 +141,19 @@ getWindow().getDecorView().setSystemUiVisibility(
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
+Paint gridPaint = new Paint();
+gridPaint.setColor(Color.LTGRAY);
+gridPaint.setStrokeWidth(1f);
 
+float gridSize = 50f;
+
+for (float x = 0; x < getWidth(); x += gridSize) {
+    canvas.drawLine(x, 0, x, getHeight(), gridPaint);
+}
+
+for (float y = 0; y < getHeight(); y += gridSize) {
+    canvas.drawLine(0, y, getWidth(), y, gridPaint);
+}
             for (Shape shape : shapes) {
                 shape.draw(canvas, paint);
             }
