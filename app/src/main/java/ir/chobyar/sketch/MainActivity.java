@@ -22,14 +22,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-getWindow().getDecorView().setSystemUiVisibility(
-        View.SYSTEM_UI_FLAG_FULLSCREEN
-        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-);
+
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
+
         drawingView = new DrawingView();
 
         Button freeButton = makeButton("✏ آزاد", () ->
@@ -44,11 +46,11 @@ getWindow().getDecorView().setSystemUiVisibility(
         Button circleButton = makeButton("○ دایره", () ->
                 drawingView.setTool(DrawingView.TOOL_CIRCLE));
 
-        Button undoButton = makeButton("↶ Undo", () ->
-                drawingView.undo());
-
-        Button clearButton = makeButton("پاک کردن", () ->
-                drawingView.clearAll());
+        Button undoButton = makeButton("↶ برگرد", drawingView::undo);
+        Button redoButton = makeButton("↷ دوباره", drawingView::redo);
+        Button gridButton = makeButton("# شبکه", drawingView::toggleGrid);
+        Button snapButton = makeButton("⊕ چسبش", drawingView::toggleSnap);
+        Button clearButton = makeButton("پاک کردن", drawingView::clearAll);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
@@ -59,6 +61,9 @@ getWindow().getDecorView().setSystemUiVisibility(
         toolbar.addView(rectButton);
         toolbar.addView(circleButton);
         toolbar.addView(undoButton);
+        toolbar.addView(redoButton);
+        toolbar.addView(gridButton);
+        toolbar.addView(snapButton);
         toolbar.addView(clearButton);
 
         HorizontalScrollView scroll = new HorizontalScrollView(this);
@@ -104,10 +109,14 @@ getWindow().getDecorView().setSystemUiVisibility(
         static final int TOOL_RECT = 2;
         static final int TOOL_CIRCLE = 3;
 
+        private static final float GRID_SIZE = 50f;
+
         private int currentTool = TOOL_FREE;
 
         private final Paint paint = new Paint();
+        private final Paint gridPaint = new Paint();
         private final ArrayList<Shape> shapes = new ArrayList<>();
+        private final ArrayList<Shape> redoShapes = new ArrayList<>();
 
         private Path currentPath;
 
@@ -117,6 +126,8 @@ getWindow().getDecorView().setSystemUiVisibility(
         private float endY;
 
         private boolean drawing = false;
+        private boolean gridVisible = true;
+        private boolean snapEnabled = false;
 
         DrawingView() {
             super(MainActivity.this);
@@ -129,6 +140,10 @@ getWindow().getDecorView().setSystemUiVisibility(
             paint.setStrokeJoin(Paint.Join.ROUND);
             paint.setAntiAlias(true);
             paint.setStrokeWidth(6f);
+
+            gridPaint.setColor(Color.LTGRAY);
+            gridPaint.setStyle(Paint.Style.STROKE);
+            gridPaint.setStrokeWidth(1f);
         }
 
         void setTool(int tool) {
@@ -138,22 +153,36 @@ getWindow().getDecorView().setSystemUiVisibility(
             invalidate();
         }
 
+        void toggleGrid() {
+            gridVisible = !gridVisible;
+            invalidate();
+        }
+
+        void toggleSnap() {
+            snapEnabled = !snapEnabled;
+        }
+
+        private float snap(float value) {
+            if (!snapEnabled) {
+                return value;
+            }
+            return Math.round(value / GRID_SIZE) * GRID_SIZE;
+        }
+
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-Paint gridPaint = new Paint();
-gridPaint.setColor(Color.LTGRAY);
-gridPaint.setStrokeWidth(1f);
 
-float gridSize = 50f;
+            if (gridVisible) {
+                for (float x = 0; x < getWidth(); x += GRID_SIZE) {
+                    canvas.drawLine(x, 0, x, getHeight(), gridPaint);
+                }
 
-for (float x = 0; x < getWidth(); x += gridSize) {
-    canvas.drawLine(x, 0, x, getHeight(), gridPaint);
-}
+                for (float y = 0; y < getHeight(); y += GRID_SIZE) {
+                    canvas.drawLine(0, y, getWidth(), y, gridPaint);
+                }
+            }
 
-for (float y = 0; y < getHeight(); y += gridSize) {
-    canvas.drawLine(0, y, getWidth(), y, gridPaint);
-}
             for (Shape shape : shapes) {
                 shape.draw(canvas, paint);
             }
@@ -164,52 +193,32 @@ for (float y = 0; y < getHeight(); y += gridSize) {
 
             if (currentTool == TOOL_FREE && currentPath != null) {
                 canvas.drawPath(currentPath, paint);
-            }
-
-            if (currentTool == TOOL_LINE) {
+            } else if (currentTool == TOOL_LINE) {
                 canvas.drawLine(startX, startY, endX, endY, paint);
-            }
-
-            if (currentTool == TOOL_RECT) {
+            } else if (currentTool == TOOL_RECT) {
                 float left = Math.min(startX, endX);
                 float right = Math.max(startX, endX);
                 float top = Math.min(startY, endY);
                 float bottom = Math.max(startY, endY);
-
                 canvas.drawRect(left, top, right, bottom, paint);
-            }
-
-            if (currentTool == TOOL_CIRCLE) {
+            } else if (currentTool == TOOL_CIRCLE) {
                 float dx = endX - startX;
                 float dy = endY - startY;
-
-                float radius = (float) Math.sqrt(
-                        (dx * dx) + (dy * dy)
-                );
-
-                canvas.drawCircle(
-                        startX,
-                        startY,
-                        radius,
-                        paint
-                );
+                float radius = (float) Math.sqrt((dx * dx) + (dy * dy));
+                canvas.drawCircle(startX, startY, radius, paint);
             }
         }
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-
             int action = event.getActionMasked();
 
             switch (action) {
-
                 case MotionEvent.ACTION_DOWN:
-
-                    startX = event.getX();
-                    startY = event.getY();
+                    startX = currentTool == TOOL_FREE ? event.getX() : snap(event.getX());
+                    startY = currentTool == TOOL_FREE ? event.getY() : snap(event.getY());
                     endX = startX;
                     endY = startY;
-
                     drawing = true;
 
                     if (currentTool == TOOL_FREE) {
@@ -221,19 +230,16 @@ for (float y = 0; y < getHeight(); y += gridSize) {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-
-                    endX = event.getX();
-                    endY = event.getY();
+                    endX = currentTool == TOOL_FREE ? event.getX() : snap(event.getX());
+                    endY = currentTool == TOOL_FREE ? event.getY() : snap(event.getY());
 
                     if (currentTool == TOOL_FREE && currentPath != null) {
-
                         for (int i = 0; i < event.getHistorySize(); i++) {
                             currentPath.lineTo(
                                     event.getHistoricalX(i),
                                     event.getHistoricalY(i)
                             );
                         }
-
                         currentPath.lineTo(endX, endY);
                     }
 
@@ -241,57 +247,19 @@ for (float y = 0; y < getHeight(); y += gridSize) {
                     return true;
 
                 case MotionEvent.ACTION_UP:
-
-                    endX = event.getX();
-                    endY = event.getY();
+                    endX = currentTool == TOOL_FREE ? event.getX() : snap(event.getX());
+                    endY = currentTool == TOOL_FREE ? event.getY() : snap(event.getY());
 
                     if (currentTool == TOOL_FREE && currentPath != null) {
-
                         currentPath.lineTo(endX, endY);
-
-                        shapes.add(
-                                new PathShape(
-                                        new Path(currentPath)
-                                )
-                        );
-
+                        addShape(new PathShape(new Path(currentPath)));
                         currentPath = null;
-                    }
-
-                    else if (currentTool == TOOL_LINE) {
-
-                        shapes.add(
-                                new LineShape(
-                                        startX,
-                                        startY,
-                                        endX,
-                                        endY
-                                )
-                        );
-                    }
-
-                    else if (currentTool == TOOL_RECT) {
-
-                        shapes.add(
-                                new RectShape(
-                                        startX,
-                                        startY,
-                                        endX,
-                                        endY
-                                )
-                        );
-                    }
-
-                    else if (currentTool == TOOL_CIRCLE) {
-
-                        shapes.add(
-                                new CircleShape(
-                                        startX,
-                                        startY,
-                                        endX,
-                                        endY
-                                )
-                        );
+                    } else if (currentTool == TOOL_LINE) {
+                        addShape(new LineShape(startX, startY, endX, endY));
+                    } else if (currentTool == TOOL_RECT) {
+                        addShape(new RectShape(startX, startY, endX, endY));
+                    } else if (currentTool == TOOL_CIRCLE) {
+                        addShape(new CircleShape(startX, startY, endX, endY));
                     }
 
                     drawing = false;
@@ -299,25 +267,40 @@ for (float y = 0; y < getHeight(); y += gridSize) {
                     return true;
 
                 case MotionEvent.ACTION_CANCEL:
-
                     currentPath = null;
                     drawing = false;
                     invalidate();
                     return true;
-            }
 
-            return true;
+                default:
+                    return true;
+            }
+        }
+
+        private void addShape(Shape shape) {
+            shapes.add(shape);
+            redoShapes.clear();
         }
 
         void undo() {
             if (!shapes.isEmpty()) {
-                shapes.remove(shapes.size() - 1);
+                Shape shape = shapes.remove(shapes.size() - 1);
+                redoShapes.add(shape);
+                invalidate();
+            }
+        }
+
+        void redo() {
+            if (!redoShapes.isEmpty()) {
+                Shape shape = redoShapes.remove(redoShapes.size() - 1);
+                shapes.add(shape);
                 invalidate();
             }
         }
 
         void clearAll() {
             shapes.clear();
+            redoShapes.clear();
             currentPath = null;
             drawing = false;
             invalidate();
@@ -329,7 +312,6 @@ for (float y = 0; y < getHeight(); y += gridSize) {
     }
 
     private static class PathShape implements Shape {
-
         private final Path path;
 
         PathShape(Path path) {
@@ -343,18 +325,12 @@ for (float y = 0; y < getHeight(); y += gridSize) {
     }
 
     private static class LineShape implements Shape {
-
         private final float x1;
         private final float y1;
         private final float x2;
         private final float y2;
 
-        LineShape(
-                float x1,
-                float y1,
-                float x2,
-                float y2
-        ) {
+        LineShape(float x1, float y1, float x2, float y2) {
             this.x1 = x1;
             this.y1 = y1;
             this.x2 = x2;
@@ -368,16 +344,9 @@ for (float y = 0; y < getHeight(); y += gridSize) {
     }
 
     private static class RectShape implements Shape {
-
         private final RectF rect;
 
-        RectShape(
-                float x1,
-                float y1,
-                float x2,
-                float y2
-        ) {
-
+        RectShape(float x1, float y1, float x2, float y2) {
             rect = new RectF(
                     Math.min(x1, x2),
                     Math.min(y1, y2),
@@ -393,37 +362,21 @@ for (float y = 0; y < getHeight(); y += gridSize) {
     }
 
     private static class CircleShape implements Shape {
-
         private final float centerX;
         private final float centerY;
         private final float radius;
 
-        CircleShape(
-                float x1,
-                float y1,
-                float x2,
-                float y2
-        ) {
-
+        CircleShape(float x1, float y1, float x2, float y2) {
             centerX = x1;
             centerY = y1;
-
             float dx = x2 - x1;
             float dy = y2 - y1;
-
-            radius = (float) Math.sqrt(
-                    (dx * dx) + (dy * dy)
-            );
+            radius = (float) Math.sqrt((dx * dx) + (dy * dy));
         }
 
         @Override
         public void draw(Canvas canvas, Paint paint) {
-            canvas.drawCircle(
-                    centerX,
-                    centerY,
-                    radius,
-                    paint
-            );
+            canvas.drawCircle(centerX, centerY, radius, paint);
         }
     }
 }
