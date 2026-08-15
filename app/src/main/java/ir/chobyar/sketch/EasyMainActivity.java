@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
@@ -16,11 +17,11 @@ import java.lang.reflect.Method;
 /**
  * ChobYar's adaptive launcher: the professional sketch/constraint engine stays
  * underneath, while the main workspace exposes smart relations, sketch planes,
- * and the new volumetric Solid 3D layer without forcing command-line knowledge.
+ * volumetric Solid 3D and dual cm/mm dimensions without forcing command-line knowledge.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private SolidCadCanvasView easyCad;
+    private DualUnitSolidCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,7 +48,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new SolidCadCanvasView(this);
+            easyCad = new DualUnitSolidCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -57,6 +58,7 @@ public class EasyMainActivity extends MainActivity {
             root.addView(makeRelationsButton(), relationsParams());
             root.addView(makePlaneButton(), planeParams());
             root.addView(makeSolidButton(), solidParams());
+            patchUnitChrome(root);
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
             Toast.makeText(this, "فضای CAD تطبیقی فعال نشد", Toast.LENGTH_SHORT).show();
@@ -104,6 +106,34 @@ public class EasyMainActivity extends MainActivity {
             if (easyCad != null) easyCad.showSolidManager();
         });
         return b;
+    }
+
+    /**
+     * MainActivity still owns the original Shapr-inspired chrome. Rather than
+     * duplicating it, patch the existing unit badge/status after the dual-unit
+     * engine is installed.
+     */
+    private void patchUnitChrome(View view) {
+        if (view instanceof Button) {
+            Button b = (Button) view;
+            String t = String.valueOf(b.getText());
+            if (t.contains("cm") && t.contains("واحد")) {
+                b.setText("cm/mm\nواحد");
+                b.setContentDescription("واحدهای سانتی‌متر و میلی‌متر");
+                b.setOnClickListener(v -> Toast.makeText(
+                        this,
+                        easyCad == null ? "cm + mm" : easyCad.dualUnitSummary(),
+                        Toast.LENGTH_LONG).show());
+            }
+        } else if (view instanceof TextView) {
+            TextView tv = (TextView) view;
+            String t = String.valueOf(tv.getText());
+            if (t.startsWith("cm |")) tv.setText(t.replaceFirst("cm \\|", "cm + mm |"));
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            for (int i=0;i<g.getChildCount();i++) patchUnitChrome(g.getChildAt(i));
+        }
     }
 
     private Button floatingButton(String text, String description) {
