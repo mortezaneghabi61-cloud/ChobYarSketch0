@@ -14,13 +14,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Keeps the existing ChobYar workspace, but swaps the CAD canvas for the easy
- * adaptive layer and adds one always-visible "روابط" button. The rest of the
- * original UI continues to use MainActivity's existing buttons and menus.
+ * Keeps the existing ChobYar workspace, swaps the CAD canvas for the adaptive
+ * spatial layer, and exposes the two concepts users need most: smart relations
+ * and sketch planes/3D. The full expert toolset remains underneath.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private EasyCadCanvasView easyCad;
+    private SpatialCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,7 +47,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new EasyCadCanvasView(this);
+            easyCad = new SpatialCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -55,9 +55,10 @@ public class EasyMainActivity extends MainActivity {
             cadField.set(this, easyCad);
 
             root.addView(makeRelationsButton(), relationsParams());
+            root.addView(makePlaneButton(), planeParams());
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
-            Toast.makeText(this, "حالت ساده روابط فعال نشد", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "فضای CAD تطبیقی فعال نشد", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -81,14 +82,30 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private Button makeRelationsButton() {
+        Button b = floatingButton("⌁\nروابط", "روابط هوشمند Sketch");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showSmartConstraintMenu();
+        });
+        return b;
+    }
+
+    private Button makePlaneButton() {
+        Button b = floatingButton("◇\nPlane/3D", "صفحه Sketch و نمای سه‌بعدی");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showPlaneManager();
+        });
+        return b;
+    }
+
+    private Button floatingButton(String text, String description) {
         Button b = new Button(this);
-        b.setText("⌁\nروابط");
+        b.setText(text);
         b.setTextSize(10f);
         b.setAllCaps(false);
         b.setTextColor(Color.rgb(35, 75, 145));
         b.setGravity(Gravity.CENTER);
-        b.setMinWidth(dp(64));
-        b.setMinimumWidth(dp(64));
+        b.setMinWidth(dp(66));
+        b.setMinimumWidth(dp(66));
         b.setMinHeight(dp(58));
         b.setMinimumHeight(dp(58));
         b.setPadding(dp(4), dp(3), dp(4), dp(3));
@@ -98,10 +115,7 @@ public class EasyMainActivity extends MainActivity {
         bg.setCornerRadius(dp(17));
         b.setBackground(bg);
         b.setElevation(dp(6));
-        b.setContentDescription("روابط هوشمند Sketch");
-        b.setOnClickListener(v -> {
-            if (easyCad != null) easyCad.showSmartConstraintMenu();
-        });
+        b.setContentDescription(description);
         return b;
     }
 
@@ -111,6 +125,15 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
         p.setMargins(0, 0, dp(10), dp(120));
+        return p;
+    }
+
+    private FrameLayout.LayoutParams planeParams() {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL);
+        p.setMargins(0, dp(120), dp(82), 0);
         return p;
     }
 
