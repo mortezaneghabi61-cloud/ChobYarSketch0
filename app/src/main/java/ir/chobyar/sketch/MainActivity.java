@@ -2,7 +2,6 @@ package ir.chobyar.sketch;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -10,7 +9,6 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
@@ -26,7 +24,6 @@ public class MainActivity extends Activity {
     private static final int REQUEST_EXPORT_DXF = 1001;
     private CadCanvasView cad;
     private TextView status;
-    private EditText command;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,10 +38,9 @@ public class MainActivity extends Activity {
 
         root.addView(makeSketchToolbar());
         root.addView(makeCadToolbar());
-        root.addView(makeCommandBar());
 
         status = new TextView(this);
-        status.setText("حالت انتخاب: روی شیء بزن تا آبی شود؛ سپس از نوار «ویرایش سریع» استفاده کن.");
+        status.setText("حالت انتخاب: روی شیء بزن تا آبی شود؛ سپس از نوار ویرایش سریع استفاده کن.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
@@ -52,9 +48,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        root.addView(new AiPanel(this, cad, status).build());
         root.addView(makeQuickEditBar());
-
         root.addView(cad, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -79,7 +73,6 @@ public class MainActivity extends Activity {
         row.addView(btn("┼ راهنما", () -> setTool(CadCanvasView.TOOL_GUIDE, "Guide؛ روی محل بزن")));
         row.addView(btn("↶ Undo", () -> { cad.undo(); say("یک مرحله برگشت"); }));
         row.addView(btn("پاک", this::confirmClear));
-
         return scroll(row);
     }
 
@@ -104,31 +97,7 @@ public class MainActivity extends Activity {
         row.addView(btn("متریال", this::showMaterialMenu));
         row.addView(btn("DXF خروجی", this::exportDxf));
         row.addView(btn("3D", this::show3dMenu));
-
         return scroll(row);
-    }
-
-    private View makeCommandBar() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(7, 3, 7, 3);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        command = new EditText(this);
-        command.setSingleLine(true);
-        command.setHint("فرمان: RECT 0 0 600 400 | POLYGON 8 0 0 100 | ROTATE 45");
-        command.setTextSize(14);
-        command.setPadding(10, 4, 10, 4);
-        row.addView(command, new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        row.addView(btn("اجرا", this::runCommand));
-
-        command.setOnEditorActionListener((v, actionId, event) -> {
-            runCommand();
-            return true;
-        });
-        return row;
     }
 
     private View makeQuickEditBar() {
@@ -147,7 +116,6 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-
         row.addView(quickBtn("📐 اندازه", this::showExactDimension));
         row.addView(quickBtn("↔ جابه‌جا", () -> promptCommand("جابه‌جایی دقیق", "dx dy   مثال: 50 0", "MOVE ")));
         row.addView(quickBtn("⟳ چرخش", () -> promptCommand("چرخش", "درجه   مثال: 45", "ROTATE ")));
@@ -157,7 +125,6 @@ public class MainActivity extends Activity {
         row.addView(quickBtn("🎨 متریال", this::showMaterialMenu));
         row.addView(quickBtn("⋮ بیشتر", this::showTransformMenu));
         row.addView(quickBtn("⌫ حذف", this::deleteSelectedQuick));
-
         outer.addView(scroll(row));
         return outer;
     }
@@ -200,10 +167,9 @@ public class MainActivity extends Activity {
         input.setText("6");
         input.setSelectAllOnFocus(true);
         input.setHint("مثال: 8 یا 9");
-
         new AlertDialog.Builder(this)
                 .setTitle("چندضلعی — تعداد ضلع")
-                .setMessage("تعداد ضلع را وارد کن؛ از 3 تا 64 ضلع. مثلاً 8 برای هشت‌ضلعی یا 9 برای نه‌ضلعی.")
+                .setMessage("تعداد ضلع را وارد کن؛ از 3 تا 64 ضلع.")
                 .setView(input)
                 .setPositiveButton("شروع رسم", (d, w) -> {
                     try {
@@ -223,17 +189,6 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    private void runCommand() {
-        String raw = command.getText().toString();
-        String result = cad.executeCommand(raw);
-        if (!result.isEmpty()) say(result);
-        command.selectAll();
-        InputMethodManager imm =
-                (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(command.getWindowToken(), 0);
-        enterImmersiveMode();
-    }
-
     private void showExactDimension() {
         say(cad.selectedInfo());
         EditText input = new EditText(this);
@@ -243,25 +198,17 @@ public class MainActivity extends Activity {
                 .setTitle("اندازه دقیق — mm")
                 .setMessage(cad.selectedInfo())
                 .setView(input)
-                .setPositiveButton("اعمال", (d, w) ->
-                        say(cad.applySelectedDimension(input.getText().toString())))
+                .setPositiveButton("اعمال", (d, w) -> say(cad.applySelectedDimension(input.getText().toString())))
                 .setNegativeButton("لغو", null)
                 .show();
     }
 
     private void showTransformMenu() {
         String[] items = {
-                "اندازه دقیق",
-                "Move — جابه‌جایی دقیق",
-                "Copy — کپی دقیق",
-                "Rotate — چرخش",
-                "Scale — تغییر مقیاس",
-                "Mirror X — قرینه نسبت به محور X",
-                "Mirror Y — قرینه نسبت به محور Y",
-                "Array — تکثیر منظم",
-                "Offset — آفست",
-                "Material — متریال",
-                "Delete — حذف"
+                "اندازه دقیق", "Move — جابه‌جایی دقیق", "Copy — کپی دقیق",
+                "Rotate — چرخش", "Scale — تغییر مقیاس",
+                "Mirror X — قرینه نسبت به محور X", "Mirror Y — قرینه نسبت به محور Y",
+                "Array — تکثیر منظم", "Offset — آفست", "Material — متریال", "Delete — حذف"
         };
         new AlertDialog.Builder(this)
                 .setTitle("ویرایش شکل انتخاب‌شده")
@@ -307,21 +254,13 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("حذف شیء انتخاب‌شده؟")
                 .setMessage(info)
-                .setPositiveButton("حذف", (d, w) -> {
-                    cad.deleteSelected();
-                    say("شیء حذف شد");
-                })
+                .setPositiveButton("حذف", (d, w) -> { cad.deleteSelected(); say("شیء حذف شد"); })
                 .setNegativeButton("لغو", null)
                 .show();
     }
 
     private void showLayerMenu() {
-        String[] items = {
-                "لایه جاری",
-                "انتقال شکل انتخاب‌شده به لایه",
-                "مخفی کردن لایه",
-                "نمایش لایه"
-        };
+        String[] items = {"لایه جاری", "انتقال شکل انتخاب‌شده به لایه", "مخفی کردن لایه", "نمایش لایه"};
         new AlertDialog.Builder(this)
                 .setTitle("Layers / لایه‌ها")
                 .setMessage("لایه جاری: " + cad.getCurrentLayer())
@@ -348,16 +287,10 @@ public class MainActivity extends Activity {
 
     private void show3dMenu() {
         String[] items = {
-                "Push/Pull / Extrude — پیش‌نمایش حجم",
-                "Revolve — دوران/خراطی",
-                "Follow Me — حرکت مقطع روی مسیر",
-                "Loft — اتصال مقاطع",
-                "Sweep — حرکت مقطع روی مسیر",
-                "Shell — پوسته",
-                "Union — اتصال حجم‌ها",
-                "Subtract — کم‌کردن حجم",
-                "Intersect — اشتراک حجم‌ها",
-                "Project — پروجکت"
+                "Push/Pull / Extrude — پیش‌نمایش حجم", "Revolve — دوران/خراطی",
+                "Follow Me — حرکت مقطع روی مسیر", "Loft — اتصال مقاطع", "Sweep — حرکت مقطع روی مسیر",
+                "Shell — پوسته", "Union — اتصال حجم‌ها", "Subtract — کم‌کردن حجم",
+                "Intersect — اشتراک حجم‌ها", "Project — پروجکت"
         };
         new AlertDialog.Builder(this)
                 .setTitle("3D چوب‌یار")
@@ -367,8 +300,7 @@ public class MainActivity extends Activity {
                         promptCommand("Push/Pull / Extrude", "ارتفاع mm؛ مثال: 18", "EXTRUDE ");
                         return;
                     }
-                    String[] cmds = {"", "REVOLVE", "FOLLOWME", "LOFT", "SWEEP",
-                            "SHELL", "UNION", "SUBTRACT", "INTERSECT", "PROJECT"};
+                    String[] cmds = {"", "REVOLVE", "FOLLOWME", "LOFT", "SWEEP", "SHELL", "UNION", "SUBTRACT", "INTERSECT", "PROJECT"};
                     say(cad.executeCommand(cmds[which]));
                 })
                 .setNegativeButton("بستن", null)
@@ -383,8 +315,7 @@ public class MainActivity extends Activity {
                 .setTitle(title)
                 .setMessage(cad.selectedInfo())
                 .setView(input)
-                .setPositiveButton("اجرا", (d, w) ->
-                        say(cad.executeCommand(prefix + input.getText().toString().trim())))
+                .setPositiveButton("اعمال", (d, w) -> say(cad.executeCommand(prefix + input.getText().toString().trim())))
                 .setNegativeButton("لغو", null)
                 .show();
     }
@@ -393,10 +324,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("پاک کردن کل نقشه؟")
                 .setMessage("با Undo می‌توانی یک مرحله برگردی.")
-                .setPositiveButton("پاک کن", (d, w) -> {
-                    cad.clearAll();
-                    say("صفحه پاک شد");
-                })
+                .setPositiveButton("پاک کن", (d, w) -> { cad.clearAll(); say("صفحه پاک شد"); })
                 .setNegativeButton("لغو", null)
                 .show();
     }
