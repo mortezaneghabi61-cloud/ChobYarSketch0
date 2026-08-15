@@ -1,17 +1,18 @@
 package ir.chobyar.sketch;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Keeps the clean skachmori shell while upgrading the modeling canvas to the
- * exact OCCT workspace with stable Face/Edge references, integrated History,
- * and selection-aware sketch measurement.
+ * Clean skachmori shell upgraded to the exact OCCT workspace plus the
+ * Shapr-inspired Sketch/Measure workflow.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -33,7 +34,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            OcctMeasureCadCanvasView upgraded=new OcctMeasureCadCanvasView(this);
+            OcctShaprCadCanvasView upgraded=new OcctShaprCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -46,9 +47,42 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             Method wire=EasyMainActivity.class.getDeclaredMethod("wireWorkspaceCallbacks");
             wire.setAccessible(true);
             wire.invoke(this);
+            rewireShaprButtons(parent,upgraded);
             upgraded.dispatchWorkspaceState();
         }catch(Exception e){
-            Toast.makeText(this,"OCCT Measure workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"OCCT Sketch workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void rewireShaprButtons(View root,OcctShaprCadCanvasView cad){
+        if(root instanceof Button){
+            Button b=(Button)root;
+            String t=String.valueOf(b.getText());
+            if(t.contains("Sketch")) b.setOnClickListener(v->cad.showShaprSketchMenu());
+            else if(t.contains("Tools")) b.setOnClickListener(v->showMasterTools(cad));
+        }
+        if(root instanceof ViewGroup){
+            ViewGroup g=(ViewGroup)root;
+            for(int i=0;i<g.getChildCount();i++)rewireShaprButtons(g.getChildAt(i),cad);
+        }
+    }
+
+    private void showMasterTools(OcctShaprCadCanvasView cad){
+        String[] items={
+                "✎ Sketch tools",
+                "▣ 3D Modeling tools",
+                "⌖ Measure انتخاب",
+                "⌁ Constraints",
+                "◇ Plane / Construction",
+                "⏱ History"
+        };
+        new AlertDialog.Builder(this).setTitle("Tools").setItems(items,(d,w)->{
+            if(w==0)cad.showShaprSketchMenu();
+            else if(w==1)cad.showShaprModelingToolsMenu();
+            else if(w==2)cad.showSketchMeasureInspector();
+            else if(w==3)cad.showSmartConstraintMenu();
+            else if(w==4)cad.showPlaneManager();
+            else cad.showHistoryManager();
+        }).setNegativeButton("بستن",null).show();
     }
 }
