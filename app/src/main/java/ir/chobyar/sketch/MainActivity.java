@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new ChobYarShaprCanvasView(this);
+        cad = new ParametricSketchCanvasView(this);
         cad.setStatusListener(this::say);
         cad.setDimensionEditListener(this::showExactDimension);
         cad.setWorkspaceListener(this::onWorkspaceStateChanged);
@@ -79,10 +79,6 @@ public class MainActivity extends Activity {
         setContentView(root);
         cad.dispatchWorkspaceState();
     }
-
-    // ---------------------------------------------------------------------
-    // Workspace chrome
-    // ---------------------------------------------------------------------
 
     private View makeTopBar() {
         LinearLayout bar = new LinearLayout(this);
@@ -216,10 +212,6 @@ public class MainActivity extends Activity {
         return d;
     }
 
-    // ---------------------------------------------------------------------
-    // Adaptive state
-    // ---------------------------------------------------------------------
-
     private void onWorkspaceStateChanged(String info, boolean exactAvailable, int activeTool) {
         boolean hasSelection = info != null && !info.startsWith("هیچ") && !info.startsWith("اول");
         if (adaptiveRail != null) adaptiveRail.setVisibility(hasSelection ? View.VISIBLE : View.GONE);
@@ -231,10 +223,6 @@ public class MainActivity extends Activity {
         cad.setTool(tool);
         say("Sketch • " + name + " — اندازه زنده کنار شکل نمایش داده می‌شود");
     }
-
-    // ---------------------------------------------------------------------
-    // Shapr-like grouped menus
-    // ---------------------------------------------------------------------
 
     private void showSketchMenu() {
         String[] items = {
@@ -385,10 +373,6 @@ public class MainActivity extends Activity {
                 }).show();
     }
 
-    // ---------------------------------------------------------------------
-    // Numeric editors
-    // ---------------------------------------------------------------------
-
     private void showPolygonToolDialog() {
         EditText input = new EditText(this);
         input.setSingleLine(true);
@@ -501,10 +485,6 @@ public class MainActivity extends Activity {
                 .setPositiveButton("پاک کن", (d, w) -> { cad.clearAll(); say("صفحه پاک شد"); })
                 .setNegativeButton("لغو", null).show();
     }
-
-    // ---------------------------------------------------------------------
-    // Export / system
-    // ---------------------------------------------------------------------
 
     private void say(String s) {
         if (status != null && s != null && !s.trim().isEmpty()) status.setText(s);
