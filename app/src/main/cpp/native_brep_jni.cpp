@@ -31,9 +31,9 @@ jdoubleArray makeArray(JNIEnv* env, const double* values, jsize count) {
 extern "C" JNIEXPORT jstring JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeVersion(JNIEnv* env, jclass) {
 #ifdef CHOBYAR_WITH_OCCT
-    return env->NewStringUTF("ChobYar Native Geometry Core 0.2 • C++17 / NDK • OCCT adapter compiled");
+    return env->NewStringUTF("ChobYar Native Geometry Core 0.3 • C++17 / NDK • OCCT form features compiled");
 #else
-    return env->NewStringUTF("ChobYar Native Geometry Core 0.2 • C++17 / Android NDK");
+    return env->NewStringUTF("ChobYar Native Geometry Core 0.3 • C++17 / Android NDK");
 #endif
 }
 
@@ -41,10 +41,11 @@ extern "C" JNIEXPORT jint JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeCapabilityFlags(JNIEnv*, jclass) {
     // 1=plane/sphere, 2=sphere/sphere, 4=analytic mass properties,
     // 8=topology self-test, 16=OCCT linked, 32=OCCT primitives,
-    // 64=OCCT exact B-Rep Boolean.
+    // 64=OCCT exact B-Rep Boolean, 128=OCCT Revolve,
+    // 256=OCCT Sweep/Loft.
     int flags = 1 | 2 | 4 | 8;
 #ifdef CHOBYAR_WITH_OCCT
-    flags |= 16 | 32 | 64;
+    flags |= 16 | 32 | 64 | 128 | 256;
 #endif
     return flags;
 }
