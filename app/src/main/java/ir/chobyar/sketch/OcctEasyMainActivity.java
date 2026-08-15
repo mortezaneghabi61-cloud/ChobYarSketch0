@@ -13,7 +13,8 @@ import java.lang.reflect.Method;
 /**
  * Clean skachmori shell upgraded to the exact OCCT workspace plus the
  * Shapr-inspired Sketch/Measure workflow, pen-first Automatic Line/Arc,
- * sketch definition states, and driving-dimension DOF solving.
+ * sketch definition states, driving-dimension DOF solving, and parametric
+ * Ellipse / Fit Point / Control Point Spline editing.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -35,7 +36,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            ShaprConstraintSolverCadCanvasView upgraded=new ShaprConstraintSolverCadCanvasView(this);
+            ShaprParametricCurveCadCanvasView upgraded=new ShaprParametricCurveCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -55,7 +56,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,ShaprConstraintSolverCadCanvasView cad){
+    private void rewireShaprButtons(View root,ShaprParametricCurveCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
@@ -68,9 +69,10 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(ShaprConstraintSolverCadCanvasView cad){
+    private void showMasterTools(ShaprParametricCurveCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
+                "〰 Ellipse / Spline edit",
                 "▣ 3D Modeling tools",
                 "⌖ Measure انتخاب",
                 "⌁ Constraints",
@@ -80,14 +82,15 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         };
         new AlertDialog.Builder(this).setTitle("Tools").setItems(items,(d,w)->{
             if(w==0)cad.showShaprSketchMenu();
-            else if(w==1)cad.showShaprModelingToolsMenu();
-            else if(w==2)cad.showSketchMeasureInspector();
-            else if(w==3)cad.showSmartConstraintMenu();
-            else if(w==4)new AlertDialog.Builder(this)
+            else if(w==1)cad.showCurveEditor();
+            else if(w==2)cad.showShaprModelingToolsMenu();
+            else if(w==3)cad.showSketchMeasureInspector();
+            else if(w==4)cad.showSmartConstraintMenu();
+            else if(w==5)new AlertDialog.Builder(this)
                     .setTitle("Sketch State / DOF")
                     .setMessage(cad.sketchStateSummary())
                     .setPositiveButton("بستن",null).show();
-            else if(w==5)cad.showPlaneManager();
+            else if(w==6)cad.showPlaneManager();
             else cad.showHistoryManager();
         }).setNegativeButton("بستن",null).show();
     }
