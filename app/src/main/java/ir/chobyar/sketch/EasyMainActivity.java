@@ -242,7 +242,7 @@ public class EasyMainActivity extends MainActivity {
         bar.addView(compactAction("⌨","اندازه",() -> invokeMain("showExactDimension",new Class<?>[0])));
         adaptiveModelButton = compactAction("⬆","Extrude",this::contextualModelAction);
         bar.addView(adaptiveModelButton);
-        bar.addView(compactAction("↗","تغییر",() -> invokeMain("showTransformMenu",new Class<?>[0])));
+        bar.addView(compactAction("↗","تغییر",() -> showStatus(easyCad.showTransformGizmo())));
         bar.addView(compactAction("⌁","More",this::showSelectionMore));
         return bar;
     }

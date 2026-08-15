@@ -45,6 +45,10 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     private float cameraYaw = 38f;
     private float cameraPitch = 24f;
     private float spatialScale = 1.25f;
+    private float cameraTargetX = 0f, cameraTargetY = 0f, cameraTargetZ = 0f;
+    private float cameraPanX = 0f, cameraPanY = 0f;
+    private boolean navigating2D = false;
+    private float navLastDistance, navLastMidX, navLastMidY;
     private boolean orbiting = false;
     private float orbitLastX, orbitLastY;
     private final RectF overviewCard = new RectF();
@@ -322,16 +326,41 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     private PointF project(Geometry3D.Vec3 p) {
         double yaw=Math.toRadians(cameraYaw), pitch=Math.toRadians(cameraPitch);
-        double x1=p.x*Math.cos(yaw)-p.y*Math.sin(yaw);
-        double y1=p.x*Math.sin(yaw)+p.y*Math.cos(yaw);
-        double z1=p.z;
+        double px=p.x-cameraTargetX,py=p.y-cameraTargetY,pz=p.z-cameraTargetZ;
+        double x1=px*Math.cos(yaw)-py*Math.sin(yaw);
+        double y1=px*Math.sin(yaw)+py*Math.cos(yaw);
+        double z1=pz;
         double y2=y1*Math.cos(pitch)-z1*Math.sin(pitch);
         float scale=spatialScale*Math.min(overviewCard.width(),overviewCard.height())/260f;
-        return new PointF(overviewCard.centerX()+(float)x1*scale, overviewCard.centerY()+(float)y2*scale);
+        return new PointF(overviewCard.centerX()+cameraPanX+(float)x1*scale,
+                overviewCard.centerY()+cameraPanY+(float)y2*scale);
+    }
+
+    protected void fitSpatialBounds(float minX,float minY,float minZ,float maxX,float maxY,float maxZ) {
+        cameraTargetX=(minX+maxX)*.5f;cameraTargetY=(minY+maxY)*.5f;cameraTargetZ=(minZ+maxZ)*.5f;
+        float size=Math.max(1f,Math.max(maxX-minX,Math.max(maxY-minY,maxZ-minZ)));
+        spatialScale=clamp(150f/size,.035f,8f);
+        cameraPanX=0f;cameraPanY=0f;invalidate();
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (overview3D && event.getPointerCount()>=2) {
+            float ax=event.getX(0),ay=event.getY(0),bx=event.getX(1),by=event.getY(1);
+            float distance=(float)Math.hypot(bx-ax,by-ay),midX=(ax+bx)*.5f,midY=(ay+by)*.5f;
+            int action=event.getActionMasked();
+            if(action==MotionEvent.ACTION_POINTER_DOWN||!navigating2D){
+                navigating2D=true;navLastDistance=Math.max(1f,distance);navLastMidX=midX;navLastMidY=midY;return true;
+            }
+            if(action==MotionEvent.ACTION_MOVE){
+                float ratio=distance/Math.max(1f,navLastDistance);
+                spatialScale=clamp(spatialScale*ratio,.02f,20f);
+                cameraPanX+=midX-navLastMidX;cameraPanY+=midY-navLastMidY;
+                navLastDistance=Math.max(1f,distance);navLastMidX=midX;navLastMidY=midY;invalidate();return true;
+            }
+            return true;
+        }
+        if(event.getActionMasked()==MotionEvent.ACTION_UP||event.getActionMasked()==MotionEvent.ACTION_CANCEL)navigating2D=false;
         if (overview3D && event.getPointerCount()==1) {
             int a=event.getActionMasked();
             float x=event.getX(),y=event.getY();

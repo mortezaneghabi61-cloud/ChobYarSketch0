@@ -87,6 +87,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     private float gizmoLastWorldY;
     private float gizmoLastAngle;
     private float gizmoDelta;
+    private boolean gizmoVisible = false;
 
     private final Paint gizmoXPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint gizmoYPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -168,7 +169,24 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         pendingPerpendicular = false;
         inferenceVisible = false;
         gizmoMode = GIZMO_NONE;
+        gizmoVisible = false;
         dispatchWorkspaceState();
+    }
+
+    /** The transform gizmo is contextual: selection alone must not cover geometry. */
+    public String showTransformGizmo() {
+        if (selectionObjects().isEmpty()) return "اول یک شکل یا پروفایل را انتخاب کن";
+        super.setTool(TOOL_SELECT);
+        gizmoVisible = true;
+        gizmoMode = GIZMO_NONE;
+        invalidate();
+        return "Move / Rotate فعال شد";
+    }
+
+    public void hideTransformGizmo() {
+        gizmoVisible = false;
+        cancelGizmo();
+        invalidate();
     }
 
     @Override
@@ -195,7 +213,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         }
 
         // Direct gizmo interaction has priority while selecting geometry.
-        if (getTool() == TOOL_SELECT && handleGizmoTouch(original)) return true;
+        if (gizmoVisible && getTool() == TOOL_SELECT && handleGizmoTouch(original)) return true;
 
         // Shapr-like line chaining: touching an endpoint of the last line and
         // dragging immediately starts the next connected segment.
@@ -496,6 +514,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     // ---------------------------------------------------------------------
 
     private void drawGizmo(Canvas canvas) {
+        if (!gizmoVisible) { gizmoCenterWorld=null; gizmoCenterScreen=null; return; }
         if (getTool() != TOOL_SELECT) return;
         List<Object> selection = selectionObjects();
         if (selection.isEmpty()) return;

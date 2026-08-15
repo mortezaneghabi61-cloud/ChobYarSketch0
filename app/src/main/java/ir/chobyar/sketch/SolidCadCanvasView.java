@@ -230,6 +230,19 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     public int bodyCount(){return bodies.size();}
 
+    @Override
+    public void fitAll() {
+        if (!is3DOverview() || bodies.isEmpty()) { super.fitAll(); return; }
+        float minX=Float.POSITIVE_INFINITY,minY=Float.POSITIVE_INFINITY,minZ=Float.POSITIVE_INFINITY;
+        float maxX=Float.NEGATIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY,maxZ=Float.NEGATIVE_INFINITY;
+        boolean found=false;
+        for(SolidBody body:bodies)if(body.visible&&body.csg!=null)for(SolidCSG.Polygon polygon:body.csg.polygons())
+            for(SolidCSG.Vertex vertex:polygon.vertices){Geometry3D.Vec3 p=vertex.pos;found=true;
+                minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);minZ=Math.min(minZ,p.z);
+                maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);maxZ=Math.max(maxZ,p.z);}
+        if(found)fitSpatialBounds(minX,minY,minZ,maxX,maxY,maxZ);else super.fitAll();
+    }
+
     // ------------------------------------------------------------------
     // Commands used by the existing Shapr-like 3D menu
     // ------------------------------------------------------------------
