@@ -9,10 +9,8 @@ import java.util.Locale;
 /**
  * Native-kernel gateway layered on top of the current ExactBoolean workspace.
  *
- * Existing Java CAD features keep working while exact geometry services begin
- * moving behind JNI. This class is intentionally a migration layer: the UI can
- * stay stable while the native backend grows from analytic intersections to an
- * OCCT-backed B-Rep/Boolean implementation.
+ * Java/Polygonal CAD remains usable as a fallback, while arm64 devices can now
+ * exercise exact OCCT B-Rep primitives and Boolean topology through JNI.
  */
 public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
 
@@ -22,22 +20,28 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
 
     @Override
     public void showSolidManager(){
-        String state=NativeBRepKernel.isAvailable()?"Native C++ فعال":"Native C++ در دسترس نیست";
+        String nativeState=NativeBRepKernel.isAvailable()?"Native C++ فعال":"Native C++ در دسترس نیست";
+        String occtState=NativeBRepKernel.occtAvailable()?"OCCT Exact B-Rep فعال":"OCCT برای این ABI فعال نیست";
         String[] items={
                 "▣ ابزارهای Solid / Exact Edge فعلی",
-                "⚙ Native B-Rep Kernel / وضعیت موتور C++",
-                "✓ Native Self-Test / تست عددی و Topology",
-                "◎ تست تقاطع Sphere ↔ Sphere در C++",
+                "⚙ Native + OCCT Kernel / وضعیت موتور",
+                "✓ Native Self-Test / تست JNI و هندسه",
+                "◆ OCCT Exact B-Rep Self-Test",
+                "▣−◯ OCCT Box − Cylinder / Boolean واقعی",
+                "◎ تست Sphere ↔ Sphere در C++",
                 "◯ تست Plane ↔ Sphere در C++"
         };
         new AlertDialog.Builder(getContext())
-                .setTitle("Solid 3D • Native Core")
-                .setMessage(state+"\n\nاین لایه مرز JNI/NDK را وارد اپ می‌کند. Exact Boolean عمومی هنوز به OCCT adapter بعدی نیاز دارد؛ ابزارهای فعلی بدون حذف شدن در گزینه اول هستند.")
+                .setTitle("Solid 3D • Native B-Rep")
+                .setMessage(nativeState+"\n"+occtState
+                        +"\n\nدر arm64، Box/Cylinder و Union/Subtract/Intersect داخل Open CASCADE به‌صورت TopoDS_Shape واقعی ساخته می‌شوند. مدل فعلی اپ همچنان برای ابزارهای قبلی حفظ شده است.")
                 .setItems(items,(d,w)->{
                     if(w==0)NativeBRepCadCanvasView.super.showSolidManager();
                     else if(w==1)showNativeStatus();
                     else if(w==2)toast(NativeBRepKernel.selfTest());
-                    else if(w==3)showSphereSphereTest();
+                    else if(w==3)toast(NativeBRepKernel.occtSelfTest());
+                    else if(w==4)showOcctBooleanDemo();
+                    else if(w==5)showSphereSphereTest();
                     else showPlaneSphereTest();
                 })
                 .setNegativeButton("بستن",null).show();
@@ -46,7 +50,14 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
     @Override
     public String selectedInfo(){
         String base=super.selectedInfo();
+        if(NativeBRepKernel.occtAvailable())return base+" | OCCT B-Rep";
         return base+(NativeBRepKernel.isAvailable()?" | Native C++":" | Java fallback");
+    }
+
+    @Override
+    public void clearAll(){
+        super.clearAll();
+        NativeBRepKernel.occtClear();
     }
 
     private void showNativeStatus(){
@@ -55,15 +66,51 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         msg.append("Backend: ").append(NativeBRepKernel.version());
         msg.append("\nABI bridge: ").append(NativeBRepKernel.isAvailable()?"✓ Loaded":"✗ Not loaded");
         if(!NativeBRepKernel.isAvailable())msg.append("\nError: ").append(NativeBRepKernel.loadError());
+        msg.append("\nOCCT: ").append(NativeBRepKernel.occtAvailable()?"✓ "+NativeBRepKernel.occtVersion():"○ فقط Native fallback");
         msg.append("\n\nNative capabilities:");
         msg.append("\n").append((flags&1)!=0?"✓":"○").append(" Plane ↔ Sphere exact");
         msg.append("\n").append((flags&2)!=0?"✓":"○").append(" Sphere ↔ Sphere exact");
         msg.append("\n").append((flags&4)!=0?"✓":"○").append(" Analytic mass properties");
-        msg.append("\n").append((flags&8)!=0?"✓":"○").append(" Topology self-test");
-        msg.append("\n○ OCCT exact B-Rep Boolean adapter — مرحله بعد");
-        msg.append("\n\nنمایش طول‌ها همچنان cm + mm است؛ مدل داخلی mm باقی می‌ماند.");
-        new AlertDialog.Builder(getContext()).setTitle("Native B-Rep Kernel")
+        msg.append("\n").append((flags&8)!=0?"✓":"○").append(" Native topology self-test");
+        msg.append("\n").append((flags&16)!=0?"✓":"○").append(" OCCT shared libraries linked");
+        msg.append("\n").append((flags&32)!=0?"✓":"○").append(" TopoDS exact Box/Cylinder");
+        msg.append("\n").append((flags&64)!=0?"✓":"○").append(" BRepAlgoAPI Union/Subtract/Intersect");
+        msg.append("\n\nواحد داخلی mm است و نمایش اندازه‌ها cm + mm باقی می‌ماند.");
+        msg.append("\n\nمرحله بعد: تبدیل مستقیم Bodyهای Sketch/Extrude موجود به TopoDS_Shape و برگرداندن Mesh نمایشی از همان B-Rep.");
+        new AlertDialog.Builder(getContext()).setTitle("Native / OCCT B-Rep Kernel")
                 .setMessage(msg.toString()).setPositiveButton("باشه",null).show();
+    }
+
+    private void showOcctBooleanDemo(){
+        if(!NativeBRepKernel.occtAvailable()){
+            toast("OCCT روی این ABI فعال نیست؛ نسخه arm64 را اجرا کن");
+            return;
+        }
+        long box=0,cylinder=0,cut=0;
+        try{
+            box=NativeBRepKernel.occtCreateBox(100,80,20);
+            cylinder=NativeBRepKernel.occtCreateCylinder(50,40,0,10,20);
+            cut=NativeBRepKernel.occtBoolean(NativeBRepKernel.OCCT_SUBTRACT,box,cylinder);
+            if(box==0||cylinder==0||cut==0){toast("OCCT Boolean انجام نشد");return;}
+            double[] s=NativeBRepKernel.occtShapeStats(cut);
+            if(s.length<4){toast("آمار B-Rep دریافت نشد");return;}
+            double expected=100.0*80.0*20.0-Math.PI*10.0*10.0*20.0;
+            String msg="Box: 10 cm × 8 cm × 2 cm\n"
+                    +"Cylinder cutter: Ø 2 cm / 20 mm\n"
+                    +"Operation: Exact Subtract (BRepAlgoAPI_Cut)\n\n"
+                    +"Volume: "+dualVolume(s[0])+"\n"
+                    +"Expected analytic: "+dualVolume(expected)+"\n"
+                    +"Difference: "+num(Math.abs(s[0]-expected))+" mm³\n"
+                    +"Face: "+(int)s[1]+"   Edge: "+(int)s[2]+"   Solid: "+(int)s[3]+"\n\n"
+                    +NativeBRepKernel.occtShapeSummary(cut)
+                    +"\n\nاین نتیجه TopoDS_Shape واقعی OCCT است؛ Polygon موتور قدیمی در محاسبه این Boolean دخالت ندارد.";
+            new AlertDialog.Builder(getContext()).setTitle("OCCT Exact Box − Cylinder")
+                    .setMessage(msg).setPositiveButton("باشه",null).show();
+        }finally{
+            NativeBRepKernel.occtRelease(cut);
+            NativeBRepKernel.occtRelease(cylinder);
+            NativeBRepKernel.occtRelease(box);
+        }
     }
 
     private void showSphereSphereTest(){
@@ -97,6 +144,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
     }
 
     private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dualVolume(double mm3){return num(mm3/1000.0)+" cm³ / "+num(mm3)+" mm³";}
     private static String num(double v){
         String s=String.format(Locale.US,"%.4f",v);
         while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);
