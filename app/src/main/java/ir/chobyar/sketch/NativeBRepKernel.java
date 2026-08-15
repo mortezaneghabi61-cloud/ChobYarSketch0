@@ -4,8 +4,8 @@ package ir.chobyar.sketch;
  * Stable Java/JNI boundary for skachmori's native geometry backend.
  *
  * The UI talks only to this contract. The arm64 backend links Open CASCADE and
- * builds exact B-Rep solids, performs Boolean operations, and returns a display
- * triangulation generated from the resulting TopoDS_Shape.
+ * builds exact B-Rep solids, performs Boolean and direct-edit operations, and
+ * returns a display triangulation generated from the resulting TopoDS_Shape.
  */
 final class NativeBRepKernel {
     static final int OCCT_UNION = 0;
@@ -140,6 +140,48 @@ final class NativeBRepKernel {
         try{return nativeOcctBoolean(operation,left,right);}catch(Throwable t){return 0L;}
     }
 
+    // ------------------------------------------------------------------
+    // Exact direct modeling on an existing TopoDS_Shape
+    // ------------------------------------------------------------------
+
+    static long occtFillet(long handle,Geometry3D.Vec3 edgeAnchor,double radiusMm,boolean allEdges){
+        if(!occtAvailable()||handle==0L||radiusMm<=0.0)return 0L;
+        double x=edgeAnchor==null?Double.NaN:edgeAnchor.x;
+        double y=edgeAnchor==null?Double.NaN:edgeAnchor.y;
+        double z=edgeAnchor==null?Double.NaN:edgeAnchor.z;
+        try{return nativeOcctFillet(handle,x,y,z,radiusMm,allEdges);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtChamfer(long handle,Geometry3D.Vec3 edgeAnchor,double distanceMm,boolean allEdges){
+        if(!occtAvailable()||handle==0L||distanceMm<=0.0)return 0L;
+        double x=edgeAnchor==null?Double.NaN:edgeAnchor.x;
+        double y=edgeAnchor==null?Double.NaN:edgeAnchor.y;
+        double z=edgeAnchor==null?Double.NaN:edgeAnchor.z;
+        try{return nativeOcctChamfer(handle,x,y,z,distanceMm,allEdges);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtPushPullFace(long handle,Geometry3D.Vec3 faceAnchor,double distanceMm){
+        if(!occtAvailable()||handle==0L||faceAnchor==null||Math.abs(distanceMm)<1e-9)return 0L;
+        try{return nativeOcctPushPullFace(handle,faceAnchor.x,faceAnchor.y,faceAnchor.z,distanceMm);}
+        catch(Throwable t){return 0L;}
+    }
+
+    static long occtShell(long handle,Geometry3D.Vec3 openingFaceAnchor,double thicknessMm){
+        if(!occtAvailable()||handle==0L||openingFaceAnchor==null||thicknessMm<=0.0)return 0L;
+        try{return nativeOcctShell(handle,openingFaceAnchor.x,openingFaceAnchor.y,openingFaceAnchor.z,thicknessMm);}
+        catch(Throwable t){return 0L;}
+    }
+
+    static long occtTranslate(long handle,Geometry3D.Vec3 deltaMm){
+        if(!occtAvailable()||handle==0L||deltaMm==null)return 0L;
+        try{return nativeOcctTranslate(handle,deltaMm.x,deltaMm.y,deltaMm.z);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtRotate(long handle,Geometry3D.Vec3 axis,double angleDeg){
+        if(!occtAvailable()||handle==0L||axis==null||Math.abs(angleDeg)<1e-9)return 0L;
+        try{return nativeOcctRotate(handle,axis.x,axis.y,axis.z,angleDeg);}catch(Throwable t){return 0L;}
+    }
+
     static double[] occtShapeStats(long handle){
         if(!occtAvailable()||handle==0L)return new double[0];
         try{return nativeOcctShapeStats(handle);}catch(Throwable t){return new double[0];}
@@ -197,6 +239,14 @@ final class NativeBRepKernel {
             int firstType,double[] firstProfileData,
             int secondType,double[] secondProfileData);
     private static native long nativeOcctBoolean(int operation,long left,long right);
+
+    private static native long nativeOcctFillet(long handle,double ax,double ay,double az,double radius,boolean allEdges);
+    private static native long nativeOcctChamfer(long handle,double ax,double ay,double az,double distance,boolean allEdges);
+    private static native long nativeOcctPushPullFace(long handle,double ax,double ay,double az,double distance);
+    private static native long nativeOcctShell(long handle,double ax,double ay,double az,double thickness);
+    private static native long nativeOcctTranslate(long handle,double dx,double dy,double dz);
+    private static native long nativeOcctRotate(long handle,double ax,double ay,double az,double angleDeg);
+
     private static native double[] nativeOcctShapeStats(long handle);
     private static native double[] nativeOcctTriangulate(long handle,double deflection);
     private static native String nativeOcctShapeSummary(long handle);
