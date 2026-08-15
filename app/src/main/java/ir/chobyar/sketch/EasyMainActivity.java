@@ -17,11 +17,11 @@ import java.lang.reflect.Method;
 /**
  * ChobYar's adaptive launcher: professional sketch/constraint tools stay under
  * a simple workspace, while Solid 3D, dual cm/mm dimensions, parametric History
- * and direct Edge/Face editing are directly reachable.
+ * and direct B-Rep Edge/Face editing are directly reachable.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private DirectModelCadCanvasView easyCad;
+    private BRepDirectCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +48,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new DirectModelCadCanvasView(this);
+            easyCad = new BRepDirectCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -111,7 +111,7 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private Button makeFinishButton() {
-        Button b = floatingButton("✥\nEdit 3D", "انتخاب Edge/Face، Fillet، Chamfer، Push/Pull و Shell");
+        Button b = floatingButton("✥\nEdit 3D", "B-Rep، انتخاب Edge/Face، Fillet، Chamfer، Push/Pull، Move/Rotate و Shell");
         b.setOnClickListener(v -> {
             if (easyCad != null) easyCad.showDirectManager();
         });
