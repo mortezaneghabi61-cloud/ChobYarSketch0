@@ -43,13 +43,15 @@ public class MainActivity extends Activity {
         root.addView(makeCommandBar());
 
         status = new TextView(this);
-        status.setText("چوب‌یار CAD — mm | دو انگشت: Zoom/Pan | انتخاب کن و «اندازه دقیق» بزن");
+        status.setText("حالت انتخاب: روی شیء بزن تا آبی شود؛ سپس از نوار «ویرایش سریع» استفاده کن.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
         root.addView(status, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        root.addView(makeQuickEditBar());
 
         root.addView(cad, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -125,6 +127,37 @@ public class MainActivity extends Activity {
         return row;
     }
 
+    private View makeQuickEditBar() {
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setPadding(6, 2, 6, 3);
+        outer.setBackgroundColor(Color.rgb(236, 242, 250));
+
+        TextView title = new TextView(this);
+        title.setText("ویرایش سریع شیء انتخاب‌شده");
+        title.setTextSize(11);
+        title.setTextColor(Color.rgb(40, 75, 120));
+        title.setPadding(6, 0, 6, 1);
+        outer.addView(title);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        row.addView(quickBtn("📐 اندازه", this::showExactDimension));
+        row.addView(quickBtn("↔ جابه‌جا", () -> promptCommand("جابه‌جایی دقیق", "dx dy   مثال: 50 0", "MOVE ")));
+        row.addView(quickBtn("⟳ چرخش", () -> promptCommand("چرخش", "درجه   مثال: 45", "ROTATE ")));
+        row.addView(quickBtn("⧉ کپی", () -> promptCommand("کپی دقیق", "dx dy   مثال: 100 0", "COPY ")));
+        row.addView(quickBtn("↕ Offset", () -> promptCommand("Offset", "فاصله mm   مثال: 18", "OFFSET ")));
+        row.addView(quickBtn("⇄ قرینه", this::showMirrorQuickMenu));
+        row.addView(quickBtn("🎨 متریال", this::showMaterialMenu));
+        row.addView(quickBtn("⋮ بیشتر", this::showTransformMenu));
+        row.addView(quickBtn("⌫ حذف", this::deleteSelectedQuick));
+
+        outer.addView(scroll(row));
+        return outer;
+    }
+
     private HorizontalScrollView scroll(LinearLayout row) {
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -141,6 +174,13 @@ public class MainActivity extends Activity {
         b.setMinimumHeight(0);
         b.setPadding(14, 4, 14, 4);
         b.setOnClickListener(v -> action.run());
+        return b;
+    }
+
+    private Button quickBtn(String text, Runnable action) {
+        Button b = btn(text, action);
+        b.setTextSize(11);
+        b.setPadding(12, 2, 12, 2);
         return b;
     }
 
@@ -177,6 +217,7 @@ public class MainActivity extends Activity {
 
     private void showTransformMenu() {
         String[] items = {
+                "اندازه دقیق",
                 "Move — جابه‌جایی دقیق",
                 "Copy — کپی دقیق",
                 "Rotate — چرخش",
@@ -185,6 +226,7 @@ public class MainActivity extends Activity {
                 "Mirror Y — قرینه نسبت به محور Y",
                 "Array — تکثیر منظم",
                 "Offset — آفست",
+                "Material — متریال",
                 "Delete — حذف"
         };
         new AlertDialog.Builder(this)
@@ -192,21 +234,50 @@ public class MainActivity extends Activity {
                 .setMessage(cad.selectedInfo())
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
-                        case 0: promptCommand("Move: dx dy", "مثال: 50 0", "MOVE "); break;
-                        case 1: promptCommand("Copy: dx dy", "مثال: 100 0", "COPY "); break;
-                        case 2: promptCommand("Rotate: درجه", "مثال: 45", "ROTATE "); break;
-                        case 3: promptCommand("Scale", "مثال: 1.5", "SCALE "); break;
-                        case 4: promptCommand("Mirror X", "مقدار محور؛ مثال: 0", "MIRROR X "); break;
-                        case 5: promptCommand("Mirror Y", "مقدار محور؛ مثال: 0", "MIRROR Y "); break;
-                        case 6: promptCommand("Array: count dx dy", "مثال: 4 100 0", "ARRAY "); break;
-                        case 7: promptCommand("Offset", "فاصله mm؛ مثال: 18", "OFFSET "); break;
-                        default:
-                            cad.deleteSelected();
-                            say("حذف شد");
-                            break;
+                        case 0: showExactDimension(); break;
+                        case 1: promptCommand("Move: dx dy", "مثال: 50 0", "MOVE "); break;
+                        case 2: promptCommand("Copy: dx dy", "مثال: 100 0", "COPY "); break;
+                        case 3: promptCommand("Rotate: درجه", "مثال: 45", "ROTATE "); break;
+                        case 4: promptCommand("Scale", "مثال: 1.5", "SCALE "); break;
+                        case 5: promptCommand("Mirror X", "مقدار محور؛ مثال: 0", "MIRROR X "); break;
+                        case 6: promptCommand("Mirror Y", "مقدار محور؛ مثال: 0", "MIRROR Y "); break;
+                        case 7: promptCommand("Array: count dx dy", "مثال: 4 100 0", "ARRAY "); break;
+                        case 8: promptCommand("Offset", "فاصله mm؛ مثال: 18", "OFFSET "); break;
+                        case 9: showMaterialMenu(); break;
+                        default: deleteSelectedQuick(); break;
                     }
                 })
                 .setNegativeButton("بستن", null)
+                .show();
+    }
+
+    private void showMirrorQuickMenu() {
+        String[] items = {"قرینه نسبت به محور X", "قرینه نسبت به محور Y"};
+        new AlertDialog.Builder(this)
+                .setTitle("قرینه")
+                .setMessage(cad.selectedInfo())
+                .setItems(items, (d, which) -> {
+                    if (which == 0) promptCommand("Mirror X", "محور؛ مثال: 0", "MIRROR X ");
+                    else promptCommand("Mirror Y", "محور؛ مثال: 0", "MIRROR Y ");
+                })
+                .setNegativeButton("بستن", null)
+                .show();
+    }
+
+    private void deleteSelectedQuick() {
+        String info = cad.selectedInfo();
+        if (info.startsWith("هیچ")) {
+            say("اول یک شیء را انتخاب کن");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("حذف شیء انتخاب‌شده؟")
+                .setMessage(info)
+                .setPositiveButton("حذف", (d, w) -> {
+                    cad.deleteSelected();
+                    say("شیء حذف شد");
+                })
+                .setNegativeButton("لغو", null)
                 .show();
     }
 
@@ -276,6 +347,7 @@ public class MainActivity extends Activity {
         input.setHint(hint);
         new AlertDialog.Builder(this)
                 .setTitle(title)
+                .setMessage(cad.selectedInfo())
                 .setView(input)
                 .setPositiveButton("اجرا", (d, w) ->
                         say(cad.executeCommand(prefix + input.getText().toString().trim())))
