@@ -17,11 +17,11 @@ import java.lang.reflect.Method;
 /**
  * ChobYar's adaptive launcher: professional sketch/constraint tools stay under
  * a simple workspace, while Solid 3D, dual cm/mm dimensions, parametric History
- * and Form tools (Revolve/Sweep/Loft) are directly reachable.
+ * and final-stage 3D finishing are directly reachable.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private AdvancedParametricSolidCadCanvasView easyCad;
+    private FinishSolidCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +48,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new AdvancedParametricSolidCadCanvasView(this);
+            easyCad = new FinishSolidCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -58,6 +58,7 @@ public class EasyMainActivity extends MainActivity {
             root.addView(makeRelationsButton(), relationsParams());
             root.addView(makePlaneButton(), planeParams());
             root.addView(makeSolidButton(), solidParams());
+            root.addView(makeFinishButton(), finishParams());
             root.addView(makeHistoryButton(), historyParams());
             patchUnitChrome(root);
             easyCad.dispatchWorkspaceState();
@@ -87,25 +88,41 @@ public class EasyMainActivity extends MainActivity {
 
     private Button makeRelationsButton() {
         Button b = floatingButton("⌁\nروابط", "روابط هوشمند Sketch");
-        b.setOnClickListener(v -> { if (easyCad != null) easyCad.showSmartConstraintMenu(); });
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showSmartConstraintMenu();
+        });
         return b;
     }
 
     private Button makePlaneButton() {
         Button b = floatingButton("◇\nPlane/3D", "صفحه Sketch و نمای سه‌بعدی");
-        b.setOnClickListener(v -> { if (easyCad != null) easyCad.showPlaneManager(); });
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showPlaneManager();
+        });
         return b;
     }
 
     private Button makeSolidButton() {
-        Button b = floatingButton("▣\nSolid", "Extrude، Revolve، Sweep، Loft، Boolean، Body و Face");
-        b.setOnClickListener(v -> { if (easyCad != null) easyCad.showSolidManager(); });
+        Button b = floatingButton("▣\nSolid", "Body، Face، Extrude، Revolve، Sweep، Loft و Boolean سه‌بعدی");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showSolidManager();
+        });
+        return b;
+    }
+
+    private Button makeFinishButton() {
+        Button b = floatingButton("⌒\nFinish", "Fillet، Chamfer و Shell سه‌بعدی");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showFinishManager();
+        });
         return b;
     }
 
     private Button makeHistoryButton() {
         Button b = floatingButton("⏱\nHistory", "تاریخچه پارامتریک و ویرایش Featureها");
-        b.setOnClickListener(v -> { if (easyCad != null) easyCad.showHistoryManager(); });
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showHistoryManager();
+        });
         return b;
     }
 
@@ -160,7 +177,7 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, 0, dp(10), dp(225));
+        p.setMargins(0, 0, dp(10), dp(300));
         return p;
     }
 
@@ -169,7 +186,7 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, 0, dp(10), dp(75));
+        p.setMargins(0, 0, dp(10), dp(150));
         return p;
     }
 
@@ -178,7 +195,16 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, dp(75), dp(10), 0);
+        p.setMargins(0, 0, dp(10), 0);
+        return p;
+    }
+
+    private FrameLayout.LayoutParams finishParams() {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL);
+        p.setMargins(0, dp(150), dp(10), 0);
         return p;
     }
 
@@ -187,9 +213,11 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, dp(225), dp(10), 0);
+        p.setMargins(0, dp(300), dp(10), 0);
         return p;
     }
 
-    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
 }
