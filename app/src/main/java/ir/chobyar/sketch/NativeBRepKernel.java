@@ -4,14 +4,16 @@ package ir.chobyar.sketch;
  * Stable Java/JNI boundary for skachmori's native geometry backend.
  *
  * The UI talks only to this contract. The arm64 backend links Open CASCADE and
- * can now build exact B-Rep prisms/cylinders directly from app sketch geometry,
- * perform Boolean operations, and return a triangulated display mesh generated
- * from the resulting TopoDS_Shape.
+ * builds exact B-Rep solids, performs Boolean operations, and returns a display
+ * triangulation generated from the resulting TopoDS_Shape.
  */
 final class NativeBRepKernel {
     static final int OCCT_UNION = 0;
     static final int OCCT_SUBTRACT = 1;
     static final int OCCT_INTERSECT = 2;
+
+    static final int OCCT_PROFILE_POLYGON = 0;
+    static final int OCCT_PROFILE_CIRCLE = 1;
 
     private static final boolean AVAILABLE;
     private static final String LOAD_ERROR;
@@ -105,6 +107,34 @@ final class NativeBRepKernel {
         catch(Throwable t){return 0L;}
     }
 
+    /**
+     * profileData:
+     * POLYGON -> xyz triples in mm.
+     * CIRCLE  -> [cx,cy,cz,nx,ny,nz,ux,uy,uz,radiusMm].
+     */
+    static long occtCreateRevolve(int profileType,double[] profileData,
+                                  Geometry3D.Vec3 axisOrigin,Geometry3D.Vec3 axisDirection,
+                                  double angleDeg){
+        if(!occtAvailable()||profileData==null||axisOrigin==null||axisDirection==null)return 0L;
+        try{return nativeOcctCreateRevolve(profileType,profileData,
+                axisOrigin.x,axisOrigin.y,axisOrigin.z,
+                axisDirection.x,axisDirection.y,axisDirection.z,angleDeg);}
+        catch(Throwable t){return 0L;}
+    }
+
+    static long occtCreateSweep(int profileType,double[] profileData,double[] pathXYZ){
+        if(!occtAvailable()||profileData==null||pathXYZ==null||pathXYZ.length<6)return 0L;
+        try{return nativeOcctCreateSweep(profileType,profileData,pathXYZ);}
+        catch(Throwable t){return 0L;}
+    }
+
+    static long occtCreateLoft(int firstType,double[] firstProfileData,
+                               int secondType,double[] secondProfileData){
+        if(!occtAvailable()||firstProfileData==null||secondProfileData==null)return 0L;
+        try{return nativeOcctCreateLoft(firstType,firstProfileData,secondType,secondProfileData);}
+        catch(Throwable t){return 0L;}
+    }
+
     static long occtBoolean(int operation,long left,long right){
         if(!occtAvailable()||left==0L||right==0L)return 0L;
         try{return nativeOcctBoolean(operation,left,right);}catch(Throwable t){return 0L;}
@@ -158,6 +188,14 @@ final class NativeBRepKernel {
             double ax,double ay,double az,
             double radius,double height);
     private static native long nativeOcctCreatePrism(double[] xyz,double vx,double vy,double vz);
+    private static native long nativeOcctCreateRevolve(
+            int profileType,double[] profileData,
+            double ox,double oy,double oz,
+            double ax,double ay,double az,double angleDeg);
+    private static native long nativeOcctCreateSweep(int profileType,double[] profileData,double[] pathXYZ);
+    private static native long nativeOcctCreateLoft(
+            int firstType,double[] firstProfileData,
+            int secondType,double[] secondProfileData);
     private static native long nativeOcctBoolean(int operation,long left,long right);
     private static native double[] nativeOcctShapeStats(long handle);
     private static native double[] nativeOcctTriangulate(long handle,double deflection);
