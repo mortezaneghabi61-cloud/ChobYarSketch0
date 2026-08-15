@@ -17,11 +17,12 @@ import java.lang.reflect.Method;
 /**
  * ChobYar's adaptive launcher: professional sketch/constraint tools stay under
  * a simple workspace, while Solid 3D, dual cm/mm dimensions, B-Rep topology,
- * direct Edge/Face editing and analytic curved solids are directly reachable.
+ * direct Edge/Face editing, analytic curved solids and analytic Boolean surface
+ * provenance are directly reachable.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private AnalyticCadCanvasView easyCad;
+    private AnalyticBooleanCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +49,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new AnalyticCadCanvasView(this);
+            easyCad = new AnalyticBooleanCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -103,7 +104,7 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private Button makeSolidButton() {
-        Button b = floatingButton("▣\nSolid", "Solid، B-Rep، Cylinder/Cone/Sphere دقیق، Extrude، Revolve، Sweep، Loft و Boolean");
+        Button b = floatingButton("▣\nSolid", "Analytic B-Rep Boolean، سطوح منحنی دقیق، Cylinder/Cone/Sphere، Extrude، Revolve، Sweep و Loft");
         b.setOnClickListener(v -> {
             if (easyCad != null) easyCad.showSolidManager();
         });
