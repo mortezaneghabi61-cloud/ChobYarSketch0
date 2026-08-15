@@ -21,7 +21,7 @@ import java.util.List;
  * the existing parametric layer says it is locked/fixed. That avoids showing a
  * false green state while more general constraint/DOF solving is implemented.
  */
-public class ShaprSketchStateCadCanvasView extends OcctShaprCadCanvasView {
+public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
 
     private static final float PX_PER_MM = 3f;
     private static final int UNDER_DEFINED = Color.rgb(55, 125, 225);
