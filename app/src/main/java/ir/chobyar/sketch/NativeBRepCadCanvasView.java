@@ -7,10 +7,10 @@ import android.widget.Toast;
 import java.util.Locale;
 
 /**
- * Native-kernel gateway layered on top of the current ExactBoolean workspace.
+ * Native-kernel gateway layered on top of the ExactBoolean workspace.
  *
- * Java/Polygonal CAD remains usable as a fallback, while arm64 devices can now
- * exercise exact OCCT B-Rep primitives and Boolean topology through JNI.
+ * Java/Polygonal CAD remains usable as a fallback, while arm64 devices exercise
+ * OCCT B-Rep primitives, Form features and Boolean topology through JNI.
  */
 public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
 
@@ -34,7 +34,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Native B-Rep")
                 .setMessage(nativeState+"\n"+occtState
-                        +"\n\nدر arm64، Box/Cylinder و Union/Subtract/Intersect داخل Open CASCADE به‌صورت TopoDS_Shape واقعی ساخته می‌شوند. مدل فعلی اپ همچنان برای ابزارهای قبلی حفظ شده است.")
+                        +"\n\nدر arm64، Primitiveها، Revolve/Sweep/Loft و Booleanهای مهاجرت‌شده داخل Open CASCADE به‌صورت TopoDS_Shape واقعی ساخته می‌شوند.")
                 .setItems(items,(d,w)->{
                     if(w==0)NativeBRepCadCanvasView.super.showSolidManager();
                     else if(w==1)showNativeStatus();
@@ -73,10 +73,12 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         msg.append("\n").append((flags&4)!=0?"✓":"○").append(" Analytic mass properties");
         msg.append("\n").append((flags&8)!=0?"✓":"○").append(" Native topology self-test");
         msg.append("\n").append((flags&16)!=0?"✓":"○").append(" OCCT shared libraries linked");
-        msg.append("\n").append((flags&32)!=0?"✓":"○").append(" TopoDS exact Box/Cylinder");
+        msg.append("\n").append((flags&32)!=0?"✓":"○").append(" TopoDS exact primitives / Extrude");
         msg.append("\n").append((flags&64)!=0?"✓":"○").append(" BRepAlgoAPI Union/Subtract/Intersect");
+        msg.append("\n").append((flags&128)!=0?"✓":"○").append(" BRepPrimAPI Revolve");
+        msg.append("\n").append((flags&256)!=0?"✓":"○").append(" BRepOffsetAPI Sweep / Loft");
         msg.append("\n\nواحد داخلی mm است و نمایش اندازه‌ها cm + mm باقی می‌ماند.");
-        msg.append("\n\nمرحله بعد: تبدیل مستقیم Bodyهای Sketch/Extrude موجود به TopoDS_Shape و برگرداندن Mesh نمایشی از همان B-Rep.");
+        msg.append("\n\nمرحله بعد: انتقال Direct Editهای Face/Edge، Fillet/Chamfer/Shell و Transform به Shape History خود OCCT.");
         new AlertDialog.Builder(getContext()).setTitle("Native / OCCT B-Rep Kernel")
                 .setMessage(msg.toString()).setPositiveButton("باشه",null).show();
     }
