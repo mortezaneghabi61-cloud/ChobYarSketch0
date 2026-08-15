@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new CentimeterCadCanvasView(this);
+        cad = new ShaprStyleCadCanvasView(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         root.addView(makeCadToolbar());
 
         status = new TextView(this);
-        status.setText("واحد اندازه‌گیری: سانتی‌متر (cm) — روی شیء بزن تا انتخاب شود. اندازه دقیق هم متناسب با همان شکل نمایش داده می‌شود.");
+        status.setText("واحد: سانتی‌متر — هنگام رسم اندازه زنده کنار شکل می‌آید؛ بعد از رسم روی همان کادر عددی بزن و اندازه دقیق را وارد کن.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
