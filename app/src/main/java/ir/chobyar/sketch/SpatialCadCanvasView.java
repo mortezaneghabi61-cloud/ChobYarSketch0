@@ -49,8 +49,6 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     private float orbitLastX, orbitLastY;
     private final RectF overviewCard = new RectF();
 
-    private final Paint cardFill = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint cardStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint spatialPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint planePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint axisX = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -73,12 +71,6 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     private void initSpatialPaints() {
-        cardFill.setColor(Color.argb(242, 252, 253, 255));
-        cardFill.setStyle(Paint.Style.FILL);
-        cardStroke.setColor(Color.rgb(180, 191, 207));
-        cardStroke.setStyle(Paint.Style.STROKE);
-        cardStroke.setStrokeWidth(2f);
-
         spatialPaint.setColor(Color.rgb(32, 67, 112));
         spatialPaint.setStyle(Paint.Style.STROKE);
         spatialPaint.setStrokeWidth(2.4f);
@@ -210,26 +202,13 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     private void drawSpatialOverview(Canvas canvas) {
-        float left = Math.max(84f, getWidth()*0.10f);
-        float top = Math.max(210f, getHeight()*0.16f);
-        float right = Math.min(getWidth()-84f, getWidth()*0.92f);
-        float bottom = Math.min(getHeight()-105f, getHeight()*0.88f);
-        if (right-left < 250f || bottom-top < 220f) {
-            left=70f; right=getWidth()-70f; top=205f; bottom=getHeight()-100f;
-        }
-        overviewCard.set(left,top,right,bottom);
-        canvas.drawRoundRect(overviewCard,22f,22f,cardFill);
-        canvas.drawRoundRect(overviewCard,22f,22f,cardStroke);
-
+        // 3D is the workspace itself, not a card layered over the 2D canvas.
+        overviewCard.set(0f,0f,getWidth(),getHeight());
         canvas.save();
-        canvas.clipRect(overviewCard);
         drawSpatialPlanes(canvas);
         drawSpatialEntities(canvas);
         drawSpatialAxes(canvas);
         canvas.restore();
-
-        canvas.drawText("3D • Sketch Planes — " + activePlaneLabel(), overviewCard.centerX(), overviewCard.top+30f, spatialText);
-        canvas.drawText("یک انگشت: Orbit", overviewCard.centerX(), overviewCard.bottom-18f, spatialText);
     }
 
     private void drawSpatialPlanes(Canvas c) {

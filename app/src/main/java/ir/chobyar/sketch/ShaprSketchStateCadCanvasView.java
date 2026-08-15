@@ -26,7 +26,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
     private static final float PX_PER_MM = 3f;
     private static final int UNDER_DEFINED = Color.rgb(55, 125, 225);
     private static final int FULLY_DEFINED = Color.rgb(46, 155, 92);
-    private static final int SELECTED = Color.rgb(242, 135, 36);
+    private static final int SELECTED = Color.rgb(28, 104, 220);
     private static final int ERROR = Color.rgb(220, 62, 62);
 
     private final Paint statePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -119,7 +119,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
         return "Fully-defined: " + full + "\n"
                 + "Under-defined: " + under + "\n"
                 + "Errors: " + error + "\n\n"
-                + "سبز = Fully-defined\nآبی = Under-defined\nنارنجی = Selected\nقرمز = Error";
+                + "سبز = Fully-defined\nآبی روشن = Under-defined\nآبی پررنگ = Selected\nقرمز = Error";
     }
 
     private void drawSketchStates(Canvas c) {
@@ -127,7 +127,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
         float k = PX_PER_MM * Math.max(0.0001f, scale);
         float ox = number(offsetXField, 0f);
         float oy = number(offsetYField, 0f);
-        statePaint.setStrokeWidth(Math.max(2.2f, 2.8f * getResources().getDisplayMetrics().density));
+        statePaint.setStrokeWidth(Math.max(1.8f, 1.65f * getResources().getDisplayMetrics().density));
 
         List<Object> selected = selection();
         for (Object e : entities()) {
@@ -188,7 +188,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
     }
 
     private void drawPoint(Canvas c,float x,float y,float k,float ox,float oy){
-        c.drawCircle(sx(x,k,ox),sy(y,k,oy),4.2f*getResources().getDisplayMetrics().density,pointPaint);
+        c.drawCircle(sx(x,k,ox),sy(y,k,oy),2.35f*getResources().getDisplayMetrics().density,pointPaint);
     }
 
     private boolean isLocked(Object e) {

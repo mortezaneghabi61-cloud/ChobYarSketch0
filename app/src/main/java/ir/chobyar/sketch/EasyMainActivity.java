@@ -12,7 +12,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -67,31 +66,33 @@ public class EasyMainActivity extends MainActivity {
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
 
-            // Shapr-style chrome: top navigation, left main menu, adaptive menu,
-            // and view/snapping controls kept away from the bottom canvas area.
-            root.addView(makeTopBar(), frameMatchWrap(Gravity.TOP, 8, 7, 8, 0));
-            root.addView(makeMainRail(), frameWrap(Gravity.START | Gravity.TOP, 8, 72, 0, 0));
+            // Full-canvas CAD chrome. Controls float over the model and use the
+            // smallest comfortable pen/touch targets instead of consuming the canvas.
+            root.addView(makeTopBar(), frameMatchWrap(Gravity.TOP, 7, 6, 7, 0));
+            root.addView(makeMainRail(), frameWrap(Gravity.START | Gravity.CENTER_VERTICAL, 7, 0, 0, 0));
 
             adaptiveBar = makeAdaptiveBar();
             adaptiveBar.setVisibility(View.GONE);
-            root.addView(adaptiveBar, frameWrap(Gravity.START | Gravity.TOP, 72, 72, 0, 0));
+            root.addView(adaptiveBar, frameWrap(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 10));
 
             navigationBar = makeNavigationBar();
             navigationBar.setVisibility(View.VISIBLE);
-            root.addView(navigationBar, frameWrap(Gravity.END | Gravity.TOP, 0, 72, 8, 0));
+            root.addView(navigationBar, frameWrap(Gravity.END | Gravity.TOP, 0, 58, 7, 0));
 
             compactStatus = new TextView(this);
             compactStatus.setText("آماده • cm + mm");
-            compactStatus.setTextSize(10f);
+            compactStatus.setTextSize(9f);
             compactStatus.setTextColor(Color.rgb(78, 88, 102));
             compactStatus.setSingleLine(true);
-            compactStatus.setPadding(dp(9), dp(4), dp(9), dp(4));
-            compactStatus.setBackground(round(Color.argb(235,255,255,255), Color.rgb(222,227,234), 12));
-            root.addView(compactStatus, frameWrap(Gravity.START | Gravity.BOTTOM, 8, 0, 0, 5));
+            compactStatus.setMaxWidth(dp(210));
+            compactStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            compactStatus.setPadding(dp(8), dp(3), dp(8), dp(3));
+            compactStatus.setBackground(round(Color.argb(232,255,255,255), Color.rgb(225,229,235), 10));
+            root.addView(compactStatus, frameWrap(Gravity.START | Gravity.BOTTOM, 7, 0, 0, 7));
 
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
-            Toast.makeText(this, "فضای skachmori فعال نشد", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "فضای چوب‌یار 3D فعال نشد", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -138,33 +139,29 @@ public class EasyMainActivity extends MainActivity {
 
     private View makeTopBar() {
         LinearLayout bar = horizontalCard();
-        bar.setPadding(dp(6), dp(2), dp(6), dp(2));
+        bar.setPadding(dp(3), dp(1), dp(3), dp(1));
 
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
-        logo.setContentDescription("skachmori");
-        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        bar.addView(logo, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        bar.addView(topButton("⌂", "پروژه‌ها", () -> showStatus("پروژه چوب‌یار 3D")));
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
         titleBox.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = new TextView(this);
-        title.setText("skachmori");
-        title.setTextSize(14.5f);
+        title.setText("چوب‌یار 3D");
+        title.setTextSize(12.5f);
         title.setTypeface(null, Typeface.BOLD);
         title.setTextColor(Color.rgb(27, 37, 50));
         titleBox.addView(title);
 
         TextView mode = new TextView(this);
-        mode.setText("Modeling");
-        mode.setTextSize(8.5f);
+        mode.setText("مدل‌سازی دقیق");
+        mode.setTextSize(7.5f);
         mode.setTextColor(Color.rgb(112, 121, 134));
         titleBox.addView(mode);
 
-        titleBox.setPadding(dp(4), 0, dp(4), 0);
-        bar.addView(titleBox, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        titleBox.setPadding(dp(3), 0, dp(3), 0);
+        bar.addView(titleBox, new LinearLayout.LayoutParams(0, dp(38), 1f));
 
         bar.addView(topButton("↶", "Undo", () -> { easyCad.undo(); showStatus("یک مرحله برگشت"); }));
         bar.addView(topButton("⏱", "History", () -> easyCad.showHistoryManager()));
@@ -178,13 +175,13 @@ public class EasyMainActivity extends MainActivity {
 
     private View makeMainRail() {
         LinearLayout rail = verticalCard();
-        rail.setPadding(dp(2), dp(4), dp(2), dp(4));
-        rail.addView(railButton("⌕", "Search", this::showCommandPalette));
-        rail.addView(railButton("✎", "Sketch", () -> invokeMain("showSketchMenu", new Class<?>[0])));
-        rail.addView(railButton("＋", "Add", this::showAddMenu));
-        rail.addView(railButton("◇", "Construct", this::showConstructMenu));
-        rail.addView(railButton("↗", "Transform", () -> invokeMain("showTransformMenu", new Class<?>[0])));
-        rail.addView(railButton("⌁", "Tools", this::showUtilityMenu));
+        rail.setPadding(dp(1), dp(2), dp(1), dp(2));
+        rail.addView(railButton("⌕", "جستجو", this::showCommandPalette));
+        rail.addView(railButton("✎", "اسکچ", () -> invokeMain("showSketchMenu", new Class<?>[0])));
+        rail.addView(railButton("＋", "افزودن", this::showAddMenu));
+        rail.addView(railButton("◇", "ساخت", this::showConstructMenu));
+        rail.addView(railButton("↗", "تغییر", () -> invokeMain("showTransformMenu", new Class<?>[0])));
+        rail.addView(railButton("⌁", "ابزار", this::showUtilityMenu));
         return rail;
     }
 
@@ -240,8 +237,8 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private LinearLayout makeAdaptiveBar() {
-        LinearLayout bar = verticalCard();
-        bar.setPadding(dp(2),dp(3),dp(2),dp(3));
+        LinearLayout bar = horizontalCard();
+        bar.setPadding(dp(3),dp(2),dp(3),dp(2));
         bar.addView(compactAction("⌨","اندازه",() -> invokeMain("showExactDimension",new Class<?>[0])));
         adaptiveModelButton = compactAction("⬆","Extrude",this::contextualModelAction);
         bar.addView(adaptiveModelButton);
@@ -278,12 +275,12 @@ public class EasyMainActivity extends MainActivity {
 
     private LinearLayout makeNavigationBar() {
         LinearLayout bar = verticalCard();
-        bar.setPadding(dp(2),dp(3),dp(2),dp(3));
-        bar.addView(navButton("XYZ","View",this::showViewCubeMenu));
-        bar.addView(navButton("◇","Fit",() -> { easyCad.fitAll(); showStatus("Fit"); }));
-        snapButton = navButton("⌁","Snap",this::toggleSnap);
+        bar.setPadding(dp(1),dp(2),dp(1),dp(2));
+        bar.addView(navButton("◈","نما",this::showViewCubeMenu));
+        bar.addView(navButton("◇","فیت",() -> { easyCad.fitAll(); showStatus("نمایش کامل مدل"); }));
+        snapButton = navButton("⌁","اسنپ",this::toggleSnap);
         bar.addView(snapButton);
-        bar.addView(navButton("mm","Units",() -> Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show()));
+        bar.addView(navButton("mm","واحد",() -> Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show()));
         updateSnapButton();
         return bar;
     }
@@ -425,7 +422,7 @@ public class EasyMainActivity extends MainActivity {
                 "◇ Plane / Construction",
                 "⋯ تنظیمات پیشرفته"
         };
-        new AlertDialog.Builder(this).setTitle("skachmori").setItems(items,(d,w)->{
+        new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(items,(d,w)->{
             if(w==0) invokeMain("exportDxf",new Class<?>[0]);
             else if(w==1) Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show();
             else if(w==2){easyCad.toggleGrid();showStatus(easyCad.isShowGrid()?"Grid روشن":"Grid خاموش");}
@@ -444,8 +441,8 @@ public class EasyMainActivity extends MainActivity {
         LinearLayout box=new LinearLayout(this);
         box.setOrientation(LinearLayout.HORIZONTAL);
         box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setBackground(round(Color.argb(248,255,255,255),Color.rgb(216,222,230),16));
-        box.setElevation(dp(4));
+        box.setBackground(round(Color.argb(242,255,255,255),Color.rgb(224,228,234),12));
+        box.setElevation(dp(3));
         return box;
     }
 
@@ -453,9 +450,9 @@ public class EasyMainActivity extends MainActivity {
         LinearLayout box=new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER_HORIZONTAL);
-        box.setPadding(dp(2),dp(3),dp(2),dp(3));
-        box.setBackground(round(Color.argb(248,255,255,255),Color.rgb(216,222,230),16));
-        box.setElevation(dp(4));
+        box.setPadding(dp(1),dp(2),dp(1),dp(2));
+        box.setBackground(round(Color.argb(242,255,255,255),Color.rgb(224,228,234),12));
+        box.setElevation(dp(3));
         return box;
     }
 
@@ -463,13 +460,13 @@ public class EasyMainActivity extends MainActivity {
         Button b=new Button(this);
         b.setText(text);
         b.setContentDescription(description);
-        b.setTextSize(text.length()>2?10f:17f);
+        b.setTextSize(text.length()>2?9f:16f);
         b.setTextColor(Color.rgb(54,64,78));
         b.setAllCaps(false);
         b.setGravity(Gravity.CENTER);
         b.setPadding(dp(1),0,dp(1),0);
-        b.setMinWidth(dp(38));b.setMinimumWidth(dp(38));
-        b.setMinHeight(dp(38));b.setMinimumHeight(dp(38));
+        b.setMinWidth(dp(36));b.setMinimumWidth(dp(36));
+        b.setMinHeight(dp(36));b.setMinimumHeight(dp(36));
         b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,10));
         b.setOnClickListener(v->action.run());
         return b;
@@ -478,13 +475,13 @@ public class EasyMainActivity extends MainActivity {
     private Button railButton(String icon,String label,Runnable action) {
         Button b=new Button(this);
         b.setText(icon+"\n"+label);
-        b.setTextSize(label.length()>8?8.2f:9f);
+        b.setTextSize(8f);
         b.setTextColor(Color.rgb(48,58,72));
         b.setAllCaps(false);
         b.setGravity(Gravity.CENTER);
         b.setPadding(dp(1),dp(1),dp(1),dp(1));
-        b.setMinWidth(dp(54));b.setMinimumWidth(dp(54));
-        b.setMinHeight(dp(47));b.setMinimumHeight(dp(47));
+        b.setMinWidth(dp(43));b.setMinimumWidth(dp(43));
+        b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));
         b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,10));
         b.setOnClickListener(v->action.run());
         return b;
@@ -492,8 +489,8 @@ public class EasyMainActivity extends MainActivity {
 
     private Button compactAction(String icon,String label,Runnable action) {
         Button b=railButton(icon,label,action);
-        b.setMinWidth(dp(58));b.setMinimumWidth(dp(58));
-        b.setMinHeight(dp(45));b.setMinimumHeight(dp(45));
+        b.setMinWidth(dp(46));b.setMinimumWidth(dp(46));
+        b.setMinHeight(dp(38));b.setMinimumHeight(dp(38));
         b.setTextColor(Color.rgb(37,91,174));
         return b;
     }
@@ -501,13 +498,13 @@ public class EasyMainActivity extends MainActivity {
     private Button navButton(String icon,String label,Runnable action) {
         Button b=new Button(this);
         b.setText(icon+"\n"+label);
-        b.setTextSize(icon.length()>2?8.5f:9f);
+        b.setTextSize(8f);
         b.setTextColor(Color.rgb(58,68,82));
         b.setAllCaps(false);
         b.setGravity(Gravity.CENTER);
         b.setPadding(dp(1),dp(1),dp(1),dp(1));
-        b.setMinWidth(dp(49));b.setMinimumWidth(dp(49));
-        b.setMinHeight(dp(44));b.setMinimumHeight(dp(44));
+        b.setMinWidth(dp(43));b.setMinimumWidth(dp(43));
+        b.setMinHeight(dp(39));b.setMinimumHeight(dp(39));
         b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,10));
         b.setOnClickListener(v->action.run());
         return b;

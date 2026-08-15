@@ -446,7 +446,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                     Float x = number(sp, "x"), y = number(sp, "y");
                     if (x == null || y == null) continue;
                     PointF p = screen(x, y);
-                    float r = 3.6f * density();
+                    float r = 2.5f * density();
                     canvas.drawCircle(p.x, p.y, r, guidePointFill);
                     canvas.drawCircle(p.x, p.y, r, guidePointPaint);
                 }

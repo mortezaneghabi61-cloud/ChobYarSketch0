@@ -523,7 +523,7 @@ public class CadCanvasView extends View {
     }
 
     private void drawSelectionHandles(Canvas c,Entity e,float px){
-        float r=6.5f*px;
+        float r=4.2f*px;
         List<ControlPoint> handles=e.controlPoints();
         for(int i=0;i<handles.size();i++){
             ControlPoint h=handles.get(i);
