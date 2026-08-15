@@ -34,6 +34,8 @@ public class CadCanvasView extends View {
 
     private static final float PX_PER_MM = 3f;
     private static final float GRID_MM = 10f;
+    private static final float MIN_VIEW_SCALE = 0.02f;
+    private static final float MAX_VIEW_SCALE = 64f;
     private static final float SNAP_RADIUS_PX = 30f;
     private static final float HIT_RADIUS_PX = 28f;
     private static final float HANDLE_RADIUS_PX = 18f;
@@ -140,7 +142,9 @@ public class CadCanvasView extends View {
                     @Override
                     public boolean onScale(ScaleGestureDetector detector) {
                         float oldScale = viewScale;
-                        viewScale = clamp(viewScale * detector.getScaleFactor(), 0.12f, 16f);
+                        float gesture = detector.getScaleFactor();
+                        float accelerated = (float)Math.pow(gesture, 1.65d);
+                        viewScale = clamp(viewScale * accelerated, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
                         float ratio = viewScale / oldScale;
                         float fx = detector.getFocusX();
                         float fy = detector.getFocusY();
@@ -178,6 +182,19 @@ public class CadCanvasView extends View {
     public void toggleDimensions() { showDimensions = !showDimensions; invalidate(); }
     public void toggleSnap() { snapEnabled = !snapEnabled; snapVisible = false; invalidate(); }
     public void toggleOrtho() { orthoEnabled = !orthoEnabled; invalidate(); }
+
+    public void zoomBy(float factor) {
+        if (factor <= 0f) return;
+        float oldScale = viewScale;
+        viewScale = clamp(viewScale * factor, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+        if (Math.abs(oldScale - viewScale) < 1e-7f) return;
+        float ratio = viewScale / oldScale;
+        float fx = getWidth() > 0 ? getWidth() / 2f : 0f;
+        float fy = getHeight() > 0 ? getHeight() / 2f : 0f;
+        offsetX = fx - (fx - offsetX) * ratio;
+        offsetY = fy - (fy - offsetY) * ratio;
+        invalidate();
+    }
 
     public String selectedInfo() {
         return selected == null ? "هیچ شکلی انتخاب نشده" : selected.describe();
@@ -384,7 +401,7 @@ public class CadCanvasView extends View {
         float h = Math.max(20f, all.height());
         float sx = getWidth() / (w * PX_PER_MM * 1.25f);
         float sy = getHeight() / (h * PX_PER_MM * 1.25f);
-        viewScale = clamp(Math.min(sx, sy), 0.12f, 16f);
+        viewScale = clamp(Math.min(sx, sy), MIN_VIEW_SCALE, MAX_VIEW_SCALE);
         PointF c = centerOf(all);
         offsetX = getWidth()/2f - c.x*PX_PER_MM*viewScale;
         offsetY = getHeight()/2f - c.y*PX_PER_MM*viewScale;
@@ -438,15 +455,27 @@ public class CadCanvasView extends View {
         String mode = toolName(tool);
         screenTextPaint.setTextSize(25f);
         String info = selected == null ? "" : " | انتخاب: " + selected.shortName();
-        canvas.drawText("حالت: " + mode + (snapEnabled ? " | Snap" : "") + info,
+        int zoomPercent = Math.max(1, Math.round(viewScale * 100f));
+        canvas.drawText("حالت: " + mode + (snapEnabled ? " | Snap" : "") + info + " | Zoom " + zoomPercent + "%",
                 12f, getHeight()-18f, screenTextPaint);
     }
 
+    private float adaptiveGridStep() {
+        float step = GRID_MM;
+        float screen = step * PX_PER_MM * viewScale;
+        while (screen < 22f) {
+            step *= 5f;
+            screen = step * PX_PER_MM * viewScale;
+        }
+        return step;
+    }
+
     private void drawGrid(Canvas c, float left, float top, float right, float bottom) {
-        float gx=(float)Math.floor(left/GRID_MM)*GRID_MM;
-        float gy=(float)Math.floor(top/GRID_MM)*GRID_MM;
-        for(float x=gx;x<=right;x+=GRID_MM)c.drawLine(x,top,x,bottom,gridPaint);
-        for(float y=gy;y<=bottom;y+=GRID_MM)c.drawLine(left,y,right,y,gridPaint);
+        float step = adaptiveGridStep();
+        float gx=(float)Math.floor(left/step)*step;
+        float gy=(float)Math.floor(top/step)*step;
+        for(float x=gx;x<=right;x+=step)c.drawLine(x,top,x,bottom,gridPaint);
+        for(float y=gy;y<=bottom;y+=step)c.drawLine(left,y,right,y,gridPaint);
     }
 
     private void drawAxes(Canvas c,float left,float top,float right,float bottom,float px){
@@ -764,10 +793,12 @@ public class CadCanvasView extends View {
                 case"LAYERHIDE":require(a,2);return setLayerVisible(a[1],false);
                 case"LAYERSHOW":require(a,2);return setLayerVisible(a[1],true);
                 case"MATERIAL":require(a,2);return setMaterial(a[1]);
-                case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=sc.scale;offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
+                case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=clamp(sc.scale,MIN_VIEW_SCALE,MAX_VIEW_SCALE);offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
                 case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
                 case"ERASE":case"DELETE":if(selected==null)return"اول شکل را انتخاب کن";deleteSelected();return"حذف شد";
                 case"U":case"UNDO":undo();return"Undo";
+                case"ZOOMIN":case"ZIN":zoomBy(1.8f);return"Zoom In";
+                case"ZOOMOUT":case"ZOUT":zoomBy(0.55f);return"Zoom Out";
                 case"Z":case"ZOOM":case"FIT":fitAll();return"Fit شد";
                 case"AXIS":toggleAxes();return showAxes?"محورها روشن":"محورها خاموش";
                 case"GRID":toggleGrid();return showGrid?"Grid روشن":"Grid خاموش";
