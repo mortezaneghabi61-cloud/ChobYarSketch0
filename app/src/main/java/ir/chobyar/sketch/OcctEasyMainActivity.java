@@ -15,7 +15,8 @@ import java.lang.reflect.Method;
  * Shapr-aligned Sketch/Measure workflow, pen-first Automatic Line/Arc,
  * sketch definition states, driving-dimension DOF solving, parametric
  * Ellipse / Fit Point / Control Point Spline editing, spline point/tangent
- * Break-Join workflows, pen-drawn circular Arc, and Shapr Snaps / Guides.
+ * Break-Join workflows, pen-drawn circular Arc, full Snaps / Guides including
+ * OCCT-derived 3D Guidepoints and Distant Edges.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -37,7 +38,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            ShaprSnappingCadCanvasView upgraded=new ShaprSnappingCadCanvasView(this);
+            Shapr3DGuideCadCanvasView upgraded=new Shapr3DGuideCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -57,7 +58,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,ShaprSnappingCadCanvasView cad){
+    private void rewireShaprButtons(View root,Shapr3DGuideCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
@@ -71,7 +72,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(ShaprSnappingCadCanvasView cad){
+    private void showMasterTools(Shapr3DGuideCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
                 "⌁ Snaps / Guides",
