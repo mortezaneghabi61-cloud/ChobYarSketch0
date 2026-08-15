@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final int REQUEST_EXPORT_DXF = 1001;
-    private SmartCadCanvasView cad;
+    private AdvancedCadCanvasView cad;
     private TextView status;
 
     @Override
@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new SmartCadCanvasView(this);
+        cad = new AdvancedCadCanvasView(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         root.addView(makeCadToolbar());
 
         status = new TextView(this);
-        status.setText("انتخاب: روی شیء بزن؛ روی فضای خالی بکش تا کادر انتخاب ساخته شود. برای چند شکل «چندانتخاب» را روشن کن.");
+        status.setText("انتخاب: روی شیء بزن. برای دو خط، چندانتخاب را روشن کن؛ Trim / Extend / Fillet / Chamfer / Join پایین صفحه ظاهر می‌شود.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
