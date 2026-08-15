@@ -17,11 +17,11 @@ import java.lang.reflect.Method;
 /**
  * ChobYar's adaptive launcher: professional sketch/constraint tools stay under
  * a simple workspace, while Solid 3D, dual cm/mm dimensions, parametric History
- * and final-stage 3D finishing are directly reachable.
+ * and direct Edge/Face editing are directly reachable.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private FinishSolidCadCanvasView easyCad;
+    private DirectModelCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +48,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new FinishSolidCadCanvasView(this);
+            easyCad = new DirectModelCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -111,9 +111,9 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private Button makeFinishButton() {
-        Button b = floatingButton("⌒\nFinish", "Fillet، Chamfer و Shell سه‌بعدی");
+        Button b = floatingButton("✥\nEdit 3D", "انتخاب Edge/Face، Fillet، Chamfer، Push/Pull و Shell");
         b.setOnClickListener(v -> {
-            if (easyCad != null) easyCad.showFinishManager();
+            if (easyCad != null) easyCad.showDirectManager();
         });
         return b;
     }
