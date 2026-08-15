@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final int REQUEST_EXPORT_DXF = 1001;
-    private AdvancedCadCanvasView cad;
+    private CentimeterCadCanvasView cad;
     private TextView status;
 
     @Override
@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new AdvancedCadCanvasView(this);
+        cad = new CentimeterCadCanvasView(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         root.addView(makeCadToolbar());
 
         status = new TextView(this);
-        status.setText("انتخاب: روی شیء بزن. برای دو خط، چندانتخاب را روشن کن؛ Trim / Extend / Fillet / Chamfer / Join پایین صفحه ظاهر می‌شود.");
+        status.setText("واحد اندازه‌گیری: سانتی‌متر (cm) — روی شیء بزن تا انتخاب شود. اندازه دقیق هم متناسب با همان شکل نمایش داده می‌شود.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
@@ -92,7 +92,7 @@ public class MainActivity extends Activity {
         row.addView(btn("Snap", () -> { cad.toggleSnap(); say(cad.isSnapEnabled() ? "Snap روشن" : "Snap خاموش"); }));
         row.addView(btn("Ortho", () -> { cad.toggleOrtho(); say(cad.isOrthoEnabled() ? "Ortho روشن" : "Ortho خاموش"); }));
         row.addView(btn("Guide", () -> { cad.toggleGuides(); say(cad.isShowGuides() ? "Guide روشن" : "Guide مخفی"); }));
-        row.addView(btn("ابعاد", () -> { cad.toggleDimensions(); say(cad.isShowDimensions() ? "ابعاد روشن" : "ابعاد مخفی"); }));
+        row.addView(btn("ابعاد", () -> { cad.toggleDimensions(); say(cad.isShowDimensions() ? "ابعاد cm روشن" : "ابعاد مخفی"); }));
         row.addView(btn("Fit", () -> { cad.fitAll(); say("تمام نقشه در صفحه"); }));
         row.addView(btn("اندازه دقیق", this::showExactDimension));
         row.addView(btn("ویرایش", this::showTransformMenu));
@@ -124,10 +124,10 @@ public class MainActivity extends Activity {
         row.addView(quickBtn("⛓ گروه", () -> say(cad.groupSelected())));
         row.addView(quickBtn("⛓ بازگروه", () -> say(cad.ungroupSelected())));
         row.addView(quickBtn("📐 اندازه", this::showExactDimension));
-        row.addView(quickBtn("↔ جابه‌جا", () -> promptCommand("جابه‌جایی دقیق", "dx dy   مثال: 50 0", "MOVE ")));
-        row.addView(quickBtn("⟳ چرخش", () -> promptCommand("چرخش", "درجه   مثال: 45", "ROTATE ")));
-        row.addView(quickBtn("⧉ کپی", () -> promptCommand("کپی دقیق", "dx dy   مثال: 100 0", "COPY ")));
-        row.addView(quickBtn("↕ Offset", () -> promptCommand("Offset", "فاصله mm   مثال: 18", "OFFSET ")));
+        row.addView(quickBtn("↔ جابه‌جا", () -> promptCommand("جابه‌جایی دقیق — cm", "dx dy به cm؛ مثال: 5 0", "MOVE ")));
+        row.addView(quickBtn("⟳ چرخش", () -> promptCommand("چرخش", "درجه؛ مثال: 45", "ROTATE ")));
+        row.addView(quickBtn("⧉ کپی", () -> promptCommand("کپی دقیق — cm", "dx dy به cm؛ مثال: 10 0", "COPY ")));
+        row.addView(quickBtn("↕ Offset", () -> promptCommand("Offset — cm", "فاصله به cm؛ مثال: 1.8", "OFFSET ")));
         row.addView(quickBtn("⇄ قرینه", this::showMirrorQuickMenu));
         row.addView(quickBtn("🎨 متریال", this::showMaterialMenu));
         row.addView(quickBtn("⋮ بیشتر", this::showTransformMenu));
@@ -197,13 +197,26 @@ public class MainActivity extends Activity {
     }
 
     private void showExactDimension() {
-        say(cad.selectedInfo());
+        if (!cad.canEditExactDimension()) {
+            String message = cad.exactDimensionMessage();
+            say(message);
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         EditText input = new EditText(this);
         input.setSingleLine(true);
-        input.setHint("خط: 876 | مستطیل: 600 400 | دایره: قطر 60");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setHint(cad.exactDimensionHint());
+        String current = cad.exactDimensionCurrentValue();
+        if (!current.isEmpty()) {
+            input.setText(current);
+            input.setSelectAllOnFocus(true);
+        }
+
         new AlertDialog.Builder(this)
-                .setTitle("اندازه دقیق — mm")
-                .setMessage(cad.selectedInfo())
+                .setTitle(cad.exactDimensionTitle())
+                .setMessage(cad.exactDimensionMessage())
                 .setView(input)
                 .setPositiveButton("اعمال", (d, w) -> say(cad.applySelectedDimension(input.getText().toString())))
                 .setNegativeButton("لغو", null)
@@ -223,14 +236,14 @@ public class MainActivity extends Activity {
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
                         case 0: showExactDimension(); break;
-                        case 1: promptCommand("Move: dx dy", "مثال: 50 0", "MOVE "); break;
-                        case 2: promptCommand("Copy: dx dy", "مثال: 100 0", "COPY "); break;
-                        case 3: promptCommand("Rotate: درجه", "مثال: 45", "ROTATE "); break;
+                        case 1: promptCommand("Move — cm", "dx dy به cm؛ مثال: 5 0", "MOVE "); break;
+                        case 2: promptCommand("Copy — cm", "dx dy به cm؛ مثال: 10 0", "COPY "); break;
+                        case 3: promptCommand("Rotate — درجه", "مثال: 45", "ROTATE "); break;
                         case 4: promptCommand("Scale", "مثال: 1.5", "SCALE "); break;
-                        case 5: promptCommand("Mirror X", "مقدار محور؛ مثال: 0", "MIRROR X "); break;
-                        case 6: promptCommand("Mirror Y", "مقدار محور؛ مثال: 0", "MIRROR Y "); break;
-                        case 7: promptCommand("Array: count dx dy", "مثال: 4 100 0", "ARRAY "); break;
-                        case 8: promptCommand("Offset", "فاصله mm؛ مثال: 18", "OFFSET "); break;
+                        case 5: promptCommand("Mirror X — cm", "مختصات محور به cm؛ مثال: 0", "MIRROR X "); break;
+                        case 6: promptCommand("Mirror Y — cm", "مختصات محور به cm؛ مثال: 0", "MIRROR Y "); break;
+                        case 7: promptCommand("Array", "تعداد dx dy به cm؛ مثال: 4 10 0", "ARRAY "); break;
+                        case 8: promptCommand("Offset — cm", "فاصله به cm؛ مثال: 1.8", "OFFSET "); break;
                         case 9: showMaterialMenu(); break;
                         default: deleteSelectedQuick(); break;
                     }
@@ -245,8 +258,8 @@ public class MainActivity extends Activity {
                 .setTitle("قرینه")
                 .setMessage(cad.selectedInfo())
                 .setItems(items, (d, which) -> {
-                    if (which == 0) promptCommand("Mirror X", "محور؛ مثال: 0", "MIRROR X ");
-                    else promptCommand("Mirror Y", "محور؛ مثال: 0", "MIRROR Y ");
+                    if (which == 0) promptCommand("Mirror X — cm", "مختصات محور؛ مثال: 0", "MIRROR X ");
+                    else promptCommand("Mirror Y — cm", "مختصات محور؛ مثال: 0", "MIRROR Y ");
                 })
                 .setNegativeButton("بستن", null)
                 .show();
@@ -304,7 +317,7 @@ public class MainActivity extends Activity {
                 .setMessage("Push/Pull فعلاً 2.5D است؛ بقیه ابزارهای Solid بعد از اتصال هسته سه‌بعدی واقعی فعال می‌شوند.")
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) {
-                        promptCommand("Push/Pull / Extrude", "ارتفاع mm؛ مثال: 18", "EXTRUDE ");
+                        promptCommand("Push/Pull / Extrude — cm", "ارتفاع به cm؛ مثال: 1.8", "EXTRUDE ");
                         return;
                     }
                     String[] cmds = {"", "REVOLVE", "FOLLOWME", "LOFT", "SWEEP", "SHELL", "UNION", "SUBTRACT", "INTERSECT", "PROJECT"};
