@@ -15,13 +15,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * ChobYar's adaptive launcher: the professional sketch/constraint engine stays
- * underneath, while the main workspace exposes smart relations, sketch planes,
- * volumetric Solid 3D and dual cm/mm dimensions without forcing command-line knowledge.
+ * ChobYar's adaptive launcher: professional sketch/constraint tools stay under
+ * a simple workspace, while Solid 3D, dual cm/mm dimensions and parametric
+ * History are directly reachable.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private DualUnitSolidCadCanvasView easyCad;
+    private ParametricHistorySolidCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +48,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new DualUnitSolidCadCanvasView(this);
+            easyCad = new ParametricHistorySolidCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -58,6 +58,7 @@ public class EasyMainActivity extends MainActivity {
             root.addView(makeRelationsButton(), relationsParams());
             root.addView(makePlaneButton(), planeParams());
             root.addView(makeSolidButton(), solidParams());
+            root.addView(makeHistoryButton(), historyParams());
             patchUnitChrome(root);
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
@@ -108,11 +109,15 @@ public class EasyMainActivity extends MainActivity {
         return b;
     }
 
-    /**
-     * MainActivity still owns the original Shapr-inspired chrome. Rather than
-     * duplicating it, patch the existing unit badge/status after the dual-unit
-     * engine is installed.
-     */
+    private Button makeHistoryButton() {
+        Button b = floatingButton("⏱\nHistory", "تاریخچه پارامتریک و ویرایش Featureها");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showHistoryManager();
+        });
+        return b;
+    }
+
+    /** Patch the original Shapr-inspired unit badge/status for dual cm/mm. */
     private void patchUnitChrome(View view) {
         if (view instanceof Button) {
             Button b = (Button) view;
@@ -163,7 +168,7 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, 0, dp(10), dp(150));
+        p.setMargins(0, 0, dp(10), dp(225));
         return p;
     }
 
@@ -172,7 +177,7 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, 0, dp(10), 0);
+        p.setMargins(0, 0, dp(10), dp(75));
         return p;
     }
 
@@ -181,7 +186,16 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, dp(150), dp(10), 0);
+        p.setMargins(0, dp(75), dp(10), 0);
+        return p;
+    }
+
+    private FrameLayout.LayoutParams historyParams() {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL);
+        p.setMargins(0, dp(225), dp(10), 0);
         return p;
     }
 
