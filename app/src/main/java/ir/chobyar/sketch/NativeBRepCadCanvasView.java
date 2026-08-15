@@ -10,7 +10,8 @@ import java.util.Locale;
  * Native-kernel gateway layered on top of the ExactBoolean workspace.
  *
  * Java/Polygonal CAD remains usable as a fallback, while arm64 devices exercise
- * OCCT B-Rep primitives, Form features and Boolean topology through JNI.
+ * OCCT B-Rep primitives, Form features, Boolean topology and exact direct edits
+ * through JNI.
  */
 public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
 
@@ -34,7 +35,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Native B-Rep")
                 .setMessage(nativeState+"\n"+occtState
-                        +"\n\nدر arm64، Primitiveها، Revolve/Sweep/Loft و Booleanهای مهاجرت‌شده داخل Open CASCADE به‌صورت TopoDS_Shape واقعی ساخته می‌شوند.")
+                        +"\n\nدر arm64، Extrude/Revolve/Sweep/Loft، Boolean و Edit 3D مهاجرت‌شده داخل Open CASCADE به‌صورت TopoDS_Shape واقعی ساخته می‌شوند.")
                 .setItems(items,(d,w)->{
                     if(w==0)NativeBRepCadCanvasView.super.showSolidManager();
                     else if(w==1)showNativeStatus();
@@ -77,8 +78,11 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         msg.append("\n").append((flags&64)!=0?"✓":"○").append(" BRepAlgoAPI Union/Subtract/Intersect");
         msg.append("\n").append((flags&128)!=0?"✓":"○").append(" BRepPrimAPI Revolve");
         msg.append("\n").append((flags&256)!=0?"✓":"○").append(" BRepOffsetAPI Sweep / Loft");
+        msg.append("\n").append((flags&512)!=0?"✓":"○").append(" Edge Fillet / Chamfer exact");
+        msg.append("\n").append((flags&1024)!=0?"✓":"○").append(" Face Push/Pull / Shell exact");
+        msg.append("\n").append((flags&2048)!=0?"✓":"○").append(" Body Move / Rotate exact");
         msg.append("\n\nواحد داخلی mm است و نمایش اندازه‌ها cm + mm باقی می‌ماند.");
-        msg.append("\n\nمرحله بعد: انتقال Direct Editهای Face/Edge، Fillet/Chamfer/Shell و Transform به Shape History خود OCCT.");
+        msg.append("\n\nقدم معماری بعدی: شناسه پایدار Edge/Face و اتصال Direct Editها به History اصلی برای وابستگی کامل Featureها.");
         new AlertDialog.Builder(getContext()).setTitle("Native / OCCT B-Rep Kernel")
                 .setMessage(msg.toString()).setPositiveButton("باشه",null).show();
     }
