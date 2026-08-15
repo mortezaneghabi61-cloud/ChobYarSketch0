@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new ParametricSketchCanvasView(this);
+        cad = new ShaprLabCanvasView(this);
         cad.setStatusListener(this::say);
         cad.setDimensionEditListener(this::showExactDimension);
         cad.setWorkspaceListener(this::onWorkspaceStateChanged);
