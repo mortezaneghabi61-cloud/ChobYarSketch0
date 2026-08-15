@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final int REQUEST_EXPORT_DXF = 1001;
-    private CadCanvasView cad;
+    private SmartCadCanvasView cad;
     private TextView status;
 
     @Override
@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         enterImmersiveMode();
 
-        cad = new CadCanvasView(this);
+        cad = new SmartCadCanvasView(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -40,13 +40,16 @@ public class MainActivity extends Activity {
         root.addView(makeCadToolbar());
 
         status = new TextView(this);
-        status.setText("حالت انتخاب: روی شیء بزن تا آبی شود؛ سپس از نوار ویرایش سریع استفاده کن.");
+        status.setText("انتخاب: روی شیء بزن؛ روی فضای خالی بکش تا کادر انتخاب ساخته شود. برای چند شکل «چندانتخاب» را روشن کن.");
         status.setTextSize(12);
         status.setPadding(12, 3, 12, 5);
         status.setTextColor(Color.DKGRAY);
         root.addView(status, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        cad.setStatusListener(this::say);
+        cad.setDimensionEditListener(this::showExactDimension);
 
         root.addView(makeQuickEditBar());
         root.addView(cad, new LinearLayout.LayoutParams(
@@ -107,7 +110,7 @@ public class MainActivity extends Activity {
         outer.setBackgroundColor(Color.rgb(236, 242, 250));
 
         TextView title = new TextView(this);
-        title.setText("ویرایش سریع شیء انتخاب‌شده");
+        title.setText("ویرایش انتخاب");
         title.setTextSize(11);
         title.setTextColor(Color.rgb(40, 75, 120));
         title.setPadding(6, 0, 6, 1);
@@ -116,6 +119,10 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(quickBtn("☑ چندانتخاب", () -> say(cad.toggleMultiSelectMode())));
+        row.addView(quickBtn("📌 جابجایی Snap", () -> say(cad.beginAnchorMove())));
+        row.addView(quickBtn("⛓ گروه", () -> say(cad.groupSelected())));
+        row.addView(quickBtn("⛓ بازگروه", () -> say(cad.ungroupSelected())));
         row.addView(quickBtn("📐 اندازه", this::showExactDimension));
         row.addView(quickBtn("↔ جابه‌جا", () -> promptCommand("جابه‌جایی دقیق", "dx dy   مثال: 50 0", "MOVE ")));
         row.addView(quickBtn("⟳ چرخش", () -> promptCommand("چرخش", "درجه   مثال: 45", "ROTATE ")));
@@ -252,9 +259,9 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("حذف شیء انتخاب‌شده؟")
+                .setTitle("حذف انتخاب؟")
                 .setMessage(info)
-                .setPositiveButton("حذف", (d, w) -> { cad.deleteSelected(); say("شیء حذف شد"); })
+                .setPositiveButton("حذف", (d, w) -> { cad.deleteSelected(); say("انتخاب حذف شد"); })
                 .setNegativeButton("لغو", null)
                 .show();
     }
@@ -279,7 +286,7 @@ public class MainActivity extends Activity {
         String[] values = {"WOOD", "MDF", "METAL", "GLASS", "DEFAULT"};
         new AlertDialog.Builder(this)
                 .setTitle("متریال / رنگ تشخیصی")
-                .setMessage("اگر شکلی انتخاب باشد روی همان اعمال می‌شود؛ در غیر این صورت روی ترسیم‌های بعدی.")
+                .setMessage("اگر شکل انتخاب باشد روی انتخاب اعمال می‌شود؛ در غیر این صورت روی ترسیم‌های بعدی.")
                 .setItems(items, (d, which) -> say(cad.setMaterial(values[which])))
                 .setNegativeButton("بستن", null)
                 .show();
