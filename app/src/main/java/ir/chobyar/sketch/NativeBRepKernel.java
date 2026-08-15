@@ -1,12 +1,12 @@
 package ir.chobyar.sketch;
 
 /**
- * Stable Java/JNI boundary for ChobYar's native geometry backend.
+ * Stable Java/JNI boundary for skachmori's native geometry backend.
  *
- * The bridge keeps the UI independent from the kernel implementation. Basic
- * analytic math is always available in C++; on arm64-v8a CI additionally links
- * the pinned Open CASCADE Technology backend for exact B-Rep primitives and
- * Boolean operations.
+ * The UI talks only to this contract. The arm64 backend links Open CASCADE and
+ * can now build exact B-Rep prisms/cylinders directly from app sketch geometry,
+ * perform Boolean operations, and return a triangulated display mesh generated
+ * from the resulting TopoDS_Shape.
  */
 final class NativeBRepKernel {
     static final int OCCT_UNION = 0;
@@ -92,6 +92,19 @@ final class NativeBRepKernel {
         try{return nativeOcctCreateCylinder(cxMm,cyMm,czMm,radiusMm,heightMm);}catch(Throwable t){return 0L;}
     }
 
+    static long occtCreateCylinderAxis(Geometry3D.Vec3 center,Geometry3D.Vec3 axis,double radiusMm,double heightMm){
+        if(!occtAvailable()||center==null||axis==null)return 0L;
+        try{return nativeOcctCreateCylinderAxis(center.x,center.y,center.z,axis.x,axis.y,axis.z,radiusMm,heightMm);}
+        catch(Throwable t){return 0L;}
+    }
+
+    /** xyz is [x0,y0,z0,x1,y1,z1,...] in model millimeters. */
+    static long occtCreatePrism(double[] xyz,Geometry3D.Vec3 extrusionVectorMm){
+        if(!occtAvailable()||xyz==null||xyz.length<9||extrusionVectorMm==null)return 0L;
+        try{return nativeOcctCreatePrism(xyz,extrusionVectorMm.x,extrusionVectorMm.y,extrusionVectorMm.z);}
+        catch(Throwable t){return 0L;}
+    }
+
     static long occtBoolean(int operation,long left,long right){
         if(!occtAvailable()||left==0L||right==0L)return 0L;
         try{return nativeOcctBoolean(operation,left,right);}catch(Throwable t){return 0L;}
@@ -100,6 +113,12 @@ final class NativeBRepKernel {
     static double[] occtShapeStats(long handle){
         if(!occtAvailable()||handle==0L)return new double[0];
         try{return nativeOcctShapeStats(handle);}catch(Throwable t){return new double[0];}
+    }
+
+    /** Returns triangle coordinates [x,y,z] × 3 per triangle, in mm. */
+    static double[] occtTriangulate(long handle,double deflectionMm){
+        if(!occtAvailable()||handle==0L)return new double[0];
+        try{return nativeOcctTriangulate(handle,deflectionMm);}catch(Throwable t){return new double[0];}
     }
 
     static String occtShapeSummary(long handle){
@@ -134,8 +153,14 @@ final class NativeBRepKernel {
     private static native String nativeOcctSelfTest();
     private static native long nativeOcctCreateBox(double dx,double dy,double dz);
     private static native long nativeOcctCreateCylinder(double cx,double cy,double cz,double radius,double height);
+    private static native long nativeOcctCreateCylinderAxis(
+            double cx,double cy,double cz,
+            double ax,double ay,double az,
+            double radius,double height);
+    private static native long nativeOcctCreatePrism(double[] xyz,double vx,double vy,double vz);
     private static native long nativeOcctBoolean(int operation,long left,long right);
     private static native double[] nativeOcctShapeStats(long handle);
+    private static native double[] nativeOcctTriangulate(long handle,double deflection);
     private static native String nativeOcctShapeSummary(long handle);
     private static native void nativeOcctRelease(long handle);
     private static native void nativeOcctClear();
