@@ -12,6 +12,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -81,6 +82,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     }
 
     private final List<Feature> history = new ArrayList<>();
+    private final ArrayDeque<Feature> redoHistory = new ArrayDeque<>();
     private final IdentityHashMap<Object,Feature> producerByBody = new IdentityHashMap<>();
     private int featureSerial=1;
     private boolean rebuilding=false;
@@ -141,6 +143,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
             f.signature=profileSignature(p.points);
             history.add(f);
             producerByBody.put(body,f);
+            redoHistory.clear();
         }
         return result;
     }
@@ -231,6 +234,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                 f.outputBody=out;
                 history.add(f);
                 producerByBody.put(out,f);
+                redoHistory.clear();
             } else if(before!=null) setSelectedBody(before);
             return result;
         }catch(Exception e){return "Boolean انجام نشد";}
@@ -361,6 +365,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     public String undoLastFeature() {
         if(history.isEmpty())return"History خالی است";
         Feature f=history.remove(history.size()-1);
+        redoHistory.addLast(f);
         producerByBody.remove(f.outputBody);
         List<Object> bs=bodies();
         bs.remove(f.outputBody);
@@ -375,13 +380,30 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         return "Feature آخر برگشت: "+f.kind;
     }
 
+    public String redoLastFeature(){
+        if(redoHistory.isEmpty())return "Redo خالی است";
+        Feature f=redoHistory.removeLast();
+        List<Object> bs=bodies();
+        if(f instanceof BooleanFeature){
+            BooleanFeature b=(BooleanFeature)f;
+            bs.remove(b.leftBody);bs.remove(b.rightBody);
+        }
+        if(!bs.contains(f.outputBody))bs.add(f.outputBody);
+        history.add(f);producerByBody.put(f.outputBody,f);
+        setSelectedBody(f.outputBody);setSelectedFace(null);
+        String rebuilt=rebuildHistory();invalidate();
+        return "Feature دوباره اجرا شد: "+f.kind+" • "+rebuilt;
+    }
+
+    public boolean canRedoFeature(){return !redoHistory.isEmpty();}
+
     @Override
     public String undoSolid(){return undoLastFeature();}
 
     @Override
     public void clearAll(){
         super.clearAll();
-        history.clear();producerByBody.clear();featureSerial=1;
+        history.clear();redoHistory.clear();producerByBody.clear();featureSerial=1;
     }
 
     // ------------------------------------------------------------------

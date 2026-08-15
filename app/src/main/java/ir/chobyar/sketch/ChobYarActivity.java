@@ -47,6 +47,7 @@ public final class ChobYarActivity extends Activity {
         projectTitle=label("چوب‌یار 3D",13,true);projectTitle.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams title=new LinearLayout.LayoutParams(0,dp(42),1);title.setMargins(dp(5),0,0,0);b.addView(projectTitle,title);
         b.addView(action("↶",42,()->{cad.undo();status("برگشت");}));
+        b.addView(action("↷",42,()->status(cad.redoLastFeature())));
         b.addView(action("◷",42,cad::showHistoryManager));
         b.addView(action("⋯",42,this::more));return b;
     }
