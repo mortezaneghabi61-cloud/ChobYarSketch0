@@ -12,7 +12,8 @@ import java.lang.reflect.Method;
 
 /**
  * Clean skachmori shell upgraded to the exact OCCT workspace plus the
- * Shapr-inspired Sketch/Measure workflow and pen-first Automatic Line/Arc.
+ * Shapr-inspired Sketch/Measure workflow, pen-first Automatic Line/Arc,
+ * and Shapr-style sketch definition states.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -34,7 +35,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            OcctShaprPenCadCanvasView upgraded=new OcctShaprPenCadCanvasView(this);
+            ShaprSketchStateCadCanvasView upgraded=new ShaprSketchStateCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -54,7 +55,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,OcctShaprCadCanvasView cad){
+    private void rewireShaprButtons(View root,ShaprSketchStateCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
@@ -67,12 +68,13 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(OcctShaprCadCanvasView cad){
+    private void showMasterTools(ShaprSketchStateCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
                 "▣ 3D Modeling tools",
                 "⌖ Measure انتخاب",
                 "⌁ Constraints",
+                "● Sketch State / DOF",
                 "◇ Plane / Construction",
                 "⏱ History"
         };
@@ -81,7 +83,11 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             else if(w==1)cad.showShaprModelingToolsMenu();
             else if(w==2)cad.showSketchMeasureInspector();
             else if(w==3)cad.showSmartConstraintMenu();
-            else if(w==4)cad.showPlaneManager();
+            else if(w==4)new AlertDialog.Builder(this)
+                    .setTitle("Sketch State")
+                    .setMessage(cad.sketchStateSummary())
+                    .setPositiveButton("بستن",null).show();
+            else if(w==5)cad.showPlaneManager();
             else cad.showHistoryManager();
         }).setNegativeButton("بستن",null).show();
     }
