@@ -13,22 +13,22 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * First production bridge between the app's own parametric Sketch/History model
- * and the OCCT TopoDS_Shape store.
+ * Production bridge between the app's Sketch/History model and OCCT TopoDS_Shape.
  *
- * Extrude features are rebuilt as exact OCCT prisms. A single Circle source is
- * preserved as an analytic OCCT cylinder on the real sketch Plane normal rather
- * than as a many-sided polygon. History Boolean features are then evaluated from
- * those exact input handles. OCCT also returns the triangulation used here as a
- * display overlay, so exact B-Rep geometry and rendering now share one source.
+ * Exact native history now covers Extrude, Revolve, Sweep, Loft and downstream
+ * Union/Subtract/Intersect. Circle profiles remain analytic OCCT circles instead
+ * of being converted to display polygons. OCCT returns the triangulation used by
+ * this view, so the display mesh is derived from the same exact B-Rep shape.
  *
- * Revolve/Sweep/Loft and direct-edit features still use their existing backend;
- * this class deliberately migrates Extrude + Boolean first without destabilizing
- * the rest of the modeling workflow.
+ * Direct Face/Edge edits are still replayed by the legacy editing layer. Bodies
+ * with active Direct Edit features are deliberately not advertised as synced
+ * native shapes until that edit stack is migrated, preventing stale geometry.
  */
 public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
 
@@ -42,11 +42,24 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         int triangleCount(){return mesh.length/9;}
     }
 
+    private static final class ProfileRecord {
+        final int type;
+        final double[] data;
+        ProfileRecord(int type,double[] data){this.type=type;this.data=data;}
+    }
+
     private final IdentityHashMap<Object,NativeRecord> nativeByBody=new IdentityHashMap<>();
+
     private Field historyField;
+    private Field formHistoryField;
     private Field selectedBodyField;
     private Field overviewCardField;
+    private Field directOpsByBodyField;
+
     private Method profileFromSourcesMethod;
+    private Method advancedProfileMethod;
+    private Method path3DMethod;
+    private Method axisForMethod;
     private Method projectMethod;
 
     private String lastHistorySignature="";
@@ -73,10 +86,20 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
     private void initOcctModelReflection(){
         try{
             historyField=field(ParametricHistorySolidCadCanvasView.class,"history");
+            formHistoryField=field(AdvancedParametricSolidCadCanvasView.class,"formHistory");
             selectedBodyField=field(SolidCadCanvasView.class,"selectedBody");
             overviewCardField=field(SpatialCadCanvasView.class,"overviewCard");
+            directOpsByBodyField=field(DirectModelCadCanvasView.class,"directOpsByBody");
+
             profileFromSourcesMethod=ParametricHistorySolidCadCanvasView.class.getDeclaredMethod("profileFromSources",List.class);
             profileFromSourcesMethod.setAccessible(true);
+            advancedProfileMethod=AdvancedParametricSolidCadCanvasView.class.getDeclaredMethod("profile",Object.class);
+            advancedProfileMethod.setAccessible(true);
+            path3DMethod=AdvancedParametricSolidCadCanvasView.class.getDeclaredMethod("path3D",Object.class);
+            path3DMethod.setAccessible(true);
+            Class<?> planeClass=Geometry3D.Plane3D.class;
+            axisForMethod=AdvancedParametricSolidCadCanvasView.class.getDeclaredMethod("axisFor",Object.class,planeClass,boolean.class);
+            axisForMethod.setAccessible(true);
             projectMethod=SpatialCadCanvasView.class.getDeclaredMethod("project",Geometry3D.Vec3.class);
             projectMethod.setAccessible(true);
         }catch(Exception ignored){}
@@ -91,9 +114,36 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         String result=super.extrudeSelectedBody(heightCm);
         lastHistorySignature="";
         syncNativeHistory(true);
-        Object selected=selectedBody();
-        NativeRecord record=nativeByBody.get(selected);
-        if(record!=null && result!=null && result.contains("ساخته شد")){
+        return withSelectedNativeResult(result);
+    }
+
+    @Override
+    public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg){
+        String result=super.createRevolve(profileEntity,axisEntity,xAxis,angleDeg);
+        lastHistorySignature="";
+        syncNativeHistory(true);
+        return withSelectedNativeResult(result);
+    }
+
+    @Override
+    public String createSweep(Object profileEntity,Object pathEntity){
+        String result=super.createSweep(profileEntity,pathEntity);
+        lastHistorySignature="";
+        syncNativeHistory(true);
+        return withSelectedNativeResult(result);
+    }
+
+    @Override
+    public String createLoft(Object first,Object second){
+        String result=super.createLoft(first,second);
+        lastHistorySignature="";
+        syncNativeHistory(true);
+        return withSelectedNativeResult(result);
+    }
+
+    private String withSelectedNativeResult(String result){
+        NativeRecord record=nativeByBody.get(selectedBody());
+        if(record!=null && result!=null && !result.trim().isEmpty()){
             return result+" | OCCT "+record.kind+" • "+record.triangleCount()+"△ Mesh";
         }
         return result;
@@ -140,8 +190,9 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         NativeRecord r=nativeByBody.get(selectedBody());
         String state=!NativeBRepKernel.occtAvailable()
                 ?"OCCT روی این ABI فعال نیست"
-                :"OCCT synced: "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" خطا":"");
+                :"OCCT synced: "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" منتظر مهاجرت/خطا":"");
         if(r!=null)state+="\nSelected: "+selected+" • "+r.kind+" • "+r.triangleCount()+" triangles";
+        else if(selectedBody()!=null && hasDirectEdits(selectedBody()))state+="\nSelected: Direct Edit فعال دارد؛ شکل Native عمداً موقتاً غیرفعال است.";
 
         String[] items={
                 "▣ ابزارهای Solid / Native قبلی",
@@ -152,7 +203,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • OCCT Model")
-                .setMessage(state+"\n\nExtrude و Booleanهای History مستقیماً از Sketch به TopoDS_Shape ساخته می‌شوند.")
+                .setMessage(state+"\n\nExtrude • Revolve • Sweep • Loft • Boolean مستقیماً به TopoDS_Shape تبدیل می‌شوند.")
                 .setItems(items,(d,w)->{
                     if(w==0)OcctModelCadCanvasView.super.showSolidManager();
                     else if(w==1){lastHistorySignature="";syncNativeHistory(true);toast(nativeSyncSummary());invalidate();}
@@ -185,36 +236,72 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
             nativeFailureCount=0;
             return;
         }
-        List<Object> history=history();
-        String signature=historySignature(history);
+
+        List<Object> baseHistory=history();
+        List<Object> forms=formHistory();
+        String signature=historySignature(baseHistory,forms);
         if(!force && signature.equals(lastHistorySignature))return;
 
         releaseNativeRecords();
         nativeFeatureCount=0;
         nativeFailureCount=0;
 
-        for(Object feature:history){
+        // 1) Independent body-producing features first.
+        for(Object feature:baseHistory){
+            if(feature==null||!"ExtrudeFeature".equals(feature.getClass().getSimpleName()))continue;
+            Object out=value(feature,"outputBody");
+            long handle=buildExtrudeFeature(feature);
+            if(!storeNative(out,handle,extrudeKind(feature)))nativeFailureCount++;
+        }
+
+        for(Object feature:forms){
             if(feature==null)continue;
+            Object out=value(feature,"outputBody");
             String type=feature.getClass().getSimpleName();
-            if("ExtrudeFeature".equals(type)){
-                Object out=value(feature,"outputBody");
-                long handle=buildExtrudeFeature(feature);
-                if(out!=null && handle!=0L){
-                    nativeByBody.put(out,new NativeRecord(handle,extrudeKind(feature),NativeBRepKernel.occtTriangulate(handle,0.35)));
-                    nativeFeatureCount++;
-                }else nativeFailureCount++;
-            }else if("BooleanFeature".equals(type)){
+            long handle=buildFormFeature(feature,type);
+            String kind="RevolveFeature".equals(type)?"Exact Revolve"
+                    :"SweepFeature".equals(type)?"Exact Sweep"
+                    :"LoftFeature".equals(type)?"Exact Loft":"Form";
+            if(!storeNative(out,handle,kind))nativeFailureCount++;
+        }
+
+        // 2) Boolean history can depend on Extrude, Form or an earlier Boolean.
+        // Resolve by dependency availability rather than by the two legacy list orders.
+        List<Object> pending=new ArrayList<>();
+        for(Object feature:baseHistory)if(feature!=null&&"BooleanFeature".equals(feature.getClass().getSimpleName()))pending.add(feature);
+        int guard=pending.size()+2;
+        while(!pending.isEmpty()&&guard-->0){
+            boolean progress=false;
+            Iterator<Object> it=pending.iterator();
+            while(it.hasNext()){
+                Object feature=it.next();
                 Object left=value(feature,"leftBody"),right=value(feature,"rightBody"),out=value(feature,"outputBody");
                 NativeRecord a=nativeByBody.get(left),b=nativeByBody.get(right);
+                if(a==null||b==null)continue;
                 String op=String.valueOf(value(feature,"operation"));
-                long handle=(a==null||b==null)?0L:NativeBRepKernel.occtBoolean(booleanCode(op),a.handle,b.handle);
-                if(out!=null && handle!=0L){
-                    nativeByBody.put(out,new NativeRecord(handle,friendlyBoolean(op),NativeBRepKernel.occtTriangulate(handle,0.35)));
-                    nativeFeatureCount++;
-                }else nativeFailureCount++;
+                long handle=NativeBRepKernel.occtBoolean(booleanCode(op),a.handle,b.handle);
+                if(storeNative(out,handle,friendlyBoolean(op))){
+                    it.remove();progress=true;
+                }else{
+                    it.remove();nativeFailureCount++;progress=true;
+                }
             }
+            if(!progress)break;
         }
+        nativeFailureCount+=pending.size();
         lastHistorySignature=signature;
+    }
+
+    private boolean storeNative(Object body,long handle,String kind){
+        if(body==null||handle==0L)return false;
+        if(hasDirectEdits(body)){
+            NativeBRepKernel.occtRelease(handle);
+            return false;
+        }
+        double[] mesh=NativeBRepKernel.occtTriangulate(handle,0.35);
+        nativeByBody.put(body,new NativeRecord(handle,kind,mesh));
+        nativeFeatureCount++;
+        return true;
     }
 
     private long buildExtrudeFeature(Object feature){
@@ -240,15 +327,103 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
             if(!(pointsObject instanceof List))return 0L;
             @SuppressWarnings("unchecked")
             List<PointF> points=(List<PointF>)pointsObject;
-            if(points.size()<3)return 0L;
-            double[] xyz=new double[points.size()*3];
-            for(int i=0;i<points.size();i++){
-                PointF p=points.get(i);
-                Geometry3D.Vec3 world=plane.point(p.x,p.y);
-                int k=i*3;xyz[k]=world.x;xyz[k+1]=world.y;xyz[k+2]=world.z;
-            }
+            double[] xyz=pointsOnPlane(points,plane);
+            if(xyz.length<9)return 0L;
             return NativeBRepKernel.occtCreatePrism(xyz,plane.normal.mul(heightMm));
         }catch(Exception e){return 0L;}
+    }
+
+    private long buildFormFeature(Object feature,String type){
+        try{
+            if("RevolveFeature".equals(type)){
+                Object profileEntity=value(feature,"profileEntity");
+                Object planeValue=value(feature,"profilePlane");
+                Geometry3D.Plane3D plane=planeValue instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)planeValue:null;
+                Object axisEntity=value(feature,"axisEntity");
+                boolean xAxis=bool(feature,"xAxis");
+                float angle=number(feature,"angleDeg");
+                ProfileRecord profile=profileRecord(profileEntity);
+                if(profile==null||plane==null)return 0L;
+                Object axis=axisForMethod==null?null:axisForMethod.invoke(this,axisEntity,plane,xAxis);
+                Geometry3D.Vec3 origin=vecValue(axis,"origin");
+                Geometry3D.Vec3 direction=vecValue(axis,"direction");
+                if(origin==null||direction==null||direction.length()<1e-6f){
+                    origin=plane.origin;direction=xAxis?plane.u:plane.v;
+                }
+                return NativeBRepKernel.occtCreateRevolve(profile.type,profile.data,origin,direction,angle);
+            }
+
+            if("SweepFeature".equals(type)){
+                Object profileEntity=value(feature,"profileEntity");
+                Object pathEntity=value(feature,"pathEntity");
+                ProfileRecord profile=profileRecord(profileEntity);
+                double[] path=pathRecord(pathEntity);
+                if(profile==null||path.length<6)return 0L;
+                return NativeBRepKernel.occtCreateSweep(profile.type,profile.data,path);
+            }
+
+            if("LoftFeature".equals(type)){
+                ProfileRecord first=profileRecord(value(feature,"first"));
+                ProfileRecord second=profileRecord(value(feature,"second"));
+                if(first==null||second==null)return 0L;
+                return NativeBRepKernel.occtCreateLoft(first.type,first.data,second.type,second.data);
+            }
+        }catch(Exception ignored){}
+        return 0L;
+    }
+
+    private ProfileRecord profileRecord(Object entity){
+        if(entity==null||advancedProfileMethod==null)return null;
+        try{
+            Object profile=advancedProfileMethod.invoke(this,entity);
+            if(profile==null)return null;
+            Object planeObject=value(profile,"plane");
+            Geometry3D.Plane3D plane=planeObject instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)planeObject:null;
+            if(plane==null)return null;
+
+            if("CircleEntity".equals(entity.getClass().getSimpleName())){
+                float x=number(entity,"x"),y=number(entity,"y"),r=Math.abs(number(entity,"r"));
+                if(r<=0f)return null;
+                Geometry3D.Vec3 c=plane.point(x,y);
+                double[] data={c.x,c.y,c.z,plane.normal.x,plane.normal.y,plane.normal.z,plane.u.x,plane.u.y,plane.u.z,r};
+                return new ProfileRecord(NativeBRepKernel.OCCT_PROFILE_CIRCLE,data);
+            }
+
+            Object pointsObject=value(profile,"points");
+            if(!(pointsObject instanceof List))return null;
+            @SuppressWarnings("unchecked")
+            List<PointF> points=(List<PointF>)pointsObject;
+            double[] xyz=pointsOnPlane(points,plane);
+            return xyz.length>=9?new ProfileRecord(NativeBRepKernel.OCCT_PROFILE_POLYGON,xyz):null;
+        }catch(Exception e){return null;}
+    }
+
+    private double[] pathRecord(Object pathEntity){
+        if(pathEntity==null||path3DMethod==null)return new double[0];
+        try{
+            Object out=path3DMethod.invoke(this,pathEntity);
+            if(!(out instanceof List))return new double[0];
+            @SuppressWarnings("unchecked")
+            List<Geometry3D.Vec3> path=(List<Geometry3D.Vec3>)out;
+            if(path.size()<2)return new double[0];
+            double[] xyz=new double[path.size()*3];
+            for(int i=0;i<path.size();i++){
+                Geometry3D.Vec3 p=path.get(i);int k=i*3;
+                xyz[k]=p.x;xyz[k+1]=p.y;xyz[k+2]=p.z;
+            }
+            return xyz;
+        }catch(Exception e){return new double[0];}
+    }
+
+    private static double[] pointsOnPlane(List<PointF> points,Geometry3D.Plane3D plane){
+        if(points==null||plane==null||points.size()<3)return new double[0];
+        double[] xyz=new double[points.size()*3];
+        for(int i=0;i<points.size();i++){
+            PointF p=points.get(i);
+            Geometry3D.Vec3 world=plane.point(p.x,p.y);
+            int k=i*3;xyz[k]=world.x;xyz[k+1]=world.y;xyz[k+2]=world.z;
+        }
+        return xyz;
     }
 
     private String extrudeKind(Object feature){
@@ -288,7 +463,10 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         Object body=selectedBody();
         NativeRecord r=nativeByBody.get(body);
         if(body==null){toast("اول یک Body را انتخاب کن");return;}
-        if(r==null){toast("این Body هنوز به OCCT مهاجرت نکرده");return;}
+        if(r==null){
+            toast(hasDirectEdits(body)?"این Body Direct Edit فعال دارد؛ مهاجرت Native آن مرحله بعد است":"این Body هنوز به OCCT مهاجرت نکرده");
+            return;
+        }
         double[] stats=NativeBRepKernel.occtShapeStats(r.handle);
         StringBuilder msg=new StringBuilder();
         msg.append("Body: ").append(bodyName(body));
@@ -309,17 +487,21 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         String msg="✓ Sketch Plane → XYZ واقعی\n"
                 +"✓ Rectangle/Polygon/closed-lines Extrude → OCCT Prism\n"
                 +"✓ Circle Extrude → analytic OCCT Cylinder\n"
+                +"✓ Revolve → BRepPrimAPI_MakeRevol\n"
+                +"✓ Sweep → BRepOffsetAPI_MakePipe\n"
+                +"✓ Loft → BRepOffsetAPI_ThruSections\n"
+                +"✓ Circle profile در Formها → analytic OCCT Circle\n"
                 +"✓ History Union/Subtract/Intersect → BRepAlgoAPI\n"
                 +"✓ TopoDS_Shape → OCCT triangulation → نمایش در workspace\n"
                 +"✓ واحد داخلی: mm؛ UI: cm + mm\n\n"
-                +"در حال حاضر Revolve / Sweep / Loft و Direct Edit هنوز روی backend قبلی‌اند. مرحله بعد آن‌ها را به همین Shape history منتقل می‌کند.";
+                +"مرحله باقی‌مانده در این شاخه: Direct Editهای Face/Edge، Fillet/Chamfer/Shell و Transform باید از backend قدیمی به خود OCCT Shape History منتقل شوند.";
         new AlertDialog.Builder(getContext()).setTitle("Exact Model Migration")
                 .setMessage(msg).setPositiveButton("باشه",null).show();
     }
 
     private String nativeSyncSummary(){
         if(!NativeBRepKernel.occtAvailable())return"OCCT فعال نیست";
-        return "OCCT Sync • "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" خطا":"");
+        return "OCCT Sync • "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" منتظر/خطا":"");
     }
 
     private void releaseNativeRecords(){
@@ -329,19 +511,35 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
 
     @SuppressWarnings("unchecked")
     private List<Object> history(){
-        try{
-            Object h=historyField==null?null:historyField.get(this);
-            return h instanceof List?(List<Object>)h:new ArrayList<>();
-        }catch(Exception e){return new ArrayList<>();}
+        try{Object h=historyField==null?null:historyField.get(this);return h instanceof List?(List<Object>)h:new ArrayList<>();}
+        catch(Exception e){return new ArrayList<>();}
     }
 
-    private String historySignature(List<Object> history){
+    @SuppressWarnings("unchecked")
+    private List<Object> formHistory(){
+        try{Object h=formHistoryField==null?null:formHistoryField.get(this);return h instanceof List?(List<Object>)h:new ArrayList<>();}
+        catch(Exception e){return new ArrayList<>();}
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean hasDirectEdits(Object body){
+        if(body==null||directOpsByBodyField==null)return false;
+        try{
+            Object mapObj=directOpsByBodyField.get(this);
+            if(!(mapObj instanceof Map))return false;
+            Object ops=((Map<Object,Object>)mapObj).get(body);
+            return ops instanceof List && !((List<?>)ops).isEmpty();
+        }catch(Exception e){return false;}
+    }
+
+    private String historySignature(List<Object> base,List<Object> forms){
         StringBuilder s=new StringBuilder();
-        s.append(history.size()).append('|');
-        for(Object f:history){
+        s.append("B").append(base.size()).append('|');
+        for(Object f:base){
             if(f==null)continue;
             String type=f.getClass().getSimpleName();
-            s.append(type).append(':').append(System.identityHashCode(value(f,"outputBody"))).append(':');
+            Object out=value(f,"outputBody");
+            s.append(type).append(':').append(System.identityHashCode(out)).append(':');
             if("ExtrudeFeature".equals(type)){
                 s.append(number(f,"heightMm")).append(':').append(String.valueOf(value(f,"signature")));
             }else if("BooleanFeature".equals(type)){
@@ -349,9 +547,33 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
                         .append(System.identityHashCode(value(f,"leftBody"))).append(':')
                         .append(System.identityHashCode(value(f,"rightBody")));
             }
-            s.append('|');
+            s.append(':').append(bodyGeometrySignature(out)).append(':').append(hasDirectEdits(out)).append('|');
+        }
+        s.append("F").append(forms.size()).append('|');
+        for(Object f:forms){
+            if(f==null)continue;
+            Object out=value(f,"outputBody");
+            s.append(f.getClass().getSimpleName()).append(':').append(System.identityHashCode(out)).append(':');
+            if("RevolveFeature".equals(f.getClass().getSimpleName()))s.append(number(f,"angleDeg"));
+            s.append(':').append(bodyGeometrySignature(out)).append(':').append(hasDirectEdits(out)).append('|');
         }
         return s.toString();
+    }
+
+    private String bodyGeometrySignature(Object body){
+        SolidCSG c=bodyCsg(body);
+        if(c==null)return"0";
+        long count=0;
+        double sx=0,sy=0,sz=0,sq=0;
+        for(SolidCSG.Polygon p:c.polygons())for(SolidCSG.Vertex v:p.vertices){
+            count++;sx+=v.pos.x;sy+=v.pos.y;sz+=v.pos.z;
+            sq+=v.pos.x*v.pos.x+v.pos.y*v.pos.y+v.pos.z*v.pos.z;
+        }
+        return c.polygons().size()+":"+count+":"+Math.round(sx*100)+":"+Math.round(sy*100)+":"+Math.round(sz*100)+":"+Math.round(sq*10);
+    }
+
+    private SolidCSG bodyCsg(Object body){
+        Object c=value(body,"csg");return c instanceof SolidCSG?(SolidCSG)c:null;
     }
 
     private Object selectedBody(){
@@ -379,8 +601,15 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
     }
 
     private static float number(Object o,String name){
-        Object v=value(o,name);
-        return v instanceof Number?((Number)v).floatValue():0f;
+        Object v=value(o,name);return v instanceof Number?((Number)v).floatValue():0f;
+    }
+
+    private static boolean bool(Object o,String name){
+        Object v=value(o,name);return v instanceof Boolean && (Boolean)v;
+    }
+
+    private static Geometry3D.Vec3 vecValue(Object o,String name){
+        Object v=value(o,name);return v instanceof Geometry3D.Vec3?(Geometry3D.Vec3)v:null;
     }
 
     private static Field findField(Class<?> c,String name){
