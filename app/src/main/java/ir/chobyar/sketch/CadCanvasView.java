@@ -34,8 +34,10 @@ public class CadCanvasView extends View {
 
     private static final float PX_PER_MM = 3f;
     private static final float GRID_MM = 10f;
-    private static final float SNAP_RADIUS_PX = 22f;
-    private static final int MAX_UNDO = 30;
+    private static final float SNAP_RADIUS_PX = 28f;
+    private static final float HIT_RADIUS_PX = 24f;
+    private static final float MIN_DRAW_PX = 12f;
+    private static final int MAX_UNDO = 40;
 
     private final Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint axisXPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -46,7 +48,10 @@ public class CadCanvasView extends View {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint snapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint guidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint hiddenInfoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handleFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handleStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint centerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint screenTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final List<Entity> entities = new ArrayList<>();
     private final ArrayDeque<List<Entity>> undoStack = new ArrayDeque<>();
@@ -54,7 +59,7 @@ public class CadCanvasView extends View {
     private final Map<String, Scene> scenes = new HashMap<>();
 
     private Entity selected;
-    private int tool = TOOL_LINE;
+    private int tool = TOOL_SELECT;
     private boolean showGrid = true;
     private boolean showAxes = true;
     private boolean showGuides = true;
@@ -75,46 +80,65 @@ public class CadCanvasView extends View {
     private float lastMultiY;
 
     private float startX, startY, endX, endY;
+    private float downScreenX, downScreenY;
     private boolean drawing = false;
+    private boolean draggingSelection = false;
+    private float lastDragX, lastDragY;
+    private boolean dragUndoSaved = false;
+
     private float snapX, snapY;
     private boolean snapVisible = false;
+    private String snapLabel = "";
     private final List<PointF> freePoints = new ArrayList<>();
 
     public CadCanvasView(Context context) {
         super(context);
         setBackgroundColor(Color.rgb(250, 250, 250));
         setFocusable(true);
-
         layers.put("0", true);
 
-        gridPaint.setColor(Color.rgb(225, 225, 225));
-        axisXPaint.setColor(Color.rgb(210, 55, 55));
-        axisYPaint.setColor(Color.rgb(55, 150, 75));
+        gridPaint.setColor(Color.rgb(226, 226, 226));
+        axisXPaint.setColor(Color.rgb(205, 55, 55));
+        axisYPaint.setColor(Color.rgb(45, 145, 75));
+
         entityPaint.setStyle(Paint.Style.STROKE);
         entityPaint.setStrokeCap(Paint.Cap.ROUND);
         entityPaint.setStrokeJoin(Paint.Join.ROUND);
+
         selectedPaint.setColor(Color.rgb(35, 105, 225));
         selectedPaint.setStyle(Paint.Style.STROKE);
         selectedPaint.setStrokeCap(Paint.Cap.ROUND);
         selectedPaint.setStrokeJoin(Paint.Join.ROUND);
+
         measurePaint.setColor(Color.rgb(210, 85, 35));
         measurePaint.setStyle(Paint.Style.STROKE);
+
         textPaint.setColor(Color.rgb(35, 85, 180));
         textPaint.setTextAlign(Paint.Align.CENTER);
-        snapPaint.setColor(Color.rgb(245, 145, 20));
+
+        snapPaint.setColor(Color.rgb(245, 135, 15));
         snapPaint.setStyle(Paint.Style.STROKE);
+
         guidePaint.setColor(Color.rgb(65, 145, 200));
         guidePaint.setStyle(Paint.Style.STROKE);
-        hiddenInfoPaint.setColor(Color.GRAY);
-        hiddenInfoPaint.setTextAlign(Paint.Align.LEFT);
+
+        handleFillPaint.setColor(Color.WHITE);
+        handleFillPaint.setStyle(Paint.Style.FILL);
+        handleStrokePaint.setColor(Color.rgb(35, 105, 225));
+        handleStrokePaint.setStyle(Paint.Style.STROKE);
+
+        centerPaint.setColor(Color.rgb(35, 105, 225));
+        centerPaint.setStyle(Paint.Style.STROKE);
+
+        screenTextPaint.setColor(Color.DKGRAY);
+        screenTextPaint.setTextSize(25f);
 
         scaleDetector = new ScaleGestureDetector(context,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
                     public boolean onScale(ScaleGestureDetector detector) {
                         float oldScale = viewScale;
-                        viewScale *= detector.getScaleFactor();
-                        viewScale = clamp(viewScale, 0.12f, 16f);
+                        viewScale = clamp(viewScale * detector.getScaleFactor(), 0.12f, 16f);
                         float ratio = viewScale / oldScale;
                         float fx = detector.getFocusX();
                         float fy = detector.getFocusY();
@@ -129,6 +153,8 @@ public class CadCanvasView extends View {
     public void setTool(int newTool) {
         tool = newTool;
         drawing = false;
+        draggingSelection = false;
+        dragUndoSaved = false;
         snapVisible = false;
         freePoints.clear();
         invalidate();
@@ -147,18 +173,18 @@ public class CadCanvasView extends View {
     public void toggleGrid() { showGrid = !showGrid; invalidate(); }
     public void toggleGuides() { showGuides = !showGuides; invalidate(); }
     public void toggleDimensions() { showDimensions = !showDimensions; invalidate(); }
-    public void toggleSnap() { snapEnabled = !snapEnabled; invalidate(); }
+    public void toggleSnap() { snapEnabled = !snapEnabled; snapVisible = false; invalidate(); }
     public void toggleOrtho() { orthoEnabled = !orthoEnabled; invalidate(); }
 
     public String selectedInfo() {
-        if (selected == null) return "هیچ شکلی انتخاب نشده";
-        return selected.describe();
+        return selected == null ? "هیچ شکلی انتخاب نشده" : selected.describe();
     }
 
     public void clearAll() {
         saveUndo();
         entities.clear();
         selected = null;
+        tool = TOOL_SELECT;
         invalidate();
     }
 
@@ -168,6 +194,7 @@ public class CadCanvasView extends View {
         entities.clear();
         for (Entity e : snapshot) entities.add(e.copy());
         selected = null;
+        tool = TOOL_SELECT;
         invalidate();
     }
 
@@ -176,6 +203,7 @@ public class CadCanvasView extends View {
         saveUndo();
         entities.remove(selected);
         selected = null;
+        tool = TOOL_SELECT;
         invalidate();
     }
 
@@ -354,10 +382,9 @@ public class CadCanvasView extends View {
         float sx = getWidth() / (w * PX_PER_MM * 1.25f);
         float sy = getHeight() / (h * PX_PER_MM * 1.25f);
         viewScale = clamp(Math.min(sx, sy), 0.12f, 16f);
-        float cx = (all.left + all.right) / 2f;
-        float cy = (all.top + all.bottom) / 2f;
-        offsetX = getWidth() / 2f - cx * PX_PER_MM * viewScale;
-        offsetY = getHeight() / 2f - cy * PX_PER_MM * viewScale;
+        PointF c = centerOf(all);
+        offsetX = getWidth()/2f - c.x*PX_PER_MM*viewScale;
+        offsetY = getHeight()/2f - c.y*PX_PER_MM*viewScale;
         invalidate();
     }
 
@@ -370,19 +397,19 @@ public class CadCanvasView extends View {
 
         float px = 1f / (PX_PER_MM * viewScale);
         gridPaint.setStrokeWidth(px);
-        axisXPaint.setStrokeWidth(2.2f * px);
-        axisYPaint.setStrokeWidth(2.2f * px);
-        entityPaint.setStrokeWidth(2.4f * px);
-        selectedPaint.setStrokeWidth(4f * px);
-        measurePaint.setStrokeWidth(2f * px);
-        snapPaint.setStrokeWidth(2f * px);
-        guidePaint.setStrokeWidth(1.4f * px);
-        textPaint.setTextSize(27f * px);
+        axisXPaint.setStrokeWidth(2.2f*px);
+        axisYPaint.setStrokeWidth(2.2f*px);
+        entityPaint.setStrokeWidth(2.4f*px);
+        selectedPaint.setStrokeWidth(4f*px);
+        measurePaint.setStrokeWidth(2f*px);
+        snapPaint.setStrokeWidth(2.2f*px);
+        guidePaint.setStrokeWidth(1.4f*px);
+        handleStrokePaint.setStrokeWidth(2f*px);
+        centerPaint.setStrokeWidth(1.8f*px);
+        textPaint.setTextSize(27f*px);
 
-        float left = screenToWorldX(0);
-        float right = screenToWorldX(getWidth());
-        float top = screenToWorldY(0);
-        float bottom = screenToWorldY(getHeight());
+        float left = screenToWorldX(0), right = screenToWorldX(getWidth());
+        float top = screenToWorldY(0), bottom = screenToWorldY(getHeight());
 
         if (showGrid) drawGrid(canvas, left, top, right, bottom);
         if (showAxes) drawAxes(canvas, left, top, right, bottom, px);
@@ -398,630 +425,343 @@ public class CadCanvasView extends View {
             e.draw(canvas, p, textPaint, measurePaint, px, showDimensions);
         }
 
+        if (selected != null && isVisible(selected)) drawSelectionHandles(canvas, selected, px);
         if (drawing) drawPreview(canvas, px);
         if (snapVisible) drawSnapMarker(canvas, snapX, snapY, px);
-
         canvas.restore();
 
-        hiddenInfoPaint.setTextSize(24f);
-        int hidden = hiddenEntityCount();
-        if (hidden > 0) canvas.drawText("Hidden: " + hidden, 12, getHeight() - 16, hiddenInfoPaint);
+        String mode = toolName(tool);
+        screenTextPaint.setTextSize(25f);
+        canvas.drawText("حالت: " + mode + (snapEnabled ? " | Snap" : ""), 12f, getHeight()-18f, screenTextPaint);
     }
 
     private void drawGrid(Canvas c, float left, float top, float right, float bottom) {
-        float gx = (float)Math.floor(left / GRID_MM) * GRID_MM;
-        float gy = (float)Math.floor(top / GRID_MM) * GRID_MM;
-        for (float x = gx; x <= right; x += GRID_MM) c.drawLine(x, top, x, bottom, gridPaint);
-        for (float y = gy; y <= bottom; y += GRID_MM) c.drawLine(left, y, right, y, gridPaint);
+        float gx=(float)Math.floor(left/GRID_MM)*GRID_MM;
+        float gy=(float)Math.floor(top/GRID_MM)*GRID_MM;
+        for(float x=gx;x<=right;x+=GRID_MM)c.drawLine(x,top,x,bottom,gridPaint);
+        for(float y=gy;y<=bottom;y+=GRID_MM)c.drawLine(left,y,right,y,gridPaint);
     }
 
-    private void drawAxes(Canvas c, float left, float top, float right, float bottom, float px) {
-        c.drawLine(left, 0, right, 0, axisXPaint);
-        c.drawLine(0, top, 0, bottom, axisYPaint);
-        c.drawText("X", right - 14f * px, -5f * px, axisXPaint);
-        c.drawText("Y", 5f * px, top + 18f * px, axisYPaint);
-        c.drawCircle(0, 0, 4f * px, axisXPaint);
+    private void drawAxes(Canvas c,float left,float top,float right,float bottom,float px){
+        c.drawLine(left,0,right,0,axisXPaint);
+        c.drawLine(0,top,0,bottom,axisYPaint);
+        c.drawText("X",right-14f*px,-5f*px,axisXPaint);
+        c.drawText("Y",5f*px,top+18f*px,axisYPaint);
+        c.drawCircle(0,0,4f*px,axisXPaint);
     }
 
-    private void drawPreview(Canvas c, float px) {
-        Paint p = tool == TOOL_MEASURE ? measurePaint : selectedPaint;
-        if (tool == TOOL_LINE || tool == TOOL_MEASURE) {
-            c.drawLine(startX, startY, endX, endY, p);
-            if (showDimensions) drawLength(c, startX, startY, endX, endY, textPaint, px);
-        } else if (tool == TOOL_RECT) {
-            RectEntity r = new RectEntity(startX, startY, endX, endY);
-            r.draw(c, p, textPaint, measurePaint, px, showDimensions);
-        } else if (tool == TOOL_CIRCLE) {
-            float r = dist(startX, startY, endX, endY);
-            c.drawCircle(startX, startY, r, p);
-            if (showDimensions) c.drawText("R " + mm(r), startX, startY-r-6f*px, textPaint);
-        } else if (tool == TOOL_ARC) {
-            float r = dist(startX, startY, endX, endY);
-            RectF b = new RectF(startX-r, startY-r, startX+r, startY+r);
-            c.drawArc(b, 180, 180, false, p);
-        } else if (tool == TOOL_POLYGON) {
-            PolygonEntity poly = PolygonEntity.regular(polygonSides, startX, startY, dist(startX,startY,endX,endY));
-            poly.draw(c, p, textPaint, measurePaint, px, showDimensions);
-        } else if (tool == TOOL_FREE && freePoints.size() > 1) {
-            Path path = new Path();
-            path.moveTo(freePoints.get(0).x, freePoints.get(0).y);
-            for (int i = 1; i < freePoints.size(); i++) path.lineTo(freePoints.get(i).x, freePoints.get(i).y);
-            c.drawPath(path, p);
+    private void drawCenterCross(Canvas c,float x,float y,float px){
+        float s=8f*px;
+        c.drawLine(x-s,y,x+s,y,centerPaint);
+        c.drawLine(x,y-s,x,y+s,centerPaint);
+        c.drawCircle(x,y,2.5f*px,centerPaint);
+    }
+
+    private void drawPreview(Canvas c,float px){
+        Paint p=tool==TOOL_MEASURE?measurePaint:selectedPaint;
+        if(tool==TOOL_LINE||tool==TOOL_MEASURE){
+            c.drawLine(startX,startY,endX,endY,p);
+            if(showDimensions)drawLength(c,startX,startY,endX,endY,textPaint,px);
+        }else if(tool==TOOL_RECT){
+            RectEntity r=new RectEntity(startX,startY,endX,endY);
+            r.draw(c,p,textPaint,measurePaint,px,showDimensions);
+        }else if(tool==TOOL_CIRCLE){
+            float r=dist(startX,startY,endX,endY);
+            c.drawCircle(startX,startY,r,p);
+            drawCenterCross(c,startX,startY,px);
+            if(showDimensions)c.drawText("Ø "+mm(r*2),startX,startY-r-6f*px,textPaint);
+        }else if(tool==TOOL_ARC){
+            float r=dist(startX,startY,endX,endY);
+            c.drawArc(new RectF(startX-r,startY-r,startX+r,startY+r),180,180,false,p);
+            drawCenterCross(c,startX,startY,px);
+        }else if(tool==TOOL_POLYGON){
+            PolygonEntity.regular(polygonSides,startX,startY,dist(startX,startY,endX,endY))
+                    .draw(c,p,textPaint,measurePaint,px,showDimensions);
+            drawCenterCross(c,startX,startY,px);
+        }else if(tool==TOOL_FREE&&freePoints.size()>1){
+            Path path=new Path();
+            path.moveTo(freePoints.get(0).x,freePoints.get(0).y);
+            for(int i=1;i<freePoints.size();i++)path.lineTo(freePoints.get(i).x,freePoints.get(i).y);
+            c.drawPath(path,p);
         }
     }
 
-    private void drawSnapMarker(Canvas c, float x, float y, float px) {
-        float s = 7f * px;
-        c.drawRect(x-s, y-s, x+s, y+s, snapPaint);
+    private void drawSelectionHandles(Canvas c,Entity e,float px){
+        float r=5.5f*px;
+        for(SnapPoint sp:e.snapPoints()){
+            c.drawCircle(sp.x,sp.y,r,handleFillPaint);
+            c.drawCircle(sp.x,sp.y,r,handleStrokePaint);
+        }
+        PointF cc=e.center();
+        drawCenterCross(c,cc.x,cc.y,px);
+    }
+
+    private void drawSnapMarker(Canvas c,float x,float y,float px){
+        float s=8f*px;
+        c.drawRect(x-s,y-s,x+s,y+s,snapPaint);
+        if(snapLabel!=null&&!snapLabel.isEmpty()){
+            Paint.Align old=textPaint.getTextAlign();
+            textPaint.setTextAlign(Paint.Align.LEFT);
+            c.drawText(snapLabel,x+11f*px,y-9f*px,textPaint);
+            textPaint.setTextAlign(old);
+        }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         scaleDetector.onTouchEvent(event);
 
-        if (event.getPointerCount() >= 2) {
-            float mx = (event.getX(0)+event.getX(1))/2f;
-            float my = (event.getY(0)+event.getY(1))/2f;
-            if (!multiTouch) {
-                multiTouch = true;
-                lastMultiX = mx;
-                lastMultiY = my;
-                drawing = false;
-                freePoints.clear();
-            } else if (!scaleDetector.isInProgress()) {
-                offsetX += mx-lastMultiX;
-                offsetY += my-lastMultiY;
-                lastMultiX = mx;
-                lastMultiY = my;
-                invalidate();
+        if(event.getPointerCount()>=2){
+            float mx=(event.getX(0)+event.getX(1))/2f;
+            float my=(event.getY(0)+event.getY(1))/2f;
+            if(!multiTouch){
+                multiTouch=true; lastMultiX=mx; lastMultiY=my;
+                drawing=false; draggingSelection=false; freePoints.clear();
+            }else if(!scaleDetector.isInProgress()){
+                offsetX+=mx-lastMultiX; offsetY+=my-lastMultiY;
+                lastMultiX=mx; lastMultiY=my; invalidate();
             }
             return true;
         }
-
-        if (multiTouch) {
-            if (event.getActionMasked() == MotionEvent.ACTION_UP ||
-                    event.getActionMasked() == MotionEvent.ACTION_POINTER_UP) multiTouch = false;
+        if(multiTouch){
+            if(event.getActionMasked()==MotionEvent.ACTION_UP||event.getActionMasked()==MotionEvent.ACTION_POINTER_UP)multiTouch=false;
             return true;
         }
 
-        float rawX = screenToWorldX(event.getX());
-        float rawY = screenToWorldY(event.getY());
-        float[] p = tool == TOOL_FREE ? new float[]{rawX, rawY} : snapPoint(rawX, rawY);
-        float x = p[0], y = p[1];
+        float rawX=screenToWorldX(event.getX());
+        float rawY=screenToWorldY(event.getY());
+        float[] snapped=tool==TOOL_FREE?new float[]{rawX,rawY}:snapPoint(rawX,rawY);
+        float x=snapped[0],y=snapped[1];
 
-        switch (event.getActionMasked()) {
+        switch(event.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
-                if (tool == TOOL_SELECT) {
-                    selected = findHit(x, y);
+                downScreenX=event.getX(); downScreenY=event.getY();
+                if(tool==TOOL_SELECT){
+                    Entity hit=findHit(rawX,rawY);
+                    selected=hit;
+                    if(hit!=null){
+                        draggingSelection=true;
+                        lastDragX=rawX; lastDragY=rawY;
+                        dragUndoSaved=false;
+                    }
                     invalidate();
                     return true;
                 }
-                if (tool == TOOL_POINT) {
+                if(tool==TOOL_POINT){
                     saveUndo();
-                    addPrepared(new PointEntity(x,y));
-                    invalidate();
-                    return true;
+                    Entity e=new PointEntity(x,y); addPrepared(e); selected=e; tool=TOOL_SELECT;
+                    invalidate(); return true;
                 }
-                if (tool == TOOL_GUIDE) {
+                if(tool==TOOL_GUIDE){
                     saveUndo();
-                    addPrepared(new GuideEntity(true, x));
-                    addPrepared(new GuideEntity(false, y));
-                    invalidate();
-                    return true;
+                    addPrepared(new GuideEntity(true,x));
+                    addPrepared(new GuideEntity(false,y));
+                    tool=TOOL_SELECT; invalidate(); return true;
                 }
-                startX=x;
-                startY=y;
-                endX=x;
-                endY=y;
-                drawing=true;
-                if (tool == TOOL_FREE) {
-                    freePoints.clear();
-                    freePoints.add(new PointF(x,y));
-                }
-                invalidate();
-                return true;
+                startX=x; startY=y; endX=x; endY=y; drawing=true;
+                if(tool==TOOL_FREE){freePoints.clear();freePoints.add(new PointF(x,y));}
+                invalidate(); return true;
 
             case MotionEvent.ACTION_MOVE:
-                if (!drawing) return true;
-                endX=x;
-                endY=y;
-                applyOrtho();
-                if (tool == TOOL_FREE) {
-                    if (freePoints.isEmpty() || dist(freePoints.get(freePoints.size()-1).x,
-                            freePoints.get(freePoints.size()-1).y, x, y) > 0.7f) {
-                        freePoints.add(new PointF(x,y));
+                if(tool==TOOL_SELECT&&draggingSelection&&selected!=null){
+                    float dx=rawX-lastDragX,dy=rawY-lastDragY;
+                    float movePx=(float)Math.hypot(event.getX()-downScreenX,event.getY()-downScreenY);
+                    if(movePx>6f){
+                        if(!dragUndoSaved){saveUndo();dragUndoSaved=true;}
+                        selected.translate(dx,dy); lastDragX=rawX; lastDragY=rawY; invalidate();
                     }
+                    return true;
                 }
-                invalidate();
-                return true;
+                if(!drawing)return true;
+                endX=x; endY=y; applyOrtho();
+                if(tool==TOOL_FREE){
+                    if(freePoints.isEmpty()||dist(freePoints.get(freePoints.size()-1).x,freePoints.get(freePoints.size()-1).y,x,y)>0.7f)
+                        freePoints.add(new PointF(x,y));
+                }
+                invalidate(); return true;
 
             case MotionEvent.ACTION_UP:
-                if (!drawing) return true;
-                endX=x;
-                endY=y;
-                applyOrtho();
+                if(tool==TOOL_SELECT){
+                    draggingSelection=false; dragUndoSaved=false; snapVisible=false; invalidate(); return true;
+                }
+                if(!drawing)return true;
+                endX=x; endY=y; applyOrtho();
+                float drawPx=(float)Math.hypot(event.getX()-downScreenX,event.getY()-downScreenY);
+                if(drawPx<MIN_DRAW_PX&&tool!=TOOL_FREE){
+                    drawing=false; freePoints.clear(); invalidate(); return true;
+                }
                 saveUndo();
-                if (tool == TOOL_LINE) addPrepared(new LineEntity(startX,startY,endX,endY));
-                else if (tool == TOOL_RECT) addPrepared(new RectEntity(startX,startY,endX,endY));
-                else if (tool == TOOL_CIRCLE) addPrepared(new CircleEntity(startX,startY,dist(startX,startY,endX,endY)));
-                else if (tool == TOOL_MEASURE) addPrepared(new MeasureEntity(startX,startY,endX,endY));
-                else if (tool == TOOL_ARC) addPrepared(new ArcEntity(startX,startY,dist(startX,startY,endX,endY),180,180));
-                else if (tool == TOOL_POLYGON) addPrepared(PolygonEntity.regular(polygonSides,startX,startY,dist(startX,startY,endX,endY)));
-                else if (tool == TOOL_FREE && freePoints.size() > 1) addPrepared(new PolylineEntity(freePoints, false));
-                drawing=false;
-                freePoints.clear();
-                invalidate();
-                return true;
+                Entity made=null;
+                if(tool==TOOL_LINE)made=new LineEntity(startX,startY,endX,endY);
+                else if(tool==TOOL_RECT)made=new RectEntity(startX,startY,endX,endY);
+                else if(tool==TOOL_CIRCLE)made=new CircleEntity(startX,startY,dist(startX,startY,endX,endY));
+                else if(tool==TOOL_MEASURE)made=new MeasureEntity(startX,startY,endX,endY);
+                else if(tool==TOOL_ARC)made=new ArcEntity(startX,startY,dist(startX,startY,endX,endY),180,180);
+                else if(tool==TOOL_POLYGON)made=PolygonEntity.regular(polygonSides,startX,startY,dist(startX,startY,endX,endY));
+                else if(tool==TOOL_FREE&&freePoints.size()>1)made=new PolylineEntity(freePoints,false);
+                if(made!=null){addPrepared(made);selected=made;}
+                drawing=false; freePoints.clear(); snapVisible=false;
+                tool=TOOL_SELECT;
+                invalidate(); return true;
 
             case MotionEvent.ACTION_CANCEL:
-                drawing=false;
-                freePoints.clear();
-                invalidate();
-                return true;
+                drawing=false; draggingSelection=false; freePoints.clear(); snapVisible=false; invalidate(); return true;
         }
         return true;
     }
 
-    private void applyOrtho() {
-        if (!orthoEnabled || (tool != TOOL_LINE && tool != TOOL_MEASURE)) return;
-        if (Math.abs(endX-startX) >= Math.abs(endY-startY)) endY = startY;
-        else endX = startX;
+    private void applyOrtho(){
+        if(!orthoEnabled||(tool!=TOOL_LINE&&tool!=TOOL_MEASURE))return;
+        if(Math.abs(endX-startX)>=Math.abs(endY-startY))endY=startY; else endX=startX;
     }
 
-    private float[] snapPoint(float x, float y) {
-        snapVisible = false;
-        if (!snapEnabled) return new float[]{x,y};
-        float radius = SNAP_RADIUS_PX / (PX_PER_MM * viewScale);
-        SnapCandidate best = null;
-        for (Entity e : entities) {
-            if (!isVisible(e) || e.isConstruction()) continue;
-            for (float[] q : e.snapPoints()) {
-                float d = dist(x,y,q[0],q[1]);
-                if (d <= radius && (best == null || d < best.d)) best = new SnapCandidate(q[0],q[1],d);
+    private float[] snapPoint(float x,float y){
+        snapVisible=false; snapLabel="";
+        if(!snapEnabled)return new float[]{x,y};
+        float radius=SNAP_RADIUS_PX/(PX_PER_MM*viewScale);
+        SnapCandidate best=null;
+
+        for(Entity e:entities){
+            if(!isVisible(e)||e.isConstruction())continue;
+            for(SnapPoint q:e.snapPoints()){
+                float d=dist(x,y,q.x,q.y);
+                if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(q.x,q.y,d,q.label);
+            }
+            PointF near=e.nearestPoint(x,y);
+            if(near!=null){
+                float d=dist(x,y,near.x,near.y);
+                if(d<=radius*0.72f&&(best==null||d<best.d))best=new SnapCandidate(near.x,near.y,d,"روی شیء");
             }
         }
-        if (best != null) {
-            snapX=best.x;
-            snapY=best.y;
-            snapVisible=true;
+
+        // line-line intersections
+        for(int i=0;i<entities.size();i++){
+            if(!(entities.get(i) instanceof LineEntity)||!isVisible(entities.get(i)))continue;
+            for(int j=i+1;j<entities.size();j++){
+                if(!(entities.get(j) instanceof LineEntity)||!isVisible(entities.get(j)))continue;
+                PointF ip=lineIntersection((LineEntity)entities.get(i),(LineEntity)entities.get(j));
+                if(ip!=null){
+                    float d=dist(x,y,ip.x,ip.y);
+                    if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(ip.x,ip.y,d,"تقاطع");
+                }
+            }
+        }
+
+        // guides
+        if(showGuides){
+            for(Entity e:entities){
+                if(!(e instanceof GuideEntity))continue;
+                GuideEntity g=(GuideEntity)e;
+                float gx=g.vertical?g.value:x;
+                float gy=g.vertical?y:g.value;
+                float d=dist(x,y,gx,gy);
+                if(d<=radius*0.7f&&(best==null||d<best.d))best=new SnapCandidate(gx,gy,d,"راهنما");
+            }
+        }
+
+        if(best!=null){
+            snapX=best.x;snapY=best.y;snapVisible=true;snapLabel=best.label;
             return new float[]{best.x,best.y};
         }
-        float gx = Math.round(x / GRID_MM) * GRID_MM;
-        float gy = Math.round(y / GRID_MM) * GRID_MM;
-        if (dist(x,y,gx,gy) <= radius*0.7f) {
-            snapX=gx;
-            snapY=gy;
-            snapVisible=true;
+        float gx=Math.round(x/GRID_MM)*GRID_MM,gy=Math.round(y/GRID_MM)*GRID_MM;
+        if(dist(x,y,gx,gy)<=radius*0.58f){
+            snapX=gx;snapY=gy;snapVisible=true;snapLabel="Grid";
             return new float[]{gx,gy};
         }
         return new float[]{x,y};
     }
 
-    private Entity findHit(float x, float y) {
-        float tol = 18f/(PX_PER_MM*viewScale);
-        Entity best=null;
-        float bd=Float.MAX_VALUE;
-        for (int i=entities.size()-1;i>=0;i--) {
+    private Entity findHit(float x,float y){
+        float tol=HIT_RADIUS_PX/(PX_PER_MM*viewScale);
+        Entity best=null;float bd=Float.MAX_VALUE;
+        for(int i=entities.size()-1;i>=0;i--){
             Entity e=entities.get(i);
-            if (!isVisible(e) || e.isConstruction()) continue;
+            if(!isVisible(e)||e.isConstruction())continue;
             float d=e.hitDistance(x,y);
-            if(d<tol && d<bd){
-                best=e;
-                bd=d;
-            }
+            if(d<tol&&d<bd){best=e;bd=d;}
         }
         return best;
     }
 
-    private void saveUndo() {
-        List<Entity> snapshot = new ArrayList<>();
-        for (Entity e : entities) snapshot.add(e.copy());
+    private void saveUndo(){
+        List<Entity> snapshot=new ArrayList<>();
+        for(Entity e:entities)snapshot.add(e.copy());
         undoStack.addLast(snapshot);
-        while (undoStack.size() > MAX_UNDO) undoStack.removeFirst();
+        while(undoStack.size()>MAX_UNDO)undoStack.removeFirst();
     }
 
-    private void addPrepared(Entity e) {
-        e.setLayer(currentLayer);
-        e.setColor(currentColor);
-        entities.add(e);
-    }
+    private void addPrepared(Entity e){e.setLayer(currentLayer);e.setColor(currentColor);entities.add(e);}
+    private void copyMeta(Entity from,Entity to){to.setLayer(from.getLayer());to.setColor(from.getColor());to.setExtrusion(from.getExtrusion());}
+    private boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
+    private float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
+    private float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
 
-    private void copyMeta(Entity from, Entity to) {
-        to.setLayer(from.getLayer());
-        to.setColor(from.getColor());
-    }
-
-    private boolean isVisible(Entity e) {
-        Boolean visible = layers.get(e.getLayer());
-        return visible == null || visible;
-    }
-
-    private int hiddenEntityCount() {
-        int n = 0;
-        for (Entity e : entities) if (!isVisible(e)) n++;
-        return n;
-    }
-
-    private float screenToWorldX(float sx) { return (sx-offsetX)/(PX_PER_MM*viewScale); }
-    private float screenToWorldY(float sy) { return (sy-offsetY)/(PX_PER_MM*viewScale); }
-
-    public String executeCommand(String raw) {
-        if (raw == null) return "";
-        String s = raw.trim();
-        if (s.isEmpty()) return "";
-        String[] a = s.replace(',', ' ').trim().split("\\s+");
-        String cmd = a[0].toUpperCase(Locale.US);
-        try {
-            switch (cmd) {
-                case "L":
-                case "LINE":
-                    require(a,5);
-                    saveUndo();
-                    addPrepared(new LineEntity(f(a,1),f(a,2),f(a,3),f(a,4)));
-                    invalidate();
-                    return "خط ساخته شد";
-
-                case "REC":
-                case "RECT":
-                case "RECTANG":
-                    require(a,5);
-                    saveUndo();
-                    float rx=f(a,1), ry=f(a,2), rw=f(a,3), rh=f(a,4);
-                    addPrepared(new RectEntity(rx,ry,rx+rw,ry+rh));
-                    invalidate();
-                    return "مستطیل " + mm(Math.abs(rw)) + " × " + mm(Math.abs(rh));
-
-                case "C":
-                case "CIRCLE":
-                    require(a,4);
-                    saveUndo();
-                    addPrepared(new CircleEntity(f(a,1),f(a,2),Math.abs(f(a,3))));
-                    invalidate();
-                    return "دایره ساخته شد";
-
-                case "PO":
-                case "POINT":
-                    require(a,3);
-                    saveUndo();
-                    addPrepared(new PointEntity(f(a,1),f(a,2)));
-                    invalidate();
-                    return "نقطه ساخته شد";
-
-                case "A":
-                case "ARC":
-                    require(a,6);
-                    saveUndo();
-                    addPrepared(new ArcEntity(f(a,1),f(a,2),Math.abs(f(a,3)),f(a,4),f(a,5)));
-                    invalidate();
-                    return "قوس ساخته شد";
-
-                case "POL":
-                case "POLYGON":
-                    require(a,5);
-                    int sides = Math.max(3, Math.min(64, Integer.parseInt(a[1])));
-                    saveUndo();
-                    addPrepared(PolygonEntity.regular(sides,f(a,2),f(a,3),Math.abs(f(a,4))));
-                    invalidate();
-                    return "چندضلعی " + sides + " ضلعی ساخته شد";
-
-                case "POLYSIDES":
-                    require(a,2);
-                    polygonSides = Math.max(3, Math.min(64, Integer.parseInt(a[1])));
-                    return "تعداد ضلع ابزار چندضلعی: " + polygonSides;
-
-                case "M":
-                case "MOVE":
-                    require(a,3);
-                    if (selected == null) return "اول شکل را انتخاب کن";
-                    moveSelected(f(a,1),f(a,2));
-                    return "جابه‌جا شد";
-
-                case "CO":
-                case "COPY":
-                    require(a,3);
-                    if (selected == null) return "اول شکل را انتخاب کن";
-                    copySelected(f(a,1),f(a,2));
-                    return "کپی شد";
-
-                case "O":
-                case "OFFSET":
-                    require(a,2);
-                    return offsetSelected(f(a,1));
-
-                case "RO":
-                case "ROTATE":
-                    require(a,2);
-                    return rotateSelected(f(a,1));
-
-                case "SC":
-                case "SCALE":
-                    require(a,2);
-                    return scaleSelected(f(a,1));
-
-                case "MI":
-                case "MIRROR":
-                    require(a,2);
-                    if ("X".equalsIgnoreCase(a[1])) {
-                        float axis = a.length >= 3 ? f(a,2) : 0f;
-                        return mirrorSelected(true, axis);
-                    }
-                    if ("Y".equalsIgnoreCase(a[1])) {
-                        float axis = a.length >= 3 ? f(a,2) : 0f;
-                        return mirrorSelected(false, axis);
-                    }
-                    return "مثال: MIRROR X 0 یا MIRROR Y 0";
-
-                case "AR":
-                case "ARRAY":
-                    require(a,4);
-                    return arraySelected(Integer.parseInt(a[1]), f(a,2), f(a,3));
-
-                case "LENGTH":
-                    require(a,2);
-                    return applySelectedDimension(a[1]);
-
-                case "SIZE":
-                    require(a,3);
-                    return applySelectedDimension(a[1] + " " + a[2]);
-
-                case "RADIUS":
-                    require(a,2);
-                    if (selected instanceof CircleEntity) {
-                        saveUndo();
-                        ((CircleEntity) selected).r = Math.abs(f(a,1));
-                        invalidate();
-                        return "شعاع = " + mm(Math.abs(f(a,1)));
-                    }
-                    if (selected instanceof ArcEntity) {
-                        saveUndo();
-                        ((ArcEntity) selected).r = Math.abs(f(a,1));
-                        invalidate();
-                        return "شعاع = " + mm(Math.abs(f(a,1)));
-                    }
-                    return "دایره یا قوس را انتخاب کن";
-
-                case "DIAMETER":
-                    require(a,2);
-                    if (selected instanceof CircleEntity) return applySelectedDimension(a[1]);
-                    return "دایره را انتخاب کن";
-
-                case "GUIDE":
-                    require(a,3);
-                    saveUndo();
-                    if ("X".equalsIgnoreCase(a[1])) addPrepared(new GuideEntity(true, f(a,2)));
-                    else if ("Y".equalsIgnoreCase(a[1])) addPrepared(new GuideEntity(false, f(a,2)));
-                    else return "مثال: GUIDE X 50 یا GUIDE Y 50";
-                    invalidate();
-                    return "خط راهنما ساخته شد";
-
-                case "TAPE":
-                case "DIST":
-                    require(a,5);
-                    saveUndo();
-                    addPrepared(new MeasureEntity(f(a,1),f(a,2),f(a,3),f(a,4)));
-                    invalidate();
-                    return "فاصله = " + mm(dist(f(a,1),f(a,2),f(a,3),f(a,4)));
-
-                case "ANGLE":
-                case "PROTRACTOR":
-                    require(a,7);
-                    saveUndo();
-                    addPrepared(new AngleEntity(f(a,1),f(a,2),f(a,3),f(a,4),f(a,5),f(a,6)));
-                    invalidate();
-                    return "زاویه اندازه‌گذاری شد";
-
-                case "LAYER":
-                    require(a,2);
-                    return setLayer(a[1]);
-
-                case "ASSIGNLAYER":
-                    require(a,2);
-                    return assignSelectedLayer(a[1]);
-
-                case "LAYERHIDE":
-                    require(a,2);
-                    return setLayerVisible(a[1], false);
-
-                case "LAYERSHOW":
-                    require(a,2);
-                    return setLayerVisible(a[1], true);
-
-                case "MATERIAL":
-                    require(a,2);
-                    return setMaterial(a[1]);
-
-                case "SCENE":
-                    require(a,3);
-                    if ("SAVE".equalsIgnoreCase(a[1])) {
-                        scenes.put(a[2], new Scene(viewScale, offsetX, offsetY, showGrid, showAxes));
-                        return "Scene ذخیره شد: " + a[2];
-                    }
-                    if ("LOAD".equalsIgnoreCase(a[1])) {
-                        Scene scene = scenes.get(a[2]);
-                        if (scene == null) return "Scene پیدا نشد";
-                        viewScale = scene.scale;
-                        offsetX = scene.x;
-                        offsetY = scene.y;
-                        showGrid = scene.grid;
-                        showAxes = scene.axes;
-                        invalidate();
-                        return "Scene بارگذاری شد: " + a[2];
-                    }
-                    return "SCENE SAVE name یا SCENE LOAD name";
-
-                case "P":
-                case "PUSHPULL":
-                case "EXTRUDE":
-                    require(a,2);
-                    if (selected == null) return "اول سطح بسته را انتخاب کن";
-                    if (!selected.canExtrude()) return "این شکل سطح بسته قابل اکسترود نیست";
-                    saveUndo();
-                    selected.setExtrusion(Math.abs(f(a,1)));
-                    invalidate();
-                    return "Push/Pull = " + mm(Math.abs(f(a,1))) + " (پیش‌نمایش 2.5D)";
-
-                case "ERASE":
-                case "DELETE":
-                    if (selected == null) return "اول شکل را انتخاب کن";
-                    deleteSelected();
-                    return "حذف شد";
-
-                case "U":
-                case "UNDO":
-                    undo();
-                    return "Undo";
-
-                case "Z":
-                case "ZOOM":
-                case "FIT":
-                    fitAll();
-                    return "نمایش Fit شد";
-
-                case "AXIS":
-                    toggleAxes();
-                    return showAxes ? "محورها روشن" : "محورها خاموش";
-
-                case "GRID":
-                    toggleGrid();
-                    return showGrid ? "Grid روشن" : "Grid خاموش";
-
-                case "GUIDES":
-                    toggleGuides();
-                    return showGuides ? "Guide روشن" : "Guide خاموش";
-
-                case "DIMS":
-                case "DIMENSIONS":
-                    toggleDimensions();
-                    return showDimensions ? "ابعاد روشن" : "ابعاد خاموش";
-
-                case "SNAP":
-                    toggleSnap();
-                    return snapEnabled ? "Snap روشن" : "Snap خاموش";
-
-                case "ORTHO":
-                    toggleOrtho();
-                    return orthoEnabled ? "Ortho روشن" : "Ortho خاموش";
-
-                case "CLEAR":
-                    clearAll();
-                    return "صفحه پاک شد";
-
-                case "SELECT":
-                    setTool(TOOL_SELECT);
-                    return "حالت انتخاب";
-
-                case "DIM":
-                    setTool(TOOL_MEASURE);
-                    return "حالت اندازه‌گذاری";
-
-                case "FREE":
-                    setTool(TOOL_FREE);
-                    return "حالت Freehand";
-
-                case "GROUP":
-                case "COMPONENT":
-                    return "Group/Component در معماری مدل ثبت شده؛ انتخاب چندگانه در نسخه بعد فعال می‌شود";
-
-                case "FOLLOWME":
-                case "REVOLVE":
-                case "LOFT":
-                case "SWEEP":
-                case "SHELL":
-                case "UNION":
-                case "SUBTRACT":
-                case "INTERSECT":
-                case "PROJECT":
-                    return "این فرمان به هسته Solid 3D نیاز دارد؛ فعلاً Push/Pull پیش‌نمایش 2.5D فعال است";
-
-                default:
-                    return "فرمان ناشناخته: " + cmd;
+    public String executeCommand(String raw){
+        if(raw==null)return"";
+        String s=raw.trim();if(s.isEmpty())return"";
+        String[] a=s.replace(',',' ').trim().split("\\s+");
+        String cmd=a[0].toUpperCase(Locale.US);
+        try{
+            switch(cmd){
+                case"L":case"LINE":require(a,5);saveUndo();addPrepared(new LineEntity(f(a,1),f(a,2),f(a,3),f(a,4)));invalidate();return"خط ساخته شد";
+                case"REC":case"RECT":case"RECTANG":require(a,5);saveUndo();float rx=f(a,1),ry=f(a,2),rw=f(a,3),rh=f(a,4);addPrepared(new RectEntity(rx,ry,rx+rw,ry+rh));invalidate();return"مستطیل "+mm(Math.abs(rw))+" × "+mm(Math.abs(rh));
+                case"C":case"CIRCLE":require(a,4);saveUndo();addPrepared(new CircleEntity(f(a,1),f(a,2),Math.abs(f(a,3))));invalidate();return"دایره ساخته شد";
+                case"PO":case"POINT":require(a,3);saveUndo();addPrepared(new PointEntity(f(a,1),f(a,2)));invalidate();return"نقطه ساخته شد";
+                case"A":case"ARC":require(a,6);saveUndo();addPrepared(new ArcEntity(f(a,1),f(a,2),Math.abs(f(a,3)),f(a,4),f(a,5)));invalidate();return"قوس ساخته شد";
+                case"POL":case"POLYGON":require(a,5);int sides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));saveUndo();addPrepared(PolygonEntity.regular(sides,f(a,2),f(a,3),Math.abs(f(a,4))));invalidate();return"چندضلعی ساخته شد";
+                case"POLYSIDES":require(a,2);polygonSides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));return"تعداد ضلع: "+polygonSides;
+                case"M":case"MOVE":require(a,3);if(selected==null)return"اول شکل را انتخاب کن";moveSelected(f(a,1),f(a,2));return"جابه‌جا شد";
+                case"CO":case"COPY":require(a,3);if(selected==null)return"اول شکل را انتخاب کن";copySelected(f(a,1),f(a,2));return"کپی شد";
+                case"O":case"OFFSET":require(a,2);return offsetSelected(f(a,1));
+                case"RO":case"ROTATE":require(a,2);return rotateSelected(f(a,1));
+                case"SC":case"SCALE":require(a,2);return scaleSelected(f(a,1));
+                case"MI":case"MIRROR":require(a,2);if("X".equalsIgnoreCase(a[1]))return mirrorSelected(true,a.length>=3?f(a,2):0f);if("Y".equalsIgnoreCase(a[1]))return mirrorSelected(false,a.length>=3?f(a,2):0f);return"MIRROR X 0 یا MIRROR Y 0";
+                case"AR":case"ARRAY":require(a,4);return arraySelected(Integer.parseInt(a[1]),f(a,2),f(a,3));
+                case"LENGTH":require(a,2);return applySelectedDimension(a[1]);
+                case"SIZE":require(a,3);return applySelectedDimension(a[1]+" "+a[2]);
+                case"RADIUS":require(a,2);if(selected instanceof CircleEntity){saveUndo();((CircleEntity)selected).r=Math.abs(f(a,1));invalidate();return"شعاع = "+mm(Math.abs(f(a,1)));}if(selected instanceof ArcEntity){saveUndo();((ArcEntity)selected).r=Math.abs(f(a,1));invalidate();return"شعاع = "+mm(Math.abs(f(a,1)));}return"دایره یا قوس را انتخاب کن";
+                case"DIAMETER":require(a,2);return selected instanceof CircleEntity?applySelectedDimension(a[1]):"دایره را انتخاب کن";
+                case"GUIDE":require(a,3);saveUndo();if("X".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(true,f(a,2)));else if("Y".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(false,f(a,2)));else return"GUIDE X 50 یا GUIDE Y 50";invalidate();return"راهنما ساخته شد";
+                case"TAPE":case"DIST":require(a,5);saveUndo();addPrepared(new MeasureEntity(f(a,1),f(a,2),f(a,3),f(a,4)));invalidate();return"فاصله = "+mm(dist(f(a,1),f(a,2),f(a,3),f(a,4)));
+                case"LAYER":require(a,2);return setLayer(a[1]);
+                case"ASSIGNLAYER":require(a,2);return assignSelectedLayer(a[1]);
+                case"LAYERHIDE":require(a,2);return setLayerVisible(a[1],false);
+                case"LAYERSHOW":require(a,2);return setLayerVisible(a[1],true);
+                case"MATERIAL":require(a,2);return setMaterial(a[1]);
+                case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=sc.scale;offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
+                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"ERASE":case"DELETE":if(selected==null)return"اول شکل را انتخاب کن";deleteSelected();return"حذف شد";
+                case"U":case"UNDO":undo();return"Undo";
+                case"Z":case"ZOOM":case"FIT":fitAll();return"Fit شد";
+                case"AXIS":toggleAxes();return showAxes?"محورها روشن":"محورها خاموش";
+                case"GRID":toggleGrid();return showGrid?"Grid روشن":"Grid خاموش";
+                case"GUIDES":toggleGuides();return showGuides?"Guide روشن":"Guide خاموش";
+                case"DIMS":case"DIMENSIONS":toggleDimensions();return showDimensions?"ابعاد روشن":"ابعاد خاموش";
+                case"SNAP":toggleSnap();return snapEnabled?"Snap روشن":"Snap خاموش";
+                case"ORTHO":toggleOrtho();return orthoEnabled?"Ortho روشن":"Ortho خاموش";
+                case"CLEAR":clearAll();return"صفحه پاک شد";
+                case"SELECT":setTool(TOOL_SELECT);return"حالت انتخاب";
+                case"DIM":setTool(TOOL_MEASURE);return"حالت اندازه‌گذاری";
+                case"FREE":setTool(TOOL_FREE);return"حالت Freehand";
+                case"GROUP":case"COMPONENT":return"Group/Component بعد از انتخاب چندگانه فعال می‌شود";
+                case"FOLLOWME":case"REVOLVE":case"LOFT":case"SWEEP":case"SHELL":case"UNION":case"SUBTRACT":case"INTERSECT":case"PROJECT":return"این فرمان به هسته Solid 3D نیاز دارد";
+                default:return"فرمان ناشناخته: "+cmd;
             }
-        } catch (Exception ex) {
-            return "فرمت فرمان درست نیست";
-        }
+        }catch(Exception ex){return"فرمت فرمان درست نیست";}
     }
 
-    public String buildDxf() {
-        StringBuilder d = new StringBuilder();
-        d.append("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n");
-        d.append("0\nSECTION\n2\nENTITIES\n");
-        for (Entity e : entities) {
-            if (!e.isConstruction()) e.appendDxf(d);
-        }
-        d.append("0\nENDSEC\n0\nEOF\n");
-        return d.toString();
+    public String buildDxf(){
+        StringBuilder d=new StringBuilder();
+        d.append("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
+        for(Entity e:entities)if(!e.isConstruction())e.appendDxf(d);
+        d.append("0\nENDSEC\n0\nEOF\n");return d.toString();
     }
 
-    private static void require(String[] a,int n){ if(a.length<n) throw new IllegalArgumentException(); }
-    private static float f(String[] a,int i){ return Float.parseFloat(a[i]); }
-    private static float clamp(float v,float min,float max){ return Math.max(min,Math.min(max,v)); }
-    private static float dist(float x1,float y1,float x2,float y2){ return(float)Math.hypot(x2-x1,y2-y1); }
-    private static String mm(float v){ return String.format(Locale.US,"%.1f mm",v); }
-    private static String fmt(float v){ return String.format(Locale.US,"%.2f",v); }
-
-    private static int materialColor(String m) {
-        if (m == null) return Color.rgb(25,25,25);
-        String s = m.trim().toUpperCase(Locale.US);
-        if ("WOOD".equals(s) || "CHOB".equals(s) || "چوب".equals(m)) return Color.rgb(125,85,45);
-        if ("MDF".equals(s)) return Color.rgb(145,110,70);
-        if ("METAL".equals(s) || "فلز".equals(m)) return Color.rgb(90,100,110);
-        if ("GLASS".equals(s) || "شیشه".equals(m)) return Color.rgb(80,150,175);
-        if ("CONSTRUCTION".equals(s)) return Color.rgb(65,145,200);
-        return Color.rgb(25,25,25);
-    }
-
-    private static void drawLength(Canvas c,float x1,float y1,float x2,float y2,Paint t,float px){
-        c.drawText(mm(dist(x1,y1,x2,y2)),(x1+x2)/2f,(y1+y2)/2f-4f*px,t);
-    }
-
-    private static float pointSeg(float px,float py,float x1,float y1,float x2,float y2){
-        float dx=x2-x1,dy=y2-y1;
-        float l2=dx*dx+dy*dy;
-        if(l2<1e-6f)return dist(px,py,x1,y1);
-        float t=((px-x1)*dx+(py-y1)*dy)/l2;
-        t=clamp(t,0,1);
-        return dist(px,py,x1+t*dx,y1+t*dy);
-    }
-
-    private static PointF rotatePoint(float x,float y,float cx,float cy,float deg){
-        double r=Math.toRadians(deg);
-        float dx=x-cx,dy=y-cy;
-        return new PointF(
-                cx+(float)(dx*Math.cos(r)-dy*Math.sin(r)),
-                cy+(float)(dx*Math.sin(r)+dy*Math.cos(r)));
-    }
-
-    private static PointF scalePoint(float x,float y,float cx,float cy,float factor){
-        return new PointF(cx+(x-cx)*factor,cy+(y-cy)*factor);
-    }
-
-    private static float angleAt(float ax,float ay,float cx,float cy,float bx,float by){
-        double a1=Math.atan2(ay-cy,ax-cx);
-        double a2=Math.atan2(by-cy,bx-cx);
-        double d=Math.toDegrees(a2-a1);
-        while(d<0)d+=360;
-        while(d>=360)d-=360;
-        if(d>180)d=360-d;
-        return(float)d;
-    }
-
-    private static class SnapCandidate {
-        float x,y,d;
-        SnapCandidate(float x,float y,float d){this.x=x;this.y=y;this.d=d;}
-    }
-
-    private static class Scene {
-        float scale,x,y;
-        boolean grid,axes;
-        Scene(float scale,float x,float y,boolean grid,boolean axes){
-            this.scale=scale;this.x=x;this.y=y;this.grid=grid;this.axes=axes;
-        }
-    }
-
-    private interface Entity {
-        void draw(Canvas c,Paint p,Paint text,Paint measure,float px,boolean showDimensions);
+    private interface Entity{
+        void draw(Canvas c,Paint p,Paint text,Paint measure,float px,boolean dims);
         float hitDistance(float x,float y);
-        List<float[]> snapPoints();
+        List<SnapPoint> snapPoints();
+        PointF nearestPoint(float x,float y);
         void translate(float dx,float dy);
         void rotate(float cx,float cy,float deg);
         void scale(float cx,float cy,float factor);
@@ -1043,531 +783,93 @@ public class CadCanvasView extends View {
         float getExtrusion();
     }
 
-    private abstract static class BaseEntity implements Entity {
-        String layer="0";
-        int color=Color.rgb(25,25,25);
-        float extrusion=0f;
-
-        public String getLayer(){return layer;}
-        public void setLayer(String layer){this.layer=layer==null?"0":layer;}
-        public int getColor(){return color;}
-        public void setColor(int color){this.color=color;}
-        public boolean isConstruction(){return false;}
-        public boolean canExtrude(){return false;}
-        public void setExtrusion(float h){extrusion=h;}
-        public float getExtrusion(){return extrusion;}
-
-        void copyMetaTo(BaseEntity other){
-            other.layer=layer;
-            other.color=color;
-            other.extrusion=extrusion;
-        }
+    private abstract static class BaseEntity implements Entity{
+        String layer="0";int color=Color.rgb(25,25,25);float extrusion=0f;
+        public String getLayer(){return layer;}public void setLayer(String l){layer=l==null?"0":l;}
+        public int getColor(){return color;}public void setColor(int c){color=c;}
+        public boolean isConstruction(){return false;}public boolean canExtrude(){return false;}
+        public void setExtrusion(float h){extrusion=h;}public float getExtrusion(){return extrusion;}
+        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;}
     }
 
-    private static class PointEntity extends BaseEntity {
-        float x,y;
-        PointEntity(float x,float y){this.x=x;this.y=y;}
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            c.drawCircle(x,y,4f*px,p);
-            if(dims)c.drawText(String.format(Locale.US,"(%.1f, %.1f)",x,y),x+18f*px,y-8f*px,t);
-        }
-        public float hitDistance(float a,float b){return dist(a,b,x,y);}
-        public List<float[]> snapPoints(){List<float[]>q=new ArrayList<>();q.add(new float[]{x,y});return q;}
-        public void translate(float dx,float dy){x+=dx;y+=dy;}
-        public void rotate(float cx,float cy,float deg){PointF p=rotatePoint(x,y,cx,cy,deg);x=p.x;y=p.y;}
-        public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;}
-        public void mirrorVertical(float axisX){x=2*axisX-x;}
-        public void mirrorHorizontal(float axisY){y=2*axisY-y;}
-        public Entity copy(){PointEntity e=new PointEntity(x,y);copyMetaTo(e);return e;}
-        public RectF bounds(){return new RectF(x,y,x,y);}
-        public PointF center(){return new PointF(x,y);}
-        public Entity offsetCopy(float d){return null;}
-        public String describe(){return "Point ("+fmt(x)+", "+fmt(y)+") | Layer "+layer;}
-        public void appendDxf(StringBuilder d){
-            d.append("0\nPOINT\n8\n").append(layer).append("\n10\n").append(x)
-                    .append("\n20\n").append(-y).append("\n30\n0\n");
-        }
+    private static class PointEntity extends BaseEntity{
+        float x,y;PointEntity(float x,float y){this.x=x;this.y=y;}
+        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawCircle(x,y,4f*px,p);if(dims)c.drawText("("+fmt(x)+", "+fmt(y)+")",x+18f*px,y-8f*px,t);}
+        public float hitDistance(float a,float b){return dist(a,b,x,y);}public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"نقطه"));return q;}public PointF nearestPoint(float a,float b){return new PointF(x,y);}
+        public void translate(float dx,float dy){x+=dx;y+=dy;}public void rotate(float cx,float cy,float d){PointF p=rotatePoint(x,y,cx,cy,d);x=p.x;y=p.y;}public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;}public void mirrorVertical(float a){x=2*a-x;}public void mirrorHorizontal(float a){y=2*a-y;}
+        public Entity copy(){PointEntity e=new PointEntity(x,y);meta(e);return e;}public RectF bounds(){return new RectF(x,y,x,y);}public PointF center(){return new PointF(x,y);}public Entity offsetCopy(float d){return null;}public String describe(){return"Point ("+fmt(x)+", "+fmt(y)+") | Layer "+layer;}
+        public void appendDxf(StringBuilder d){d.append("0\nPOINT\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n");}
     }
 
-    private static class LineEntity extends BaseEntity {
-        float x1,y1,x2,y2;
-        LineEntity(float x1,float y1,float x2,float y2){this.x1=x1;this.y1=y1;this.x2=x2;this.y2=y2;}
-
-        void setLength(float len){
-            float dx=x2-x1,dy=y2-y1;
-            float old=(float)Math.hypot(dx,dy);
-            if(old<1e-6f){x2=x1+len;y2=y1;return;}
-            x2=x1+dx/old*len;
-            y2=y1+dy/old*len;
-        }
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            c.drawLine(x1,y1,x2,y2,p);
-            if(dims)drawLength(c,x1,y1,x2,y2,t,px);
-        }
-        public float hitDistance(float x,float y){return pointSeg(x,y,x1,y1,x2,y2);}
-        public List<float[]> snapPoints(){
-            List<float[]>q=new ArrayList<>();
-            q.add(new float[]{x1,y1});q.add(new float[]{x2,y2});
-            q.add(new float[]{(x1+x2)/2f,(y1+y2)/2f});
-            return q;
-        }
-        public void translate(float dx,float dy){x1+=dx;x2+=dx;y1+=dy;y2+=dy;}
-        public void rotate(float cx,float cy,float deg){
-            PointF a=rotatePoint(x1,y1,cx,cy,deg),b=rotatePoint(x2,y2,cx,cy,deg);
-            x1=a.x;y1=a.y;x2=b.x;y2=b.y;
-        }
-        public void scale(float cx,float cy,float f){
-            PointF a=scalePoint(x1,y1,cx,cy,f),b=scalePoint(x2,y2,cx,cy,f);
-            x1=a.x;y1=a.y;x2=b.x;y2=b.y;
-        }
-        public void mirrorVertical(float axisX){x1=2*axisX-x1;x2=2*axisX-x2;}
-        public void mirrorHorizontal(float axisY){y1=2*axisY-y1;y2=2*axisY-y2;}
-        public Entity copy(){LineEntity e=new LineEntity(x1,y1,x2,y2);copyMetaTo(e);return e;}
-        public RectF bounds(){return new RectF(Math.min(x1,x2),Math.min(y1,y2),Math.max(x1,x2),Math.max(y1,y2));}
-        public PointF center(){return new PointF((x1+x2)/2f,(y1+y2)/2f);}
-        public Entity offsetCopy(float distance){
-            float dx=x2-x1,dy=y2-y1,len=(float)Math.hypot(dx,dy);
-            if(len<1e-6f)return null;
-            float nx=-dy/len*distance,ny=dx/len*distance;
-            LineEntity e=new LineEntity(x1+nx,y1+ny,x2+nx,y2+ny);copyMetaTo(e);return e;
-        }
-        public String describe(){return "Line | L="+mm(dist(x1,y1,x2,y2))+" | Layer "+layer;}
-        public void appendDxf(StringBuilder d){
-            d.append("0\nLINE\n8\n").append(layer).append("\n10\n").append(x1)
-                    .append("\n20\n").append(-y1).append("\n30\n0\n11\n").append(x2)
-                    .append("\n21\n").append(-y2).append("\n31\n0\n");
-        }
+    private static class LineEntity extends BaseEntity{
+        float x1,y1,x2,y2;LineEntity(float a,float b,float c,float d){x1=a;y1=b;x2=c;y2=d;}
+        void setLength(float len){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f){x2=x1+len;y2=y1;}else{x2=x1+dx/l*len;y2=y1+dy/l*len;}}
+        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawLine(x1,y1,x2,y2,p);if(dims)drawLength(c,x1,y1,x2,y2,t,px);}
+        public float hitDistance(float x,float y){return pointSeg(x,y,x1,y1,x2,y2);}public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x1,y1,"ابتدا"));q.add(new SnapPoint(x2,y2,"انتها"));q.add(new SnapPoint((x1+x2)/2f,(y1+y2)/2f,"وسط"));return q;}public PointF nearestPoint(float x,float y){return projectSeg(x,y,x1,y1,x2,y2);}
+        public void translate(float dx,float dy){x1+=dx;x2+=dx;y1+=dy;y2+=dy;}public void rotate(float cx,float cy,float d){PointF a=rotatePoint(x1,y1,cx,cy,d),b=rotatePoint(x2,y2,cx,cy,d);x1=a.x;y1=a.y;x2=b.x;y2=b.y;}public void scale(float cx,float cy,float f){PointF a=scalePoint(x1,y1,cx,cy,f),b=scalePoint(x2,y2,cx,cy,f);x1=a.x;y1=a.y;x2=b.x;y2=b.y;}public void mirrorVertical(float a){x1=2*a-x1;x2=2*a-x2;}public void mirrorHorizontal(float a){y1=2*a-y1;y2=2*a-y2;}
+        public Entity copy(){LineEntity e=new LineEntity(x1,y1,x2,y2);meta(e);return e;}public RectF bounds(){return new RectF(Math.min(x1,x2),Math.min(y1,y2),Math.max(x1,x2),Math.max(y1,y2));}public PointF center(){return new PointF((x1+x2)/2f,(y1+y2)/2f);}public Entity offsetCopy(float d){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f)return null;LineEntity e=new LineEntity(x1-dy/l*d,y1+dx/l*d,x2-dy/l*d,y2+dx/l*d);meta(e);return e;}public String describe(){return"Line | L="+mm(dist(x1,y1,x2,y2))+" | Layer "+layer;}
+        public void appendDxf(StringBuilder d){d.append("0\nLINE\n8\n").append(layer).append("\n10\n").append(x1).append("\n20\n").append(-y1).append("\n30\n0\n11\n").append(x2).append("\n21\n").append(-y2).append("\n31\n0\n");}
     }
 
-    private static class RectEntity extends BaseEntity {
-        final PointF[] p=new PointF[4];
-        RectEntity(float x1,float y1,float x2,float y2){
-            p[0]=new PointF(x1,y1);
-            p[1]=new PointF(x2,y1);
-            p[2]=new PointF(x2,y2);
-            p[3]=new PointF(x1,y2);
-        }
-        RectEntity(PointF[] src){
-            for(int i=0;i<4;i++)p[i]=new PointF(src[i].x,src[i].y);
-        }
-
-        void setSize(float w,float h){
-            PointF o=p[0];
-            float ux=p[1].x-o.x,uy=p[1].y-o.y;
-            float ul=(float)Math.hypot(ux,uy);
-            if(ul<1e-6f){ux=1;uy=0;ul=1;}
-            ux/=ul;uy/=ul;
-            float vx=p[3].x-o.x,vy=p[3].y-o.y;
-            float vl=(float)Math.hypot(vx,vy);
-            if(vl<1e-6f){vx=-uy;vy=ux;vl=1;}
-            vx/=vl;vy/=vl;
-            p[1].set(o.x+ux*w,o.y+uy*w);
-            p[3].set(o.x+vx*h,o.y+vy*h);
-            p[2].set(p[1].x+vx*h,p[1].y+vy*h);
-        }
-
-        public boolean canExtrude(){return true;}
-
-        public void draw(Canvas c,Paint paint,Paint t,Paint m,float px,boolean dims){
-            drawPolygonPath(c,p,paint);
-            if(extrusion>0.01f)drawExtrudedPolygon(c,p,extrusion,paint,px);
-            if(dims){
-                c.drawText(mm(dist(p[0].x,p[0].y,p[1].x,p[1].y)),
-                        (p[0].x+p[1].x)/2f,(p[0].y+p[1].y)/2f-5f*px,t);
-                c.drawText(mm(dist(p[1].x,p[1].y,p[2].x,p[2].y)),
-                        (p[1].x+p[2].x)/2f+12f*px,(p[1].y+p[2].y)/2f,t);
-                if(extrusion>0.01f)c.drawText("H "+mm(extrusion),center().x,center().y,t);
-            }
-        }
-        public float hitDistance(float x,float y){
-            float best=Float.MAX_VALUE;
-            for(int i=0;i<4;i++)best=Math.min(best,pointSeg(x,y,p[i].x,p[i].y,p[(i+1)%4].x,p[(i+1)%4].y));
-            return best;
-        }
-        public List<float[]> snapPoints(){return polygonSnaps(p);}
-        public void translate(float dx,float dy){for(PointF q:p){q.x+=dx;q.y+=dy;}}
-        public void rotate(float cx,float cy,float deg){for(int i=0;i<4;i++)p[i]=rotatePoint(p[i].x,p[i].y,cx,cy,deg);}
-        public void scale(float cx,float cy,float f){for(int i=0;i<4;i++)p[i]=scalePoint(p[i].x,p[i].y,cx,cy,f);}
-        public void mirrorVertical(float axisX){for(PointF q:p)q.x=2*axisX-q.x;}
-        public void mirrorHorizontal(float axisY){for(PointF q:p)q.y=2*axisY-q.y;}
-        public Entity copy(){RectEntity e=new RectEntity(p);copyMetaTo(e);return e;}
-        public RectF bounds(){return boundsOf(p);}
-        public PointF center(){return centroid(p);}
-        public Entity offsetCopy(float d){
-            PointF c=center();
-            float w=dist(p[0].x,p[0].y,p[1].x,p[1].y);
-            float h=dist(p[0].x,p[0].y,p[3].x,p[3].y);
-            if(w<1e-6f||h<1e-6f)return null;
-            float nw=w+2f*d,nh=h+2f*d;
-            if(nw<=0||nh<=0)return null;
-            RectEntity e=(RectEntity)copy();
-            float ux=nw/w,uy=nh/h;
-            PointF cc=e.center();
-            for(PointF q:e.p){
-                float dx=q.x-cc.x,dy=q.y-cc.y;
-                float angle=(float)Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x);
-                float ca=(float)Math.cos(-angle),sa=(float)Math.sin(-angle);
-                float lx=dx*ca-dy*sa,ly=dx*sa+dy*ca;
-                lx*=ux;ly*=uy;
-                ca=(float)Math.cos(angle);sa=(float)Math.sin(angle);
-                q.x=cc.x+lx*ca-ly*sa;
-                q.y=cc.y+lx*sa+ly*ca;
-            }
-            return e;
-        }
-        public String describe(){
-            return "Rectangle | "+mm(dist(p[0].x,p[0].y,p[1].x,p[1].y))+" × "+
-                    mm(dist(p[1].x,p[1].y,p[2].x,p[2].y))+
-                    (extrusion>0?" × H "+mm(extrusion):"")+" | Layer "+layer;
-        }
-        public void appendDxf(StringBuilder d){
-            appendPolylineDxf(d,p,true,layer);
-        }
+    private static class RectEntity extends BaseEntity{
+        PointF[] p=new PointF[4];RectEntity(float x1,float y1,float x2,float y2){p[0]=new PointF(x1,y1);p[1]=new PointF(x2,y1);p[2]=new PointF(x2,y2);p[3]=new PointF(x1,y2);}RectEntity(PointF[]s){for(int i=0;i<4;i++)p[i]=new PointF(s[i].x,s[i].y);}
+        void setSize(float w,float h){PointF o=p[0];float ux=p[1].x-o.x,uy=p[1].y-o.y,ul=(float)Math.hypot(ux,uy);if(ul<1e-6f){ux=1;uy=0;ul=1;}ux/=ul;uy/=ul;float vx=p[3].x-o.x,vy=p[3].y-o.y,vl=(float)Math.hypot(vx,vy);if(vl<1e-6f){vx=-uy;vy=ux;vl=1;}vx/=vl;vy/=vl;p[1].set(o.x+ux*w,o.y+uy*w);p[3].set(o.x+vx*h,o.y+vy*h);p[2].set(p[1].x+vx*h,p[1].y+vy*h);}
+        public boolean canExtrude(){return true;}public void draw(Canvas c,Paint paint,Paint t,Paint m,float px,boolean dims){drawPoly(c,p,paint);if(extrusion>0.01f)drawExtruded(c,p,extrusion,paint);if(dims){c.drawText(mm(dist(p[0].x,p[0].y,p[1].x,p[1].y)),(p[0].x+p[1].x)/2f,(p[0].y+p[1].y)/2f-5f*px,t);c.drawText(mm(dist(p[1].x,p[1].y,p[2].x,p[2].y)),(p[1].x+p[2].x)/2f+12f*px,(p[1].y+p[2].y)/2f,t);}}
+        public float hitDistance(float x,float y){float b=Float.MAX_VALUE;for(int i=0;i<4;i++)b=Math.min(b,pointSeg(x,y,p[i].x,p[i].y,p[(i+1)%4].x,p[(i+1)%4].y));return b;}public List<SnapPoint> snapPoints(){return polygonSnaps(p);}public PointF nearestPoint(float x,float y){PointF best=null;float bd=Float.MAX_VALUE;for(int i=0;i<4;i++){PointF q=projectSeg(x,y,p[i].x,p[i].y,p[(i+1)%4].x,p[(i+1)%4].y);float d=dist(x,y,q.x,q.y);if(d<bd){bd=d;best=q;}}return best;}
+        public void translate(float dx,float dy){for(PointF q:p){q.x+=dx;q.y+=dy;}}public void rotate(float cx,float cy,float d){for(int i=0;i<4;i++)p[i]=rotatePoint(p[i].x,p[i].y,cx,cy,d);}public void scale(float cx,float cy,float f){for(int i=0;i<4;i++)p[i]=scalePoint(p[i].x,p[i].y,cx,cy,f);}public void mirrorVertical(float a){for(PointF q:p)q.x=2*a-q.x;}public void mirrorHorizontal(float a){for(PointF q:p)q.y=2*a-q.y;}
+        public Entity copy(){RectEntity e=new RectEntity(p);meta(e);return e;}public RectF bounds(){return boundsOf(p);}public PointF center(){return centroid(p);}public Entity offsetCopy(float d){PointF c=center();float w=dist(p[0].x,p[0].y,p[1].x,p[1].y),h=dist(p[0].x,p[0].y,p[3].x,p[3].y);if(w+2*d<=0||h+2*d<=0)return null;RectEntity e=(RectEntity)copy();e.scale(c.x,c.y,1f+2f*d/Math.max(w,h));return e;}public String describe(){return"Rectangle | "+mm(dist(p[0].x,p[0].y,p[1].x,p[1].y))+" × "+mm(dist(p[1].x,p[1].y,p[2].x,p[2].y))+(extrusion>0?" × H "+mm(extrusion):"")+" | Layer "+layer;}public void appendDxf(StringBuilder d){appendPolylineDxf(d,p,true,layer);}
     }
 
-    private static class CircleEntity extends BaseEntity {
-        float x,y,r;
-        CircleEntity(float x,float y,float r){this.x=x;this.y=y;this.r=r;}
-
-        public boolean canExtrude(){return true;}
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            c.drawCircle(x,y,r,p);
-            if(extrusion>0.01f){
-                float sx=-extrusion*0.28f,sy=-extrusion*0.18f;
-                c.drawCircle(x+sx,y+sy,r,p);
-                c.drawLine(x+r,y,x+r+sx,y+sy,p);
-                c.drawLine(x-r,y,x-r+sx,y+sy,p);
-            }
-            if(dims){
-                c.drawText("Ø "+mm(r*2),x,y-r-6f*px,t);
-                if(extrusion>0.01f)c.drawText("H "+mm(extrusion),x,y,t);
-            }
-        }
-        public float hitDistance(float a,float b){return Math.abs(dist(a,b,x,y)-r);}
-        public List<float[]> snapPoints(){
-            List<float[]>q=new ArrayList<>();
-            q.add(new float[]{x,y});
-            q.add(new float[]{x+r,y});q.add(new float[]{x-r,y});
-            q.add(new float[]{x,y+r});q.add(new float[]{x,y-r});
-            return q;
-        }
-        public void translate(float dx,float dy){x+=dx;y+=dy;}
-        public void rotate(float cx,float cy,float deg){PointF p=rotatePoint(x,y,cx,cy,deg);x=p.x;y=p.y;}
-        public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;r*=Math.abs(f);}
-        public void mirrorVertical(float axisX){x=2*axisX-x;}
-        public void mirrorHorizontal(float axisY){y=2*axisY-y;}
-        public Entity copy(){CircleEntity e=new CircleEntity(x,y,r);copyMetaTo(e);return e;}
-        public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}
-        public PointF center(){return new PointF(x,y);}
-        public Entity offsetCopy(float d){
-            if(r+d<=0)return null;
-            CircleEntity e=new CircleEntity(x,y,r+d);copyMetaTo(e);return e;
-        }
-        public String describe(){return "Circle | Ø "+mm(r*2)+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}
-        public void appendDxf(StringBuilder d){
-            d.append("0\nCIRCLE\n8\n").append(layer).append("\n10\n").append(x)
-                    .append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r).append("\n");
-        }
+    private static class CircleEntity extends BaseEntity{
+        float x,y,r;CircleEntity(float x,float y,float r){this.x=x;this.y=y;this.r=r;}public boolean canExtrude(){return true;}
+        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawCircle(x,y,r,p);float s=6f*px;c.drawLine(x-s,y,x+s,y,p);c.drawLine(x,y-s,x,y+s,p);if(extrusion>0.01f){float sx=-extrusion*.28f,sy=-extrusion*.18f;c.drawCircle(x+sx,y+sy,r,p);c.drawLine(x+r,y,x+r+sx,y+sy,p);c.drawLine(x-r,y,x-r+sx,y+sy,p);}if(dims)c.drawText("Ø "+mm(r*2),x,y-r-6f*px,t);}
+        public float hitDistance(float a,float b){return Math.abs(dist(a,b,x,y)-r);}public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"مرکز"));q.add(new SnapPoint(x+r,y,"ربع"));q.add(new SnapPoint(x-r,y,"ربع"));q.add(new SnapPoint(x,y+r,"ربع"));q.add(new SnapPoint(x,y-r,"ربع"));return q;}public PointF nearestPoint(float a,float b){float dx=a-x,dy=b-y,l=(float)Math.hypot(dx,dy);if(l<1e-6f)return new PointF(x+r,y);return new PointF(x+dx/l*r,y+dy/l*r);}
+        public void translate(float dx,float dy){x+=dx;y+=dy;}public void rotate(float cx,float cy,float d){PointF p=rotatePoint(x,y,cx,cy,d);x=p.x;y=p.y;}public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;r*=Math.abs(f);}public void mirrorVertical(float a){x=2*a-x;}public void mirrorHorizontal(float a){y=2*a-y;}public Entity copy(){CircleEntity e=new CircleEntity(x,y,r);meta(e);return e;}public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}public PointF center(){return new PointF(x,y);}public Entity offsetCopy(float d){if(r+d<=0)return null;CircleEntity e=new CircleEntity(x,y,r+d);meta(e);return e;}public String describe(){return"Circle | مرکز ("+fmt(x)+", "+fmt(y)+") | Ø "+mm(r*2)+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}public void appendDxf(StringBuilder d){d.append("0\nCIRCLE\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r).append("\n");}
     }
 
-    private static class ArcEntity extends BaseEntity {
-        float x,y,r,start,sweep;
-        ArcEntity(float x,float y,float r,float start,float sweep){this.x=x;this.y=y;this.r=r;this.start=start;this.sweep=sweep;}
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            RectF b=new RectF(x-r,y-r,x+r,y+r);
-            c.drawArc(b,start,sweep,false,p);
-            if(dims)c.drawText("R "+mm(r),x,y-r-5f*px,t);
-        }
-        public float hitDistance(float a,float b){return Math.abs(dist(a,b,x,y)-r);}
-        public List<float[]> snapPoints(){
-            List<float[]>q=new ArrayList<>();
-            q.add(new float[]{x,y});
-            q.add(new float[]{x+(float)Math.cos(Math.toRadians(start))*r,y+(float)Math.sin(Math.toRadians(start))*r});
-            float e=start+sweep;
-            q.add(new float[]{x+(float)Math.cos(Math.toRadians(e))*r,y+(float)Math.sin(Math.toRadians(e))*r});
-            return q;
-        }
-        public void translate(float dx,float dy){x+=dx;y+=dy;}
-        public void rotate(float cx,float cy,float deg){PointF p=rotatePoint(x,y,cx,cy,deg);x=p.x;y=p.y;start+=deg;}
-        public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;r*=Math.abs(f);}
-        public void mirrorVertical(float axisX){x=2*axisX-x;start=180-start;sweep=-sweep;}
-        public void mirrorHorizontal(float axisY){y=2*axisY-y;start=-start;sweep=-sweep;}
-        public Entity copy(){ArcEntity e=new ArcEntity(x,y,r,start,sweep);copyMetaTo(e);return e;}
-        public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}
-        public PointF center(){return new PointF(x,y);}
-        public Entity offsetCopy(float d){
-            if(r+d<=0)return null;
-            ArcEntity e=new ArcEntity(x,y,r+d,start,sweep);copyMetaTo(e);return e;
-        }
-        public String describe(){return "Arc | R "+mm(r)+" | "+fmt(sweep)+"° | Layer "+layer;}
-        public void appendDxf(StringBuilder d){
-            d.append("0\nARC\n8\n").append(layer).append("\n10\n").append(x)
-                    .append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r)
-                    .append("\n50\n").append(start).append("\n51\n").append(start+sweep).append("\n");
-        }
+    private static class ArcEntity extends BaseEntity{
+        float x,y,r,start,sweep;ArcEntity(float x,float y,float r,float s,float w){this.x=x;this.y=y;this.r=r;start=s;sweep=w;}
+        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawArc(new RectF(x-r,y-r,x+r,y+r),start,sweep,false,p);float z=5f*px;c.drawLine(x-z,y,x+z,y,p);c.drawLine(x,y-z,x,y+z,p);if(dims)c.drawText("R "+mm(r),x,y-r-5f*px,t);}public float hitDistance(float a,float b){return Math.abs(dist(a,b,x,y)-r);}public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"مرکز"));q.add(new SnapPoint(x+(float)Math.cos(Math.toRadians(start))*r,y+(float)Math.sin(Math.toRadians(start))*r,"ابتدا"));float e=start+sweep;q.add(new SnapPoint(x+(float)Math.cos(Math.toRadians(e))*r,y+(float)Math.sin(Math.toRadians(e))*r,"انتها"));return q;}public PointF nearestPoint(float a,float b){float dx=a-x,dy=b-y,l=(float)Math.hypot(dx,dy);if(l<1e-6f)return null;return new PointF(x+dx/l*r,y+dy/l*r);}
+        public void translate(float dx,float dy){x+=dx;y+=dy;}public void rotate(float cx,float cy,float d){PointF p=rotatePoint(x,y,cx,cy,d);x=p.x;y=p.y;start+=d;}public void scale(float cx,float cy,float f){PointF p=scalePoint(x,y,cx,cy,f);x=p.x;y=p.y;r*=Math.abs(f);}public void mirrorVertical(float a){x=2*a-x;start=180-start;sweep=-sweep;}public void mirrorHorizontal(float a){y=2*a-y;start=-start;sweep=-sweep;}public Entity copy(){ArcEntity e=new ArcEntity(x,y,r,start,sweep);meta(e);return e;}public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}public PointF center(){return new PointF(x,y);}public Entity offsetCopy(float d){if(r+d<=0)return null;ArcEntity e=new ArcEntity(x,y,r+d,start,sweep);meta(e);return e;}public String describe(){return"Arc | مرکز ("+fmt(x)+", "+fmt(y)+") | R "+mm(r)+" | Layer "+layer;}public void appendDxf(StringBuilder d){d.append("0\nARC\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r).append("\n50\n").append(start).append("\n51\n").append(start+sweep).append("\n");}
     }
 
-    private static class PolygonEntity extends BaseEntity {
-        final List<PointF> points=new ArrayList<>();
-
-        PolygonEntity(List<PointF> pts){for(PointF p:pts)points.add(new PointF(p.x,p.y));}
-
-        static PolygonEntity regular(int sides,float cx,float cy,float r){
-            List<PointF> pts=new ArrayList<>();
-            for(int i=0;i<sides;i++){
-                double a=-Math.PI/2+2*Math.PI*i/sides;
-                pts.add(new PointF(cx+(float)Math.cos(a)*r,cy+(float)Math.sin(a)*r));
-            }
-            return new PolygonEntity(pts);
-        }
-
-        void setRadius(float r){
-            PointF c=center();
-            float current=0f;
-            for(PointF p:points)current+=dist(c.x,c.y,p.x,p.y);
-            current/=Math.max(1,points.size());
-            if(current<1e-6f)return;
-            scale(c.x,c.y,r/current);
-        }
-
-        public boolean canExtrude(){return true;}
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            PointF[] arr=points.toArray(new PointF[0]);
-            drawPolygonPath(c,arr,p);
-            if(extrusion>0.01f)drawExtrudedPolygon(c,arr,extrusion,p,px);
-            if(dims){
-                PointF cc=center();
-                float r=points.isEmpty()?0:dist(cc.x,cc.y,points.get(0).x,points.get(0).y);
-                c.drawText(points.size()+" sides | R "+mm(r),cc.x,cc.y,t);
-                if(extrusion>0.01f)c.drawText("H "+mm(extrusion),cc.x,cc.y+12f*px,t);
-            }
-        }
-        public float hitDistance(float x,float y){
-            if(points.isEmpty())return Float.MAX_VALUE;
-            float best=Float.MAX_VALUE;
-            for(int i=0;i<points.size();i++){
-                PointF a=points.get(i),b=points.get((i+1)%points.size());
-                best=Math.min(best,pointSeg(x,y,a.x,a.y,b.x,b.y));
-            }
-            return best;
-        }
-        public List<float[]> snapPoints(){
-            List<float[]>q=new ArrayList<>();
-            for(int i=0;i<points.size();i++){
-                PointF a=points.get(i),b=points.get((i+1)%points.size());
-                q.add(new float[]{a.x,a.y});
-                q.add(new float[]{(a.x+b.x)/2f,(a.y+b.y)/2f});
-            }
-            PointF c=center();q.add(new float[]{c.x,c.y});
-            return q;
-        }
-        public void translate(float dx,float dy){for(PointF p:points){p.x+=dx;p.y+=dy;}}
-        public void rotate(float cx,float cy,float deg){for(int i=0;i<points.size();i++)points.set(i,rotatePoint(points.get(i).x,points.get(i).y,cx,cy,deg));}
-        public void scale(float cx,float cy,float f){for(int i=0;i<points.size();i++)points.set(i,scalePoint(points.get(i).x,points.get(i).y,cx,cy,f));}
-        public void mirrorVertical(float axisX){for(PointF p:points)p.x=2*axisX-p.x;}
-        public void mirrorHorizontal(float axisY){for(PointF p:points)p.y=2*axisY-p.y;}
-        public Entity copy(){PolygonEntity e=new PolygonEntity(points);copyMetaTo(e);return e;}
-        public RectF bounds(){return boundsOf(points.toArray(new PointF[0]));}
-        public PointF center(){return centroid(points.toArray(new PointF[0]));}
-        public Entity offsetCopy(float d){
-            PointF c=center();
-            float r=0f;
-            for(PointF p:points)r+=dist(c.x,c.y,p.x,p.y);
-            r/=Math.max(1,points.size());
-            if(r+d<=0||r<1e-6f)return null;
-            PolygonEntity e=(PolygonEntity)copy();
-            e.scale(c.x,c.y,(r+d)/r);
-            return e;
-        }
-        public String describe(){return "Polygon "+points.size()+" sides"+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}
-        public void appendDxf(StringBuilder d){appendPolylineDxf(d,points.toArray(new PointF[0]),true,layer);}
+    private static class PolygonEntity extends BaseEntity{
+        List<PointF>p=new ArrayList<>();PolygonEntity(List<PointF>s){for(PointF q:s)p.add(new PointF(q.x,q.y));}static PolygonEntity regular(int n,float x,float y,float r){List<PointF>a=new ArrayList<>();for(int i=0;i<n;i++){double z=-Math.PI/2+2*Math.PI*i/n;a.add(new PointF(x+(float)Math.cos(z)*r,y+(float)Math.sin(z)*r));}return new PolygonEntity(a);}void setRadius(float r){PointF c=center();float old=p.isEmpty()?1:dist(c.x,c.y,p.get(0).x,p.get(0).y);if(old>1e-6f)scale(c.x,c.y,r/old);}public boolean canExtrude(){return true;}
+        public void draw(Canvas c,Paint paint,Paint t,Paint m,float px,boolean dims){PointF[]a=p.toArray(new PointF[0]);drawPoly(c,a,paint);if(extrusion>0.01f)drawExtruded(c,a,extrusion,paint);if(dims){PointF cc=center();c.drawText(p.size()+" sides",cc.x,cc.y,t);}}public float hitDistance(float x,float y){float b=Float.MAX_VALUE;for(int i=0;i<p.size();i++)b=Math.min(b,pointSeg(x,y,p.get(i).x,p.get(i).y,p.get((i+1)%p.size()).x,p.get((i+1)%p.size()).y));return b;}public List<SnapPoint> snapPoints(){return polygonSnaps(p.toArray(new PointF[0]));}public PointF nearestPoint(float x,float y){PointF best=null;float bd=Float.MAX_VALUE;for(int i=0;i<p.size();i++){PointF a=p.get(i),b=p.get((i+1)%p.size()),q=projectSeg(x,y,a.x,a.y,b.x,b.y);float d=dist(x,y,q.x,q.y);if(d<bd){bd=d;best=q;}}return best;}
+        public void translate(float dx,float dy){for(PointF q:p){q.x+=dx;q.y+=dy;}}public void rotate(float cx,float cy,float d){for(int i=0;i<p.size();i++)p.set(i,rotatePoint(p.get(i).x,p.get(i).y,cx,cy,d));}public void scale(float cx,float cy,float f){for(int i=0;i<p.size();i++)p.set(i,scalePoint(p.get(i).x,p.get(i).y,cx,cy,f));}public void mirrorVertical(float a){for(PointF q:p)q.x=2*a-q.x;}public void mirrorHorizontal(float a){for(PointF q:p)q.y=2*a-q.y;}public Entity copy(){PolygonEntity e=new PolygonEntity(p);meta(e);return e;}public RectF bounds(){return boundsOf(p.toArray(new PointF[0]));}public PointF center(){return centroid(p.toArray(new PointF[0]));}public Entity offsetCopy(float d){PointF c=center();float r=p.isEmpty()?0:dist(c.x,c.y,p.get(0).x,p.get(0).y);if(r+d<=0||r<1e-6f)return null;PolygonEntity e=(PolygonEntity)copy();e.scale(c.x,c.y,(r+d)/r);return e;}public String describe(){return"Polygon "+p.size()+" sides | Layer "+layer;}public void appendDxf(StringBuilder d){appendPolylineDxf(d,p.toArray(new PointF[0]),true,layer);}
     }
 
-    private static class PolylineEntity extends BaseEntity {
-        final List<PointF> points=new ArrayList<>();
-        final boolean closed;
-
-        PolylineEntity(List<PointF> pts,boolean closed){
-            for(PointF p:pts)points.add(new PointF(p.x,p.y));
-            this.closed=closed;
-        }
-
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            if(points.size()<2)return;
-            Path path=new Path();
-            path.moveTo(points.get(0).x,points.get(0).y);
-            for(int i=1;i<points.size();i++)path.lineTo(points.get(i).x,points.get(i).y);
-            if(closed)path.close();
-            c.drawPath(path,p);
-        }
-        public float hitDistance(float x,float y){
-            float best=Float.MAX_VALUE;
-            for(int i=0;i<points.size()-1;i++)best=Math.min(best,pointSeg(x,y,points.get(i).x,points.get(i).y,points.get(i+1).x,points.get(i+1).y));
-            return best;
-        }
-        public List<float[]> snapPoints(){
-            List<float[]>q=new ArrayList<>();
-            for(PointF p:points)q.add(new float[]{p.x,p.y});
-            return q;
-        }
-        public void translate(float dx,float dy){for(PointF p:points){p.x+=dx;p.y+=dy;}}
-        public void rotate(float cx,float cy,float deg){for(int i=0;i<points.size();i++)points.set(i,rotatePoint(points.get(i).x,points.get(i).y,cx,cy,deg));}
-        public void scale(float cx,float cy,float f){for(int i=0;i<points.size();i++)points.set(i,scalePoint(points.get(i).x,points.get(i).y,cx,cy,f));}
-        public void mirrorVertical(float axisX){for(PointF p:points)p.x=2*axisX-p.x;}
-        public void mirrorHorizontal(float axisY){for(PointF p:points)p.y=2*axisY-p.y;}
-        public Entity copy(){PolylineEntity e=new PolylineEntity(points,closed);copyMetaTo(e);return e;}
-        public RectF bounds(){return boundsOf(points.toArray(new PointF[0]));}
-        public PointF center(){return centroid(points.toArray(new PointF[0]));}
-        public Entity offsetCopy(float d){return null;}
-        public String describe(){return (closed?"Polyline closed":"Freehand")+" | "+points.size()+" points | Layer "+layer;}
-        public void appendDxf(StringBuilder d){appendPolylineDxf(d,points.toArray(new PointF[0]),closed,layer);}
+    private static class PolylineEntity extends BaseEntity{
+        List<PointF>p=new ArrayList<>();boolean closed;PolylineEntity(List<PointF>s,boolean c){for(PointF q:s)p.add(new PointF(q.x,q.y));closed=c;}public void draw(Canvas c,Paint paint,Paint t,Paint m,float px,boolean dims){if(p.size()<2)return;Path path=new Path();path.moveTo(p.get(0).x,p.get(0).y);for(int i=1;i<p.size();i++)path.lineTo(p.get(i).x,p.get(i).y);if(closed)path.close();c.drawPath(path,paint);}public float hitDistance(float x,float y){float b=Float.MAX_VALUE;for(int i=0;i<p.size()-1;i++)b=Math.min(b,pointSeg(x,y,p.get(i).x,p.get(i).y,p.get(i+1).x,p.get(i+1).y));return b;}public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();for(PointF z:p)q.add(new SnapPoint(z.x,z.y,"گره"));return q;}public PointF nearestPoint(float x,float y){PointF best=null;float bd=Float.MAX_VALUE;for(int i=0;i<p.size()-1;i++){PointF a=p.get(i),b=p.get(i+1),q=projectSeg(x,y,a.x,a.y,b.x,b.y);float d=dist(x,y,q.x,q.y);if(d<bd){bd=d;best=q;}}return best;}public void translate(float dx,float dy){for(PointF q:p){q.x+=dx;q.y+=dy;}}public void rotate(float cx,float cy,float d){for(int i=0;i<p.size();i++)p.set(i,rotatePoint(p.get(i).x,p.get(i).y,cx,cy,d));}public void scale(float cx,float cy,float f){for(int i=0;i<p.size();i++)p.set(i,scalePoint(p.get(i).x,p.get(i).y,cx,cy,f));}public void mirrorVertical(float a){for(PointF q:p)q.x=2*a-q.x;}public void mirrorHorizontal(float a){for(PointF q:p)q.y=2*a-q.y;}public Entity copy(){PolylineEntity e=new PolylineEntity(p,closed);meta(e);return e;}public RectF bounds(){return boundsOf(p.toArray(new PointF[0]));}public PointF center(){return centroid(p.toArray(new PointF[0]));}public Entity offsetCopy(float d){return null;}public String describe(){return"Freehand | "+p.size()+" points | Layer "+layer;}public void appendDxf(StringBuilder d){appendPolylineDxf(d,p.toArray(new PointF[0]),closed,layer);}
     }
 
-    private static class MeasureEntity extends BaseEntity {
-        float x1,y1,x2,y2;
-        MeasureEntity(float x1,float y1,float x2,float y2){this.x1=x1;this.y1=y1;this.x2=x2;this.y2=y2;}
+    private static class MeasureEntity extends LineEntity{MeasureEntity(float a,float b,float c,float d){super(a,b,c,d);}public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawLine(x1,y1,x2,y2,m);if(dims)drawLength(c,x1,y1,x2,y2,t,px);}public Entity copy(){MeasureEntity e=new MeasureEntity(x1,y1,x2,y2);meta(e);return e;}public String describe(){return"Dimension | "+mm(dist(x1,y1,x2,y2));}public void appendDxf(StringBuilder d){}public boolean isConstruction(){return true;}}
 
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            c.drawLine(x1,y1,x2,y2,m);
-            drawArrow(c,x1,y1,x2,y2,m,px);
-            if(dims)drawLength(c,x1,y1,x2,y2,t,px);
-        }
-        public float hitDistance(float x,float y){return pointSeg(x,y,x1,y1,x2,y2);}
-        public List<float[]> snapPoints(){List<float[]>q=new ArrayList<>();q.add(new float[]{x1,y1});q.add(new float[]{x2,y2});return q;}
-        public void translate(float dx,float dy){x1+=dx;x2+=dx;y1+=dy;y2+=dy;}
-        public void rotate(float cx,float cy,float deg){PointF a=rotatePoint(x1,y1,cx,cy,deg),b=rotatePoint(x2,y2,cx,cy,deg);x1=a.x;y1=a.y;x2=b.x;y2=b.y;}
-        public void scale(float cx,float cy,float f){PointF a=scalePoint(x1,y1,cx,cy,f),b=scalePoint(x2,y2,cx,cy,f);x1=a.x;y1=a.y;x2=b.x;y2=b.y;}
-        public void mirrorVertical(float axisX){x1=2*axisX-x1;x2=2*axisX-x2;}
-        public void mirrorHorizontal(float axisY){y1=2*axisY-y1;y2=2*axisY-y2;}
-        public Entity copy(){MeasureEntity e=new MeasureEntity(x1,y1,x2,y2);copyMetaTo(e);return e;}
-        public RectF bounds(){return new RectF(Math.min(x1,x2),Math.min(y1,y2),Math.max(x1,x2),Math.max(y1,y2));}
-        public PointF center(){return new PointF((x1+x2)/2f,(y1+y2)/2f);}
-        public Entity offsetCopy(float d){return null;}
-        public String describe(){return "Dimension | "+mm(dist(x1,y1,x2,y2));}
-        public void appendDxf(StringBuilder d){}
-    }
+    private static class GuideEntity extends BaseEntity{boolean vertical;float value;GuideEntity(boolean v,float x){vertical=v;value=x;color=Color.rgb(65,145,200);}public boolean isConstruction(){return true;}public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){float far=100000f;if(vertical)c.drawLine(value,-far,value,far,p);else c.drawLine(-far,value,far,value,p);}public float hitDistance(float x,float y){return vertical?Math.abs(x-value):Math.abs(y-value);}public List<SnapPoint> snapPoints(){return new ArrayList<>();}public PointF nearestPoint(float x,float y){return vertical?new PointF(value,y):new PointF(x,value);}public void translate(float dx,float dy){value+=vertical?dx:dy;}public void rotate(float cx,float cy,float d){}public void scale(float cx,float cy,float f){}public void mirrorVertical(float a){if(vertical)value=2*a-value;}public void mirrorHorizontal(float a){if(!vertical)value=2*a-value;}public Entity copy(){GuideEntity e=new GuideEntity(vertical,value);meta(e);return e;}public RectF bounds(){return new RectF();}public PointF center(){return vertical?new PointF(value,0):new PointF(0,value);}public Entity offsetCopy(float d){GuideEntity e=new GuideEntity(vertical,value+d);meta(e);return e;}public String describe(){return"Guide";}public void appendDxf(StringBuilder d){} }
 
-    private static class AngleEntity extends BaseEntity {
-        float ax,ay,cx,cy,bx,by;
-        AngleEntity(float ax,float ay,float cx,float cy,float bx,float by){
-            this.ax=ax;this.ay=ay;this.cx=cx;this.cy=cy;this.bx=bx;this.by=by;
-        }
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            c.drawLine(cx,cy,ax,ay,m);c.drawLine(cx,cy,bx,by,m);
-            if(dims)c.drawText(fmt(angleAt(ax,ay,cx,cy,bx,by))+"°",cx+15f*px,cy-10f*px,t);
-        }
-        public float hitDistance(float x,float y){return Math.min(pointSeg(x,y,cx,cy,ax,ay),pointSeg(x,y,cx,cy,bx,by));}
-        public List<float[]> snapPoints(){List<float[]>q=new ArrayList<>();q.add(new float[]{ax,ay});q.add(new float[]{cx,cy});q.add(new float[]{bx,by});return q;}
-        public void translate(float dx,float dy){ax+=dx;ay+=dy;cx+=dx;cy+=dy;bx+=dx;by+=dy;}
-        public void rotate(float x,float y,float deg){
-            PointF a=rotatePoint(ax,ay,x,y,deg),cc=rotatePoint(cx,cy,x,y,deg),b=rotatePoint(bx,by,x,y,deg);
-            ax=a.x;ay=a.y;cx=cc.x;cy=cc.y;bx=b.x;by=b.y;
-        }
-        public void scale(float x,float y,float f){
-            PointF a=scalePoint(ax,ay,x,y,f),cc=scalePoint(cx,cy,x,y,f),b=scalePoint(bx,by,x,y,f);
-            ax=a.x;ay=a.y;cx=cc.x;cy=cc.y;bx=b.x;by=b.y;
-        }
-        public void mirrorVertical(float axisX){ax=2*axisX-ax;cx=2*axisX-cx;bx=2*axisX-bx;}
-        public void mirrorHorizontal(float axisY){ay=2*axisY-ay;cy=2*axisY-cy;by=2*axisY-by;}
-        public Entity copy(){AngleEntity e=new AngleEntity(ax,ay,cx,cy,bx,by);copyMetaTo(e);return e;}
-        public RectF bounds(){PointF[]p={new PointF(ax,ay),new PointF(cx,cy),new PointF(bx,by)};return boundsOf(p);}
-        public PointF center(){return new PointF(cx,cy);}
-        public Entity offsetCopy(float d){return null;}
-        public String describe(){return "Angle | "+fmt(angleAt(ax,ay,cx,cy,bx,by))+"°";}
-        public void appendDxf(StringBuilder d){}
-    }
+    private static class SnapPoint{float x,y;String label;SnapPoint(float x,float y,String l){this.x=x;this.y=y;label=l;}}
+    private static class SnapCandidate{float x,y,d;String label;SnapCandidate(float x,float y,float d,String l){this.x=x;this.y=y;this.d=d;label=l;}}
+    private static class Scene{float scale,x,y;boolean grid,axes;Scene(float s,float x,float y,boolean g,boolean a){scale=s;this.x=x;this.y=y;grid=g;axes=a;}}
 
-    private static class GuideEntity extends BaseEntity {
-        final boolean vertical;
-        float value;
-        GuideEntity(boolean vertical,float value){
-            this.vertical=vertical;
-            this.value=value;
-            color=Color.rgb(65,145,200);
-        }
-        public boolean isConstruction(){return true;}
-        public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){
-            float far=100000f;
-            if(vertical)c.drawLine(value,-far,value,far,p);
-            else c.drawLine(-far,value,far,value,p);
-            if(dims)c.drawText((vertical?"X ":"Y ")+mm(value),vertical?value:0,vertical?0:value,t);
-        }
-        public float hitDistance(float x,float y){return vertical?Math.abs(x-value):Math.abs(y-value);}
-        public List<float[]> snapPoints(){return new ArrayList<>();}
-        public void translate(float dx,float dy){value+=vertical?dx:dy;}
-        public void rotate(float cx,float cy,float deg){}
-        public void scale(float cx,float cy,float f){}
-        public void mirrorVertical(float axisX){if(vertical)value=2*axisX-value;}
-        public void mirrorHorizontal(float axisY){if(!vertical)value=2*axisY-value;}
-        public Entity copy(){GuideEntity e=new GuideEntity(vertical,value);copyMetaTo(e);return e;}
-        public RectF bounds(){return vertical?new RectF(value,0,value,0):new RectF(0,value,0,value);}
-        public PointF center(){return vertical?new PointF(value,0):new PointF(0,value);}
-        public Entity offsetCopy(float d){GuideEntity e=new GuideEntity(vertical,value+d);copyMetaTo(e);return e;}
-        public String describe(){return "Guide "+(vertical?"X ":"Y ")+mm(value);}
-        public void appendDxf(StringBuilder d){}
-    }
-
-    private static List<float[]> polygonSnaps(PointF[] p){
-        List<float[]>q=new ArrayList<>();
-        for(int i=0;i<p.length;i++){
-            PointF a=p[i],b=p[(i+1)%p.length];
-            q.add(new float[]{a.x,a.y});
-            q.add(new float[]{(a.x+b.x)/2f,(a.y+b.y)/2f});
-        }
-        PointF c=centroid(p);q.add(new float[]{c.x,c.y});
-        return q;
-    }
-
-    private static RectF boundsOf(PointF[] p){
-        if(p.length==0)return new RectF();
-        float l=p[0].x,r=p[0].x,t=p[0].y,b=p[0].y;
-        for(PointF q:p){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);}
-        return new RectF(l,t,r,b);
-    }
-
-    private static PointF centroid(PointF[] p){
-        if(p.length==0)return new PointF();
-        float x=0,y=0;
-        for(PointF q:p){x+=q.x;y+=q.y;}
-        return new PointF(x/p.length,y/p.length);
-    }
-
-    private static void drawPolygonPath(Canvas c,PointF[] p,Paint paint){
-        if(p.length==0)return;
-        Path path=new Path();path.moveTo(p[0].x,p[0].y);
-        for(int i=1;i<p.length;i++)path.lineTo(p[i].x,p[i].y);
-        path.close();c.drawPath(path,paint);
-    }
-
-    private static void drawExtrudedPolygon(Canvas c,PointF[] p,float h,Paint paint,float px){
-        if(p.length<3)return;
-        float sx=-h*0.28f,sy=-h*0.18f;
-        PointF[] top=new PointF[p.length];
-        for(int i=0;i<p.length;i++)top[i]=new PointF(p[i].x+sx,p[i].y+sy);
-        drawPolygonPath(c,top,paint);
-        for(int i=0;i<p.length;i++)c.drawLine(p[i].x,p[i].y,top[i].x,top[i].y,paint);
-    }
-
-    private static void drawArrow(Canvas c,float x1,float y1,float x2,float y2,Paint p,float px){
-        float dx=x2-x1,dy=y2-y1,len=(float)Math.hypot(dx,dy);
-        if(len<1e-6f)return;
-        float ux=dx/len,uy=dy/len;
-        float s=7f*px;
-        c.drawLine(x1,y1,x1+ux*s-uy*s*0.6f,y1+uy*s+ux*s*0.6f,p);
-        c.drawLine(x1,y1,x1+ux*s+uy*s*0.6f,y1+uy*s-ux*s*0.6f,p);
-        c.drawLine(x2,y2,x2-ux*s-uy*s*0.6f,y2-uy*s+ux*s*0.6f,p);
-        c.drawLine(x2,y2,x2-ux*s+uy*s*0.6f,y2-uy*s-ux*s*0.6f,p);
-    }
-
-    private static void appendPolylineDxf(StringBuilder d,PointF[] p,boolean closed,String layer){
-        if(p.length==0)return;
-        d.append("0\nLWPOLYLINE\n8\n").append(layer).append("\n90\n").append(p.length)
-                .append("\n70\n").append(closed?1:0).append("\n");
-        for(PointF q:p)d.append("10\n").append(q.x).append("\n20\n").append(-q.y).append("\n");
-    }
+    private static void require(String[]a,int n){if(a.length<n)throw new IllegalArgumentException();}
+    private static float f(String[]a,int i){return Float.parseFloat(a[i]);}
+    private static float clamp(float v,float a,float b){return Math.max(a,Math.min(b,v));}
+    private static float dist(float a,float b,float c,float d){return(float)Math.hypot(c-a,d-b);}
+    private static String mm(float v){return String.format(Locale.US,"%.1f mm",v);}
+    private static String fmt(float v){return String.format(Locale.US,"%.2f",v);}
+    private static String toolName(int t){switch(t){case TOOL_POINT:return"نقطه";case TOOL_LINE:return"خط";case TOOL_RECT:return"مستطیل";case TOOL_CIRCLE:return"دایره مرکز-شعاع";case TOOL_MEASURE:return"اندازه";case TOOL_ARC:return"قوس";case TOOL_POLYGON:return"چندضلعی";case TOOL_FREE:return"آزاد";case TOOL_GUIDE:return"راهنما";default:return"انتخاب";}}
+    private static int materialColor(String m){if(m==null)return Color.rgb(25,25,25);String s=m.trim().toUpperCase(Locale.US);if("WOOD".equals(s)||"CHOB".equals(s))return Color.rgb(125,85,45);if("MDF".equals(s))return Color.rgb(145,110,70);if("METAL".equals(s))return Color.rgb(90,100,110);if("GLASS".equals(s))return Color.rgb(80,150,175);return Color.rgb(25,25,25);}
+    private static PointF centerOf(RectF r){return new PointF((r.left+r.right)/2f,(r.top+r.bottom)/2f);}
+    private static void drawLength(Canvas c,float x1,float y1,float x2,float y2,Paint t,float px){c.drawText(mm(dist(x1,y1,x2,y2)),(x1+x2)/2f,(y1+y2)/2f-4f*px,t);}
+    private static float pointSeg(float px,float py,float x1,float y1,float x2,float y2){PointF q=projectSeg(px,py,x1,y1,x2,y2);return dist(px,py,q.x,q.y);}
+    private static PointF projectSeg(float px,float py,float x1,float y1,float x2,float y2){float dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;if(l2<1e-6f)return new PointF(x1,y1);float t=((px-x1)*dx+(py-y1)*dy)/l2;t=clamp(t,0,1);return new PointF(x1+t*dx,y1+t*dy);}
+    private static PointF rotatePoint(float x,float y,float cx,float cy,float deg){double r=Math.toRadians(deg);float dx=x-cx,dy=y-cy;return new PointF(cx+(float)(dx*Math.cos(r)-dy*Math.sin(r)),cy+(float)(dx*Math.sin(r)+dy*Math.cos(r)));}
+    private static PointF scalePoint(float x,float y,float cx,float cy,float f){return new PointF(cx+(x-cx)*f,cy+(y-cy)*f);}
+    private static PointF lineIntersection(LineEntity a,LineEntity b){float x1=a.x1,y1=a.y1,x2=a.x2,y2=a.y2,x3=b.x1,y3=b.y1,x4=b.x2,y4=b.y2;float den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);if(Math.abs(den)<1e-6f)return null;float t=((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/den;float u=-((x1-x2)*(y1-y3)-(y1-y2)*(x1-x3))/den;if(t<0||t>1||u<0||u>1)return null;return new PointF(x1+t*(x2-x1),y1+t*(y2-y1));}
+    private static List<SnapPoint> polygonSnaps(PointF[]p){List<SnapPoint>q=new ArrayList<>();for(int i=0;i<p.length;i++){PointF a=p[i],b=p[(i+1)%p.length];q.add(new SnapPoint(a.x,a.y,"گوشه"));q.add(new SnapPoint((a.x+b.x)/2f,(a.y+b.y)/2f,"وسط"));}PointF c=centroid(p);q.add(new SnapPoint(c.x,c.y,"مرکز"));return q;}
+    private static RectF boundsOf(PointF[]p){if(p.length==0)return new RectF();float l=p[0].x,r=p[0].x,t=p[0].y,b=p[0].y;for(PointF q:p){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);}return new RectF(l,t,r,b);}
+    private static PointF centroid(PointF[]p){if(p.length==0)return new PointF();float x=0,y=0;for(PointF q:p){x+=q.x;y+=q.y;}return new PointF(x/p.length,y/p.length);}
+    private static void drawPoly(Canvas c,PointF[]p,Paint paint){if(p.length==0)return;Path path=new Path();path.moveTo(p[0].x,p[0].y);for(int i=1;i<p.length;i++)path.lineTo(p[i].x,p[i].y);path.close();c.drawPath(path,paint);}
+    private static void drawExtruded(Canvas c,PointF[]p,float h,Paint paint){if(p.length<3)return;float sx=-h*.28f,sy=-h*.18f;PointF[]top=new PointF[p.length];for(int i=0;i<p.length;i++)top[i]=new PointF(p[i].x+sx,p[i].y+sy);drawPoly(c,top,paint);for(int i=0;i<p.length;i++)c.drawLine(p[i].x,p[i].y,top[i].x,top[i].y,paint);}
+    private static void appendPolylineDxf(StringBuilder d,PointF[]p,boolean closed,String layer){if(p.length==0)return;d.append("0\nLWPOLYLINE\n8\n").append(layer).append("\n90\n").append(p.length).append("\n70\n").append(closed?1:0).append("\n");for(PointF q:p)d.append("10\n").append(q.x).append("\n20\n").append(-q.y).append("\n");}
 }
