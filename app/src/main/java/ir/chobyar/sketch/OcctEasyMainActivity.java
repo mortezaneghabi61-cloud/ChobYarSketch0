@@ -12,10 +12,10 @@ import java.lang.reflect.Method;
 
 /**
  * Clean skachmori shell upgraded to the exact OCCT workspace plus the
- * Shapr-inspired Sketch/Measure workflow, pen-first Automatic Line/Arc,
+ * Shapr-aligned Sketch/Measure workflow, pen-first Automatic Line/Arc,
  * sketch definition states, driving-dimension DOF solving, parametric
- * Ellipse / Fit Point / Control Point Spline editing, and Shapr-style
- * spline point/tangent Break-Join workflows.
+ * Ellipse / Fit Point / Control Point Spline editing, spline point/tangent
+ * Break-Join workflows, and a pen-drawn circular Arc tool.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -37,7 +37,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            ShaprSplineEditingCadCanvasView upgraded=new ShaprSplineEditingCadCanvasView(this);
+            ShaprArcCadCanvasView upgraded=new ShaprArcCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -57,7 +57,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,ShaprSplineEditingCadCanvasView cad){
+    private void rewireShaprButtons(View root,ShaprArcCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
@@ -70,7 +70,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(ShaprSplineEditingCadCanvasView cad){
+    private void showMasterTools(ShaprArcCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
                 "〰 Ellipse / Spline edit",
