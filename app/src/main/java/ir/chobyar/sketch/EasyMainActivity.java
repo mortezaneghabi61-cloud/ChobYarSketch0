@@ -22,7 +22,7 @@ import java.lang.reflect.Method;
 import java.util.Locale;
 
 /**
- * Shapr-style shell for skachmori.
+ * Pen-first modeling shell for ChobYar 3D.
  *
  * The geometry engine stays independent from the UI. The workspace follows a
  * compact CAD pattern: a slim top bar, one left modeling menu, a selection-
@@ -31,7 +31,7 @@ import java.util.Locale;
  */
 public class EasyMainActivity extends MainActivity {
 
-    private NativeBRepCadCanvasView easyCad;
+    protected NativeBRepCadCanvasView easyCad;
     private TextView compactStatus;
     private LinearLayout adaptiveBar;
     private LinearLayout navigationBar;
@@ -96,7 +96,7 @@ public class EasyMainActivity extends MainActivity {
     }
 
     /** Kept with this exact name because the OCCT activity rewires it after upgrading the canvas. */
-    private void wireWorkspaceCallbacks() {
+    protected void wireWorkspaceCallbacks() {
         easyCad.setStatusListener(this::showStatus);
         easyCad.setDimensionEditListener(() -> invokeMain("showExactDimension", new Class<?>[0]));
         easyCad.setWorkspaceListener(this::onWorkspaceStateChanged);

@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
 
     private static final int REQUEST_EXPORT_DXF = 1001;
 
-    private ChobYarShaprCanvasView cad;
+    protected ChobYarShaprCanvasView cad;
     private TextView status;
     private LinearLayout adaptiveRail;
     private LinearLayout constraintRail;
