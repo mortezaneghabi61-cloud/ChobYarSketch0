@@ -10,7 +10,8 @@ import java.lang.reflect.Method;
 
 /**
  * Keeps the clean skachmori shell while upgrading the modeling canvas to the
- * exact OCCT workspace with stable Face/Edge references and integrated History.
+ * exact OCCT workspace with stable Face/Edge references, integrated History,
+ * and selection-aware sketch measurement.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -32,7 +33,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            OcctStableCadCanvasView upgraded=new OcctStableCadCanvasView(this);
+            OcctMeasureCadCanvasView upgraded=new OcctMeasureCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -47,7 +48,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             wire.invoke(this);
             upgraded.dispatchWorkspaceState();
         }catch(Exception e){
-            Toast.makeText(this,"OCCT Stable workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"OCCT Measure workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
         }
     }
 }
