@@ -13,7 +13,7 @@ import java.lang.reflect.Method;
 /**
  * Clean skachmori shell upgraded to the exact OCCT workspace plus the
  * Shapr-inspired Sketch/Measure workflow, pen-first Automatic Line/Arc,
- * and Shapr-style sketch definition states.
+ * sketch definition states, and driving-dimension DOF solving.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -35,7 +35,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            ShaprSketchStateCadCanvasView upgraded=new ShaprSketchStateCadCanvasView(this);
+            ShaprConstraintSolverCadCanvasView upgraded=new ShaprConstraintSolverCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -55,7 +55,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,ShaprSketchStateCadCanvasView cad){
+    private void rewireShaprButtons(View root,ShaprConstraintSolverCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
@@ -68,7 +68,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(ShaprSketchStateCadCanvasView cad){
+    private void showMasterTools(ShaprConstraintSolverCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
                 "▣ 3D Modeling tools",
@@ -84,7 +84,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             else if(w==2)cad.showSketchMeasureInspector();
             else if(w==3)cad.showSmartConstraintMenu();
             else if(w==4)new AlertDialog.Builder(this)
-                    .setTitle("Sketch State")
+                    .setTitle("Sketch State / DOF")
                     .setMessage(cad.sketchStateSummary())
                     .setPositiveButton("بستن",null).show();
             else if(w==5)cad.showPlaneManager();
