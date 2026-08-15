@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        root.addView(new AiPanel(this, cad, status).build());
         root.addView(makeQuickEditBar());
 
         root.addView(cad, new LinearLayout.LayoutParams(
