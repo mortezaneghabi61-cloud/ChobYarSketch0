@@ -128,6 +128,16 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     public boolean is3DOverview() { return overview3D; }
 
+    public String setStandardView(String view) {
+        overview3D=true;orbiting=false;navigating2D=false;cameraPanX=0f;cameraPanY=0f;
+        String key=view==null?"ISO":view.toUpperCase(java.util.Locale.US);
+        if("TOP".equals(key)){cameraYaw=0f;cameraPitch=0f;}
+        else if("FRONT".equals(key)){cameraYaw=0f;cameraPitch=90f;}
+        else if("RIGHT".equals(key)){cameraYaw=90f;cameraPitch=90f;}
+        else{cameraYaw=38f;cameraPitch=24f;key="ISO";}
+        invalidate();return key;
+    }
+
     public String toggle3DOverview() {
         overview3D = !overview3D;
         orbiting = false;
