@@ -22,16 +22,20 @@ fi
 mkdir -p "$OCCT_BASE"
 
 # Cache-friendly: GitHub Actions restores install-arm64. Rebuild when any
-# toolkit/header required by exact Extrude/Boolean/Revolve/Sweep/Loft or display
-# meshing is missing. TKOffset owns MakePipe/ThruSections in OCCT 8.
+# toolkit/header required by exact modeling, direct Fillet/Chamfer/Shell or
+# display meshing is missing.
 if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKBool.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKPrim.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKMesh.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKOffset.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKFillet.so" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepMesh_IncrementalMesh.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_MakePipe.hxx" \
-   || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_ThruSections.hxx" ]]; then
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_ThruSections.hxx" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_MakeThickSolid.hxx" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeFillet.hxx" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeChamfer.hxx" ]]; then
   rm -rf "$OCCT_SRC" "$OCCT_BUILD" "$OCCT_INSTALL"
   git clone --filter=blob:none https://github.com/Open-Cascade-SAS/OCCT.git "$OCCT_SRC"
   git -C "$OCCT_SRC" checkout --detach "$OCCT_COMMIT"
@@ -53,7 +57,7 @@ if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
     -DBUILD_MODULE_ApplicationFramework=OFF \
     -DBUILD_MODULE_DataExchange=OFF \
     -DBUILD_MODULE_Draw=OFF \
-    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool;TKMesh;TKOffset" \
+    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool;TKMesh;TKOffset;TKFillet" \
     -DUSE_TK=OFF \
     -DUSE_FREETYPE=OFF \
     -DUSE_TBB=OFF \
