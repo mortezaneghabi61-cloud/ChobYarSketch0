@@ -14,13 +14,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Keeps the existing ChobYar workspace, swaps the CAD canvas for the adaptive
- * spatial layer, and exposes the two concepts users need most: smart relations
- * and sketch planes/3D. The full expert toolset remains underneath.
+ * ChobYar's adaptive launcher: the professional sketch/constraint engine stays
+ * underneath, while the main workspace exposes smart relations, sketch planes,
+ * and the new volumetric Solid 3D layer without forcing command-line knowledge.
  */
 public class EasyMainActivity extends MainActivity {
 
-    private SpatialCadCanvasView easyCad;
+    private SolidCadCanvasView easyCad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,7 +47,7 @@ public class EasyMainActivity extends MainActivity {
             int index = root.indexOfChild(oldCad);
             ViewGroup.LayoutParams oldParams = oldCad.getLayoutParams();
 
-            easyCad = new SpatialCadCanvasView(this);
+            easyCad = new SolidCadCanvasView(this);
             wireMainActivityCallbacks(easyCad);
 
             root.removeView(oldCad);
@@ -56,6 +56,7 @@ public class EasyMainActivity extends MainActivity {
 
             root.addView(makeRelationsButton(), relationsParams());
             root.addView(makePlaneButton(), planeParams());
+            root.addView(makeSolidButton(), solidParams());
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
             Toast.makeText(this, "فضای CAD تطبیقی فعال نشد", Toast.LENGTH_SHORT).show();
@@ -97,6 +98,14 @@ public class EasyMainActivity extends MainActivity {
         return b;
     }
 
+    private Button makeSolidButton() {
+        Button b = floatingButton("▣\nSolid", "Body، Face، Extrude و Boolean سه‌بعدی");
+        b.setOnClickListener(v -> {
+            if (easyCad != null) easyCad.showSolidManager();
+        });
+        return b;
+    }
+
     private Button floatingButton(String text, String description) {
         Button b = new Button(this);
         b.setText(text);
@@ -124,7 +133,7 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, 0, dp(10), dp(120));
+        p.setMargins(0, 0, dp(10), dp(150));
         return p;
     }
 
@@ -133,7 +142,16 @@ public class EasyMainActivity extends MainActivity {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.END | Gravity.CENTER_VERTICAL);
-        p.setMargins(0, dp(120), dp(82), 0);
+        p.setMargins(0, 0, dp(10), 0);
+        return p;
+    }
+
+    private FrameLayout.LayoutParams solidParams() {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL);
+        p.setMargins(0, dp(150), dp(10), 0);
         return p;
     }
 
