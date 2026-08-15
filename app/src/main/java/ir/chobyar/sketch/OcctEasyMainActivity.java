@@ -15,7 +15,7 @@ import java.lang.reflect.Method;
  * Shapr-aligned Sketch/Measure workflow, pen-first Automatic Line/Arc,
  * sketch definition states, driving-dimension DOF solving, parametric
  * Ellipse / Fit Point / Control Point Spline editing, spline point/tangent
- * Break-Join workflows, and a pen-drawn circular Arc tool.
+ * Break-Join workflows, pen-drawn circular Arc, and Shapr Snaps / Guides.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -37,7 +37,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            ShaprArcCadCanvasView upgraded=new ShaprArcCadCanvasView(this);
+            ShaprSnappingCadCanvasView upgraded=new ShaprSnappingCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -57,12 +57,13 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void rewireShaprButtons(View root,ShaprArcCadCanvasView cad){
+    private void rewireShaprButtons(View root,ShaprSnappingCadCanvasView cad){
         if(root instanceof Button){
             Button b=(Button)root;
             String t=String.valueOf(b.getText());
             if(t.contains("Sketch")) b.setOnClickListener(v->cad.showShaprSketchMenu());
             else if(t.contains("Tools")) b.setOnClickListener(v->showMasterTools(cad));
+            else if(t.contains("Snap")) b.setOnClickListener(v->cad.showShaprSnappingOptions());
         }
         if(root instanceof ViewGroup){
             ViewGroup g=(ViewGroup)root;
@@ -70,28 +71,32 @@ public class OcctEasyMainActivity extends EasyMainActivity {
         }
     }
 
-    private void showMasterTools(ShaprArcCadCanvasView cad){
+    private void showMasterTools(ShaprSnappingCadCanvasView cad){
         String[] items={
                 "✎ Sketch tools",
+                "⌁ Snaps / Guides",
                 "〰 Ellipse / Spline edit",
                 "▣ 3D Modeling tools",
                 "⌖ Measure انتخاب",
                 "⌁ Constraints",
+                "⚙ Constraint Settings",
                 "● Sketch State / DOF",
                 "◇ Plane / Construction",
                 "⏱ History"
         };
         new AlertDialog.Builder(this).setTitle("Tools").setItems(items,(d,w)->{
             if(w==0)cad.showShaprSketchMenu();
-            else if(w==1)cad.showCurveEditor();
-            else if(w==2)cad.showShaprModelingToolsMenu();
-            else if(w==3)cad.showSketchMeasureInspector();
-            else if(w==4)cad.showSmartConstraintMenu();
-            else if(w==5)new AlertDialog.Builder(this)
+            else if(w==1)cad.showShaprSnappingOptions();
+            else if(w==2)cad.showCurveEditor();
+            else if(w==3)cad.showShaprModelingToolsMenu();
+            else if(w==4)cad.showSketchMeasureInspector();
+            else if(w==5)cad.showSmartConstraintMenu();
+            else if(w==6)cad.showShaprConstraintSettings();
+            else if(w==7)new AlertDialog.Builder(this)
                     .setTitle("Sketch State / DOF")
                     .setMessage(cad.sketchStateSummary())
                     .setPositiveButton("بستن",null).show();
-            else if(w==6)cad.showPlaneManager();
+            else if(w==8)cad.showPlaneManager();
             else cad.showHistoryManager();
         }).setNegativeButton("بستن",null).show();
     }
