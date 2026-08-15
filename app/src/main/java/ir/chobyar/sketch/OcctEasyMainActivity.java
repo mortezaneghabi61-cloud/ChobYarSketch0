@@ -9,8 +9,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Keeps the clean skachmori shell from EasyMainActivity while upgrading only the
- * modeling canvas to the exact OCCT model/direct-edit workspace.
+ * Keeps the clean skachmori shell while upgrading the modeling canvas to the
+ * exact OCCT workspace with stable Face/Edge references and integrated History.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -32,7 +32,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            OcctDirectCadCanvasView upgraded=new OcctDirectCadCanvasView(this);
+            OcctStableCadCanvasView upgraded=new OcctStableCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
@@ -47,7 +47,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             wire.invoke(this);
             upgraded.dispatchWorkspaceState();
         }catch(Exception e){
-            Toast.makeText(this,"OCCT Exact workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"OCCT Stable workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
         }
     }
 }
