@@ -2,9 +2,7 @@ package ir.chobyar.sketch;
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.PointF;
 import android.text.InputType;
-import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -73,7 +71,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
                 .setTitle("Edit 3D • B-Rep")
                 .setMessage(bodyLabel+"\n\nکاربر عادی: گزینه اول.\nکار حرفه‌ای: Topology، اندازه‌های دقیق و Transform سه‌بعدی همین‌جا در دسترس است.")
                 .setItems(items,(d,w)->{
-                    if(w==0)BRepDirectCadCanvasView.super.showDirectManager();
+                    if(w==0)super.showDirectManager();
                     else if(w==1)showTopologyInspector();
                     else if(w==2)showSelectedFaceMeasure();
                     else if(w==3)showSelectedEdgeMeasure();
