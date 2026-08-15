@@ -104,10 +104,35 @@ public final class ChobYarActivity extends Activity {
     private void more(){
         String[] x={"Items / Layers","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)toast("Items در مرحله بازسازی بعدی");else if(w==1)cad.setStandardView("TOP");
+            if(w==0)showItems();else if(w==1)cad.setStandardView("TOP");
             else if(w==2)cad.setStandardView("FRONT");else if(w==3)cad.setStandardView("RIGHT");
             else if(w==4)cad.setStandardView("ISO");else cad.showShaprSnappingOptions();
         }).show();
+    }
+
+    private void showItems(){
+        String[] rows=cad.itemRows();
+        if(rows.length==0){toast("هنوز Body ساخته نشده");return;}
+        new AlertDialog.Builder(this).setTitle("Items • Bodies")
+                .setMessage("یک Body را انتخاب کن؛ لمس طولانی با دکمه‌های پایین جایگزین شده تا روی گوشی هم دقیق باشد.")
+                .setItems(rows,(d,w)->{status(cad.selectItem(w));showItemActions(w);})
+                .setNegativeButton("بستن",null).show();
+    }
+
+    private void showItemActions(int index){
+        String[] actions={"نمایش / مخفی","تغییر نام","Fit انتخاب"};
+        new AlertDialog.Builder(this).setTitle("Body").setItems(actions,(d,w)->{
+            if(w==0){status(cad.toggleItemVisibility(index));showItems();}
+            else if(w==1)renameItem(index);
+            else {cad.fitAll();status("Fit");}
+        }).setNegativeButton("بستن",null).show();
+    }
+
+    private void renameItem(int index){
+        EditText e=new EditText(this);e.setSingleLine();
+        new AlertDialog.Builder(this).setTitle("تغییر نام Body").setView(e)
+                .setPositiveButton("ذخیره",(d,w)->status(cad.renameItem(index,e.getText().toString())))
+                .setNegativeButton("لغو",null).show();
     }
 
     private void editDimension(){

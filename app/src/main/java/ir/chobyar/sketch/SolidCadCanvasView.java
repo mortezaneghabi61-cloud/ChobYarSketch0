@@ -230,6 +230,36 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     public int bodyCount(){return bodies.size();}
 
+    /** Stable, reflection-free bridge used by the production Items panel. */
+    public String[] itemRows(){
+        String[] rows=new String[bodies.size()];
+        for(int i=0;i<bodies.size();i++){
+            SolidBody b=bodies.get(i);
+            rows[i]=(b.visible?"◉ ":"○ ")+(b==selectedBody?"● ":"")+b.name+"  •  "+b.csg.polygons().size()+" faces";
+        }
+        return rows;
+    }
+
+    public String selectItem(int index){
+        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        selectedBody=bodies.get(index);selectedFace=null;setOverview(true);invalidate();
+        return selectedBody.name+" انتخاب شد";
+    }
+
+    public String toggleItemVisibility(int index){
+        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        SolidBody b=bodies.get(index);b.visible=!b.visible;
+        if(!b.visible&&selectedBody==b){selectedBody=null;selectedFace=null;}
+        invalidate();return b.name+(b.visible?" نمایش داده شد":" مخفی شد");
+    }
+
+    public String renameItem(int index,String newName){
+        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        String clean=newName==null?"":newName.trim();
+        if(clean.isEmpty())return "نام نمی‌تواند خالی باشد";
+        bodies.get(index).name=clean;invalidate();return "نام به «"+clean+"» تغییر کرد";
+    }
+
     @Override
     public void fitAll() {
         if (!is3DOverview() || bodies.isEmpty()) { super.fitAll(); return; }
