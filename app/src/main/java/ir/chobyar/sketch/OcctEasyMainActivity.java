@@ -12,7 +12,7 @@ import java.lang.reflect.Method;
 
 /**
  * Clean skachmori shell upgraded to the exact OCCT workspace plus the
- * Shapr-inspired Sketch/Measure workflow.
+ * Shapr-inspired Sketch/Measure workflow and pen-first Automatic Line/Arc.
  */
 public class OcctEasyMainActivity extends EasyMainActivity {
 
@@ -34,7 +34,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             int index=parent.indexOfChild(old);
             ViewGroup.LayoutParams params=old.getLayoutParams();
 
-            OcctShaprCadCanvasView upgraded=new OcctShaprCadCanvasView(this);
+            OcctShaprPenCadCanvasView upgraded=new OcctShaprPenCadCanvasView(this);
             easyField.set(this,upgraded);
 
             Field mainCad=MainActivity.class.getDeclaredField("cad");
