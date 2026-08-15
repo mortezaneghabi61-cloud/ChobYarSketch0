@@ -31,9 +31,9 @@ jdoubleArray makeArray(JNIEnv* env, const double* values, jsize count) {
 extern "C" JNIEXPORT jstring JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeVersion(JNIEnv* env, jclass) {
 #ifdef CHOBYAR_WITH_OCCT
-    return env->NewStringUTF("ChobYar Native Geometry Core 0.3 • C++17 / NDK • OCCT form features compiled");
+    return env->NewStringUTF("skachmori Native Geometry Core 0.4 • C++17 / NDK • OCCT direct edit compiled");
 #else
-    return env->NewStringUTF("ChobYar Native Geometry Core 0.3 • C++17 / Android NDK");
+    return env->NewStringUTF("skachmori Native Geometry Core 0.4 • C++17 / Android NDK");
 #endif
 }
 
@@ -41,21 +41,18 @@ extern "C" JNIEXPORT jint JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeCapabilityFlags(JNIEnv*, jclass) {
     // 1=plane/sphere, 2=sphere/sphere, 4=analytic mass properties,
     // 8=topology self-test, 16=OCCT linked, 32=OCCT primitives,
-    // 64=OCCT exact B-Rep Boolean, 128=OCCT Revolve,
-    // 256=OCCT Sweep/Loft.
+    // 64=exact Boolean, 128=Revolve, 256=Sweep/Loft,
+    // 512=Edge Fillet/Chamfer, 1024=Face PushPull/Shell, 2048=Body transform.
     int flags = 1 | 2 | 4 | 8;
 #ifdef CHOBYAR_WITH_OCCT
-    flags |= 16 | 32 | 64 | 128 | 256;
+    flags |= 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048;
 #endif
     return flags;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeSelfTest(JNIEnv* env, jclass) {
-    // Topology sanity check for a closed box: V - E + F = 8 - 12 + 6 = 2.
     const int euler = 8 - 12 + 6;
-
-    // Numeric sanity check: equal spheres R=30 mm, center distance 40 mm.
     const double r = 30.0;
     const double d = 40.0;
     const double x = d * 0.5;
