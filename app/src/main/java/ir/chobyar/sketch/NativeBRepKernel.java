@@ -1,14 +1,18 @@
 package ir.chobyar.sketch;
 
 /**
- * Stable Java/JNI boundary for the future exact native B-Rep backend.
+ * Stable Java/JNI boundary for ChobYar's native geometry backend.
  *
- * The first native module deliberately has no dependency on OCCT yet: it proves
- * Android NDK/CMake/JNI integration, moves exact analytic math into C++ and gives
- * the UI a stable contract. The next backend can link Open CASCADE behind this
- * class without forcing another UI rewrite.
+ * The bridge keeps the UI independent from the kernel implementation. Basic
+ * analytic math is always available in C++; on arm64-v8a CI additionally links
+ * the pinned Open CASCADE Technology backend for exact B-Rep primitives and
+ * Boolean operations.
  */
 final class NativeBRepKernel {
+    static final int OCCT_UNION = 0;
+    static final int OCCT_SUBTRACT = 1;
+    static final int OCCT_INTERSECT = 2;
+
     private static final boolean AVAILABLE;
     private static final String LOAD_ERROR;
 
@@ -63,6 +67,56 @@ final class NativeBRepKernel {
         catch(Throwable t){return new double[0];}
     }
 
+    static boolean occtAvailable(){
+        if(!AVAILABLE)return false;
+        try{return nativeOcctAvailable();}catch(Throwable t){return false;}
+    }
+
+    static String occtVersion(){
+        if(!AVAILABLE)return "OCCT unavailable";
+        try{return nativeOcctVersion();}catch(Throwable t){return "OCCT version unavailable";}
+    }
+
+    static String occtSelfTest(){
+        if(!AVAILABLE)return "FAIL • Native library unavailable";
+        try{return nativeOcctSelfTest();}catch(Throwable t){return "FAIL • "+t.getClass().getSimpleName();}
+    }
+
+    static long occtCreateBox(double dxMm,double dyMm,double dzMm){
+        if(!occtAvailable())return 0L;
+        try{return nativeOcctCreateBox(dxMm,dyMm,dzMm);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtCreateCylinder(double cxMm,double cyMm,double czMm,double radiusMm,double heightMm){
+        if(!occtAvailable())return 0L;
+        try{return nativeOcctCreateCylinder(cxMm,cyMm,czMm,radiusMm,heightMm);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtBoolean(int operation,long left,long right){
+        if(!occtAvailable()||left==0L||right==0L)return 0L;
+        try{return nativeOcctBoolean(operation,left,right);}catch(Throwable t){return 0L;}
+    }
+
+    static double[] occtShapeStats(long handle){
+        if(!occtAvailable()||handle==0L)return new double[0];
+        try{return nativeOcctShapeStats(handle);}catch(Throwable t){return new double[0];}
+    }
+
+    static String occtShapeSummary(long handle){
+        if(!occtAvailable()||handle==0L)return "OCCT Shape unavailable";
+        try{return nativeOcctShapeSummary(handle);}catch(Throwable t){return "OCCT Shape summary failed";}
+    }
+
+    static void occtRelease(long handle){
+        if(!AVAILABLE||handle==0L)return;
+        try{nativeOcctRelease(handle);}catch(Throwable ignored){}
+    }
+
+    static void occtClear(){
+        if(!AVAILABLE)return;
+        try{nativeOcctClear();}catch(Throwable ignored){}
+    }
+
     private static native String nativeVersion();
     private static native int nativeCapabilityFlags();
     private static native String nativeSelfTest();
@@ -74,4 +128,15 @@ final class NativeBRepKernel {
             double nx,double ny,double nz,
             double sx,double sy,double sz,double radius);
     private static native double[] nativeCylinderMassProperties(double radius,double height);
+
+    private static native boolean nativeOcctAvailable();
+    private static native String nativeOcctVersion();
+    private static native String nativeOcctSelfTest();
+    private static native long nativeOcctCreateBox(double dx,double dy,double dz);
+    private static native long nativeOcctCreateCylinder(double cx,double cy,double cz,double radius,double height);
+    private static native long nativeOcctBoolean(int operation,long left,long right);
+    private static native double[] nativeOcctShapeStats(long handle);
+    private static native String nativeOcctShapeSummary(long handle);
+    private static native void nativeOcctRelease(long handle);
+    private static native void nativeOcctClear();
 }
