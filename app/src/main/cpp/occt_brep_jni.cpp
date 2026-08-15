@@ -21,8 +21,13 @@
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepOffsetAPI_MakePipe.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Common.hxx>
@@ -30,8 +35,10 @@
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <Geom_Circle.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Poly_Triangle.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
@@ -46,6 +53,10 @@ jdoubleArray emptyArray(JNIEnv* env) {
 }
 
 #ifdef CHOBYAR_WITH_OCCT
+constexpr jint PROFILE_POLYGON = 0;
+constexpr jint PROFILE_CIRCLE = 1;
+constexpr double PI = 3.14159265358979323846;
+
 std::mutex gShapeMutex;
 std::unordered_map<jlong, TopoDS_Shape> gShapes;
 std::atomic<jlong> gNextHandle{1};
@@ -92,6 +103,77 @@ std::string statsText(const TopoDS_Shape& shape) {
 bool validVector(double x, double y, double z) {
     return std::sqrt(x*x + y*y + z*z) > 1e-10;
 }
+
+bool readArray(JNIEnv* env, jdoubleArray array, std::vector<jdouble>& out) {
+    if (array == nullptr) return false;
+    const jsize count = env->GetArrayLength(array);
+    if (count <= 0) return false;
+    out.resize(static_cast<size_t>(count));
+    env->GetDoubleArrayRegion(array, 0, count, out.data());
+    return !env->ExceptionCheck();
+}
+
+bool buildProfileWire(JNIEnv* env, jint profileType, jdoubleArray profileData, TopoDS_Wire& out) {
+    std::vector<jdouble> data;
+    if (!readArray(env, profileData, data)) return false;
+
+    if (profileType == PROFILE_POLYGON) {
+        if (data.size() < 9 || data.size() % 3 != 0) return false;
+        BRepBuilderAPI_MakePolygon polygon;
+        for (size_t i=0; i<data.size(); i+=3) {
+            polygon.Add(gp_Pnt(data[i], data[i+1], data[i+2]));
+        }
+        polygon.Close();
+        if (!polygon.IsDone()) return false;
+        out = polygon.Wire();
+        return !out.IsNull();
+    }
+
+    if (profileType == PROFILE_CIRCLE) {
+        // [cx,cy,cz,nx,ny,nz,ux,uy,uz,radius]
+        if (data.size() < 10 || data[9] <= 0.0) return false;
+        if (!validVector(data[3],data[4],data[5]) || !validVector(data[6],data[7],data[8])) return false;
+        const gp_Ax2 axis(
+                gp_Pnt(data[0],data[1],data[2]),
+                gp_Dir(data[3],data[4],data[5]),
+                gp_Dir(data[6],data[7],data[8]));
+        Handle(Geom_Circle) circle = new Geom_Circle(axis, data[9]);
+        BRepBuilderAPI_MakeEdge edgeMaker(circle);
+        if (!edgeMaker.IsDone()) return false;
+        BRepBuilderAPI_MakeWire wireMaker;
+        wireMaker.Add(edgeMaker.Edge());
+        if (!wireMaker.IsDone()) return false;
+        out = wireMaker.Wire();
+        return !out.IsNull();
+    }
+
+    return false;
+}
+
+bool buildProfileFace(JNIEnv* env, jint profileType, jdoubleArray profileData, TopoDS_Face& out) {
+    TopoDS_Wire wire;
+    if (!buildProfileWire(env, profileType, profileData, wire)) return false;
+    BRepBuilderAPI_MakeFace faceMaker(wire, true);
+    if (!faceMaker.IsDone()) return false;
+    out = faceMaker.Face();
+    return !out.IsNull();
+}
+
+bool buildOpenWire(JNIEnv* env, jdoubleArray xyzArray, TopoDS_Wire& out) {
+    std::vector<jdouble> xyz;
+    if (!readArray(env, xyzArray, xyz) || xyz.size() < 6 || xyz.size() % 3 != 0) return false;
+    BRepBuilderAPI_MakePolygon polygon;
+    for (size_t i=0; i<xyz.size(); i+=3) {
+        polygon.Add(gp_Pnt(xyz[i],xyz[i+1],xyz[i+2]));
+    }
+    if (!polygon.IsDone()) return false;
+    out = polygon.Wire();
+    return !out.IsNull();
+}
+
+bool isSolidResult(const TopoDS_Shape& shape) {
+    return !shape.IsNull() && countSubShapes(shape, TopAbs_SOLID) > 0;
+}
 #endif
 
 }
@@ -128,7 +210,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctSelfTest(JNIEnv* env, jclass) 
             return env->NewStringUTF("FAIL • OCCT BRepAlgoAPI_Cut did not complete");
         }
         const TopoDS_Shape result = cut.Shape();
-        const double expected = 100.0 * 80.0 * 20.0 - 3.14159265358979323846 * 10.0 * 10.0 * 20.0;
+        const double expected = 100.0 * 80.0 * 20.0 - PI * 10.0 * 10.0 * 20.0;
         const double actual = volumeOf(result);
         const double error = std::abs(actual - expected);
         std::ostringstream ss;
@@ -228,11 +310,79 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreatePrism(
         const gp_Vec extrusion(vx,vy,vz);
         BRepPrimAPI_MakePrism prism(faceMaker.Face(), extrusion, true, true);
         prism.Build();
-        if (!prism.IsDone() || prism.Shape().IsNull()) return 0;
+        if (!prism.IsDone() || !isSolidResult(prism.Shape())) return 0;
         return storeShape(prism.Shape());
     } catch (...) { return 0; }
 #else
     (void)env; (void)xyzArray; (void)vx; (void)vy; (void)vz;
+    return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateRevolve(
+        JNIEnv* env, jclass, jint profileType, jdoubleArray profileData,
+        jdouble ox, jdouble oy, jdouble oz,
+        jdouble ax, jdouble ay, jdouble az, jdouble angleDeg) {
+#ifdef CHOBYAR_WITH_OCCT
+    if (!validVector(ax,ay,az) || std::abs(angleDeg) < 1e-8 || std::abs(angleDeg) > 360.000001) return 0;
+    try {
+        TopoDS_Face face;
+        if (!buildProfileFace(env, profileType, profileData, face)) return 0;
+        const gp_Ax1 axis(gp_Pnt(ox,oy,oz), gp_Dir(ax,ay,az));
+        const double radians = angleDeg * PI / 180.0;
+        BRepPrimAPI_MakeRevol revolve(face, axis, radians, true);
+        revolve.Build();
+        if (!revolve.IsDone() || !isSolidResult(revolve.Shape())) return 0;
+        return storeShape(revolve.Shape());
+    } catch (...) { return 0; }
+#else
+    (void)env; (void)profileType; (void)profileData; (void)ox; (void)oy; (void)oz;
+    (void)ax; (void)ay; (void)az; (void)angleDeg;
+    return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateSweep(
+        JNIEnv* env, jclass, jint profileType, jdoubleArray profileData, jdoubleArray pathXYZ) {
+#ifdef CHOBYAR_WITH_OCCT
+    try {
+        TopoDS_Face profileFace;
+        TopoDS_Wire pathWire;
+        if (!buildProfileFace(env, profileType, profileData, profileFace)) return 0;
+        if (!buildOpenWire(env, pathXYZ, pathWire)) return 0;
+        BRepOffsetAPI_MakePipe pipe(pathWire, profileFace);
+        pipe.Build();
+        if (!pipe.IsDone() || !isSolidResult(pipe.Shape())) return 0;
+        return storeShape(pipe.Shape());
+    } catch (...) { return 0; }
+#else
+    (void)env; (void)profileType; (void)profileData; (void)pathXYZ;
+    return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateLoft(
+        JNIEnv* env, jclass,
+        jint firstType, jdoubleArray firstProfileData,
+        jint secondType, jdoubleArray secondProfileData) {
+#ifdef CHOBYAR_WITH_OCCT
+    try {
+        TopoDS_Wire first, second;
+        if (!buildProfileWire(env, firstType, firstProfileData, first)) return 0;
+        if (!buildProfileWire(env, secondType, secondProfileData, second)) return 0;
+        BRepOffsetAPI_ThruSections loft(true, false, 1.0e-6);
+        loft.CheckCompatibility(true);
+        loft.AddWire(first);
+        loft.AddWire(second);
+        loft.Build();
+        if (!loft.IsDone() || !isSolidResult(loft.Shape())) return 0;
+        return storeShape(loft.Shape());
+    } catch (...) { return 0; }
+#else
+    (void)env; (void)firstType; (void)firstProfileData; (void)secondType; (void)secondProfileData;
     return 0;
 #endif
 }
