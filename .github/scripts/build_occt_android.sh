@@ -21,9 +21,14 @@ fi
 
 mkdir -p "$OCCT_BASE"
 
-# Cache-friendly: GitHub Actions restores install-arm64. Rebuild only when the
-# exact OCCT shared libraries we need are missing.
-if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" || ! -f "$OCCT_INSTALL/lib/libTKBool.so" || ! -f "$OCCT_INSTALL/lib/libTKPrim.so" ]]; then
+# Cache-friendly: GitHub Actions restores install-arm64. Rebuild when the exact
+# Boolean AND meshing toolkits/headers required by the native display bridge are
+# missing. TKMesh owns BRepMesh_IncrementalMesh in OCCT 8.
+if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKBool.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKPrim.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKMesh.so" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepMesh_IncrementalMesh.hxx" ]]; then
   rm -rf "$OCCT_SRC" "$OCCT_BUILD" "$OCCT_INSTALL"
   git clone --filter=blob:none https://github.com/Open-Cascade-SAS/OCCT.git "$OCCT_SRC"
   git -C "$OCCT_SRC" checkout --detach "$OCCT_COMMIT"
@@ -45,7 +50,7 @@ if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" || ! -f "$OCCT_INSTALL/lib/libTKBoo
     -DBUILD_MODULE_ApplicationFramework=OFF \
     -DBUILD_MODULE_DataExchange=OFF \
     -DBUILD_MODULE_Draw=OFF \
-    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool" \
+    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool;TKMesh" \
     -DUSE_TK=OFF \
     -DUSE_FREETYPE=OFF \
     -DUSE_TBB=OFF \
