@@ -3,7 +3,9 @@
     <application
         android:name=".SafeAreaApplication"
         android:theme="@style/AppTheme"
-        android:label="چوب‌یار Sketch">
+        android:label="skachmori"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher">
 
         <activity
             android:name=".EasyMainActivity"
