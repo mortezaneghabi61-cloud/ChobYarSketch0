@@ -6,7 +6,7 @@
         android:label="چوب‌یار Sketch">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".EasyMainActivity"
             android:screenOrientation="unspecified"
             android:exported="true">
 
