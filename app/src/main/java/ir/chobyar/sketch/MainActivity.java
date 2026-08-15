@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -71,7 +72,7 @@ public class MainActivity extends Activity {
         row.addView(btn("□ مستطیل", () -> setTool(CadCanvasView.TOOL_RECT, "مستطیل")));
         row.addView(btn("○ دایره", () -> setTool(CadCanvasView.TOOL_CIRCLE, "دایره")));
         row.addView(btn("⌒ قوس", () -> setTool(CadCanvasView.TOOL_ARC, "قوس")));
-        row.addView(btn("⬡ چندضلعی", () -> setTool(CadCanvasView.TOOL_POLYGON, "چندضلعی")));
+        row.addView(btn("⬡ چندضلعی", this::showPolygonToolDialog));
         row.addView(btn("✎ آزاد", () -> setTool(CadCanvasView.TOOL_FREE, "Freehand")));
         row.addView(btn("↔ اندازه", () -> setTool(CadCanvasView.TOOL_MEASURE, "اندازه‌گیری")));
         row.addView(btn("┼ راهنما", () -> setTool(CadCanvasView.TOOL_GUIDE, "Guide؛ روی محل بزن")));
@@ -87,6 +88,8 @@ public class MainActivity extends Activity {
         row.setPadding(5, 1, 5, 3);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
+        row.addView(btn("− زوم", () -> { cad.zoomBy(0.55f); say("Zoom Out"); }));
+        row.addView(btn("+ زوم", () -> { cad.zoomBy(1.8f); say("Zoom In"); }));
         row.addView(btn("محور X/Y", () -> { cad.toggleAxes(); say(cad.isShowAxes() ? "محورها روشن" : "محورها مخفی"); }));
         row.addView(btn("Grid", () -> { cad.toggleGrid(); say(cad.isShowGrid() ? "Grid روشن" : "Grid خاموش"); }));
         row.addView(btn("Snap", () -> { cad.toggleSnap(); say(cad.isSnapEnabled() ? "Snap روشن" : "Snap خاموش"); }));
@@ -112,7 +115,7 @@ public class MainActivity extends Activity {
 
         command = new EditText(this);
         command.setSingleLine(true);
-        command.setHint("فرمان: RECT 0 0 600 400 | ROTATE 45 | ARRAY 4 100 0");
+        command.setHint("فرمان: RECT 0 0 600 400 | POLYGON 8 0 0 100 | ROTATE 45");
         command.setTextSize(14);
         command.setPadding(10, 4, 10, 4);
         row.addView(command, new LinearLayout.LayoutParams(
@@ -187,6 +190,36 @@ public class MainActivity extends Activity {
     private void setTool(int tool, String name) {
         cad.setTool(tool);
         say("ابزار: " + name);
+    }
+
+    private void showPolygonToolDialog() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText("6");
+        input.setSelectAllOnFocus(true);
+        input.setHint("مثال: 8 یا 9");
+
+        new AlertDialog.Builder(this)
+                .setTitle("چندضلعی — تعداد ضلع")
+                .setMessage("تعداد ضلع را وارد کن؛ از 3 تا 64 ضلع. مثلاً 8 برای هشت‌ضلعی یا 9 برای نه‌ضلعی.")
+                .setView(input)
+                .setPositiveButton("شروع رسم", (d, w) -> {
+                    try {
+                        int sides = Integer.parseInt(input.getText().toString().trim());
+                        if (sides < 3 || sides > 64) {
+                            say("تعداد ضلع باید بین 3 تا 64 باشد");
+                            return;
+                        }
+                        String result = cad.executeCommand("POLYSIDES " + sides);
+                        cad.setTool(CadCanvasView.TOOL_POLYGON);
+                        say(result + " — مرکز را بزن و شعاع را بکش");
+                    } catch (Exception e) {
+                        say("تعداد ضلع درست وارد نشده");
+                    }
+                })
+                .setNegativeButton("لغو", null)
+                .show();
     }
 
     private void runCommand() {
