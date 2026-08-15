@@ -5,10 +5,12 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -17,20 +19,23 @@ import android.widget.Toast;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Locale;
 
 /**
  * Minimal direct-modeling shell for skachmori.
  *
  * The heavy engine remains unchanged; this class only reorganizes access around
  * a clean CAD workspace: one compact tool rail, a selection-adaptive action bar,
- * XYZ/view controls at the top and small navigation controls at the bottom.
+ * XYZ/view controls at the top and one bottom dock at a time.
  */
 public class EasyMainActivity extends MainActivity {
 
     private NativeBRepCadCanvasView easyCad;
     private TextView compactStatus;
     private LinearLayout adaptiveBar;
+    private LinearLayout navigationBar;
     private Button snapButton;
+    private Button adaptiveModelButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,7 +73,9 @@ public class EasyMainActivity extends MainActivity {
             adaptiveBar.setVisibility(View.GONE);
             root.addView(adaptiveBar, frameWrap(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 18));
 
-            root.addView(makeNavigationBar(), frameWrap(Gravity.END | Gravity.BOTTOM, 0, 0, 10, 18));
+            navigationBar = makeNavigationBar();
+            navigationBar.setVisibility(View.VISIBLE);
+            root.addView(navigationBar, frameWrap(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 18));
 
             compactStatus = new TextView(this);
             compactStatus.setText("آماده • cm + mm");
@@ -77,7 +84,7 @@ public class EasyMainActivity extends MainActivity {
             compactStatus.setSingleLine(true);
             compactStatus.setPadding(dp(10), dp(5), dp(10), dp(5));
             compactStatus.setBackground(round(Color.argb(238,255,255,255), Color.rgb(220,225,232), 14));
-            root.addView(compactStatus, frameWrap(Gravity.START | Gravity.BOTTOM, 10, 0, 0, 18));
+            root.addView(compactStatus, frameWrap(Gravity.START | Gravity.BOTTOM, 10, 0, 0, 4));
 
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
@@ -96,14 +103,18 @@ public class EasyMainActivity extends MainActivity {
                 && !info.startsWith("هیچ")
                 && !info.startsWith("اول")
                 && !info.trim().isEmpty();
+
+        // One bottom dock only: never let navigation and contextual actions overlap.
         if (adaptiveBar != null) adaptiveBar.setVisibility(hasSelection ? View.VISIBLE : View.GONE);
+        if (navigationBar != null) navigationBar.setVisibility(hasSelection ? View.GONE : View.VISIBLE);
+        if (adaptiveModelButton != null) {
+            adaptiveModelButton.setText(easyCad != null && easyCad.is3DOverview() ? "✥\nEdit 3D" : "⬆\nحجم");
+        }
         if (hasSelection) showStatus(info);
     }
 
     private void showStatus(String text) {
-        if (compactStatus != null && text != null && !text.trim().isEmpty()) {
-            compactStatus.setText(text);
-        }
+        if (compactStatus != null && text != null && !text.trim().isEmpty()) compactStatus.setText(text);
     }
 
     private Object invokeMain(String name, Class<?>[] types, Object... args) {
@@ -139,10 +150,7 @@ public class EasyMainActivity extends MainActivity {
         bar.addView(axisButton("Y", Color.rgb(42,150,80), () -> standardView("FRONT")));
         bar.addView(axisButton("Z", Color.rgb(45,100,215), () -> standardView("TOP")));
         bar.addView(topButton("▦", "نماها / View cube", this::showViewCubeMenu));
-        bar.addView(topButton("↶", "Undo", () -> {
-            easyCad.undo();
-            showStatus("یک مرحله برگشت");
-        }));
+        bar.addView(topButton("↶", "Undo", () -> { easyCad.undo(); showStatus("یک مرحله برگشت"); }));
         bar.addView(topButton("⋯", "بیشتر", this::showMoreMenu));
         return bar;
     }
@@ -165,36 +173,14 @@ public class EasyMainActivity extends MainActivity {
             Field yaw = SpatialCadCanvasView.class.getDeclaredField("cameraYaw");
             Field pitch = SpatialCadCanvasView.class.getDeclaredField("cameraPitch");
             Field orbiting = SpatialCadCanvasView.class.getDeclaredField("orbiting");
-            overview.setAccessible(true);
-            yaw.setAccessible(true);
-            pitch.setAccessible(true);
-            orbiting.setAccessible(true);
-            overview.setBoolean(easyCad, true);
-            orbiting.setBoolean(easyCad, false);
+            overview.setAccessible(true); yaw.setAccessible(true); pitch.setAccessible(true); orbiting.setAccessible(true);
+            overview.setBoolean(easyCad, true); orbiting.setBoolean(easyCad, false);
 
-            String key = view == null ? "ISO" : view.toUpperCase();
-            if ("TOP".equals(key)) {
-                yaw.setFloat(easyCad, 0f);
-                pitch.setFloat(easyCad, 0f);
-                easyCad.invalidate();
-                return "نمای بالا • XY • محور Z";
-            }
-            if ("FRONT".equals(key)) {
-                yaw.setFloat(easyCad, 0f);
-                pitch.setFloat(easyCad, 90f);
-                easyCad.invalidate();
-                return "نمای روبرو • XZ • محور Y";
-            }
-            if ("RIGHT".equals(key)) {
-                yaw.setFloat(easyCad, 90f);
-                pitch.setFloat(easyCad, 90f);
-                easyCad.invalidate();
-                return "نمای راست • YZ • محور X";
-            }
-            yaw.setFloat(easyCad, 38f);
-            pitch.setFloat(easyCad, 24f);
-            easyCad.invalidate();
-            return "نمای ایزومتریک 3D";
+            String key = view == null ? "ISO" : view.toUpperCase(Locale.US);
+            if ("TOP".equals(key)) { yaw.setFloat(easyCad,0f); pitch.setFloat(easyCad,0f); easyCad.invalidate(); return "نمای بالا • XY • محور Z"; }
+            if ("FRONT".equals(key)) { yaw.setFloat(easyCad,0f); pitch.setFloat(easyCad,90f); easyCad.invalidate(); return "نمای روبرو • XZ • محور Y"; }
+            if ("RIGHT".equals(key)) { yaw.setFloat(easyCad,90f); pitch.setFloat(easyCad,90f); easyCad.invalidate(); return "نمای راست • YZ • محور X"; }
+            yaw.setFloat(easyCad,38f); pitch.setFloat(easyCad,24f); easyCad.invalidate(); return "نمای ایزومتریک 3D";
         } catch (Exception e) {
             easyCad.showPlaneManager();
             return "View / Plane";
@@ -203,241 +189,196 @@ public class EasyMainActivity extends MainActivity {
 
     private void showViewCubeMenu() {
         if (easyCad == null) return;
-        String[] items = {
-                "◇ ایزومتریک / Isometric",
-                "Z  بالا / XY",
-                "Y  روبرو / XZ",
-                "X  راست / YZ",
-                easyCad.is3DOverview() ? "□ برگشت به Sketch 2D" : "▣ ورود به نمای 3D",
-                "⌗ Fit / نمایش همه"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("View / نما")
-                .setItems(items, (d,w) -> {
-                    if (w == 0) standardView("ISO");
-                    else if (w == 1) standardView("TOP");
-                    else if (w == 2) standardView("FRONT");
-                    else if (w == 3) standardView("RIGHT");
-                    else if (w == 4) showStatus(easyCad.toggle3DOverview());
-                    else { easyCad.fitAll(); showStatus("تمام مدل در صفحه"); }
-                })
-                .setNegativeButton("بستن", null)
-                .show();
+        String[] items = {"◇ ایزومتریک / Isometric","Z  بالا / XY","Y  روبرو / XZ","X  راست / YZ",
+                easyCad.is3DOverview() ? "□ برگشت به Sketch 2D" : "▣ ورود به نمای 3D","⌗ Fit / نمایش همه"};
+        new AlertDialog.Builder(this).setTitle("View / نما").setItems(items, (d,w) -> {
+            if (w==0) standardView("ISO"); else if (w==1) standardView("TOP"); else if (w==2) standardView("FRONT");
+            else if (w==3) standardView("RIGHT"); else if (w==4) showStatus(easyCad.toggle3DOverview());
+            else { easyCad.fitAll(); showStatus("تمام مدل در صفحه"); }
+        }).setNegativeButton("بستن",null).show();
     }
 
     private View makeMainRail() {
         LinearLayout rail = verticalCard();
         rail.addView(railButton("✎", "Sketch", () -> invokeMain("showSketchMenu", new Class<?>[0])));
-        rail.addView(railButton("▣", "Solid", this::showModelMenu));
+        rail.addView(railButton("▣", "Solid", this::smartSolidAction));
         rail.addView(railButton("↗", "تغییر", () -> invokeMain("showTransformMenu", new Class<?>[0])));
         rail.addView(railButton("⌁", "Tools", this::showUtilityMenu));
         return rail;
     }
 
-    private void showModelMenu() {
-        String[] items = {
-                "◇ Plane / Sketch 3D",
-                "▣ Solid / Extrude • Revolve • Sweep • Loft • Boolean",
-                "✥ Edit 3D / Face • Edge • Fillet • Chamfer",
-                "⌁ روابط Sketch",
-                "⏱ History"
-        };
+    /** Shapr-style shortcut: selected 2D closed sketch -> Extrude immediately. */
+    private void smartSolidAction() {
+        if (easyCad == null) return;
+        String info = easyCad.selectedInfo();
+        boolean likelySketch = info != null && (
+                info.contains("مستطیل") || info.contains("دایره") || info.contains("چندضلعی") ||
+                info.contains("Polygon") || info.contains("Rectangle") || info.contains("Circle") || info.contains("Polyline"));
+        if (!easyCad.is3DOverview() && likelySketch) showQuickExtrudeDialog();
+        else showModelMenu();
+    }
+
+    private void contextualModelAction() {
+        if (easyCad == null) return;
+        if (easyCad.is3DOverview()) easyCad.showDirectManager();
+        else showQuickExtrudeDialog();
+    }
+
+    private void showQuickExtrudeDialog() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setText("20mm");
+        input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
-                .setTitle("مدل‌سازی 3D")
-                .setItems(items, (d,w) -> {
-                    if (w == 0) easyCad.showPlaneManager();
-                    else if (w == 1) easyCad.showSolidManager();
-                    else if (w == 2) easyCad.showDirectManager();
-                    else if (w == 3) easyCad.showSmartConstraintMenu();
-                    else easyCad.showHistoryManager();
+                .setTitle("حجم / Extrude • cm / mm")
+                .setMessage("ارتفاع حجم را وارد کن؛ مثال 20mm یا 2cm. مقدار منفی جهت حجم را برعکس می‌کند.")
+                .setView(input)
+                .setPositiveButton("ساخت حجم", (d,w) -> {
+                    try {
+                        float mm = parseLengthMm(input.getText().toString());
+                        if (Math.abs(mm) < 0.0001f) { showStatus("ارتفاع حجم نباید صفر باشد"); return; }
+                        String result = easyCad.extrudeSelectedBody(mm / 10f);
+                        showStatus(result);
+                        if (result != null && result.contains("ساخته")) standardView("ISO");
+                        easyCad.dispatchWorkspaceState();
+                    } catch (Exception e) {
+                        showStatus("اندازه حجم درست وارد نشده");
+                    }
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("لغو", null)
                 .show();
     }
 
+    private static float parseLengthMm(String raw) {
+        String s = normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');
+        boolean mm = s.endsWith("mm") || s.endsWith("میلیمتر") || s.endsWith("میلی‌متر");
+        s = s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","")
+                .replace("mm","").replace("cm","").trim();
+        float v = Float.parseFloat(s);
+        return mm ? v : v * 10f;
+    }
+
+    private static String normalizeDigits(String s) {
+        if (s == null) return "";
+        StringBuilder b = new StringBuilder();
+        for (int i=0;i<s.length();i++) {
+            char c=s.charAt(i);
+            if(c>='۰'&&c<='۹') b.append((char)('0'+c-'۰'));
+            else if(c>='٠'&&c<='٩') b.append((char)('0'+c-'٠'));
+            else b.append(c);
+        }
+        return b.toString().trim();
+    }
+
+    private void showModelMenu() {
+        String[] items = {"⬆ حجم / Extrude سریع","◇ Plane / Sketch 3D","▣ Solid / Revolve • Sweep • Loft • Boolean",
+                "✥ Edit 3D / Face • Edge • Fillet • Chamfer","⌁ روابط Sketch","⏱ History"};
+        new AlertDialog.Builder(this).setTitle("مدل‌سازی 3D").setItems(items, (d,w) -> {
+            if (w==0) showQuickExtrudeDialog(); else if (w==1) easyCad.showPlaneManager(); else if (w==2) easyCad.showSolidManager();
+            else if (w==3) easyCad.showDirectManager(); else if (w==4) easyCad.showSmartConstraintMenu(); else easyCad.showHistoryManager();
+        }).setNegativeButton("بستن",null).show();
+    }
+
     private void showUtilityMenu() {
-        String[] items = {
-                "⌁ ابزارهای عمومی",
-                "↔ اندازه‌گیری",
-                "⌁ روابط و Constraint",
-                "⏱ History",
-                "⇩ خروجی DXF"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("Tools")
-                .setItems(items, (d,w) -> {
-                    if (w == 0) invokeMain("showToolsMenu", new Class<?>[0]);
-                    else if (w == 1) {
-                        easyCad.setTool(CadCanvasView.TOOL_MEASURE);
-                        showStatus("اندازه‌گیری فعال شد");
-                    } else if (w == 2) easyCad.showSmartConstraintMenu();
-                    else if (w == 3) easyCad.showHistoryManager();
-                    else invokeMain("exportDxf", new Class<?>[0]);
-                })
-                .setNegativeButton("بستن", null)
-                .show();
+        String[] items = {"⌁ ابزارهای عمومی","↔ اندازه‌گیری","⌁ روابط و Constraint","⏱ History","⇩ خروجی DXF"};
+        new AlertDialog.Builder(this).setTitle("Tools").setItems(items, (d,w) -> {
+            if (w==0) invokeMain("showToolsMenu",new Class<?>[0]);
+            else if (w==1) { easyCad.setTool(CadCanvasView.TOOL_MEASURE); showStatus("اندازه‌گیری فعال شد"); }
+            else if (w==2) easyCad.showSmartConstraintMenu(); else if (w==3) easyCad.showHistoryManager();
+            else invokeMain("exportDxf",new Class<?>[0]);
+        }).setNegativeButton("بستن",null).show();
     }
 
     private LinearLayout makeAdaptiveBar() {
         LinearLayout bar = horizontalCard();
-        bar.setPadding(dp(4), dp(3), dp(4), dp(3));
-        bar.addView(compactAction("⌨", "اندازه", () -> invokeMain("showExactDimension", new Class<?>[0])));
-        bar.addView(compactAction("↗", "تغییر", () -> invokeMain("showTransformMenu", new Class<?>[0])));
-        bar.addView(compactAction("✥", "Edit 3D", () -> easyCad.showDirectManager()));
-        bar.addView(compactAction("⌫", "حذف", () -> invokeMain("deleteSelectedQuick", new Class<?>[0])));
+        bar.setPadding(dp(4),dp(3),dp(4),dp(3));
+        bar.addView(compactAction("⌨","اندازه",() -> invokeMain("showExactDimension",new Class<?>[0])));
+        adaptiveModelButton = compactAction("⬆","حجم",this::contextualModelAction);
+        bar.addView(adaptiveModelButton);
+        bar.addView(compactAction("↗","تغییر",() -> invokeMain("showTransformMenu",new Class<?>[0])));
+        bar.addView(compactAction("⌫","حذف",() -> invokeMain("deleteSelectedQuick",new Class<?>[0])));
         return bar;
     }
 
-    private View makeNavigationBar() {
+    private LinearLayout makeNavigationBar() {
         LinearLayout bar = horizontalCard();
-        bar.setPadding(dp(3), dp(3), dp(3), dp(3));
-        bar.addView(navButton("◇", "Fit", () -> { easyCad.fitAll(); showStatus("Fit"); }));
-        bar.addView(navButton("＋", "Zoom in", () -> easyCad.zoomBy(1.25f)));
-        bar.addView(navButton("−", "Zoom out", () -> easyCad.zoomBy(0.80f)));
-        snapButton = navButton("⌁", "Snap", this::toggleSnap);
-        bar.addView(snapButton);
-        bar.addView(navButton("cm/mm", "واحد", () -> Toast.makeText(
-                this, easyCad.dualUnitSummary(), Toast.LENGTH_LONG).show()));
-        updateSnapButton();
-        return bar;
+        bar.setPadding(dp(3),dp(3),dp(3),dp(3));
+        bar.addView(navButton("◇","Fit",() -> { easyCad.fitAll(); showStatus("Fit"); }));
+        bar.addView(navButton("＋","Zoom in",() -> easyCad.zoomBy(1.25f)));
+        bar.addView(navButton("−","Zoom out",() -> easyCad.zoomBy(0.80f)));
+        snapButton = navButton("⌁","Snap",this::toggleSnap); bar.addView(snapButton);
+        bar.addView(navButton("cm/mm","واحد",() -> Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show()));
+        updateSnapButton(); return bar;
     }
 
-    private void toggleSnap() {
-        easyCad.toggleSnap();
-        updateSnapButton();
-        showStatus(easyCad.isSnapEnabled() ? "Snap روشن" : "Snap خاموش");
-    }
+    private void toggleSnap() { easyCad.toggleSnap(); updateSnapButton(); showStatus(easyCad.isSnapEnabled()?"Snap روشن":"Snap خاموش"); }
 
     private void updateSnapButton() {
-        if (snapButton == null || easyCad == null) return;
-        snapButton.setText(easyCad.isSnapEnabled() ? "⌁\nSnap" : "○\nSnap");
-        snapButton.setTextColor(easyCad.isSnapEnabled()
-                ? Color.rgb(42, 100, 205)
-                : Color.rgb(100, 108, 120));
+        if (snapButton==null || easyCad==null) return;
+        snapButton.setText(easyCad.isSnapEnabled()?"⌁\nSnap":"○\nSnap");
+        snapButton.setTextColor(easyCad.isSnapEnabled()?Color.rgb(42,100,205):Color.rgb(100,108,120));
     }
 
     private void showMoreMenu() {
-        String[] items = {
-                "⇩ خروجی DXF",
-                "cm/mm واحدهای اندازه",
-                easyCad.isShowGrid() ? "# Grid خاموش" : "# Grid روشن",
-                easyCad.isShowAxes() ? "XYZ محورها مخفی" : "XYZ محورها روشن",
-                easyCad.isShowGuides() ? "┼ Guide مخفی" : "┼ Guide روشن",
-                "⋯ تنظیمات پیشرفته"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("skachmori")
-                .setItems(items, (d,w) -> {
-                    if (w == 0) invokeMain("exportDxf", new Class<?>[0]);
-                    else if (w == 1) Toast.makeText(this, easyCad.dualUnitSummary(), Toast.LENGTH_LONG).show();
-                    else if (w == 2) { easyCad.toggleGrid(); showStatus(easyCad.isShowGrid()?"Grid روشن":"Grid خاموش"); }
-                    else if (w == 3) { easyCad.toggleAxes(); showStatus(easyCad.isShowAxes()?"محورها روشن":"محورها مخفی"); }
-                    else if (w == 4) { easyCad.toggleGuides(); showStatus(easyCad.isShowGuides()?"Guide روشن":"Guide مخفی"); }
-                    else invokeMain("showMoreMenu", new Class<?>[0]);
-                })
-                .setNegativeButton("بستن", null)
-                .show();
+        String[] items = {"⇩ خروجی DXF","cm/mm واحدهای اندازه",easyCad.isShowGrid()?"# Grid خاموش":"# Grid روشن",
+                easyCad.isShowAxes()?"XYZ محورها مخفی":"XYZ محورها روشن",easyCad.isShowGuides()?"┼ Guide مخفی":"┼ Guide روشن","⋯ تنظیمات پیشرفته"};
+        new AlertDialog.Builder(this).setTitle("skachmori").setItems(items,(d,w)->{
+            if(w==0) invokeMain("exportDxf",new Class<?>[0]);
+            else if(w==1) Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show();
+            else if(w==2){easyCad.toggleGrid();showStatus(easyCad.isShowGrid()?"Grid روشن":"Grid خاموش");}
+            else if(w==3){easyCad.toggleAxes();showStatus(easyCad.isShowAxes()?"محورها روشن":"محورها مخفی");}
+            else if(w==4){easyCad.toggleGuides();showStatus(easyCad.isShowGuides()?"Guide روشن":"Guide مخفی");}
+            else invokeMain("showMoreMenu",new Class<?>[0]);
+        }).setNegativeButton("بستن",null).show();
     }
 
     private LinearLayout horizontalCard() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.HORIZONTAL);
-        box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setBackground(round(Color.argb(248,255,255,255), Color.rgb(216,222,230), 18));
-        box.setElevation(dp(5));
-        return box;
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.HORIZONTAL);box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setBackground(round(Color.argb(248,255,255,255),Color.rgb(216,222,230),18));box.setElevation(dp(5));return box;
     }
 
     private LinearLayout verticalCard() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER_HORIZONTAL);
-        box.setPadding(dp(3), dp(4), dp(3), dp(4));
-        box.setBackground(round(Color.argb(248,255,255,255), Color.rgb(216,222,230), 18));
-        box.setElevation(dp(5));
-        return box;
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(3),dp(4),dp(3),dp(4));box.setBackground(round(Color.argb(248,255,255,255),Color.rgb(216,222,230),18));box.setElevation(dp(5));return box;
     }
 
-    private Button topButton(String text, String description, Runnable action) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setContentDescription(description);
-        b.setTextSize(text.length() > 2 ? 10f : 17f);
-        b.setTextColor(Color.rgb(54, 64, 78));
-        b.setAllCaps(false);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(2), 0, dp(2), 0);
-        b.setMinWidth(dp(38)); b.setMinimumWidth(dp(38));
-        b.setMinHeight(dp(38)); b.setMinimumHeight(dp(38));
-        b.setBackground(round(Color.TRANSPARENT, Color.TRANSPARENT, 12));
-        b.setOnClickListener(v -> action.run());
-        return b;
+    private Button topButton(String text,String description,Runnable action) {
+        Button b=new Button(this);b.setText(text);b.setContentDescription(description);b.setTextSize(text.length()>2?10f:17f);
+        b.setTextColor(Color.rgb(54,64,78));b.setAllCaps(false);b.setGravity(Gravity.CENTER);b.setPadding(dp(2),0,dp(2),0);
+        b.setMinWidth(dp(38));b.setMinimumWidth(dp(38));b.setMinHeight(dp(38));b.setMinimumHeight(dp(38));
+        b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,12));b.setOnClickListener(v->action.run());return b;
     }
 
-    private Button railButton(String icon, String label, Runnable action) {
-        Button b = new Button(this);
-        b.setText(icon + "\n" + label);
-        b.setTextSize(9.5f);
-        b.setTextColor(Color.rgb(48, 58, 72));
-        b.setAllCaps(false);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(2), dp(2), dp(2), dp(2));
-        b.setMinWidth(dp(58)); b.setMinimumWidth(dp(58));
-        b.setMinHeight(dp(52)); b.setMinimumHeight(dp(52));
-        b.setBackground(round(Color.TRANSPARENT, Color.TRANSPARENT, 12));
-        b.setOnClickListener(v -> action.run());
-        return b;
+    private Button railButton(String icon,String label,Runnable action) {
+        Button b=new Button(this);b.setText(icon+"\n"+label);b.setTextSize(9.5f);b.setTextColor(Color.rgb(48,58,72));b.setAllCaps(false);
+        b.setGravity(Gravity.CENTER);b.setPadding(dp(2),dp(2),dp(2),dp(2));b.setMinWidth(dp(58));b.setMinimumWidth(dp(58));
+        b.setMinHeight(dp(52));b.setMinimumHeight(dp(52));b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,12));b.setOnClickListener(v->action.run());return b;
     }
 
-    private Button compactAction(String icon, String label, Runnable action) {
-        Button b = railButton(icon, label, action);
-        b.setMinWidth(dp(60)); b.setMinimumWidth(dp(60));
-        b.setMinHeight(dp(46)); b.setMinimumHeight(dp(46));
-        return b;
+    private Button compactAction(String icon,String label,Runnable action) {
+        Button b=railButton(icon,label,action);b.setMinWidth(dp(60));b.setMinimumWidth(dp(60));b.setMinHeight(dp(46));b.setMinimumHeight(dp(46));return b;
     }
 
-    private Button navButton(String icon, String label, Runnable action) {
-        Button b = new Button(this);
-        b.setText(icon + "\n" + label);
-        b.setTextSize(icon.length() > 2 ? 8.5f : 9.5f);
-        b.setTextColor(Color.rgb(58, 68, 82));
-        b.setAllCaps(false);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(2), dp(1), dp(2), dp(1));
-        b.setMinWidth(dp(48)); b.setMinimumWidth(dp(48));
-        b.setMinHeight(dp(45)); b.setMinimumHeight(dp(45));
-        b.setBackground(round(Color.TRANSPARENT, Color.TRANSPARENT, 12));
-        b.setOnClickListener(v -> action.run());
-        return b;
+    private Button navButton(String icon,String label,Runnable action) {
+        Button b=new Button(this);b.setText(icon+"\n"+label);b.setTextSize(icon.length()>2?8.5f:9.5f);b.setTextColor(Color.rgb(58,68,82));
+        b.setAllCaps(false);b.setGravity(Gravity.CENTER);b.setPadding(dp(2),dp(1),dp(2),dp(1));b.setMinWidth(dp(48));b.setMinimumWidth(dp(48));
+        b.setMinHeight(dp(45));b.setMinimumHeight(dp(45));b.setBackground(round(Color.TRANSPARENT,Color.TRANSPARENT,12));b.setOnClickListener(v->action.run());return b;
     }
 
-    private GradientDrawable round(int fill, int stroke, int radiusDp) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(fill);
-        d.setCornerRadius(dp(radiusDp));
-        if (Color.alpha(stroke) > 0) d.setStroke(dp(1), stroke);
-        return d;
+    private GradientDrawable round(int fill,int stroke,int radiusDp) {
+        GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radiusDp));if(Color.alpha(stroke)>0)d.setStroke(dp(1),stroke);return d;
     }
 
-    private FrameLayout.LayoutParams frameMatchWrap(int gravity, int left, int top, int right, int bottom) {
-        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                gravity);
-        p.setMargins(dp(left), dp(top), dp(right), dp(bottom));
-        return p;
+    private FrameLayout.LayoutParams frameMatchWrap(int gravity,int left,int top,int right,int bottom) {
+        FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.WRAP_CONTENT,gravity);
+        p.setMargins(dp(left),dp(top),dp(right),dp(bottom));return p;
     }
 
-    private FrameLayout.LayoutParams frameWrap(int gravity, int left, int top, int right, int bottom) {
-        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                gravity);
-        p.setMargins(dp(left), dp(top), dp(right), dp(bottom));
-        return p;
+    private FrameLayout.LayoutParams frameWrap(int gravity,int left,int top,int right,int bottom) {
+        FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,FrameLayout.LayoutParams.WRAP_CONTENT,gravity);
+        p.setMargins(dp(left),dp(top),dp(right),dp(bottom));return p;
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
-    }
+    private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
 }
