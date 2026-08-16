@@ -12,11 +12,13 @@ import com.google.android.filament.EntityManager;
 import com.google.android.filament.Filament;
 import com.google.android.filament.IndexBuffer;
 import com.google.android.filament.Material;
+import com.google.android.filament.LightManager;
 import com.google.android.filament.Renderer;
 import com.google.android.filament.RenderableManager;
 import com.google.android.filament.Scene;
 import com.google.android.filament.Skybox;
 import com.google.android.filament.SwapChain;
+import com.google.android.filament.SurfaceOrientation;
 import com.google.android.filament.VertexBuffer;
 import com.google.android.filament.View;
 import com.google.android.filament.android.UiHelper;
@@ -47,6 +49,8 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private final int cameraEntity;
     private final Skybox skybox;
     private final Material cadMaterial;
+    private final int keyLightEntity;
+    private final int fillLightEntity;
     private final UiHelper uiHelper;
     private SwapChain swapChain;
     private boolean running;
@@ -74,16 +78,23 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         MaterialBuilder.init();
         MaterialPackage materialPackage=new MaterialBuilder()
                 .name("ChobYar CAD Surface")
-                .shading(MaterialBuilder.Shading.UNLIT)
+                .shading(MaterialBuilder.Shading.LIT)
                 .doubleSided(true)
                 .platform(MaterialBuilder.Platform.MOBILE)
                 .targetApi(MaterialBuilder.TargetApi.ALL)
                 .optimization(MaterialBuilder.Optimization.PERFORMANCE)
-                .material("void material(inout MaterialInputs material) { prepareMaterial(material); material.baseColor = float4(0.34, 0.60, 0.88, 1.0); }")
+                .material("void material(inout MaterialInputs material) { prepareMaterial(material); material.baseColor = float4(0.38, 0.64, 0.90, 1.0); material.roughness = 0.62; material.metallic = 0.0; material.reflectance = 0.35; }")
                 .build(engine);
         if(!materialPackage.isValid())throw new IllegalStateException("CAD material compilation failed");
         ByteBuffer materialBuffer=materialPackage.getBuffer();
         cadMaterial=new Material.Builder().payload(materialBuffer,materialBuffer.remaining()).build(engine);
+        keyLightEntity=EntityManager.get().create();
+        new LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1.0f,0.97f,0.92f).intensity(92000f)
+                .direction(-0.55f,-0.70f,-0.85f).castShadows(false).build(engine,keyLightEntity);
+        fillLightEntity=EntityManager.get().create();
+        new LightManager.Builder(LightManager.Type.DIRECTIONAL).color(0.72f,0.84f,1.0f).intensity(38000f)
+                .direction(0.65f,0.25f,0.45f).castShadows(false).build(engine,fillLightEntity);
+        scene.addEntity(keyLightEntity);scene.addEntity(fillLightEntity);
         camera.lookAt(180.0,140.0,180.0,0.0,0.0,0.0,0.0,0.0,1.0);
 
         uiHelper=new UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK);
@@ -139,6 +150,8 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
 
         ByteBuffer vertexBytes=ByteBuffer.allocateDirect(vertexCount*3*4).order(ByteOrder.nativeOrder());
         FloatBuffer vertices=vertexBytes.asFloatBuffer();
+        ByteBuffer normalBytes=ByteBuffer.allocateDirect(vertexCount*3*4).order(ByteOrder.nativeOrder());
+        FloatBuffer normals=normalBytes.asFloatBuffer();
         float minX=Float.POSITIVE_INFINITY,minY=minX,minZ=minX,maxX=Float.NEGATIVE_INFINITY,maxY=maxX,maxZ=maxX;
         for(int i=0;i<vertexCount*3;i+=3){
             float x=(float)xyz[i],y=(float)xyz[i+1],z=(float)xyz[i+2];vertices.put(x).put(y).put(z);
@@ -146,12 +159,29 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
             maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);maxZ=Math.max(maxZ,z);
         }
         vertices.flip();
+        for(int triangle=0;triangle<vertexCount;triangle+=3){
+            int k=triangle*3;
+            double ax=xyz[k],ay=xyz[k+1],az=xyz[k+2];
+            double ux=xyz[k+3]-ax,uy=xyz[k+4]-ay,uz=xyz[k+5]-az;
+            double vx=xyz[k+6]-ax,vy=xyz[k+7]-ay,vz=xyz[k+8]-az;
+            double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+            double length=Math.max(1e-12,Math.sqrt(nx*nx+ny*ny+nz*nz));
+            float fx=(float)(nx/length),fy=(float)(ny/length),fz=(float)(nz/length);
+            for(int corner=0;corner<3;corner++)normals.put(fx).put(fy).put(fz);
+        }
+        normals.flip();
+        ByteBuffer tangentBytes=ByteBuffer.allocateDirect(vertexCount*4*4).order(ByteOrder.nativeOrder());
+        FloatBuffer tangents=tangentBytes.asFloatBuffer();
+        SurfaceOrientation orientation=new SurfaceOrientation.Builder().vertexCount(vertexCount).normals(normals).build();
+        orientation.getQuatsAsFloat(tangents);orientation.destroy();tangents.rewind();
         ByteBuffer indexBytes=ByteBuffer.allocateDirect(vertexCount*4).order(ByteOrder.nativeOrder());
         IntBuffer indices=indexBytes.asIntBuffer();for(int i=0;i<vertexCount;i++)indices.put(i);indices.flip();
 
-        vertexBuffer=new VertexBuffer.Builder().bufferCount(1).vertexCount(vertexCount)
-                .attribute(VertexBuffer.VertexAttribute.POSITION,0,VertexBuffer.AttributeType.FLOAT3,0,12).build(engine);
+        vertexBuffer=new VertexBuffer.Builder().bufferCount(2).vertexCount(vertexCount)
+                .attribute(VertexBuffer.VertexAttribute.POSITION,0,VertexBuffer.AttributeType.FLOAT3,0,12)
+                .attribute(VertexBuffer.VertexAttribute.TANGENTS,1,VertexBuffer.AttributeType.FLOAT4,0,16).build(engine);
         vertexBuffer.setBufferAt(engine,0,vertices);
+        vertexBuffer.setBufferAt(engine,1,tangents);
         indexBuffer=new IndexBuffer.Builder().indexCount(vertexCount).bufferType(IndexBuffer.Builder.IndexType.UINT).build(engine);
         indexBuffer.setBuffer(engine,indices);
 
@@ -186,7 +216,10 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     void destroyRenderer(){
         stopFrames();uiHelper.detach();
         if(swapChain!=null){engine.destroySwapChain(swapChain);swapChain=null;}
-        clearMesh();engine.destroyMaterial(cadMaterial);MaterialBuilder.shutdown();
+        clearMesh();scene.removeEntity(keyLightEntity);scene.removeEntity(fillLightEntity);
+        engine.destroyEntity(keyLightEntity);engine.destroyEntity(fillLightEntity);
+        EntityManager.get().destroy(keyLightEntity);EntityManager.get().destroy(fillLightEntity);
+        engine.destroyMaterial(cadMaterial);MaterialBuilder.shutdown();
         scene.setSkybox(null);engine.destroySkybox(skybox);engine.destroyCameraComponent(cameraEntity);
         engine.destroyView(view);engine.destroyScene(scene);engine.destroyRenderer(renderer);
         EntityManager.get().destroy(cameraEntity);engine.destroy();
