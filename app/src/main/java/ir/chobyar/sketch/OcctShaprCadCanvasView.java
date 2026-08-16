@@ -197,13 +197,13 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
     }
     private void setConstruction(Object e,boolean v)throws Exception{Field f=findField(e.getClass(),"construction");if(f!=null){f.setBoolean(e,v);return;}Method m=findMethod(e.getClass(),"setConstruction",boolean.class);if(m!=null)m.invoke(e,v);}
 
-    private Object addPolyline(List<PointF> p,boolean closed){
+    protected Object addPolyline(List<PointF> p,boolean closed){
         try{if(polylineCtor==null||p.size()<2)return null;saveUndo();Object e=polylineCtor.newInstance(p,closed);Method m=findMethod(e.getClass(),"setLayer",String.class);if(m!=null)m.invoke(e,getCurrentLayer());entities().add(e);selectOne(e);invalidate();return e;}catch(Exception ex){msg("ساخت هندسه انجام نشد");return null;}
     }
 
     @SuppressWarnings("unchecked") private List<Object> entities()throws Exception{return(List<Object>)entitiesField.get(this);}
     @SuppressWarnings("unchecked") private List<Object> selection(){try{Object m=selectedObjectsField.get(this);if(m instanceof List&&!((List<?>)m).isEmpty())return new ArrayList<>((List<Object>)m);Object e=selectedField.get(this);List<Object> o=new ArrayList<>();if(e!=null)o.add(e);return o;}catch(Exception ex){return new ArrayList<>();}}
-    @SuppressWarnings("unchecked") private void selectOne(Object e)throws Exception{selectedField.set(this,e);Object m=selectedObjectsField.get(this);if(m instanceof List){((List<Object>)m).clear();((List<Object>)m).add(e);}}
+    @SuppressWarnings("unchecked") protected void selectOne(Object e)throws Exception{selectedField.set(this,e);Object m=selectedObjectsField.get(this);if(m instanceof List){((List<Object>)m).clear();((List<Object>)m).add(e);}}
     private void saveUndo()throws Exception{if(saveUndoMethod!=null)saveUndoMethod.invoke(this);}
     private PointF world(float sx,float sy){try{float k=PX_PER_MM*viewScaleField.getFloat(this);return new PointF((sx-offsetXField.getFloat(this))/k,(sy-offsetYField.getFloat(this))/k);}catch(Exception ex){return new PointF(sx/PX_PER_MM,sy/PX_PER_MM);}}
 

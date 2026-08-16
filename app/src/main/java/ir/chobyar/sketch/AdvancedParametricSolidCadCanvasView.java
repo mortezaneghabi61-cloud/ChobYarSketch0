@@ -171,7 +171,11 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             if(isClosedProfile(e)&&profile==null)profile=e;
             else if(isLine(e)&&axis==null)axis=e;
         }
-        if(profile==null){toast("برای Revolve یک پروفایل بسته انتخاب کن؛ محور می‌تواند یک Line انتخاب‌شده باشد");return;}
+        if(profile==null){
+            AutoProfile auto=autoProfile(s,true);
+            if(auto!=null){profile=auto.profile;axis=auto.axis;}
+        }
+        if(profile==null){toast("مقطع بسته پیدا نشد؛ یک خط از محیط مقطع را انتخاب کن و دوباره Revolve را بزن");return;}
         Object finalProfile=profile,finalAxis=axis;
         if(axis!=null){showRevolveAngle(finalProfile,finalAxis,false);return;}
         String[] axes={"محور Y همان Sketch — پیشنهاد معمول","محور X همان Sketch"};
@@ -184,6 +188,14 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public void showRevolveTool(){startRevolve();}
     public void showSweepTool(){startSweep();}
     public void showLoftTool(){startLoft();}
+
+    @Override public void showInteractiveExtrude(){
+        if(!hasSelectedClosedProfile()){
+            AutoProfile auto=autoProfile(selection(),false);
+            if(auto!=null)try{selectOne(auto.profile);}catch(Exception ignored){}
+        }
+        super.showInteractiveExtrude();
+    }
 
     private void showRevolveAngle(Object profile,Object axis,boolean xAxis){
         EditText input=new EditText(getContext());input.setSingleLine(true);
@@ -314,6 +326,52 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         if("PolylineEntity".equals(type)&&boolField(e,"closed")){List<PointF>p=points(e);return p.size()>=3?new Profile(e,p,layer,plane):null;}
         return null;
     }
+
+    /** A Shapr-like region resolver: one picked edge is enough to recover the
+     * closed loop from its Sketch layer.  A spare line is treated as a revolve
+     * axis, so woodworking profiles do not require fragile multi-selection. */
+    private static final class AutoProfile{final Object profile,axis;AutoProfile(Object p,Object a){profile=p;axis=a;}}
+
+    private boolean hasSelectedClosedProfile(){for(Object e:selection())if(isClosedProfile(e))return true;return false;}
+
+    private AutoProfile autoProfile(List<Object> picked,boolean allowAxis){
+        String layer=null;Object explicitAxis=null;
+        for(Object e:picked){if(e==null)continue;if(layer==null)layer=entityLayer(e);if(isClosedProfile(e))return new AutoProfile(e,null);}
+        if(layer==null)layer=getCurrentLayer();
+        List<Object> lines=new ArrayList<>();
+        for(Object e:entities())if(isLine(e)&&layer.equals(entityLayer(e)))lines.add(e);
+        if(lines.size()<3)return null;
+        // Prefer exactly what the user selected when it already forms a loop.
+        List<Object> selectedLines=new ArrayList<>();for(Object e:picked)if(isLine(e))selectedLines.add(e);
+        List<PointF> loop=stitchLoop(selectedLines);
+        if(loop==null)loop=stitchLoop(lines);
+        if(loop==null&&allowAxis){
+            // Typical turning Sketch = one closed perimeter plus one axis line.
+            for(int skip=0;skip<lines.size();skip++){
+                List<Object> candidate=new ArrayList<>(lines);Object spare=candidate.remove(skip);List<PointF> test=stitchLoop(candidate);
+                if(test!=null){loop=test;explicitAxis=spare;break;}
+            }
+        }
+        if(loop==null)return null;
+        Object profile=addPolyline(loop,true);if(profile==null)return null;
+        return new AutoProfile(profile,explicitAxis);
+    }
+
+    private List<PointF> stitchLoop(List<Object> lines){
+        if(lines==null||lines.size()<3)return null;boolean[] used=new boolean[lines.size()];
+        PointF first=lineEnd(lines.get(0),0),current=lineEnd(lines.get(0),1);if(first==null||current==null)return null;
+        List<PointF> out=new ArrayList<>();out.add(first);out.add(current);used[0]=true;
+        for(int step=1;step<lines.size();step++){
+            int found=-1;PointF next=null;
+            for(int i=0;i<lines.size();i++)if(!used[i]){PointF a=lineEnd(lines.get(i),0),b=lineEnd(lines.get(i),1);if(a==null||b==null)continue;
+                if(distance(current,a)<=0.35f){found=i;next=b;break;}if(distance(current,b)<=0.35f){found=i;next=a;break;}}
+            if(found<0)return null;used[found]=true;current=next;out.add(current);
+        }
+        if(distance(current,first)>0.35f)return null;out.remove(out.size()-1);return out.size()>=3?out:null;
+    }
+
+    private static PointF lineEnd(Object e,int which){return which==0?new PointF(getFloat(e,"x1"),getFloat(e,"y1")):new PointF(getFloat(e,"x2"),getFloat(e,"y2"));}
+    private static float distance(PointF a,PointF b){return(float)Math.hypot(a.x-b.x,a.y-b.y);}
 
     private Axis3D axisFor(Object line,Geometry3D.Plane3D plane,boolean xAxis){
         if(line!=null&&isLine(line)){
