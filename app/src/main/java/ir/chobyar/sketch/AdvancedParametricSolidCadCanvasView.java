@@ -109,6 +109,8 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private Field selectedFaceField;
     private Field bodySerialField;
     private Constructor<?> solidBodyConstructor;
+    private Constructor<?> autoPolylineConstructor;
+    private Method saveUndoMethod;
 
     public AdvancedParametricSolidCadCanvasView(Context context){
         super(context);
@@ -129,6 +131,9 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             Class<?> bodyClass=Class.forName("ir.chobyar.sketch.SolidCadCanvasView$SolidBody");
             solidBodyConstructor=bodyClass.getDeclaredConstructor(int.class,String.class,SolidCSG.class);
             solidBodyConstructor.setAccessible(true);
+            Class<?> polylineClass=Class.forName("ir.chobyar.sketch.CadCanvasView$PolylineEntity");
+            autoPolylineConstructor=polylineClass.getDeclaredConstructor(List.class,boolean.class);autoPolylineConstructor.setAccessible(true);
+            saveUndoMethod=CadCanvasView.class.getDeclaredMethod("saveUndo");saveUndoMethod.setAccessible(true);
         }catch(Exception ignored){}
     }
 
@@ -192,7 +197,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     @Override public void showInteractiveExtrude(){
         if(!hasSelectedClosedProfile()){
             AutoProfile auto=autoProfile(selection(),false);
-            if(auto!=null)try{selectOne(auto.profile);}catch(Exception ignored){}
+            if(auto!=null)selectAutoProfile(auto.profile);
         }
         super.showInteractiveExtrude();
     }
@@ -353,8 +358,22 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             }
         }
         if(loop==null)return null;
-        Object profile=addPolyline(loop,true);if(profile==null)return null;
+        Object profile=addAutoPolyline(loop,layer);if(profile==null)return null;
         return new AutoProfile(profile,explicitAxis);
+    }
+
+    private Object addAutoPolyline(List<PointF> loop,String layer){
+        try{
+            if(autoPolylineConstructor==null)return null;if(saveUndoMethod!=null)saveUndoMethod.invoke(this);
+            List<PointF> copy=new ArrayList<>();for(PointF p:loop)copy.add(new PointF(p.x,p.y));
+            Object entity=autoPolylineConstructor.newInstance(copy,true);Method setLayer=findMethod(entity.getClass(),"setLayer",String.class);
+            if(setLayer!=null)setLayer.invoke(entity,layer);entities().add(entity);selectAutoProfile(entity);invalidate();return entity;
+        }catch(Exception e){return null;}
+    }
+
+    @SuppressWarnings("unchecked") private void selectAutoProfile(Object entity){
+        try{selectedField.set(this,entity);Object v=selectedObjectsField.get(this);if(v instanceof List){List<Object>s=(List<Object>)v;s.clear();s.add(entity);}}
+        catch(Exception ignored){}
     }
 
     private List<PointF> stitchLoop(List<Object> lines){
@@ -372,6 +391,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
 
     private static PointF lineEnd(Object e,int which){return which==0?new PointF(getFloat(e,"x1"),getFloat(e,"y1")):new PointF(getFloat(e,"x2"),getFloat(e,"y2"));}
     private static float distance(PointF a,PointF b){return(float)Math.hypot(a.x-b.x,a.y-b.y);}
+    private static Method findMethod(Class<?> c,String name,Class<?>...types){for(Class<?> x=c;x!=null;x=x.getSuperclass())try{Method m=x.getDeclaredMethod(name,types);m.setAccessible(true);return m;}catch(Exception ignored){}return null;}
 
     private Axis3D axisFor(Object line,Geometry3D.Plane3D plane,boolean xAxis){
         if(line!=null&&isLine(line)){
