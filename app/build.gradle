@@ -55,3 +55,7 @@ android {
         }
     }
 }
+
+dependencies {
+    implementation 'com.google.android.filament:filament-android:1.74.0'
+}

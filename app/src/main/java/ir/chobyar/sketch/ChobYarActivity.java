@@ -21,6 +21,7 @@ import android.widget.Toast;
 /** Single production workspace. No activity swapping and no reflection wiring. */
 public final class ChobYarActivity extends Activity {
     private Shapr3DGuideCadCanvasView cad;
+    private FilamentCadSurface gpuSurface;
     private LinearLayout adaptive;
     private TextView projectTitle;
     private TextView snapButton;
@@ -28,6 +29,7 @@ public final class ChobYarActivity extends Activity {
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);immersive();
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(248,249,251));
+        gpuSurface=new FilamentCadSurface(this);root.addView(gpuSurface,new FrameLayout.LayoutParams(-1,-1));
         cad=new Shapr3DGuideCadCanvasView(this);
         cad.setStatusListener(this::status);
         cad.setDimensionEditListener(this::editDimension);
@@ -174,6 +176,7 @@ public final class ChobYarActivity extends Activity {
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     private void immersive(){getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}
     @Override public void onWindowFocusChanged(boolean h){super.onWindowFocusChanged(h);if(h)immersive();}
+    @Override protected void onDestroy(){if(gpuSurface!=null)gpuSurface.destroyRenderer();super.onDestroy();}
 
     private final class Cube extends View{
         Paint p=new Paint(1);Path a=new Path(),b=new Path(),c=new Path();int mode=0;
