@@ -65,7 +65,8 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
     private String lastHistorySignature="";
     private int nativeFeatureCount=0;
     private int nativeFailureCount=0;
-    private boolean showNativeMesh=true;
+    // Triangle diagonals are a diagnostics view, never part of the production viewport.
+    private boolean showNativeMesh=false;
     private long lastSignatureCheckNs=0L;
 
     private final Paint nativeMeshPaint=new Paint(Paint.ANTI_ALIAS_FLAG);

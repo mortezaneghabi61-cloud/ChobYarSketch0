@@ -31,6 +31,9 @@ public final class ChobYarActivity extends Activity {
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(248,249,251));
         gpuSurface=new FilamentCadSurface(this);root.addView(gpuSurface,new FrameLayout.LayoutParams(-1,-1));
         cad=new Shapr3DGuideCadCanvasView(this);
+        // The GPU SurfaceView sits behind the interaction canvas. Keeping this
+        // layer transparent is what lets exact Filament bodies remain visible.
+        cad.setBackgroundColor(Color.TRANSPARENT);
         cad.setStatusListener(this::status);
         cad.setDimensionEditListener(this::editDimension);
         cad.setWorkspaceListener(this::workspaceChanged);
@@ -79,7 +82,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void workspaceChanged(String info,boolean exact,int tool){
-        boolean selected=info!=null&&!info.trim().isEmpty()&&!info.startsWith("هیچ")&&!info.startsWith("اول");
+        boolean selected=info!=null&&!info.trim().isEmpty()&&!info.startsWith("هیچ")&&!info.startsWith("اول")
+                &&!info.contains("انتخاب نبود")&&!info.contains("انتخاب نشده")&&!info.contains("داخل کادر");
         if(adaptive!=null){if(selected)renderAdaptive(cad.selectionKind());adaptive.setVisibility(selected?View.VISIBLE:View.GONE);}
         syncGpuMesh();
     }
@@ -175,7 +179,11 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁\nSnap");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
-    private void status(String s){if(s!=null&&!s.trim().isEmpty()&&projectTitle!=null)projectTitle.setText(s.length()>34?s.substring(0,34)+"…":s);}
+    private void status(String s){
+        // Project identity must stay stable; command feedback already exists in
+        // the workspace status line and dialogs.
+        if(projectTitle!=null)projectTitle.setText("چوب‌یار 3D");
+    }
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
 
     private LinearLayout card(boolean vertical){LinearLayout x=new LinearLayout(this);x.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);x.setGravity(Gravity.CENTER);x.setElevation(dp(4));x.setBackground(round(Color.argb(246,255,255,255),Color.rgb(222,226,232),14));return x;}
