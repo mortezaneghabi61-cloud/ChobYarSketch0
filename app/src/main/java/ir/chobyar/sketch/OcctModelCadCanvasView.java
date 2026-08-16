@@ -292,6 +292,20 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         lastHistorySignature=signature;
     }
 
+    /** Snapshot of the exact OCCT display tessellation for the GPU renderer. */
+    public synchronized double[] gpuMesh(){
+        syncNativeHistory(false);
+        int length=0;
+        for(NativeRecord record:nativeByBody.values())if(record!=null)length+=record.mesh.length;
+        if(length==0)return new double[0];
+        double[] combined=new double[length];int offset=0;
+        for(NativeRecord record:nativeByBody.values()){
+            if(record==null||record.mesh.length==0)continue;
+            System.arraycopy(record.mesh,0,combined,offset,record.mesh.length);offset+=record.mesh.length;
+        }
+        return combined;
+    }
+
     private boolean storeNative(Object body,long handle,String kind){
         if(body==null||handle==0L)return false;
         if(hasDirectEdits(body)){

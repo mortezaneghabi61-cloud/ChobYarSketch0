@@ -41,6 +41,7 @@ public final class ChobYarActivity extends Activity {
         adaptive=adaptiveTools();adaptive.setVisibility(View.GONE);
         root.addView(adaptive,wrap(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,12));
         setContentView(root);
+        cad.post(this::syncGpuMesh);
     }
 
     private View topBar(){
@@ -79,7 +80,10 @@ public final class ChobYarActivity extends Activity {
     private void workspaceChanged(String info,boolean exact,int tool){
         boolean selected=info!=null&&!info.trim().isEmpty()&&!info.startsWith("هیچ")&&!info.startsWith("اول");
         if(adaptive!=null){if(selected)renderAdaptive(cad.selectionKind());adaptive.setVisibility(selected?View.VISIBLE:View.GONE);}
+        syncGpuMesh();
     }
+
+    private void syncGpuMesh(){if(gpuSurface!=null&&cad!=null)gpuSurface.setMesh(cad.gpuMesh());}
 
     private void renderAdaptive(String kind){
         adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
