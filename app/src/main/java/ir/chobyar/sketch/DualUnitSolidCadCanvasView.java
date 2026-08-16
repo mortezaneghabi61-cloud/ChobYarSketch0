@@ -77,19 +77,19 @@ public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
 
     /** User-visible unit policy. */
     public String dualUnitSummary() {
-        return "نمایش اندازه: سانتی‌متر + میلی‌متر | ورود: 8cm یا 80mm";
+        return "واحد پروژه: میلی‌متر (mm)";
     }
 
     @Override
     public String selectedInfo() {
-        return addMillimetersToCmText(super.selectedInfo());
+        return super.selectedInfo();
     }
 
     @Override
     public String exactDimensionTitle() {
         String title = super.exactDimensionTitle();
         title = title.replace(" — cm", "").replace(" — سانتی‌متر", "");
-        return title + " — cm / mm";
+        return title.endsWith("— mm") ? title : title + " — mm";
     }
 
     @Override
@@ -97,36 +97,33 @@ public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
         Object selected = selectedObject();
         if (selected == null) return "اول فقط یک شکل را انتخاب کن";
         String type = selected.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "طول؛ مثال: 80cm یا 800mm";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع؛ مثال: 60cm 40cm یا 600mm 400mm";
-        if ("CircleEntity".equals(type)) return "قطر؛ مثال: 8cm یا 80mm";
-        if ("ArcEntity".equals(type)) return "شعاع؛ مثال: 5cm یا 50mm";
-        if ("PolygonEntity".equals(type)) return "شعاع؛ مثال: 8cm یا 80mm";
+        if ("LineEntity".equals(type)) return "طول به میلی‌متر؛ مثال: 800";
+        if ("RectEntity".equals(type)) return "عرض و ارتفاع به میلی‌متر؛ مثال: 600 400";
+        if ("CircleEntity".equals(type)) return "قطر به میلی‌متر؛ مثال: 80";
+        if ("ArcEntity".equals(type)) return "شعاع به میلی‌متر؛ مثال: 50";
+        if ("PolygonEntity".equals(type)) return "شعاع به میلی‌متر؛ مثال: 80";
         return "برای این شکل ویرایش عددی تعریف نشده";
     }
 
     @Override
     public String exactDimensionMessage() {
-        return selectedInfo() + "\n\n" + exactDimensionHint()
-                + "\nعدد بدون پسوند مثل قبل سانتی‌متر حساب می‌شود.";
+        return selectedInfo() + "\n\n" + exactDimensionHint();
     }
 
     @Override
     public String applySelectedDimension(String raw) {
-        return super.applySelectedDimension(explicitUnitsToCentimeters(raw));
+        return super.applySelectedDimension(raw);
     }
 
     @Override
     public String executeCommand(String raw) {
-        return addMillimetersToCmText(super.executeCommand(explicitUnitsToCentimeters(raw)));
+        return super.executeCommand(raw);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (!isShowDimensions()) return;
-        drawMillimeterDimensions(canvas);
-        drawLiveMillimeterDimension(canvas);
+        // The millimeter-first base layer already paints one clean dimension.
     }
 
     private void drawMillimeterDimensions(Canvas canvas) {

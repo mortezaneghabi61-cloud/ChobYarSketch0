@@ -334,7 +334,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         EditText input=new EditText(getContext());input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(initial);input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(getContext()).setTitle(title+" • cm/mm").setMessage(message).setView(input)
+        new AlertDialog.Builder(getContext()).setTitle(title+" • mm").setMessage(message).setView(input)
                 .setPositiveButton("اعمال",(d,w)->{
                     try{double v=parseLengthMm(input.getText().toString());if(!signed)v=Math.abs(v);consumer.accept(v);}
                     catch(Exception e){toast("اندازه درست وارد نشده");}
@@ -346,7 +346,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         Geometry3D.Vec3 old=editing==null?new Geometry3D.Vec3(0,0,0):editing.vector;
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"X",mmText(old.x)),y=axisInput(box,"Y",mmText(old.y)),z=axisInput(box,"Z",mmText(old.z));
-        new AlertDialog.Builder(getContext()).setTitle((editing==null?"Move Body":"ویرایش D"+editing.id)+" • cm/mm")
+        new AlertDialog.Builder(getContext()).setTitle((editing==null?"Move Body":"ویرایش D"+editing.id)+" • mm")
                 .setView(box).setPositiveButton("اعمال",(d,w)->{
                     try{
                         Geometry3D.Vec3 v=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
@@ -359,7 +359,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     }
 
     private EditText axisInput(LinearLayout parent,String axis,String initial){
-        TextView t=new TextView(getContext());t.setText(axis+"  (cm/mm)");parent.addView(t);
+        TextView t=new TextView(getContext());t.setText(axis+"  (mm)");parent.addView(t);
         EditText e=new EditText(getContext());e.setSingleLine(true);e.setText(initial);e.setSelectAllOnFocus(true);parent.addView(e);return e;
     }
 
@@ -728,13 +728,13 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private static double parseLengthMm(String raw){
         String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');
-        boolean mm=s.endsWith("mm")||s.endsWith("میلیمتر")||s.endsWith("میلی‌متر");
+        boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");
         s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();
-        double v=Double.parseDouble(s);return mm?v:v*10.0;
+        double v=Double.parseDouble(s);return cm?v*10.0:v;
     }
 
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString().trim();}
-    private static String dual(double mm){return num(mm/10.0)+" cm / "+num(mm)+" mm";}
+    private static String dual(double mm){return num(mm)+" mm";}
     private static String signedDual(double mm){return(mm>=0?"+":"")+dual(mm);}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String mmText(double mm){return num(mm)+"mm";}

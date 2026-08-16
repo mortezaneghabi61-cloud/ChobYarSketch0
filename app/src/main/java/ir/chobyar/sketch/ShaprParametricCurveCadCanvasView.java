@@ -282,7 +282,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
 
     private void showEllipseEditor(Object obj,EllipseParam e){
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
-        EditText major=input(cm(e.rx*2f)),minor=input(cm(e.ry*2f)),ang=input(fmt(e.angle));major.setHint("Major axis • cm/mm");minor.setHint("Minor axis • cm/mm");ang.setHint("Rotation °");box.addView(major);box.addView(minor);box.addView(ang);
+        EditText major=input(fmt(e.rx*2f)),minor=input(fmt(e.ry*2f)),ang=input(fmt(e.angle));major.setHint("Major axis • mm");minor.setHint("Minor axis • mm");ang.setHint("Rotation °");box.addView(major);box.addView(minor);box.addView(ang);
         new AlertDialog.Builder(getContext()).setTitle("Ellipse • Major / Minor Axis").setView(box).setPositiveButton("اعمال",(d,w)->{
             try{saveUndo();e.rx=Math.max(.05f,lengthMm(major.getText().toString())/2f);e.ry=Math.max(.05f,lengthMm(minor.getText().toString())/2f);e.angle=Float.parseFloat(normalizeDigits(ang.getText().toString()));rebuildEllipse(obj,e);invalidate();dispatchWorkspaceState();}
             catch(Exception ex){toast("مقادیر Ellipse درست نیست");}
@@ -302,7 +302,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
     public boolean canEditExactDimension(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return true;if(s!=null&&splines.containsKey(s))return false;return super.canEditExactDimension();}
 
     @Override
-    public String exactDimensionTitle(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"محور بزرگ و کوچک Ellipse — cm/mm";return super.exactDimensionTitle();}
+    public String exactDimensionTitle(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"محور بزرگ و کوچک Ellipse — mm";return super.exactDimensionTitle();}
     @Override
     public String exactDimensionHint(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"Major Minor؛ مثال: 10cm 6cm یا 100mm 60mm";return super.exactDimensionHint();}
     @Override
@@ -361,9 +361,9 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
     private String invokeParentString(String name){try{Method m=OcctShaprCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);Object r=m.invoke(this);return r==null?"":String.valueOf(r);}catch(Exception e){return"ابزار در دسترس نیست";}}
 
     private EditText input(String s){EditText e=new EditText(getContext());e.setSingleLine(true);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setText(s);e.setSelectAllOnFocus(true);return e;}
-    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean mm=s.endsWith("mm")||s.endsWith("میلیمتر")||s.endsWith("میلی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return mm?v:v*10f;}
+    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
-    private static String cm(float mm){return fmt(mm/10f);}private static String dual(float mm){return cm(mm)+" cm / "+fmt(mm)+" mm";}
+    private static String cm(float mm){return fmt(mm);}private static String dual(float mm){return fmt(mm)+" mm";}
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static float dist(PointF a,PointF b){return(float)Math.hypot(b.x-a.x,b.y-a.y);}
     private static Field findField(Class<?> c,String n){for(Class<?> x=c;x!=null;x=x.getSuperclass())try{Field f=x.getDeclaredField(n);f.setAccessible(true);return f;}catch(Exception ignored){}return null;}

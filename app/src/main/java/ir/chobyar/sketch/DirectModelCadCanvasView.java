@@ -155,7 +155,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                 .setTitle("Edit 3D • مستقیم")
                 .setMessage(bodyText + "\n" + faceText + " • " + edgeText
                         + "\n\nبرای Face فقط روی سطح بزن. برای Edge گزینه اول را بزن و بعد خود لبه را لمس کن."
-                        + "\nاندازه‌ها: cm یا mm؛ عدد خالی = cm")
+                        + "\nواحد همه اندازه‌ها: میلی‌متر (mm)")
                 .setItems(items, (d,w) -> {
                     if (w == 0) beginEdgePick();
                     else if (w == 1) askEdgeEdit(EditKind.EDGE_FILLET);
@@ -203,7 +203,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
             return;
         }
         String title = kind == EditKind.EDGE_FILLET ? "Fillet Edge — شعاع" : "Chamfer Edge — فاصله";
-        askLength(title, "مثال: 5mm یا 0.5cm", "5mm", value -> {
+        askLength(title, "مثال: 5", "5", value -> {
             DirectOp op = new DirectOp(kind, value, 0, midpoint(selectedEdgeA, selectedEdgeB));
             toast(recordAndApply(body, op));
         });
@@ -221,7 +221,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         if (p == null) { toast("Push/Pull فعلی روی Faceهای Bodyهای Prism/Extrude اجرا می‌شود"); return; }
         int selector = faceSelector(p, face);
         Geometry3D.Vec3 anchor = face.centroid();
-        askLength("Push/Pull Face — فاصله", "مثبت = بیرون، منفی = داخل؛ مثال: 12mm یا -0.5cm", "10mm", value -> {
+        askLength("Push/Pull Face — فاصله", "مثبت = بیرون، منفی = داخل؛ مثال: 12", "10", value -> {
             if (Math.abs(value) < 1e-5f) { toast("فاصله نباید صفر باشد"); return; }
             toast(recordAndApply(body, new DirectOp(EditKind.FACE_OFFSET, value, selector, anchor)));
         });
@@ -233,8 +233,8 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         String title = kind == EditKind.ALL_FILLET ? "Fillet همه Edgeها — شعاع"
                 : kind == EditKind.ALL_CHAMFER ? "Chamfer همه Edgeها — فاصله"
                 : "Shell — ضخامت دیواره";
-        String def = kind == EditKind.SHELL ? "2mm" : "5mm";
-        askLength(title, "cm یا mm", def, value -> {
+        String def = kind == EditKind.SHELL ? "2" : "5";
+        askLength(title, "میلی‌متر", def, value -> {
             if (!(value > 0f)) { toast("مقدار باید بزرگ‌تر از صفر باشد"); return; }
             toast(recordAndApply(body, new DirectOp(kind, value, 0, null)));
         });
@@ -249,7 +249,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         input.setText(initial);
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle(title + " • cm/mm")
+                .setTitle(title + " • mm")
                 .setMessage(message)
                 .setView(input)
                 .setPositiveButton("اعمال", (d,w) -> {
@@ -843,11 +843,11 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");
         if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
-        return Float.parseFloat(s)*10f;
+        return Float.parseFloat(s);
     }
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 
     @Override

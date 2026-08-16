@@ -21,9 +21,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * User-facing centimeter layer.
- * Geometry and DXF stay internally in millimeters for precision/compatibility,
- * while every visible dimension and every length entered from the UI is cm.
+ * Millimeter-first presentation layer. Geometry, typed values, dimensions and
+ * CAD exchange all use the same unit, avoiding hidden conversions while drawing.
  */
 public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
 
@@ -108,41 +107,40 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
 
     @Override
     public String selectedInfo() {
-        return mmTextToCm(super.selectedInfo());
+        return super.selectedInfo();
     }
 
     @Override
     public String applySelectedDimension(String raw) {
         if (raw == null || raw.trim().isEmpty()) return "عدد وارد نشده";
         try {
-            String mmInput = dimensionInputCmToMm(raw);
-            return mmTextToCm(super.applySelectedDimension(mmInput));
+            return super.applySelectedDimension(raw);
         } catch (Exception e) {
-            return "عدد را به سانتی‌متر درست وارد کن";
+            return "اندازه را به میلی‌متر درست وارد کن";
         }
     }
 
     public String exactDimensionTitle() {
         Object e = singleSelected();
-        if (e == null) return "اندازه دقیق — سانتی‌متر";
+        if (e == null) return "اندازه دقیق — میلی‌متر";
         String type = e.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "طول خط — cm";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع مستطیل — cm";
-        if ("CircleEntity".equals(type)) return "قطر دایره — cm";
-        if ("ArcEntity".equals(type)) return "شعاع قوس — cm";
-        if ("PolygonEntity".equals(type)) return "شعاع چندضلعی — cm";
-        return "اندازه دقیق — cm";
+        if ("LineEntity".equals(type)) return "طول خط — mm";
+        if ("RectEntity".equals(type)) return "عرض و ارتفاع مستطیل — mm";
+        if ("CircleEntity".equals(type)) return "قطر دایره — mm";
+        if ("ArcEntity".equals(type)) return "شعاع قوس — mm";
+        if ("PolygonEntity".equals(type)) return "شعاع چندضلعی — mm";
+        return "اندازه دقیق — mm";
     }
 
     public String exactDimensionHint() {
         Object e = singleSelected();
         if (e == null) return "اول فقط یک شکل را انتخاب کن";
         String type = e.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "فقط طول خط؛ مثال: 80";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع؛ مثال: 60 40";
-        if ("CircleEntity".equals(type)) return "فقط قطر دایره؛ مثال: 8";
-        if ("ArcEntity".equals(type)) return "فقط شعاع قوس؛ مثال: 5";
-        if ("PolygonEntity".equals(type)) return "فقط شعاع چندضلعی؛ مثال: 8";
+        if ("LineEntity".equals(type)) return "فقط طول خط؛ مثال: 800";
+        if ("RectEntity".equals(type)) return "عرض و ارتفاع؛ مثال: 600 400";
+        if ("CircleEntity".equals(type)) return "فقط قطر دایره؛ مثال: 80";
+        if ("ArcEntity".equals(type)) return "فقط شعاع قوس؛ مثال: 50";
+        if ("PolygonEntity".equals(type)) return "فقط شعاع چندضلعی؛ مثال: 80";
         return "برای این شکل ویرایش عددی تعریف نشده";
     }
 
@@ -153,7 +151,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
                     ? "برای اندازه دقیق فقط یک شکل را انتخاب کن."
                     : "اول یک شکل را انتخاب کن.";
         }
-        return selectedInfo() + "\n\n" + exactDimensionHint() + " cm";
+        return selectedInfo() + "\n\n" + exactDimensionHint() + " mm";
     }
 
     public String exactDimensionCurrentValue() {
@@ -202,8 +200,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         String s = normalizeDigits(raw).trim().replace(',', ' ');
         if (s.isEmpty()) return "";
         try {
-            String internal = commandCmToMm(s);
-            return mmTextToCm(super.executeCommand(internal));
+            return super.executeCommand(s);
         } catch (Exception e) {
             return "فرمت عدد درست نیست";
         }
@@ -273,8 +270,8 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
     private void runCmPaletteTool(int index) {
         if (index==0) showResultCm(trimSelectedLines());
         else if (index==1) showResultCm(extendSelectedLines());
-        else if (index==2) askCmDistance("Fillet — شعاع", "شعاع به سانتی‌متر؛ مثال: 1", true);
-        else if (index==3) askCmDistance("Chamfer — پخ", "فاصله پخ به سانتی‌متر؛ مثال: 1", false);
+        else if (index==2) askCmDistance("Fillet — شعاع", "شعاع به میلی‌متر؛ مثال: 10", true);
+        else if (index==3) askCmDistance("Chamfer — پخ", "فاصله پخ به میلی‌متر؛ مثال: 10", false);
         else showResultCm(joinSelectedLines());
     }
 
@@ -283,16 +280,15 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
         input.setHint(hint);
-        input.setText("1");
+        input.setText("10");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle(title+" — cm")
-                .setMessage("مقدار را به سانتی‌متر وارد کن.")
+                .setTitle(title+" — mm")
+                .setMessage("مقدار را به میلی‌متر وارد کن.")
                 .setView(input)
                 .setPositiveButton("اعمال",(d,w)->{
                     try{
-                        float cm=Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
-                        float mm=cm*MM_PER_CM;
+                        float mm=Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
                         showResultCm(fillet?super.filletSelectedLines(mm):super.chamferSelectedLines(mm));
                     }catch(Exception e){showResultCm("عدد درست وارد نشده");}
                 })
@@ -339,7 +335,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
                     }
                 } else if ("PointEntity".equals(type)) {
                     PointF s=worldToScreen(getFloat(e,"x"),getFloat(e,"y"));
-                    label(canvas,"("+cm(getFloat(e,"x"))+", "+cm(getFloat(e,"y"))+") cm",s.x+55f,s.y-12f);
+                    label(canvas,"("+cm(getFloat(e,"x"))+", "+cm(getFloat(e,"y"))+") mm",s.x+55f,s.y-12f);
                 } else if ("AngleEntity".equals(type)) {
                     float ax=getFloat(e,"ax"),ay=getFloat(e,"ay"),cx=getFloat(e,"cx"),cy=getFloat(e,"cy"),bx=getFloat(e,"bx"),by=getFloat(e,"by");
                     PointF s=worldToScreen(cx,cy);
@@ -426,8 +422,8 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         return out.toString();
     }
 
-    private String cmLabel(float mm){return cm(mm)+" cm";}
-    private String cm(float mm){return trim(String.format(Locale.US,"%.2f",mm/MM_PER_CM));}
+    private String cmLabel(float mm){return cm(mm)+" mm";}
+    private String cm(float mm){return trim(String.format(Locale.US,"%.2f",mm));}
     private static String trim(String s){while(s.contains(".")&&(s.endsWith("0")||s.endsWith("."))){s=s.substring(0,s.length()-1);}return s;}
     private static String format(float v){return trim(String.format(Locale.US,"%.1f",v));}
     private static float dist(PointF a,PointF b){return(float)Math.hypot(b.x-a.x,b.y-a.y);}
