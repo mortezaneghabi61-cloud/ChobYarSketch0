@@ -181,6 +181,10 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
                 .setNegativeButton("لغو",null).show();
     }
 
+    public void showRevolveTool(){startRevolve();}
+    public void showSweepTool(){startSweep();}
+    public void showLoftTool(){startLoft();}
+
     private void showRevolveAngle(Object profile,Object axis,boolean xAxis){
         EditText input=new EditText(getContext());input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);

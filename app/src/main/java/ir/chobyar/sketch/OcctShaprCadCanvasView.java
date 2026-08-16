@@ -79,9 +79,35 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
     }
 
     public void showShaprModelingToolsMenu(){
-        String[] items={"⬆ Extrude / Revolve / Sweep / Loft / Boolean","⌒ Chamfer / Fillet","▱ Shell","↕ Offset Face / Push-Pull","✥ Edge / Face Edit","⏱ History"};
+        String[] items={
+                "⬆ Extrude",
+                "⟳ Revolve",
+                "➜ Sweep",
+                "≋ Loft",
+                "∪ Union",
+                "− Subtract",
+                "∩ Intersect",
+                "⌒ Fillet",
+                "◩ Chamfer",
+                "▱ Shell",
+                "↕ Offset Face / Push-Pull",
+                "✥ Move / Rotate • Direct Edit",
+                "⏱ Design History"
+        };
         new AlertDialog.Builder(getContext()).setTitle("Tools • 3D").setItems(items,(d,w)->{
-            if(w==0)showSolidManager();else if(w<=4)showDirectManager();else showHistoryManager();
+            if(w==0)showInteractiveExtrude();
+            else if(w==1)showRevolveTool();
+            else if(w==2)showSweepTool();
+            else if(w==3)showLoftTool();
+            else if(w==4)startBooleanTool("UNION");
+            else if(w==5)startBooleanTool("SUBTRACT");
+            else if(w==6)startBooleanTool("INTERSECT");
+            else if(w==7)showSelectedFillet();
+            else if(w==8)showSelectedChamfer();
+            else if(w==9)showSelectedShell();
+            else if(w==10)showSelectedPushPull();
+            else if(w==11)showDirectManager();
+            else showHistoryManager();
         }).setNegativeButton("بستن",null).show();
     }
 

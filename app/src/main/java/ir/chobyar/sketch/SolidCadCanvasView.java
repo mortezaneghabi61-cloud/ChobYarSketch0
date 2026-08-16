@@ -208,6 +208,9 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         return body.name+" ساخته شد | Extrude = "+fmt(heightCm)+" cm";
     }
 
+    /** Selection-first Boolean entry used by the production adaptive toolbar. */
+    public void startBooleanTool(String operation){startBoolean(operation);}
+
     /** Live Shapr-style extrusion preview with drag slider and exact input. */
     public void showInteractiveExtrude(){
         ProfileData profile=profileFromSelection();
