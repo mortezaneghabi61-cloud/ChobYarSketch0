@@ -36,7 +36,7 @@ import java.util.Map;
  */
 public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
-    private enum Kind { FILLET, CHAMFER, PUSH_PULL, SHELL, MOVE, ROTATE }
+    private enum Kind { FILLET, CHAMFER, PUSH_PULL, SHELL, MOVE, ROTATE, SCALE, MIRROR, PATTERN }
 
     private static final class StableEdit {
         final int id;
@@ -59,7 +59,10 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                 case PUSH_PULL:return prefix+"Push/Pull • "+signedDual(value)+topologySuffix();
                 case SHELL:return prefix+"Shell • "+dual(value)+topologySuffix();
                 case MOVE:return prefix+"Move • X "+dual(vector.x)+" • Y "+dual(vector.y)+" • Z "+dual(vector.z);
-                default:return prefix+"Rotate "+axisName(vector)+" • "+num(value)+"°";
+                case ROTATE:return prefix+"Rotate "+axisName(vector)+" • "+num(value)+"°";
+                case SCALE:return prefix+"Scale • ×"+num(value);
+                case MIRROR:return prefix+"Mirror • plane "+axisName(vector);
+                default:return prefix+"Linear Pattern • "+(int)value+" copies • step "+dual(vector.length());
             }
         }
 
@@ -157,6 +160,9 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                 "▱ Shell — بازکردن Face انتخاب‌شده",
                 "↔ Move Body در X / Y / Z",
                 "⟳ Rotate Body حول X / Y / Z",
+                "⇲ Scale Body دقیق",
+                "⇋ Mirror حول صفحه مرکزی",
+                "⠿ Linear Pattern",
                 "⏱ History پارامتریک + OCCT",
                 "↶ Undo آخرین Direct Feature",
                 "⌘ ابزار Exact قبلی / Inspector"
@@ -172,8 +178,11 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                     else if(w==4)askFaceFeature(Kind.SHELL);
                     else if(w==5)showMoveDialog(null);
                     else if(w==6)showRotateAxis(null);
-                    else if(w==7)showHistoryManager();
-                    else if(w==8)toast(undoStable());
+                    else if(w==7)showScaleTool();
+                    else if(w==8)showMirrorTool();
+                    else if(w==9)showLinearPatternTool();
+                    else if(w==10)showHistoryManager();
+                    else if(w==11)toast(undoStable());
                     else OcctStableCadCanvasView.super.showDirectManager();
                 }).setNegativeButton("بستن",null).show();
     }
@@ -378,6 +387,37 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                 }).setNegativeButton("لغو",null).show();
     }
 
+    public void showScaleTool(){
+        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        EditText input=new EditText(getContext());input.setSingleLine();input.setText("1.25");input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(getContext()).setTitle("Scale Body • ضریب دقیق").setMessage("مثال: 2 یعنی دو برابر؛ 0.5 یعنی نصف")
+                .setView(input).setPositiveButton("اعمال",(d,w)->{try{double factor=Double.parseDouble(normalizeDigits(input.getText().toString()));
+                    if(factor<=1e-6)throw new IllegalArgumentException();recordStable(body,new StableEdit(directSerial++,Kind.SCALE,factor,null,null));}
+                    catch(Exception e){toast("ضریب Scale درست نیست");}}).setNegativeButton("لغو",null).show();
+    }
+
+    public void showMirrorTool(){
+        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        String[] planes={"YZ • برعکس‌کردن X","XZ • برعکس‌کردن Y","XY • برعکس‌کردن Z"};
+        new AlertDialog.Builder(getContext()).setTitle("Mirror Body • صفحه از مرکز Body").setItems(planes,(d,w)->{
+            Geometry3D.Vec3 normal=w==0?new Geometry3D.Vec3(1,0,0):w==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
+            recordStable(body,new StableEdit(directSerial++,Kind.MIRROR,0,normal,null));
+        }).setNegativeButton("لغو",null).show();
+    }
+
+    public void showLinearPatternTool(){
+        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
+        EditText x=axisInput(box,"Step X","50mm"),y=axisInput(box,"Step Y","0mm"),z=axisInput(box,"Step Z","0mm");
+        EditText count=axisInput(box,"تعداد نسخه‌ها","3");
+        new AlertDialog.Builder(getContext()).setTitle("Linear Pattern • OCCT Exact").setMessage("فاصله هر تکرار و تعداد کل نسخه‌ها")
+                .setView(box).setPositiveButton("ساخت",(d,w)->{try{Geometry3D.Vec3 step=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
+                    (float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
+                    int n=Integer.parseInt(normalizeDigits(count.getText().toString()).trim());if(step.length()<1e-8||n<2||n>256)throw new IllegalArgumentException();
+                    recordStable(body,new StableEdit(directSerial++,Kind.PATTERN,n,step,null));}catch(Exception e){toast("فاصله یا تعداد Pattern درست نیست");}})
+                .setNegativeButton("لغو",null).show();
+    }
+
     // ------------------------------------------------------------------
     // Stable feature recording / deterministic replay
     // ------------------------------------------------------------------
@@ -407,7 +447,10 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
             case PUSH_PULL:return NativeBRepKernel.occtPushPullFace(handle,anchor,edit.value);
             case SHELL:return NativeBRepKernel.occtShell(handle,anchor,edit.value);
             case MOVE:return NativeBRepKernel.occtTranslate(handle,edit.vector);
-            default:return NativeBRepKernel.occtRotate(handle,edit.vector,edit.value);
+            case ROTATE:return NativeBRepKernel.occtRotate(handle,edit.vector,edit.value);
+            case SCALE:return NativeBRepKernel.occtScale(handle,edit.value);
+            case MIRROR:return NativeBRepKernel.occtMirror(handle,edit.vector);
+            default:return NativeBRepKernel.occtLinearPattern(handle,edit.vector,(int)edit.value);
         }
     }
 
@@ -508,6 +551,14 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private void editParameter(StableEdit e){
         if(e.kind==Kind.MOVE){showMoveDialog(e);return;}
         if(e.kind==Kind.ROTATE){showRotateAxis(e);return;}
+        if(e.kind==Kind.MIRROR){toast("برای تغییر صفحه Mirror، Feature را حذف و دوباره بساز");return;}
+        if(e.kind==Kind.PATTERN){toast("ویرایش Pattern از پنل اختصاصی در مرحله بعد افزوده می‌شود");return;}
+        if(e.kind==Kind.SCALE){
+            EditText input=new EditText(getContext());input.setSingleLine();input.setText(num(e.value));input.setSelectAllOnFocus(true);
+            new AlertDialog.Builder(getContext()).setTitle("ویرایش Scale D"+e.id).setView(input).setPositiveButton("اعمال",(d,w)->{
+                try{double factor=Double.parseDouble(normalizeDigits(input.getText().toString()));if(factor<=1e-6)throw new IllegalArgumentException();e.value=factor;toast(rebuildAllStable());}
+                catch(Exception ex){toast("ضریب درست نیست");}}).setNegativeButton("لغو",null).show();return;
+        }
         boolean signed=e.kind==Kind.PUSH_PULL;
         askLength("ویرایش D"+e.id,e.target==null?"":e.target.shortLabel(),mmText(e.value),signed,v->{
             if(!signed&&v<=0){toast("مقدار باید مثبت باشد");return;}

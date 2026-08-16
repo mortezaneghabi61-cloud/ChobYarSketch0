@@ -65,7 +65,7 @@ public final class ChobYarActivity extends Activity {
         b.addView(tool("✎","Sketch",cad::showShaprSketchMenu));
         b.addView(tool("＋","Add",cad::showShaprModelingToolsMenu));
         b.addView(tool("◇","Construct",cad::showPlaneManager));
-        b.addView(tool("↗","Transform",()->status(cad.showTransformGizmo())));
+        b.addView(tool("↗","Transform",this::transformTools));
         b.addView(tool("⌁","Tools",this::tools));return b;
     }
 
@@ -131,6 +131,16 @@ public final class ChobYarActivity extends Activity {
             else if(w==2)cad.showDirectManager();else if(w==3)cad.showSmartConstraintMenu();
             else if(w==4)cad.showShaprSnappingOptions();else if(w==5)cad.showSketchMeasureInspector();else cad.showHistoryManager();
         }).show();
+    }
+
+    private void transformTools(){
+        String[] items={"↗ Move / Rotate","⇲ Scale","⇋ Mirror","⠿ Linear Pattern"};
+        new AlertDialog.Builder(this).setTitle("Transform").setItems(items,(d,w)->{
+            if(w==0)status(cad.showTransformGizmo());
+            else if(w==1)cad.showScaleTool();
+            else if(w==2)cad.showMirrorTool();
+            else cad.showLinearPatternTool();
+        }).setNegativeButton("بستن",null).show();
     }
 
     private void more(){

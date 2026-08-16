@@ -16,6 +16,7 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -29,6 +30,7 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepOffsetAPI_MakePipe.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
@@ -558,6 +560,44 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctRotate(
     }catch(...){return 0;}
 #else
     (void)handle;(void)ax;(void)ay;(void)az;(void)angleDeg;return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctScale(
+        JNIEnv*, jclass, jlong handle, jdouble factor) {
+#ifdef CHOBYAR_WITH_OCCT
+    TopoDS_Shape shape;if(!loadShape(handle,shape)||!std::isfinite(factor)||factor<=1.0e-6)return 0;
+    try {gp_Trsf tr;tr.SetScale(shapeCenter(shape),factor);BRepBuilderAPI_Transform op(shape,tr,true);op.Build();
+        if(!op.IsDone()||op.Shape().IsNull())return 0;return storeShape(op.Shape());}catch(...){return 0;}
+#else
+    (void)handle;(void)factor;return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctMirror(
+        JNIEnv*, jclass, jlong handle, jdouble nx, jdouble ny, jdouble nz) {
+#ifdef CHOBYAR_WITH_OCCT
+    TopoDS_Shape shape;if(!loadShape(handle,shape)||!validVector(nx,ny,nz))return 0;
+    try {gp_Trsf tr;tr.SetMirror(gp_Ax2(shapeCenter(shape),gp_Dir(nx,ny,nz)));BRepBuilderAPI_Transform op(shape,tr,true);op.Build();
+        if(!op.IsDone()||op.Shape().IsNull())return 0;return storeShape(op.Shape());}catch(...){return 0;}
+#else
+    (void)handle;(void)nx;(void)ny;(void)nz;return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctLinearPattern(
+        JNIEnv*, jclass, jlong handle, jdouble dx, jdouble dy, jdouble dz, jint count) {
+#ifdef CHOBYAR_WITH_OCCT
+    TopoDS_Shape shape;if(!loadShape(handle,shape)||!validVector(dx,dy,dz)||count<2||count>256)return 0;
+    try {BRep_Builder builder;TopoDS_Compound compound;builder.MakeCompound(compound);builder.Add(compound,shape);
+        for(jint i=1;i<count;i++){gp_Trsf tr;tr.SetTranslation(gp_Vec(dx*i,dy*i,dz*i));BRepBuilderAPI_Transform op(shape,tr,true);op.Build();
+            if(!op.IsDone()||op.Shape().IsNull())return 0;builder.Add(compound,op.Shape());}
+        return storeShape(compound);}catch(...){return 0;}
+#else
+    (void)handle;(void)dx;(void)dy;(void)dz;(void)count;return 0;
 #endif
 }
 

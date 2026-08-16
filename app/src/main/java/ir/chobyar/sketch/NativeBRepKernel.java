@@ -182,6 +182,21 @@ final class NativeBRepKernel {
         try{return nativeOcctRotate(handle,axis.x,axis.y,axis.z,angleDeg);}catch(Throwable t){return 0L;}
     }
 
+    static long occtScale(long handle,double factor){
+        if(!occtAvailable()||handle==0L||factor<=1e-6)return 0L;
+        try{return nativeOcctScale(handle,factor);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtMirror(long handle,Geometry3D.Vec3 normal){
+        if(!occtAvailable()||handle==0L||normal==null)return 0L;
+        try{return nativeOcctMirror(handle,normal.x,normal.y,normal.z);}catch(Throwable t){return 0L;}
+    }
+
+    static long occtLinearPattern(long handle,Geometry3D.Vec3 step,int count){
+        if(!occtAvailable()||handle==0L||step==null||count<2)return 0L;
+        try{return nativeOcctLinearPattern(handle,step.x,step.y,step.z,count);}catch(Throwable t){return 0L;}
+    }
+
     static double[] occtShapeStats(long handle){
         if(!occtAvailable()||handle==0L)return new double[0];
         try{return nativeOcctShapeStats(handle);}catch(Throwable t){return new double[0];}
@@ -246,6 +261,9 @@ final class NativeBRepKernel {
     private static native long nativeOcctShell(long handle,double ax,double ay,double az,double thickness);
     private static native long nativeOcctTranslate(long handle,double dx,double dy,double dz);
     private static native long nativeOcctRotate(long handle,double ax,double ay,double az,double angleDeg);
+    private static native long nativeOcctScale(long handle,double factor);
+    private static native long nativeOcctMirror(long handle,double nx,double ny,double nz);
+    private static native long nativeOcctLinearPattern(long handle,double dx,double dy,double dz,int count);
 
     private static native double[] nativeOcctShapeStats(long handle);
     private static native double[] nativeOcctTriangulate(long handle,double deflection);
