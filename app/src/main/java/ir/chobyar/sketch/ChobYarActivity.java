@@ -74,7 +74,7 @@ public final class ChobYarActivity extends Activity {
         LinearLayout b=card(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));
         b.addView(tool("⌨","اندازه",this::editDimension));
         b.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));
-        b.addView(tool("⬆","Extrude",cad::showShaprModelingToolsMenu));
+        b.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));
         b.addView(tool("⌁","More",this::tools));return b;
     }
 

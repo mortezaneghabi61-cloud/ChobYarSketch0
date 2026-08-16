@@ -11,6 +11,9 @@ import android.graphics.RectF;
 import android.text.InputType;
 import android.view.MotionEvent;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
@@ -90,6 +93,10 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private final Paint selectedWire = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint faceFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bodyText = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint extrudePreviewFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint extrudePreviewWire = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private SolidCSG extrudePreview;
+    private float extrudePreviewHeightMm = 20f;
 
     public SolidCadCanvasView(Context context) {
         super(context);
@@ -131,6 +138,11 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         bodyText.setColor(Color.rgb(35, 58, 88));
         bodyText.setTextSize(22f);
         bodyText.setTextAlign(Paint.Align.CENTER);
+        extrudePreviewFill.setColor(Color.argb(105,55,145,230));
+        extrudePreviewFill.setStyle(Paint.Style.FILL);
+        extrudePreviewWire.setColor(Color.rgb(0,105,210));
+        extrudePreviewWire.setStyle(Paint.Style.STROKE);
+        extrudePreviewWire.setStrokeWidth(3.2f);
     }
 
     // ------------------------------------------------------------------
@@ -191,6 +203,68 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         post(this::fitAll);
         invalidate();
         return body.name+" ساخته شد | Extrude = "+fmt(heightCm)+" cm";
+    }
+
+    /** Live Shapr-style extrusion preview with drag slider and exact input. */
+    public void showInteractiveExtrude(){
+        ProfileData profile=profileFromSelection();
+        if(profile==null||profile.points.size()<3){toast("اول یک سطح بسته را انتخاب کن");return;}
+        Geometry3D.Plane3D plane=planeForLayer(profile.layer);
+        setOverview(true);
+
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
+        int pad=Math.round(18f*getResources().getDisplayMetrics().density);box.setPadding(pad,pad/2,pad,pad/2);
+        TextView value=new TextView(getContext());value.setTextSize(18f);value.setTextColor(Color.rgb(30,45,65));
+        EditText exact=new EditText(getContext());exact.setSingleLine();exact.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        SeekBar slider=new SeekBar(getContext());slider.setMax(4000);slider.setProgress(2200);
+        box.addView(value);box.addView(slider);box.addView(exact);
+
+        final float[] height={20f};
+        Runnable refresh=()->{
+            float h=Math.abs(height[0])<.1f?(height[0]<0?-.1f:.1f):height[0];
+            height[0]=h;extrudePreviewHeightMm=h;
+            extrudePreview=SolidCSG.extrude(profile.points,plane,h);
+            value.setText("Extrude  "+fmt(h)+" mm  /  "+fmt(h/10f)+" cm");
+            exact.setText(fmt(h)+"mm");exact.setSelection(exact.length());
+            fitPreview();invalidate();
+        };
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int progress,boolean fromUser){if(fromUser){height[0]=(progress-2000)/10f;refresh.run();}}
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){}
+        });
+        refresh.run();
+
+        AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle("Extrude • پیش‌نمایش زنده")
+                .setMessage("نوار را بکش یا اندازه دقیق را با mm / cm وارد کن. مقدار منفی جهت حجم را برعکس می‌کند.")
+                .setView(box).setPositiveButton("ساخت",null).setNegativeButton("لغو",null).create();
+        dialog.setOnShowListener(x->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try{float mm=parseLengthInput(exact.getText().toString());clearExtrudePreview();dialog.dismiss();toast(extrudeSelectedBody(mm/10f));}
+                catch(Exception e){exact.setError("مثال: 20mm یا 2cm");}
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearExtrudePreview();dialog.dismiss();});
+        });
+        dialog.setOnCancelListener(x->clearExtrudePreview());dialog.show();
+    }
+
+    private float parseLengthInput(String raw){
+        String s=normalizeDigits(raw==null?"":raw).trim().toLowerCase(Locale.US).replace(" ","");
+        if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));
+        if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
+        return Float.parseFloat(s);
+    }
+
+    private void clearExtrudePreview(){extrudePreview=null;invalidate();}
+
+    private void fitPreview(){
+        if(extrudePreview==null||extrudePreview.isEmpty())return;
+        float minX=Float.POSITIVE_INFINITY,minY=Float.POSITIVE_INFINITY,minZ=Float.POSITIVE_INFINITY;
+        float maxX=Float.NEGATIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY,maxZ=Float.NEGATIVE_INFINITY;
+        for(SolidCSG.Polygon p:extrudePreview.polygons())for(SolidCSG.Vertex v:p.vertices){Geometry3D.Vec3 q=v.pos;
+            minX=Math.min(minX,q.x);minY=Math.min(minY,q.y);minZ=Math.min(minZ,q.z);
+            maxX=Math.max(maxX,q.x);maxY=Math.max(maxY,q.y);maxZ=Math.max(maxZ,q.z);}
+        final float a=minX,b=minY,c=minZ,d=maxX,e=maxY,f=maxZ;post(()->fitSpatialBounds(a,b,c,d,e,f));
     }
 
     public String sketchOnSelectedFace() {
@@ -401,7 +475,19 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if(is3DOverview())drawSolidBodies(canvas);
+        if(is3DOverview()){drawSolidBodies(canvas);drawExtrudePreview(canvas);}
+    }
+
+    private void drawExtrudePreview(Canvas canvas){
+        if(extrudePreview==null||extrudePreview.isEmpty())return;
+        RectF card=overviewCard();if(card==null||card.isEmpty())return;
+        canvas.save();canvas.clipRect(card);
+        for(SolidCSG.Polygon polygon:extrudePreview.polygons()){
+            List<PointF> points=new ArrayList<>();for(SolidCSG.Vertex vertex:polygon.vertices)points.add(project(vertex.pos));
+            Path shape=path(points);if(shape!=null){canvas.drawPath(shape,extrudePreviewFill);canvas.drawPath(shape,extrudePreviewWire);}
+        }
+        canvas.restore();
+        canvas.drawText("Extrude "+fmt(extrudePreviewHeightMm)+" mm",card.centerX(),card.bottom-72f,bodyText);
     }
 
     private void drawSolidBodies(Canvas canvas) {
