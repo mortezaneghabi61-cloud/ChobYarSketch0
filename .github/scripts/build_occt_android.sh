@@ -30,12 +30,16 @@ if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKMesh.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKOffset.so" \
    || ! -f "$OCCT_INSTALL/lib/libTKFillet.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKDESTEP.so" \
+   || ! -f "$OCCT_INSTALL/lib/libTKRWMesh.so" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepMesh_IncrementalMesh.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_MakePipe.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_ThruSections.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_MakeThickSolid.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeFillet.hxx" \
-   || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeChamfer.hxx" ]]; then
+   || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeChamfer.hxx" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/STEPControl_Writer.hxx" \
+   || ! -f "$OCCT_INSTALL/include/opencascade/StlAPI_Writer.hxx" ]]; then
   rm -rf "$OCCT_SRC" "$OCCT_BUILD" "$OCCT_INSTALL"
   git clone --filter=blob:none https://github.com/Open-Cascade-SAS/OCCT.git "$OCCT_SRC"
   git -C "$OCCT_SRC" checkout --detach "$OCCT_COMMIT"
@@ -57,7 +61,7 @@ if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
     -DBUILD_MODULE_ApplicationFramework=OFF \
     -DBUILD_MODULE_DataExchange=OFF \
     -DBUILD_MODULE_Draw=OFF \
-    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool;TKMesh;TKOffset;TKFillet" \
+    -DBUILD_ADDITIONAL_TOOLKITS="TKPrim;TKBool;TKMesh;TKOffset;TKFillet;TKDESTEP;TKRWMesh" \
     -DUSE_TK=OFF \
     -DUSE_FREETYPE=OFF \
     -DUSE_TBB=OFF \
