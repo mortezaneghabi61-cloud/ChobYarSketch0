@@ -1,6 +1,9 @@
 #include <jni.h>
+#include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <mutex>
 #include <sstream>
@@ -58,7 +61,6 @@
 #include <STEPControl_Writer.hxx>
 #include <STEPControl_StepModelType.hxx>
 #include <IFSelect_ReturnStatus.hxx>
-#include <StlAPI_Writer.hxx>
 #endif
 
 namespace {
@@ -663,8 +665,32 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctExport(
         if(shapes.empty())return JNI_FALSE;
         if(format==0){STEPControl_Writer writer;for(const TopoDS_Shape& shape:shapes)if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return JNI_FALSE;
             return writer.Write(path.c_str())==IFSelect_RetDone?JNI_TRUE:JNI_FALSE;}
-        BRep_Builder builder;TopoDS_Compound compound;builder.MakeCompound(compound);for(const TopoDS_Shape& shape:shapes)builder.Add(compound,shape);
-        StlAPI_Writer writer;writer.ASCIIMode()=Standard_False;writer.Write(compound,path.c_str());return JNI_TRUE;
+        // OCCT 8 removed the legacy StlAPI_Writer shape facade.  Emit a
+        // standards-compliant binary STL directly from OCCT face meshes so
+        // multi-body export stays deterministic and independent of UI meshes.
+        std::ofstream out(path,std::ios::binary|std::ios::trunc);if(!out)return JNI_FALSE;
+        char header[80]{};const char marker[]="ChobYar exact OCCT B-Rep STL";
+        std::copy(marker,marker+sizeof(marker)-1,header);out.write(header,sizeof(header));
+        const std::streampos countPos=out.tellp();std::uint32_t triangleCount=0;out.write(reinterpret_cast<const char*>(&triangleCount),sizeof(triangleCount));
+        for(const TopoDS_Shape& shape:shapes){
+            BRepMesh_IncrementalMesh mesher(shape,0.12,false,0.25,true);mesher.Perform();if(!mesher.IsDone())return JNI_FALSE;
+            for(TopExp_Explorer ex(shape,TopAbs_FACE);ex.More();ex.Next()){
+                const TopoDS_Face face=TopoDS::Face(ex.Current());TopLoc_Location location;
+                Handle(Poly_Triangulation) mesh=BRep_Tool::Triangulation(face,location);if(mesh.IsNull())continue;
+                const gp_Trsf transform=location.Transformation();
+                for(Standard_Integer i=1;i<=mesh->NbTriangles();++i){
+                    Standard_Integer n1=0,n2=0,n3=0;mesh->Triangle(i).Get(n1,n2,n3);if(face.Orientation()==TopAbs_REVERSED)std::swap(n2,n3);
+                    gp_Pnt p1=mesh->Node(n1),p2=mesh->Node(n2),p3=mesh->Node(n3);p1.Transform(transform);p2.Transform(transform);p3.Transform(transform);
+                    gp_Vec normal(p1,p2);normal.Cross(gp_Vec(p1,p3));if(normal.SquareMagnitude()>1e-24)normal.Normalize();
+                    const float record[12]={static_cast<float>(normal.X()),static_cast<float>(normal.Y()),static_cast<float>(normal.Z()),
+                        static_cast<float>(p1.X()),static_cast<float>(p1.Y()),static_cast<float>(p1.Z()),
+                        static_cast<float>(p2.X()),static_cast<float>(p2.Y()),static_cast<float>(p2.Z()),
+                        static_cast<float>(p3.X()),static_cast<float>(p3.Y()),static_cast<float>(p3.Z())};
+                    const std::uint16_t attribute=0;out.write(reinterpret_cast<const char*>(record),sizeof(record));out.write(reinterpret_cast<const char*>(&attribute),sizeof(attribute));++triangleCount;
+                }
+            }
+        }
+        if(!out||triangleCount==0)return JNI_FALSE;out.seekp(countPos);out.write(reinterpret_cast<const char*>(&triangleCount),sizeof(triangleCount));out.close();return out?JNI_TRUE:JNI_FALSE;
     }catch(...){return JNI_FALSE;}
 #else
     (void)env;(void)handles;(void)pathValue;(void)format;return JNI_FALSE;

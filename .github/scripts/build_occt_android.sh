@@ -38,8 +38,7 @@ if [[ ! -f "$OCCT_INSTALL/lib/libTKernel.so" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepOffsetAPI_MakeThickSolid.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeFillet.hxx" \
    || ! -f "$OCCT_INSTALL/include/opencascade/BRepFilletAPI_MakeChamfer.hxx" \
-   || ! -f "$OCCT_INSTALL/include/opencascade/STEPControl_Writer.hxx" \
-   || ! -f "$OCCT_INSTALL/include/opencascade/StlAPI_Writer.hxx" ]]; then
+   || ! -f "$OCCT_INSTALL/include/opencascade/STEPControl_Writer.hxx" ]]; then
   rm -rf "$OCCT_SRC" "$OCCT_BUILD" "$OCCT_INSTALL"
   git clone --filter=blob:none https://github.com/Open-Cascade-SAS/OCCT.git "$OCCT_SRC"
   git -C "$OCCT_SRC" checkout --detach "$OCCT_COMMIT"
