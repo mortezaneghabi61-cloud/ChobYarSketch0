@@ -200,6 +200,8 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     public void showSelectedFillet(){showEdgeFeaturePreview(Kind.FILLET);}
     public void showSelectedChamfer(){showEdgeFeaturePreview(Kind.CHAMFER);}
+    public void showSelectedPushPull(){showFaceFeaturePreview(Kind.PUSH_PULL);}
+    public void showSelectedShell(){showFaceFeaturePreview(Kind.SHELL);}
 
     private void showEdgeFeaturePreview(Kind kind){
         Object body=selectedBody();
@@ -239,6 +241,56 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         featurePreviewHandle=kind==Kind.FILLET
                 ?NativeBRepKernel.occtFillet(base,resolved.anchor,mm,false)
                 :NativeBRepKernel.occtChamfer(base,resolved.anchor,mm,false);
+        if(featurePreviewHandle!=0L)featurePreviewMesh=NativeBRepKernel.occtTriangulate(featurePreviewHandle,.24);
+        invalidate();
+    }
+
+    private void showFaceFeaturePreview(Kind kind){
+        Object body=selectedBody();SolidCSG.Polygon face=selectedFace();
+        if(body==null||face==null){toast("اول Face را لمس کن");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق آماده نیست");return;}
+        String id=nextTopologyId(body,OcctTopologyRef.FACE);
+        OcctTopologyRef.Ref ref=OcctTopologyRef.captureFace(recordHandle(record),face.centroid(),id);
+        if(ref==null){toast("Face دقیق پیدا نشد");return;}
+
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(6),dp(20),0);
+        TextView value=new TextView(getContext());value.setTextSize(18f);
+        SeekBar slider=new SeekBar(getContext());
+        EditText exact=new EditText(getContext());exact.setSingleLine();exact.setSelectAllOnFocus(true);
+        final double[] amount={kind==Kind.PUSH_PULL?10.0:2.0};
+        if(kind==Kind.PUSH_PULL){slider.setMax(4000);slider.setProgress(2100);exact.setText("10mm");}
+        else{slider.setMax(200);slider.setProgress(20);exact.setText("2mm");}
+        box.addView(value);box.addView(slider);box.addView(exact);
+        Runnable preview=()->{value.setText((kind==Kind.PUSH_PULL?"Offset  ":"Thickness  ")+num(amount[0])+" mm");updateFacePreview(record,ref,kind,amount[0]);};
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int progress,boolean fromUser){if(fromUser){amount[0]=kind==Kind.PUSH_PULL?(progress-2000)/10.0:Math.max(.1,progress/10.0);exact.setText(num(amount[0])+"mm");}}
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){preview.run();}
+        });
+        preview.run();
+        String title=kind==Kind.PUSH_PULL?"Offset Face / Push-Pull":"Shell";
+        AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle(title)
+                .setMessage(ref.id+" • پیش‌نمایش B-Rep دقیق").setView(box)
+                .setPositiveButton("Done",null).setNegativeButton("Cancel",null).create();
+        dialog.setOnShowListener(x->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try{double mm=parseLengthMm(exact.getText().toString());if(kind==Kind.SHELL)mm=Math.abs(mm);
+                    if(Math.abs(mm)<1e-8)throw new IllegalArgumentException();clearFeaturePreview();dialog.dismiss();
+                    recordStable(body,new StableEdit(directSerial++,kind,mm,null,ref));
+                }catch(Exception e){exact.setError(kind==Kind.PUSH_PULL?"مثال: -5mm یا 1cm":"مثال: 2mm");}
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearFeaturePreview();dialog.dismiss();});
+        });
+        dialog.setOnCancelListener(x->clearFeaturePreview());dialog.show();
+    }
+
+    private void updateFacePreview(Object record,OcctTopologyRef.Ref ref,Kind kind,double mm){
+        clearFeaturePreview();long base=recordHandle(record);if(base==0L||Math.abs(mm)<1e-8)return;
+        OcctTopologyRef.Resolution resolved=OcctTopologyRef.resolve(base,ref);
+        if(resolved==null||!resolved.confident())return;
+        featurePreviewHandle=kind==Kind.PUSH_PULL
+                ?NativeBRepKernel.occtPushPullFace(base,resolved.anchor,mm)
+                :NativeBRepKernel.occtShell(base,resolved.anchor,Math.abs(mm));
         if(featurePreviewHandle!=0L)featurePreviewMesh=NativeBRepKernel.occtTriangulate(featurePreviewHandle,.24);
         invalidate();
     }

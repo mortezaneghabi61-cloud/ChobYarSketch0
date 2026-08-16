@@ -85,7 +85,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
             adaptive.addView(tool("⌨","اندازه",this::editDimension));
         }else if("FACE".equals(k)){
-            adaptive.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));adaptive.addView(tool("⇧","Offset",cad::showDirectManager));
+            adaptive.addView(tool("⇧","Offset Face",cad::showSelectedPushPull));adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
             adaptive.addView(tool("▱","Sketch",()->status(cad.sketchOnSelectedFace())));
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
