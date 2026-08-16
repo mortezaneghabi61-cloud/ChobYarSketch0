@@ -311,6 +311,17 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         return combined;
     }
 
+    /** Writes every visible exact body as STEP (0) or binary STL (1). */
+    public synchronized boolean exportVisibleCad(String path,int format){
+        syncNativeHistory(false);List<Long> handles=new ArrayList<>();
+        for(Map.Entry<Object,NativeRecord> entry:nativeByBody.entrySet()){
+            Object visible=value(entry.getKey(),"visible");NativeRecord record=entry.getValue();
+            if(record!=null&&!Boolean.FALSE.equals(visible)&&record.handle!=0L)handles.add(record.handle);
+        }
+        long[] ids=new long[handles.size()];for(int i=0;i<ids.length;i++)ids[i]=handles.get(i);
+        return NativeBRepKernel.occtExport(ids,path,format);
+    }
+
     private boolean storeNative(Object body,long handle,String kind){
         if(body==null||handle==0L)return false;
         if(hasDirectEdits(body)){

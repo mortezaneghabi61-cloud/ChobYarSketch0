@@ -2,6 +2,7 @@ package ir.chobyar.sketch;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -18,13 +19,19 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+
 /** Single production workspace. No activity swapping and no reflection wiring. */
 public final class ChobYarActivity extends Activity {
+    private static final int REQUEST_EXPORT_CAD=1701;
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
     private LinearLayout adaptive;
     private TextView projectTitle;
     private TextView snapButton;
+    private File pendingCadExport;
 
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);immersive();
@@ -144,12 +151,34 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides"};
+        String[] x={"Items / Layers","Export STEP / STL","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)showItems();else if(w==1)setView("TOP");
-            else if(w==2)setView("FRONT");else if(w==3)setView("RIGHT");
-            else if(w==4)setView("ISO");else cad.showShaprSnappingOptions();
+            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2)setView("TOP");
+            else if(w==3)setView("FRONT");else if(w==4)setView("RIGHT");
+            else if(w==5)setView("ISO");else cad.showShaprSnappingOptions();
         }).show();
+    }
+
+    private void showCadExport(){
+        String[] formats={"STEP • مدل دقیق قابل ویرایش","STL • مناسب چاپ سه‌بعدی / CAM"};
+        new AlertDialog.Builder(this).setTitle("Export CAD").setItems(formats,(d,w)->exportCad(w)).setNegativeButton("لغو",null).show();
+    }
+
+    private void exportCad(int format){
+        String ext=format==0?"step":"stl";File file=new File(getCacheDir(),"ChobYar-Model."+ext);
+        if(!cad.exportVisibleCad(file.getAbsolutePath(),format)){toast("بدنه دقیق قابل خروجی وجود ندارد");return;}
+        pendingCadExport=file;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(format==0?"model/step":"model/stl");
+        intent.putExtra(Intent.EXTRA_TITLE,file.getName());startActivityForResult(intent,REQUEST_EXPORT_CAD);
+    }
+
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=REQUEST_EXPORT_CAD||resultCode!=RESULT_OK||data==null||data.getData()==null||pendingCadExport==null)return;
+        try(FileInputStream in=new FileInputStream(pendingCadExport);OutputStream out=getContentResolver().openOutputStream(data.getData())){
+            if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))>0)out.write(buffer,0,n);
+            out.flush();toast("فایل CAD ذخیره شد");
+        }catch(Exception e){toast("ذخیره فایل انجام نشد");}finally{pendingCadExport=null;}
     }
 
     private void setView(String view){cad.setStandardView(view);syncGpuCamera();}

@@ -213,6 +213,11 @@ final class NativeBRepKernel {
         try{return nativeOcctShapeSummary(handle);}catch(Throwable t){return "OCCT Shape summary failed";}
     }
 
+    static boolean occtExport(long[] handles,String path,int format){
+        if(!occtAvailable()||handles==null||handles.length==0||path==null)return false;
+        try{return nativeOcctExport(handles,path,format);}catch(Throwable t){return false;}
+    }
+
     static void occtRelease(long handle){
         if(!AVAILABLE||handle==0L)return;
         try{nativeOcctRelease(handle);}catch(Throwable ignored){}
@@ -267,6 +272,7 @@ final class NativeBRepKernel {
 
     private static native double[] nativeOcctShapeStats(long handle);
     private static native double[] nativeOcctTriangulate(long handle,double deflection);
+    private static native boolean nativeOcctExport(long[] handles,String path,int format);
     private static native String nativeOcctShapeSummary(long handle);
     private static native void nativeOcctRelease(long handle);
     private static native void nativeOcctClear();

@@ -55,6 +55,10 @@
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Vec.hxx>
+#include <STEPControl_Writer.hxx>
+#include <STEPControl_StepModelType.hxx>
+#include <IFSelect_ReturnStatus.hxx>
+#include <StlAPI_Writer.hxx>
 #endif
 
 namespace {
@@ -642,6 +646,28 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctTriangulate(
     } catch (...) { return emptyArray(env); }
 #else
     (void)handle;(void)deflection;return emptyArray(env);
+#endif
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctExport(
+        JNIEnv* env, jclass, jlongArray handles, jstring pathValue, jint format) {
+#ifdef CHOBYAR_WITH_OCCT
+    if(!handles||!pathValue)return JNI_FALSE;
+    const jsize count=env->GetArrayLength(handles);if(count<=0)return JNI_FALSE;
+    std::vector<jlong> ids(static_cast<size_t>(count));env->GetLongArrayRegion(handles,0,count,ids.data());
+    const char* raw=env->GetStringUTFChars(pathValue,nullptr);if(!raw)return JNI_FALSE;std::string path(raw);env->ReleaseStringUTFChars(pathValue,raw);
+    try {
+        std::vector<TopoDS_Shape> shapes;shapes.reserve(static_cast<size_t>(count));
+        for(jlong id:ids){TopoDS_Shape shape;if(loadShape(id,shape))shapes.push_back(shape);}
+        if(shapes.empty())return JNI_FALSE;
+        if(format==0){STEPControl_Writer writer;for(const TopoDS_Shape& shape:shapes)if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return JNI_FALSE;
+            return writer.Write(path.c_str())==IFSelect_RetDone?JNI_TRUE:JNI_FALSE;}
+        BRep_Builder builder;TopoDS_Compound compound;builder.MakeCompound(compound);for(const TopoDS_Shape& shape:shapes)builder.Add(compound,shape);
+        StlAPI_Writer writer;writer.ASCIIMode()=Standard_False;writer.Write(compound,path.c_str());return JNI_TRUE;
+    }catch(...){return JNI_FALSE;}
+#else
+    (void)env;(void)handles;(void)pathValue;(void)format;return JNI_FALSE;
 #endif
 }
 
