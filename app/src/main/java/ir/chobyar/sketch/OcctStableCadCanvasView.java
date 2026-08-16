@@ -10,6 +10,7 @@ import android.text.InputType;
 import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -94,12 +95,18 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private Object selectedEdgeBody;
 
     private final Paint stableEdgePaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint featurePreviewPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private long featurePreviewHandle=0L;
+    private double[] featurePreviewMesh=new double[0];
 
     public OcctStableCadCanvasView(Context context){
         super(context);
         stableEdgePaint.setColor(Color.rgb(0,115,210));
         stableEdgePaint.setStrokeWidth(9f);
         stableEdgePaint.setStrokeCap(Paint.Cap.ROUND);
+        featurePreviewPaint.setColor(Color.rgb(0,120,225));
+        featurePreviewPaint.setStrokeWidth(2.4f);
+        featurePreviewPaint.setStyle(Paint.Style.STROKE);
         initStableReflection();
     }
 
@@ -189,6 +196,56 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
             if(v<=0){toast("مقدار باید بزرگ‌تر از صفر باشد");return;}
             recordStable(body,new StableEdit(directSerial++,kind,v,null,selectedEdgeRef));
         });
+    }
+
+    public void showSelectedFillet(){showEdgeFeaturePreview(Kind.FILLET);}
+    public void showSelectedChamfer(){showEdgeFeaturePreview(Kind.CHAMFER);}
+
+    private void showEdgeFeaturePreview(Kind kind){
+        Object body=selectedBody();
+        if(body==null||selectedEdgeRef==null||selectedEdgeBody!=body){toast("اول Edge را لمس کن");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق آماده نیست");return;}
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(6),dp(20),0);
+        TextView value=new TextView(getContext());value.setTextSize(18f);
+        SeekBar slider=new SeekBar(getContext());slider.setMax(200);slider.setProgress(20);
+        EditText exact=new EditText(getContext());exact.setSingleLine();exact.setText("2mm");exact.setSelectAllOnFocus(true);
+        box.addView(value);box.addView(slider);box.addView(exact);
+        final double[] amount={2.0};
+        Runnable preview=()->{value.setText((kind==Kind.FILLET?"Radius  ":"Distance  ")+num(amount[0])+" mm");updateEdgePreview(record,kind,amount[0]);};
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int progress,boolean fromUser){if(fromUser){amount[0]=Math.max(.1,progress/10.0);exact.setText(num(amount[0])+"mm");}}
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){preview.run();}
+        });
+        preview.run();
+        AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle(kind==Kind.FILLET?"Fillet":"Chamfer")
+                .setMessage(selectedEdgeRef.id+" • پیش‌نمایش دقیق OCCT").setView(box)
+                .setPositiveButton("Done",null).setNegativeButton("Cancel",null).create();
+        dialog.setOnShowListener(x->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try{double mm=Math.abs(parseLengthMm(exact.getText().toString()));if(mm<=0)throw new IllegalArgumentException();
+                    clearFeaturePreview();dialog.dismiss();recordStable(body,new StableEdit(directSerial++,kind,mm,null,selectedEdgeRef));
+                }catch(Exception e){exact.setError("مثال: 2mm یا 0.2cm");}
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearFeaturePreview();dialog.dismiss();});
+        });
+        dialog.setOnCancelListener(x->clearFeaturePreview());dialog.show();
+    }
+
+    private void updateEdgePreview(Object record,Kind kind,double mm){
+        clearFeaturePreview();long base=recordHandle(record);if(base==0L)return;
+        OcctTopologyRef.Resolution resolved=OcctTopologyRef.resolve(base,selectedEdgeRef);
+        if(resolved==null||!resolved.confident())return;
+        featurePreviewHandle=kind==Kind.FILLET
+                ?NativeBRepKernel.occtFillet(base,resolved.anchor,mm,false)
+                :NativeBRepKernel.occtChamfer(base,resolved.anchor,mm,false);
+        if(featurePreviewHandle!=0L)featurePreviewMesh=NativeBRepKernel.occtTriangulate(featurePreviewHandle,.24);
+        invalidate();
+    }
+
+    private void clearFeaturePreview(){
+        if(featurePreviewHandle!=0L)NativeBRepKernel.occtRelease(featurePreviewHandle);
+        featurePreviewHandle=0L;featurePreviewMesh=new double[0];invalidate();
     }
 
     private void askFaceFeature(Kind kind){
@@ -444,6 +501,14 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         super.onDraw(canvas);
         if(is3DOverview()&&edgeA!=null&&edgeB!=null&&selectedEdgeBody==selectedBody()){
             PointF a=project(edgeA),b=project(edgeB);canvas.drawLine(a.x,a.y,b.x,b.y,stableEdgePaint);
+        }
+        if(is3DOverview()&&featurePreviewMesh.length>=9){
+            for(int i=0;i+8<featurePreviewMesh.length;i+=9){
+                PointF a=project(new Geometry3D.Vec3((float)featurePreviewMesh[i],(float)featurePreviewMesh[i+1],(float)featurePreviewMesh[i+2]));
+                PointF b=project(new Geometry3D.Vec3((float)featurePreviewMesh[i+3],(float)featurePreviewMesh[i+4],(float)featurePreviewMesh[i+5]));
+                PointF c=project(new Geometry3D.Vec3((float)featurePreviewMesh[i+6],(float)featurePreviewMesh[i+7],(float)featurePreviewMesh[i+8]));
+                canvas.drawLine(a.x,a.y,b.x,b.y,featurePreviewPaint);canvas.drawLine(b.x,b.y,c.x,c.y,featurePreviewPaint);canvas.drawLine(c.x,c.y,a.x,a.y,featurePreviewPaint);
+            }
         }
     }
 

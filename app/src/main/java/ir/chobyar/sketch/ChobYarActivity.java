@@ -82,7 +82,7 @@ public final class ChobYarActivity extends Activity {
     private void renderAdaptive(String kind){
         adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
         if("EDGE".equals(k)){
-            adaptive.addView(tool("⌒","Fillet",cad::showDirectManager));adaptive.addView(tool("／","Chamfer",cad::showDirectManager));
+            adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
             adaptive.addView(tool("⌨","اندازه",this::editDimension));
         }else if("FACE".equals(k)){
             adaptive.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));adaptive.addView(tool("⇧","Offset",cad::showDirectManager));
