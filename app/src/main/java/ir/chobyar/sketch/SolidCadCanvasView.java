@@ -38,6 +38,7 @@ import java.util.Map;
  * can replace SolidCSG later without changing the interaction model.
  */
 public class SolidCadCanvasView extends SpatialCadCanvasView {
+    private boolean gpuBodyRendering;
 
     private static final float LINE_JOIN_TOL_MM = 0.30f;
     private static final int CIRCLE_SEGMENTS = 56;
@@ -487,7 +488,24 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if(is3DOverview()){drawSolidBodies(canvas);drawExtrudePreview(canvas);}
+        if(is3DOverview()){
+            if(gpuBodyRendering)drawGpuSelection(canvas);else drawSolidBodies(canvas);
+            drawExtrudePreview(canvas);
+        }
+    }
+
+    public void setGpuBodyRendering(boolean enabled){gpuBodyRendering=enabled;invalidate();}
+
+    private void drawGpuSelection(Canvas canvas){
+        RectF card=overviewCard();if(card==null||card.isEmpty())return;
+        canvas.save();canvas.clipRect(card);
+        if(selectedFace!=null){
+            List<PointF> points=new ArrayList<>();for(SolidCSG.Vertex vertex:selectedFace.vertices)points.add(project(vertex.pos));
+            Path selectedPath=path(points);if(selectedPath!=null){canvas.drawPath(selectedPath,faceFill);canvas.drawPath(selectedPath,selectedWire);}
+        }
+        canvas.restore();
+        drawTopologySelection(canvas);
+        if(selectedBody!=null)canvas.drawText(selectedBody.name+(selectedFace!=null?" • Face انتخاب شد":" • Body انتخاب شد"),card.centerX(),card.top+58f,bodyText);
     }
 
     private void drawExtrudePreview(Canvas canvas){

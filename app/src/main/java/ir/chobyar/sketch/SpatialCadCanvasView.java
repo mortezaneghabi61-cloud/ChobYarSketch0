@@ -128,6 +128,24 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     public boolean is3DOverview() { return overview3D; }
 
+    /** Immutable camera contract shared with the Filament renderer. */
+    public static final class GpuCameraState {
+        public final boolean visible;
+        public final float yaw,pitch,scale,targetX,targetY,targetZ,panX,panY;
+        public final float left,top,right,bottom;
+        GpuCameraState(boolean visible,float yaw,float pitch,float scale,float targetX,float targetY,float targetZ,
+                       float panX,float panY,float left,float top,float right,float bottom){
+            this.visible=visible;this.yaw=yaw;this.pitch=pitch;this.scale=scale;
+            this.targetX=targetX;this.targetY=targetY;this.targetZ=targetZ;this.panX=panX;this.panY=panY;
+            this.left=left;this.top=top;this.right=right;this.bottom=bottom;
+        }
+    }
+
+    public GpuCameraState gpuCameraState(){
+        return new GpuCameraState(overview3D,cameraYaw,cameraPitch,spatialScale,cameraTargetX,cameraTargetY,cameraTargetZ,
+                cameraPanX,cameraPanY,overviewCard.left,overviewCard.top,overviewCard.right,overviewCard.bottom);
+    }
+
     public String setStandardView(String view) {
         overview3D=true;orbiting=false;navigating2D=false;cameraPanX=0f;cameraPanY=0f;
         String key=view==null?"ISO":view.toUpperCase(java.util.Locale.US);

@@ -296,11 +296,15 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
     public synchronized double[] gpuMesh(){
         syncNativeHistory(false);
         int length=0;
-        for(NativeRecord record:nativeByBody.values())if(record!=null)length+=record.mesh.length;
+        for(Map.Entry<Object,NativeRecord> entry:nativeByBody.entrySet()){
+            NativeRecord record=entry.getValue();Object visible=value(entry.getKey(),"visible");
+            if(record!=null&&!Boolean.FALSE.equals(visible))length+=record.mesh.length;
+        }
         if(length==0)return new double[0];
         double[] combined=new double[length];int offset=0;
-        for(NativeRecord record:nativeByBody.values()){
-            if(record==null||record.mesh.length==0)continue;
+        for(Map.Entry<Object,NativeRecord> entry:nativeByBody.entrySet()){
+            NativeRecord record=entry.getValue();Object visible=value(entry.getKey(),"visible");
+            if(record==null||record.mesh.length==0||Boolean.FALSE.equals(visible))continue;
             System.arraycopy(record.mesh,0,combined,offset,record.mesh.length);offset+=record.mesh.length;
         }
         return combined;

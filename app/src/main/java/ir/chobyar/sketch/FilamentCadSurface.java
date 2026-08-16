@@ -55,6 +55,8 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private int renderableEntity;
     private int meshHash;
     private int meshLength;
+    private int surfaceWidth,surfaceHeight;
+    private SpatialCadCanvasView.GpuCameraState cameraState;
 
     FilamentCadSurface(Context context) {
         super(context);
@@ -96,11 +98,34 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
             }
             @Override public void onResized(int width,int height) {
                 if(width<=0||height<=0)return;
-                view.setViewport(new com.google.android.filament.Viewport(0,0,width,height));
-                camera.setProjection(45.0,(double)width/(double)height,0.1,5000.0, Camera.Fov.VERTICAL);
+                surfaceWidth=width;surfaceHeight=height;applyCameraState();
             }
         });
         uiHelper.attachTo(this);
+    }
+
+    void setCameraState(SpatialCadCanvasView.GpuCameraState state){cameraState=state;applyCameraState();}
+
+    private void applyCameraState(){
+        SpatialCadCanvasView.GpuCameraState s=cameraState;
+        if(surfaceWidth<=0||surfaceHeight<=0||s==null)return;
+        int left=Math.max(0,Math.round(s.left)),top=Math.max(0,Math.round(s.top));
+        int right=Math.min(surfaceWidth,Math.round(s.right)),bottom=Math.min(surfaceHeight,Math.round(s.bottom));
+        int width=Math.max(1,right-left),height=Math.max(1,bottom-top);
+        view.setViewport(new com.google.android.filament.Viewport(left,Math.max(0,surfaceHeight-bottom),width,height));
+        setVisibility(s.visible?VISIBLE:INVISIBLE);
+        float pixelsPerUnit=Math.max(0.0001f,s.scale*Math.min(width,height)/260f);
+        double halfWidth=width/(2.0*pixelsPerUnit),halfHeight=height/(2.0*pixelsPerUnit);
+        camera.setProjection(Camera.Projection.ORTHO,-halfWidth,halfWidth,-halfHeight,halfHeight,0.1,100000.0);
+        camera.setShift(2.0*s.panX/width,-2.0*s.panY/height);
+
+        double yaw=Math.toRadians(s.yaw),pitch=Math.toRadians(s.pitch);
+        double sy=Math.sin(yaw),cy=Math.cos(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
+        double forwardX=sp*sy,forwardY=sp*cy,forwardZ=cp;
+        double upX=-sy*cp,upY=-cy*cp,upZ=sp;
+        double distance=10000.0;
+        camera.lookAt(s.targetX-forwardX*distance,s.targetY-forwardY*distance,s.targetZ-forwardZ*distance,
+                s.targetX,s.targetY,s.targetZ,upX,upY,upZ);
     }
 
     /** Uploads non-indexed OCCT triangles (xyz xyz xyz per triangle) to the GPU. */
@@ -138,8 +163,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
                 .geometry(0,RenderableManager.PrimitiveType.TRIANGLES,vertexBuffer,indexBuffer,0,vertexCount)
                 .culling(false).build(engine,renderableEntity);
         scene.addEntity(renderableEntity);
-        double radius=Math.max(1.0,Math.sqrt(hx*hx+hy*hy+hz*hz));
-        camera.lookAt(cx+radius*1.7,cy-radius*1.7,cz+radius*1.25,cx,cy,cz,0.0,0.0,1.0);
+        applyCameraState();
     }
 
     private void clearMesh(){

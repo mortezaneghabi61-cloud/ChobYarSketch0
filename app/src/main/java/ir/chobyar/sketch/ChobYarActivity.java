@@ -34,6 +34,7 @@ public final class ChobYarActivity extends Activity {
         cad.setStatusListener(this::status);
         cad.setDimensionEditListener(this::editDimension);
         cad.setWorkspaceListener(this::workspaceChanged);
+        cad.setOnTouchListener((v,event)->{cad.post(this::syncGpuCamera);return false;});
         root.addView(cad,new FrameLayout.LayoutParams(-1,-1));
         root.addView(topBar(),matchWrap(Gravity.TOP,8,7,8,0));
         root.addView(mainTools(),wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
@@ -68,7 +69,7 @@ public final class ChobYarActivity extends Activity {
     private View viewTools(){
         LinearLayout b=card(true);b.setPadding(dp(2),dp(3),dp(2),dp(3));
         Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(44),dp(44)));
-        b.addView(tool("◇","Fit",()->{cad.fitAll();status("Fit");}));
+        b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
         snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
         b.addView(tool("mm","Units",()->toast(cad.dualUnitSummary())));updateSnap();return b;
     }
@@ -83,7 +84,12 @@ public final class ChobYarActivity extends Activity {
         syncGpuMesh();
     }
 
-    private void syncGpuMesh(){if(gpuSurface!=null&&cad!=null)gpuSurface.setMesh(cad.gpuMesh());}
+    private void syncGpuMesh(){
+        if(gpuSurface==null||cad==null)return;
+        double[] mesh=cad.gpuMesh();gpuSurface.setMesh(mesh);cad.setGpuBodyRendering(mesh.length>=9);syncGpuCamera();
+    }
+
+    private void syncGpuCamera(){if(gpuSurface!=null&&cad!=null)gpuSurface.setCameraState(cad.gpuCameraState());}
 
     private void renderAdaptive(String kind){
         adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
@@ -126,11 +132,13 @@ public final class ChobYarActivity extends Activity {
     private void more(){
         String[] x={"Items / Layers","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)showItems();else if(w==1)cad.setStandardView("TOP");
-            else if(w==2)cad.setStandardView("FRONT");else if(w==3)cad.setStandardView("RIGHT");
-            else if(w==4)cad.setStandardView("ISO");else cad.showShaprSnappingOptions();
+            if(w==0)showItems();else if(w==1)setView("TOP");
+            else if(w==2)setView("FRONT");else if(w==3)setView("RIGHT");
+            else if(w==4)setView("ISO");else cad.showShaprSnappingOptions();
         }).show();
     }
+
+    private void setView(String view){cad.setStandardView(view);syncGpuCamera();}
 
     private void showItems(){
         String[] rows=cad.itemRows();
@@ -184,7 +192,7 @@ public final class ChobYarActivity extends Activity {
 
     private final class Cube extends View{
         Paint p=new Paint(1);Path a=new Path(),b=new Path(),c=new Path();int mode=0;
-        Cube(){super(ChobYarActivity.this);setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};cad.setStandardView(m[mode]);invalidate();});}
+        Cube(){super(ChobYarActivity.this);setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};setView(m[mode]);invalidate();});}
         @Override protected void onDraw(Canvas x){super.onDraw(x);float w=getWidth(),h=getHeight();p.setStrokeWidth(dp(1));p.setStyle(Paint.Style.FILL);
             a.reset();a.moveTo(w*.2f,h*.35f);a.lineTo(w*.5f,h*.17f);a.lineTo(w*.8f,h*.35f);a.lineTo(w*.5f,h*.53f);a.close();p.setColor(Color.rgb(231,237,245));x.drawPath(a,p);
             b.reset();b.moveTo(w*.2f,h*.35f);b.lineTo(w*.5f,h*.53f);b.lineTo(w*.5f,h*.84f);b.lineTo(w*.2f,h*.66f);b.close();p.setColor(Color.rgb(218,227,239));x.drawPath(b,p);
