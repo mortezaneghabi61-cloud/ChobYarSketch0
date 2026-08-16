@@ -391,7 +391,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         if(!bs.contains(f.outputBody))bs.add(f.outputBody);
         history.add(f);producerByBody.put(f.outputBody,f);
         setSelectedBody(f.outputBody);setSelectedFace(null);
-        String rebuilt=rebuildHistory();invalidate();
+        String rebuilt=rebuildHistory();post(this::fitAll);invalidate();
         return "Feature دوباره اجرا شد: "+f.kind+" • "+rebuilt;
     }
 
