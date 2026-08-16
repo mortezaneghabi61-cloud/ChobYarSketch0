@@ -71,16 +71,31 @@ public final class ChobYarActivity extends Activity {
     }
 
     private LinearLayout adaptiveTools(){
-        LinearLayout b=card(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));
-        b.addView(tool("⌨","اندازه",this::editDimension));
-        b.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));
-        b.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));
-        b.addView(tool("⌁","More",this::tools));return b;
+        LinearLayout b=card(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));return b;
     }
 
     private void workspaceChanged(String info,boolean exact,int tool){
         boolean selected=info!=null&&!info.trim().isEmpty()&&!info.startsWith("هیچ")&&!info.startsWith("اول");
-        if(adaptive!=null)adaptive.setVisibility(selected?View.VISIBLE:View.GONE);
+        if(adaptive!=null){if(selected)renderAdaptive(cad.selectionKind());adaptive.setVisibility(selected?View.VISIBLE:View.GONE);}
+    }
+
+    private void renderAdaptive(String kind){
+        adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
+        if("EDGE".equals(k)){
+            adaptive.addView(tool("⌒","Fillet",cad::showDirectManager));adaptive.addView(tool("／","Chamfer",cad::showDirectManager));
+            adaptive.addView(tool("⌨","اندازه",this::editDimension));
+        }else if("FACE".equals(k)){
+            adaptive.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));adaptive.addView(tool("⇧","Offset",cad::showDirectManager));
+            adaptive.addView(tool("▱","Sketch",()->status(cad.sketchOnSelectedFace())));
+        }else if("BODY".equals(k)){
+            adaptive.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
+            adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
+        }else if("VERTEX".equals(k)){
+            adaptive.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
+        }else{
+            adaptive.addView(tool("⌨","اندازه",this::editDimension));adaptive.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));
+        }
+        adaptive.addView(tool("⌁","More",this::tools));
     }
 
     private void search(){

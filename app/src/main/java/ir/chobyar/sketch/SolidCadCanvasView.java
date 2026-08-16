@@ -72,6 +72,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private int bodySerial = 1;
     private SolidBody selectedBody;
     private SolidCSG.Polygon selectedFace;
+    private Geometry3D.Vec3 selectedEdgeA,selectedEdgeB,selectedVertex;
 
     private Field selectedField;
     private Field selectedObjectsField;
@@ -195,6 +196,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         bodies.add(body);
         selectedBody=body;
         selectedFace=null;
+        clearSubSelection();
         setOverview(true);
         // A sketch can be heavily zoomed or panned. Reusing that camera made a
         // valid extrusion look enormous, clipped or completely off-screen.
@@ -321,7 +323,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     public String selectItem(int index){
         if(index<0||index>=bodies.size())return "Body پیدا نشد";
-        selectedBody=bodies.get(index);selectedFace=null;setOverview(true);invalidate();
+        selectedBody=bodies.get(index);selectedFace=null;clearSubSelection();setOverview(true);invalidate();
         return selectedBody.name+" انتخاب شد";
     }
 
@@ -383,10 +385,20 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     public String selectedInfo() {
         if(is3DOverview()&&selectedBody!=null){
             int faces=selectedBody.csg.polygons().size();
-            return selectedBody.name+" | "+faces+" Face"+(selectedFace!=null?" | Face انتخاب شده":"");
+            return selectedBody.name+" | "+faces+" Face | "+selectionKind();
         }
         return super.selectedInfo();
     }
+
+    public String selectionKind(){
+        if(selectedVertex!=null)return "VERTEX";
+        if(selectedEdgeA!=null&&selectedEdgeB!=null)return "EDGE";
+        if(selectedFace!=null)return "FACE";
+        if(selectedBody!=null)return "BODY";
+        return "SKETCH";
+    }
+
+    private void clearSubSelection(){selectedEdgeA=null;selectedEdgeB=null;selectedVertex=null;}
 
     // ------------------------------------------------------------------
     // UI dialogs
@@ -515,6 +527,13 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
             String t=selectedBody.name+(selectedFace!=null?" • Face انتخاب شد — Solid > Sketch on Face":" • برای Face روی سطح بزن");
             canvas.drawText(t,card.centerX(),card.top+58f,bodyText);
         }
+        drawTopologySelection(canvas);
+    }
+
+    private void drawTopologySelection(Canvas canvas){
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(Color.rgb(255,145,25));p.setStrokeWidth(6f);p.setStrokeCap(Paint.Cap.ROUND);
+        if(selectedEdgeA!=null&&selectedEdgeB!=null){PointF a=project(selectedEdgeA),b=project(selectedEdgeB);canvas.drawLine(a.x,a.y,b.x,b.y,p);}
+        if(selectedVertex!=null){PointF q=project(selectedVertex);p.setStyle(Paint.Style.FILL);canvas.drawCircle(q.x,q.y,9f*getResources().getDisplayMetrics().density,p);}
     }
 
     @Override
@@ -544,18 +563,37 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     private void pickFace(float sx,float sy) {
         SolidBody hitBody=null;SolidCSG.Polygon hitFace=null;float bestDepth=-Float.MAX_VALUE;
+        Geometry3D.Vec3 hitVertex=null,hitEdgeA=null,hitEdgeB=null;
+        SolidBody vertexBody=null,edgeBody=null;
+        float bestVertex=Float.MAX_VALUE,bestEdge=Float.MAX_VALUE;
+        float density=getResources().getDisplayMetrics().density;
         for(SolidBody body:bodies){
             if(!body.visible)continue;
             for(SolidCSG.Polygon p:body.csg.polygons()){
                 List<PointF> q=new ArrayList<>();float depth=0;
-                for(SolidCSG.Vertex v:p.vertices){q.add(project(v.pos));depth+=cameraDepth(v.pos);}
+                for(int i=0;i<p.vertices.size();i++){
+                    Geometry3D.Vec3 va=p.vertices.get(i).pos,vb=p.vertices.get((i+1)%p.vertices.size()).pos;
+                    PointF a=project(va),b=project(vb);q.add(a);depth+=cameraDepth(va);
+                    float vd=(float)Math.hypot(sx-a.x,sy-a.y);if(vd<bestVertex){bestVertex=vd;hitVertex=va;vertexBody=body;}
+                    float ed=distanceToSegment(sx,sy,a.x,a.y,b.x,b.y);if(ed<bestEdge){bestEdge=ed;hitEdgeA=va;hitEdgeB=vb;edgeBody=body;}
+                }
                 if(q.size()<3||!pointInPolygon(sx,sy,q))continue;
                 depth/=q.size();
                 if(depth>bestDepth){bestDepth=depth;hitBody=body;hitFace=p;}
             }
         }
-        selectedBody=hitBody;selectedFace=hitFace;invalidate();dispatchWorkspaceState();
-        if(hitBody!=null)toast(hitBody.name+" • Face انتخاب شد");
+        selectedBody=hitBody;selectedFace=null;clearSubSelection();
+        if(hitVertex!=null&&bestVertex<=14f*density){selectedBody=vertexBody;selectedVertex=hitVertex;}
+        else if(hitEdgeA!=null&&bestEdge<=12f*density){selectedBody=edgeBody;selectedEdgeA=hitEdgeA;selectedEdgeB=hitEdgeB;}
+        else selectedFace=hitFace;
+        invalidate();dispatchWorkspaceState();
+        if(hitBody!=null)toast(hitBody.name+" • "+selectionKind()+" انتخاب شد");
+    }
+
+    private static float distanceToSegment(float px,float py,float ax,float ay,float bx,float by){
+        float dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;if(l2<1e-8f)return(float)Math.hypot(px-ax,py-ay);
+        float t=Math.max(0f,Math.min(1f,((px-ax)*dx+(py-ay)*dy)/l2));
+        return(float)Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
     }
 
     private static Path path(List<PointF> p) {
