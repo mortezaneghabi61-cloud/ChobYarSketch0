@@ -586,9 +586,17 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         if(hitVertex!=null&&bestVertex<=14f*density){selectedBody=vertexBody;selectedVertex=hitVertex;}
         else if(hitEdgeA!=null&&bestEdge<=12f*density){selectedBody=edgeBody;selectedEdgeA=hitEdgeA;selectedEdgeB=hitEdgeB;}
         else selectedFace=hitFace;
+        Geometry3D.Vec3 anchor=selectedVertex!=null?selectedVertex
+                :selectedEdgeA!=null?selectedEdgeA.add(selectedEdgeB).mul(.5f)
+                :selectedFace!=null?selectedFace.centroid():null;
+        onTopologyPicked(selectedBody,selectionKind(),anchor,selectedEdgeA,selectedEdgeB);
         invalidate();dispatchWorkspaceState();
         if(hitBody!=null)toast(hitBody.name+" • "+selectionKind()+" انتخاب شد");
     }
+
+    /** Exact-kernel layers override this to bind the visual hit to B-Rep topology. */
+    protected void onTopologyPicked(Object body,String kind,Geometry3D.Vec3 anchor,
+                                    Geometry3D.Vec3 edgeStart,Geometry3D.Vec3 edgeEnd){}
 
     private static float distanceToSegment(float px,float py,float ax,float ay,float bx,float by){
         float dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;if(l2<1e-8f)return(float)Math.hypot(px-ax,py-ay);

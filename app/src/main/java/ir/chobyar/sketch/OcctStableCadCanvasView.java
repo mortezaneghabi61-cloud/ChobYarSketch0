@@ -464,6 +464,19 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     }
 
     @Override
+    protected void onTopologyPicked(Object body,String kind,Geometry3D.Vec3 anchor,
+                                    Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB){
+        if(body==null||!"EDGE".equals(kind)||anchor==null||selectedA==null||selectedB==null){
+            selectedEdgeRef=null;selectedEdgeBody=null;edgeA=edgeB=edgeAnchor=null;return;
+        }
+        Object record=ensureNativeRecord(body);if(record==null)return;
+        String id=nextTopologyId(body,OcctTopologyRef.EDGE);
+        OcctTopologyRef.Ref ref=OcctTopologyRef.captureEdge(recordHandle(record),anchor,selectedA,selectedB,id);
+        if(ref==null)return;
+        edgeA=selectedA;edgeB=selectedB;edgeAnchor=anchor;selectedEdgeRef=ref;selectedEdgeBody=body;
+    }
+
+    @Override
     public String selectedInfo(){
         String base=super.selectedInfo();
         if(selectedEdgeRef!=null&&selectedEdgeBody==selectedBody())return base+" | "+selectedEdgeRef.id;

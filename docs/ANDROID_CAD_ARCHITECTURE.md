@@ -1,8 +1,8 @@
 # ChobYar 3D — Android CAD architecture
 
-This document is the implementation contract for the production rewrite. It is
-based on mobile CAD practice documented by Chinese CAD vendors and Open CASCADE,
-then mapped to the interaction model of Shapr3D without using its name or assets.
+This document is the implementation contract for an independent Android CAD
+product that reproduces the complete modeling workflow and interaction quality
+of the reference iPad product without using its code, name, assets or private data.
 
 ## Non-negotiable product behavior
 
@@ -29,7 +29,14 @@ then mapped to the interaction model of Shapr3D without using its name or assets
 - G2: constrained sketch with editable dimensions and closed-profile detection.
 - G3: complete feature history with stable topology references and redo.
 - G4: save/open plus STEP, STL, OBJ and DXF import/export.
-- G5: GPU renderer, section view, materials and woodworking presets.
+- G5: GPU renderer, section view, materials, drawings and production readiness.
+
+## Scope lock
+
+Until parity is reached, no product-specific or trade-specific features are
+added. Tool availability, adaptive UI, gestures, selection precedence, history
+behavior and modeling results follow the reference workflow. Independent naming,
+visual assets and implementation are mandatory.
 
 ## Current migration rule
 
