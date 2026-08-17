@@ -73,7 +73,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
         pointPaint.setStyle(Paint.Style.FILL);
         pointPaint.setColor(Color.rgb(242,135,36));
         textPaint.setColor(Color.rgb(35,80,160));
-        textPaint.setTextSize(16f * getResources().getDisplayMetrics().scaledDensity);
+        textPaint.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
         textPaint.setTextAlign(Paint.Align.CENTER);
     }
 
@@ -261,7 +261,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
         PointF center=screen(e.cx,e.cy),ma=screen(ellipseAxisPoint(e,true)),mi=screen(ellipseAxisPoint(e,false));
         c.drawLine(center.x,center.y,ma.x,ma.y,guidePaint);c.drawLine(center.x,center.y,mi.x,mi.y,guidePaint);
         dot(c,center);dot(c,ma);dot(c,mi);
-        c.drawText("Major "+dual(e.rx*2f),ma.x,ma.y-14f,textPaint);c.drawText("Minor "+dual(e.ry*2f),mi.x,mi.y-14f,textPaint);
+        c.drawText(dual(e.rx*2f),ma.x,ma.y-10f,textPaint);c.drawText(dual(e.ry*2f),mi.x,mi.y-10f,textPaint);
     }
 
     private void drawSplineHandles(Canvas c,SplineParam s){

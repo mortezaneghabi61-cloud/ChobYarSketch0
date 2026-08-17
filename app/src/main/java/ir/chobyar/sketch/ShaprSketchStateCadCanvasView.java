@@ -132,17 +132,18 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
         List<Object> selected = selection();
         for (Object e : entities()) {
             if (!isSketchEntity(e) || !isVisible(e)) continue;
+            boolean isSelected=containsIdentity(selected,e);
             int color = isGeometryError(e) ? ERROR
-                    : containsIdentity(selected, e) ? SELECTED
+                    : isSelected ? SELECTED
                     : isLocked(e) ? FULLY_DEFINED
                     : UNDER_DEFINED;
             statePaint.setColor(color);
             pointPaint.setColor(color);
-            drawEntityOverlay(c, e, k, ox, oy);
+            drawEntityOverlay(c, e, k, ox, oy, isSelected);
         }
     }
 
-    private void drawEntityOverlay(Canvas c, Object e, float k, float ox, float oy) {
+    private void drawEntityOverlay(Canvas c, Object e, float k, float ox, float oy, boolean handles) {
         String type = e.getClass().getSimpleName();
         if ("LineEntity".equals(type)) {
             c.drawLine(sx(num(e,"x1"),k,ox), sy(num(e,"y1"),k,oy),
@@ -165,26 +166,27 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
             return;
         }
         if ("RectEntity".equals(type)) {
-            drawPath(c, pointArray(e,"p"), true, k, ox, oy);
+            drawPath(c, pointArray(e,"p"), true, k, ox, oy, handles);
             return;
         }
         if ("PolygonEntity".equals(type)) {
-            drawPath(c, points(e,"points"), true, k, ox, oy);
+            drawPath(c, points(e,"points"), true, k, ox, oy, handles);
             return;
         }
         if ("PolylineEntity".equals(type)) {
-            drawPath(c, points(e,"points"), bool(e,"closed"), k, ox, oy);
+            drawPath(c, points(e,"points"), bool(e,"closed"), k, ox, oy, handles);
         }
     }
 
-    private void drawPath(Canvas c,List<PointF> p,boolean closed,float k,float ox,float oy){
+    private void drawPath(Canvas c,List<PointF> p,boolean closed,float k,float ox,float oy,boolean handles){
         if(p==null||p.size()<2)return;
         for(int i=1;i<p.size();i++){
             PointF a=p.get(i-1),b=p.get(i);
             c.drawLine(sx(a.x,k,ox),sy(a.y,k,oy),sx(b.x,k,ox),sy(b.y,k,oy),statePaint);
         }
         if(closed&&p.size()>2){PointF a=p.get(p.size()-1),b=p.get(0);c.drawLine(sx(a.x,k,ox),sy(a.y,k,oy),sx(b.x,k,ox),sy(b.y,k,oy),statePaint);}
-        for(PointF q:p)drawPoint(c,q.x,q.y,k,ox,oy);
+        // Dense sampled curves are implementation detail, not editable points.
+        if(handles&&p.size()<=24)for(PointF q:p)drawPoint(c,q.x,q.y,k,ox,oy);
     }
 
     private void drawPoint(Canvas c,float x,float y,float k,float ox,float oy){

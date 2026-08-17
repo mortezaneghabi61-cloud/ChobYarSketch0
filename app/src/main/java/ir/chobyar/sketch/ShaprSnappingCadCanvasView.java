@@ -52,6 +52,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
     private boolean autoConstraining = true;
 
     private PointF gestureStart;
+    private PointF lastPointerWorld;
     private SnapCandidate lastCandidate;
     private final List<GuideLine> activeGuides = new ArrayList<>();
 
@@ -180,6 +181,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
 
         if (sketchGesture && isSnapEnabled()) {
             PointF raw = world(event.getX(), event.getY());
+            lastPointerWorld = raw;
             SnapCandidate c = findBestSnap(raw, action != MotionEvent.ACTION_DOWN);
             lastCandidate = c;
             if (c != null) {
@@ -212,6 +214,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                 activeGuides.clear();
             }
             gestureStart = null;
+            lastPointerWorld = null;
         }
         return handled;
     }
@@ -233,8 +236,11 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (snapSketchGuidepoints && showGuidepoints) drawAllGuidepoints(canvas);
-        if (snapSketchGuidelines) drawActiveGuidelines(canvas);
+        // Guides are transient drawing aids, never permanent model geometry.
+        if (isSketchCreationGesture() && gestureStart != null) {
+            if (snapSketchGuidepoints && showGuidepoints) drawNearbyGuidepoints(canvas);
+            if (snapSketchGuidelines) drawActiveGuidelines(canvas);
+        }
         if (showHints && lastCandidate != null) drawHint(canvas, lastCandidate);
     }
 
@@ -262,6 +268,9 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
             float px = screenDistance(raw, g);
             if (px <= 15f * density()) best = better(best, new SnapCandidate(g, "Grid", 1, px));
         }
+        // Candidate searches can discover many collinear entities. Only one
+        // visual guide is useful; painting all candidates creates a starburst.
+        if(activeGuides.size()>1){GuideLine keep=activeGuides.get(activeGuides.size()-1);activeGuides.clear();activeGuides.add(keep);}
         return best;
     }
 
@@ -435,7 +444,8 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
         return best;
     }
 
-    private void drawAllGuidepoints(Canvas canvas) {
+    private void drawNearbyGuidepoints(Canvas canvas) {
+        if(lastPointerWorld==null)return;int painted=0;
         try {
             for (Object e : entities()) {
                 Method m = findMethod(e.getClass(), "snapPoints");
@@ -445,10 +455,12 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                 for (Object sp : (List<?>) v) {
                     Float x = number(sp, "x"), y = number(sp, "y");
                     if (x == null || y == null) continue;
+                    if(screenDistance(lastPointerWorld,new PointF(x,y))>64f*density())continue;
                     PointF p = screen(x, y);
                     float r = 2.5f * density();
                     canvas.drawCircle(p.x, p.y, r, guidePointFill);
                     canvas.drawCircle(p.x, p.y, r, guidePointPaint);
+                    if(++painted>=12)return;
                 }
             }
         } catch (Exception ignored) {
