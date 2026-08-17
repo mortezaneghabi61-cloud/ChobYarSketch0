@@ -1,5 +1,8 @@
 name: Build APK
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -59,3 +62,14 @@ jobs:
         with:
           name: ChobYarSketch0-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish installable APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ChobYar3D.apk
+          gh release create "android-${{ github.run_number }}" ChobYar3D.apk \
+            --target "${{ github.sha }}" \
+            --title "ChobYar 3D Android ${{ env.CHOBYAR_VERSION_NAME }}" \
+            --notes "Automated Android CAD build from commit ${{ github.sha }}" \
+            --prerelease
