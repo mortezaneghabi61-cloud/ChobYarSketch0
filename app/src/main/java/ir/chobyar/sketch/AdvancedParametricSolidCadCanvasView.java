@@ -2,9 +2,17 @@ package ir.chobyar.sketch;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PointF;
+import android.graphics.RectF;
 import android.text.InputType;
+import android.view.MotionEvent;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Constructor;
@@ -46,16 +54,21 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object axisEntity;
         final boolean xAxis;
         float angleDeg;
-        RevolveFeature(int id,Object profile,Geometry3D.Plane3D plane,Object axis,boolean xAxis,float angleDeg){
-            super(id,"Revolve");this.profileEntity=profile;this.profilePlane=plane;this.axisEntity=axis;this.xAxis=xAxis;this.angleDeg=angleDeg;
+        float heightMm;
+        RevolveFeature(int id,Object profile,Geometry3D.Plane3D plane,Object axis,boolean xAxis,float angleDeg,float heightMm){
+            super(id,"Revolve");this.profileEntity=profile;this.profilePlane=plane;this.axisEntity=axis;this.xAxis=xAxis;this.angleDeg=angleDeg;this.heightMm=heightMm;
             sourceEntities.add(profile);if(axis!=null)sourceEntities.add(axis);
         }
-        @Override String detail(){return "Revolve • "+fmt(angleDeg)+"°"+(axisEntity!=null?" • محور خط":" • محور "+(xAxis?"X":"Y"))+(broken?" • ⚠":"");}
+        @Override String detail(){
+            String thread=Math.abs(heightMm)<1e-5f?"":" • H "+fmt(heightMm)+" mm • "+fmt(Math.abs(angleDeg)/360f)+" دور • Pitch "+fmt(pitchMm())+" mm";
+            return "Revolve • "+fmt(angleDeg)+"°"+thread+(axisEntity!=null?" • محور خط":" • محور "+(xAxis?"X":"Y"))+(broken?" • ⚠":"");
+        }
+        float pitchMm(){float turns=Math.abs(angleDeg)/360f;return turns<1e-5f?0f:Math.abs(heightMm)/turns;}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile p=o.profile(profileEntity);if(p==null)return null;
             Axis3D axis=o.axisFor(axisEntity,profilePlane,xAxis);if(axis==null)return null;
-            int steps=Math.max(12,Math.min(128,(int)Math.ceil(Math.abs(angleDeg)/5f)));
-            return SolidCSG.revolve(p.points,profilePlane,axis.origin,axis.direction,angleDeg,steps);
+            int steps=o.revolveSteps(angleDeg,heightMm,p.points.size());
+            return SolidCSG.helicalRevolve(p.points,profilePlane,axis.origin,axis.direction,angleDeg,heightMm,steps);
         }
     }
 
@@ -98,6 +111,24 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private final List<FormFeature> formHistory=new ArrayList<>();
     private int formSerial=1;
     private boolean rebuildingForms=false;
+    private Object interactiveRevolveProfile;
+    private Object interactiveRevolveAxis;
+    private boolean interactiveRevolveXAxis;
+    private float interactiveRevolveAngle=360f;
+    private float interactiveRevolveHeightMm=0f;
+    private boolean interactiveRevolveActive;
+
+    private final Paint revolveRingPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint revolveHeightPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint revolveHandleFill=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint revolveTextPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private PointF revolveRingCenterScreen;
+    private final List<PointF> revolveRingScreen=new ArrayList<>();
+    private PointF revolveHeightBaseScreen,revolveHeightTipScreen;
+    private int revolveDragMode;
+    private boolean revolveDragMoved;
+    private float revolveDragStartX,revolveDragStartY,revolveDragStartAngle,revolveDragStartHeight;
+    private float revolveHeightPixelsPerMm=3f;
 
     private Field selectedField;
     private Field selectedObjectsField;
@@ -115,6 +146,12 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public AdvancedParametricSolidCadCanvasView(Context context){
         super(context);
         initFormReflection();
+        float density=getResources().getDisplayMetrics().density;
+        revolveRingPaint.setColor(Color.rgb(31,111,235));revolveRingPaint.setStyle(Paint.Style.STROKE);revolveRingPaint.setStrokeWidth(2.5f*density);
+        revolveRingPaint.setStrokeCap(Paint.Cap.ROUND);revolveRingPaint.setStrokeJoin(Paint.Join.ROUND);
+        revolveHeightPaint.setColor(Color.rgb(29,145,255));revolveHeightPaint.setStyle(Paint.Style.STROKE);revolveHeightPaint.setStrokeWidth(3f*density);revolveHeightPaint.setStrokeCap(Paint.Cap.ROUND);
+        revolveHandleFill.setColor(Color.WHITE);revolveHandleFill.setStyle(Paint.Style.FILL);
+        revolveTextPaint.setColor(Color.rgb(29,88,170));revolveTextPaint.setTextSize(13f*density);revolveTextPaint.setTextAlign(Paint.Align.CENTER);
     }
 
     private void initFormReflection(){
@@ -194,6 +231,73 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public void showSweepTool(){startSweep();}
     public void showLoftTool(){startLoft();}
 
+    public String beginInteractiveRevolveSession(){
+        List<Object> selected=selection();Object profile=null,axis=null;
+        for(Object e:selected){
+            if(isClosedProfile(e)&&profile==null)profile=e;
+            else if(isLine(e)&&axis==null)axis=e;
+        }
+        if(profile==null){
+            AutoProfile auto=autoProfile(selected,true);
+            if(auto!=null){profile=auto.profile;axis=auto.axis;}
+        }
+        if(profile==null)return "پروفایل بسته پیدا نشد؛ داخل مقطع یا یک خط از محیطش را انتخاب کن";
+        interactiveRevolveProfile=profile;interactiveRevolveAxis=axis;interactiveRevolveXAxis=false;
+        interactiveRevolveAngle=360f;interactiveRevolveHeightMm=0f;interactiveRevolveActive=true;showModelOverview();
+        if(!refreshInteractiveRevolve(true)){clearInteractiveRevolve();return "Revolve نتوانست پیش‌نمایش بسازد؛ محور نباید از داخل پروفایل بگذرد";}
+        dispatchWorkspaceState();
+        return "Revolve • 360° • Height 0 mm • برای رزوه Height و چند دور را وارد کن";
+    }
+
+    public boolean isInteractiveRevolveActive(){return interactiveRevolveActive;}
+
+    public String commitInteractiveRevolve(){
+        if(!interactiveRevolveActive)return "Revolve فعال نیست";
+        Object profile=interactiveRevolveProfile,axis=interactiveRevolveAxis;boolean xAxis=interactiveRevolveXAxis;
+        float angle=interactiveRevolveAngle,height=interactiveRevolveHeightMm;clearInteractiveRevolve();
+        String result=createRevolve(profile,axis,xAxis,angle,height);dispatchWorkspaceState();return result;
+    }
+
+    public void cancelInteractiveRevolve(){clearInteractiveRevolve();dispatchWorkspaceState();}
+
+    public void showInteractiveRevolveAngleEditor(){
+        if(!interactiveRevolveActive)return;
+        LinearLayout box=revolveInputs(interactiveRevolveAngle,interactiveRevolveHeightMm);
+        EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
+        new AlertDialog.Builder(getContext()).setTitle("Revolve • Angle + Height")
+                .setMessage("Height=0 دوران عادی است. برای رزوه: Angle=360×تعداد دور و Height=گام×تعداد دور.")
+                .setView(box).setPositiveButton("اعمال",(d,w)->{
+                    try{
+                        float value=parseAngle(angle),lead=parseMillimeters(height);
+                        validateRevolve(value,lead);
+                        interactiveRevolveAngle=value;interactiveRevolveHeightMm=lead;
+                        if(!refreshInteractiveRevolve(true))toast("این زاویه برای پروفایل فعلی معتبر نیست");
+                    }catch(Exception e){toast("زاویه/ارتفاع درست نیست • مثال رزوه 10 دور: 3600° و 25.2 mm");}
+                }).setNegativeButton("لغو",null).show();
+    }
+
+    public String interactiveRevolveSummary(){
+        if(!interactiveRevolveActive)return "Revolve";
+        float turns=Math.abs(interactiveRevolveAngle)/360f;
+        if(Math.abs(interactiveRevolveHeightMm)<1e-5f)return "Revolve  "+fmt(interactiveRevolveAngle)+"°";
+        float pitch=turns<1e-5f?0f:Math.abs(interactiveRevolveHeightMm)/turns;
+        return fmt(interactiveRevolveAngle)+"°  •  H "+fmt(interactiveRevolveHeightMm)+" mm  •  P "+fmt(pitch)+" mm";
+    }
+
+    private boolean refreshInteractiveRevolve(boolean fit){
+        Profile p=profile(interactiveRevolveProfile);if(p==null)return false;
+        Axis3D axis=axisFor(interactiveRevolveAxis,p.plane,interactiveRevolveXAxis);if(axis==null)return false;
+        int steps=revolveSteps(interactiveRevolveAngle,interactiveRevolveHeightMm,p.points.size());
+        SolidCSG preview=SolidCSG.helicalRevolve(p.points,p.plane,axis.origin,axis.direction,interactiveRevolveAngle,interactiveRevolveHeightMm,steps);
+        if(preview==null||preview.isEmpty())return false;
+        setFormPreview(preview,interactiveRevolveSummary(),fit);dispatchWorkspaceState();return true;
+    }
+
+    private void clearInteractiveRevolve(){
+        interactiveRevolveActive=false;interactiveRevolveProfile=null;interactiveRevolveAxis=null;interactiveRevolveHeightMm=0f;
+        revolveRingScreen.clear();revolveRingCenterScreen=null;revolveHeightBaseScreen=null;revolveHeightTipScreen=null;revolveDragMode=0;clearFormPreview();
+    }
+
     @Override public void showInteractiveExtrude(){
         if(!hasSelectedClosedProfile()){
             AutoProfile auto=autoProfile(selection(),false);
@@ -203,28 +307,186 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     }
 
     private void showRevolveAngle(Object profile,Object axis,boolean xAxis){
-        EditText input=new EditText(getContext());input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
-        input.setText("360");input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(getContext()).setTitle("Revolve • زاویه")
-                .setMessage("360° برای دوران کامل. زاویه کمتر هم Body قطاعی می‌سازد.")
-                .setView(input)
+        LinearLayout box=revolveInputs(360f,0f);EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
+        new AlertDialog.Builder(getContext()).setTitle("Revolve • Angle + Height")
+                .setMessage("Height صفر: دوران معمولی. Height غیرصفر: دوران مارپیچی برای رزوه.")
+                .setView(box)
                 .setPositiveButton("ساخت Body",(d,w)->{
-                    try{float a=Float.parseFloat(normalizeDigits(input.getText().toString()));toast(createRevolve(profile,axis,xAxis,a));}
-                    catch(Exception e){toast("زاویه درست وارد نشده");}
+                    try{float a=parseAngle(angle),h=parseMillimeters(height);validateRevolve(a,h);toast(createRevolve(profile,axis,xAxis,a,h));}
+                    catch(Exception e){toast("زاویه یا Height درست وارد نشده");}
                 }).setNegativeButton("لغو",null).show();
     }
 
     public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg){
-        if(Math.abs(angleDeg)<0.01f||Math.abs(angleDeg)>360f)return"زاویه Revolve باید بین 0 و 360 درجه باشد";
+        return createRevolve(profileEntity,axisEntity,xAxis,angleDeg,0f);
+    }
+
+    public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg,float heightMm){
+        try{validateRevolve(angleDeg,heightMm);}catch(Exception e){return"زاویه Revolve باید 0.01 تا 36000 درجه و Height معتبر باشد";}
         Profile p=profile(profileEntity);if(p==null)return"پروفایل بسته معتبر نیست";
         Axis3D axis=axisFor(axisEntity,p.plane,xAxis);if(axis==null)return"محور Revolve معتبر نیست";
-        RevolveFeature f=new RevolveFeature(formSerial++,profileEntity,p.plane,axisEntity,xAxis,angleDeg);
+        RevolveFeature f=new RevolveFeature(formSerial++,profileEntity,p.plane,axisEntity,xAxis,angleDeg,heightMm);
         SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Revolve نتوانست Body بسازد؛ پروفایل و محور را بررسی کن";
         Object body=addBody("Revolve "+f.id,csg);if(body==null)return"ساخت Body انجام نشد";
         f.outputBody=body;formHistory.add(f);setOverview3D();invalidate();
-        return "Revolve ساخته شد • "+fmt(angleDeg)+"°";
+        if(Math.abs(heightMm)<1e-5f)return "Revolve ساخته شد • "+fmt(angleDeg)+"°";
+        return "رزوه ساخته شد • "+fmt(Math.abs(angleDeg)/360f)+" دور • Height "+fmt(heightMm)+" mm • Pitch "+fmt(f.pitchMm())+" mm";
     }
+
+    private LinearLayout revolveInputs(float angleDeg,float heightMm){
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
+        int pad=(int)(16f*getResources().getDisplayMetrics().density);box.setPadding(pad,0,pad,0);
+        TextView angleLabel=new TextView(getContext());angleLabel.setText("Angle • درجه (360 × تعداد دور)");box.addView(angleLabel);
+        EditText angle=new EditText(getContext());angle.setSingleLine(true);angle.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+        angle.setText(fmt(angleDeg));angle.setSelectAllOnFocus(true);box.addView(angle);
+        TextView heightLabel=new TextView(getContext());heightLabel.setText("Height • پیشروی کل روی محور (mm)");box.addView(heightLabel);
+        EditText height=new EditText(getContext());height.setSingleLine(true);height.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+        height.setText(fmt(heightMm)+" mm");height.setSelectAllOnFocus(true);box.addView(height);
+        return box;
+    }
+
+    private static float parseAngle(EditText input){
+        String s=normalizeDigits(input.getText().toString()).trim().toLowerCase(Locale.US).replace("°","").replace("deg","").trim();
+        return Float.parseFloat(s);
+    }
+
+    private static float parseMillimeters(EditText input){
+        String s=normalizeDigits(input.getText().toString()).trim().toLowerCase(Locale.US).replace(" ","");
+        if(s.endsWith("mm"))s=s.substring(0,s.length()-2);
+        else if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
+        return Float.parseFloat(s);
+    }
+
+    private static void validateRevolve(float angleDeg,float heightMm){
+        if(!Float.isFinite(angleDeg)||!Float.isFinite(heightMm)||Math.abs(angleDeg)<.01f||Math.abs(angleDeg)>36000f||Math.abs(heightMm)>100000f)throw new IllegalArgumentException();
+    }
+
+    /** Keeps dense circular profiles responsive while preserving thread flanks. */
+    private int revolveSteps(float angleDeg,float heightMm,int profilePoints){
+        float turns=Math.max(1f,Math.abs(angleDeg)/360f);
+        int degreesPerStep=Math.abs(heightMm)<1e-5f?5:10;
+        int desired=(int)Math.ceil(Math.abs(angleDeg)/degreesPerStep);
+        if(profilePoints>24&&turns>2f)desired=(int)Math.ceil(Math.abs(angleDeg)/15f);
+        return Math.max(12,Math.min(1440,desired));
+    }
+
+    // ------------------------------------------------------------------
+    // On-canvas Revolve + Height manipulator
+    // ------------------------------------------------------------------
+
+    @Override protected void onDraw(Canvas canvas){
+        super.onDraw(canvas);
+        if(interactiveRevolveActive&&is3DOverview())drawInteractiveRevolveManipulator(canvas);
+    }
+
+    private void drawInteractiveRevolveManipulator(Canvas canvas){
+        Profile p=profile(interactiveRevolveProfile);if(p==null||p.points.isEmpty())return;
+        Axis3D axis=axisFor(interactiveRevolveAxis,p.plane,interactiveRevolveXAxis);if(axis==null)return;
+        Geometry3D.Vec3 center=profileWorldCenter(p);
+        Geometry3D.Vec3 axial=axis.direction.mul(axis.direction.dot(center.sub(axis.origin)));
+        Geometry3D.Vec3 ringOrigin=axis.origin.add(axial);
+        Geometry3D.Vec3 radial=center.sub(ringOrigin);
+        float radius=radial.length();
+        if(radius<1e-3f){radial=p.plane.u.sub(axis.direction.mul(p.plane.u.dot(axis.direction)));radius=Math.max(12f,profileRadius(p));}
+        radial=radial.normalized().mul(Math.max(4f,radius));
+        Geometry3D.Vec3 tangent=axis.direction.cross(radial).normalized().mul(radial.length());
+
+        revolveRingScreen.clear();Path ring=new Path();
+        for(int i=0;i<=72;i++){
+            double a=2d*Math.PI*i/72d;
+            Geometry3D.Vec3 point=ringOrigin.add(radial.mul((float)Math.cos(a))).add(tangent.mul((float)Math.sin(a)));
+            PointF q=projectSolidPoint(point);revolveRingScreen.add(q);if(i==0)ring.moveTo(q.x,q.y);else ring.lineTo(q.x,q.y);
+        }
+        revolveRingCenterScreen=projectSolidPoint(ringOrigin);
+        RectF card=solidViewport();canvas.save();if(card!=null&&!card.isEmpty())canvas.clipRect(card);
+        canvas.drawPath(ring,revolveRingPaint);
+
+        // Draw the actual simultaneous rotation/translation path.  This is the
+        // direct visual explanation of pitch: one turn advances along the axis.
+        int helixSamples=Math.max(36,Math.min(420,(int)Math.ceil(Math.abs(interactiveRevolveAngle)/12f)));
+        Path helix=new Path();
+        double total=Math.toRadians(interactiveRevolveAngle);
+        for(int i=0;i<=helixSamples;i++){
+            float t=(float)i/helixSamples;double a=total*t;
+            Geometry3D.Vec3 point=ringOrigin
+                    .add(radial.mul((float)Math.cos(a)))
+                    .add(tangent.mul((float)Math.sin(a)))
+                    .add(axis.direction.mul(interactiveRevolveHeightMm*t));
+            PointF q=projectSolidPoint(point);if(i==0)helix.moveTo(q.x,q.y);else helix.lineTo(q.x,q.y);
+        }
+        canvas.drawPath(helix,revolveHeightPaint);
+
+        float displayHeight=Math.abs(interactiveRevolveHeightMm)<.01f?Math.max(12f,radial.length()*.75f):interactiveRevolveHeightMm;
+        Geometry3D.Vec3 heightStart=center,heightEnd=center.add(axis.direction.mul(displayHeight));
+        revolveHeightBaseScreen=projectSolidPoint(heightStart);revolveHeightTipScreen=projectSolidPoint(heightEnd);
+        float dx=revolveHeightTipScreen.x-revolveHeightBaseScreen.x,dy=revolveHeightTipScreen.y-revolveHeightBaseScreen.y;
+        float screenLength=Math.max(1f,(float)Math.hypot(dx,dy));float ux=dx/screenLength,uy=dy/screenLength;
+        revolveHeightPixelsPerMm=Math.max(.2f,screenLength/Math.max(1f,Math.abs(displayHeight)));
+        canvas.drawLine(revolveHeightBaseScreen.x,revolveHeightBaseScreen.y,revolveHeightTipScreen.x,revolveHeightTipScreen.y,revolveHeightPaint);
+        float wing=11f*getResources().getDisplayMetrics().density;
+        canvas.drawLine(revolveHeightTipScreen.x,revolveHeightTipScreen.y,revolveHeightTipScreen.x-ux*wing-uy*wing*.55f,revolveHeightTipScreen.y-uy*wing+ux*wing*.55f,revolveHeightPaint);
+        canvas.drawLine(revolveHeightTipScreen.x,revolveHeightTipScreen.y,revolveHeightTipScreen.x-ux*wing+uy*wing*.55f,revolveHeightTipScreen.y-uy*wing-ux*wing*.55f,revolveHeightPaint);
+        float handle=7f*getResources().getDisplayMetrics().density;
+        canvas.drawCircle(revolveHeightTipScreen.x,revolveHeightTipScreen.y,handle,revolveHandleFill);canvas.drawCircle(revolveHeightTipScreen.x,revolveHeightTipScreen.y,handle,revolveHeightPaint);
+        canvas.restore();
+        canvas.drawText(fmt(interactiveRevolveAngle)+"°",revolveRingCenterScreen.x,revolveRingCenterScreen.y-12f,revolveTextPaint);
+        canvas.drawText("H "+fmt(interactiveRevolveHeightMm)+" mm",revolveHeightTipScreen.x,revolveHeightTipScreen.y-16f,revolveTextPaint);
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent event){
+        if(interactiveRevolveActive&&is3DOverview()&&event.getPointerCount()==1&&handleInteractiveRevolveTouch(event))return true;
+        return super.onTouchEvent(event);
+    }
+
+    private boolean handleInteractiveRevolveTouch(MotionEvent event){
+        int action=event.getActionMasked();float x=event.getX(),y=event.getY();float density=getResources().getDisplayMetrics().density;
+        if(action==MotionEvent.ACTION_DOWN){
+            float heightDistance=revolveHeightBaseScreen==null||revolveHeightTipScreen==null?Float.MAX_VALUE:
+                    distanceToScreenSegment(x,y,revolveHeightBaseScreen,revolveHeightTipScreen);
+            float ringDistance=distanceToScreenPolyline(x,y,revolveRingScreen);
+            float hit=28f*density;if(heightDistance>hit&&ringDistance>hit)return false;
+            revolveDragMode=heightDistance<=ringDistance?2:1;revolveDragMoved=false;revolveDragStartX=x;revolveDragStartY=y;
+            revolveDragStartAngle=interactiveRevolveAngle;revolveDragStartHeight=interactiveRevolveHeightMm;return true;
+        }
+        if(revolveDragMode==0)return false;
+        if(action==MotionEvent.ACTION_MOVE){
+            float dx=x-revolveDragStartX,dy=y-revolveDragStartY;if(dx*dx+dy*dy>16f)revolveDragMoved=true;
+            if(revolveDragMode==2&&revolveHeightBaseScreen!=null&&revolveHeightTipScreen!=null){
+                float vx=revolveHeightTipScreen.x-revolveHeightBaseScreen.x,vy=revolveHeightTipScreen.y-revolveHeightBaseScreen.y;
+                float len=Math.max(1f,(float)Math.hypot(vx,vy));float along=(dx*vx+dy*vy)/len;
+                interactiveRevolveHeightMm=clamp(revolveDragStartHeight+along/revolveHeightPixelsPerMm,-100000f,100000f);
+            }else if(revolveDragMode==1&&revolveRingCenterScreen!=null){
+                double start=Math.atan2(revolveDragStartY-revolveRingCenterScreen.y,revolveDragStartX-revolveRingCenterScreen.x);
+                double now=Math.atan2(y-revolveRingCenterScreen.y,x-revolveRingCenterScreen.x);double delta=Math.toDegrees(now-start);
+                if(delta>180d)delta-=360d;if(delta<-180d)delta+=360d;
+                float sign=revolveDragStartAngle<0f?-1f:1f;
+                interactiveRevolveAngle=sign*clamp(Math.abs(revolveDragStartAngle)+(float)delta,1f,36000f);
+            }
+            refreshInteractiveRevolve(false);return true;
+        }
+        if(action==MotionEvent.ACTION_UP){boolean edit=!revolveDragMoved;revolveDragMode=0;if(edit)showInteractiveRevolveAngleEditor();return true;}
+        if(action==MotionEvent.ACTION_CANCEL){revolveDragMode=0;return true;}return true;
+    }
+
+    private Geometry3D.Vec3 profileWorldCenter(Profile profile){
+        Geometry3D.Vec3 c=new Geometry3D.Vec3(0,0,0);for(PointF q:profile.points)c=c.add(profile.plane.point(q.x,q.y));return c.mul(1f/profile.points.size());
+    }
+
+    private float profileRadius(Profile profile){
+        PointF c=new PointF();for(PointF q:profile.points){c.x+=q.x;c.y+=q.y;}c.x/=profile.points.size();c.y/=profile.points.size();
+        float r=0f;for(PointF q:profile.points)r=Math.max(r,(float)Math.hypot(q.x-c.x,q.y-c.y));return r;
+    }
+
+    private static float distanceToScreenPolyline(float x,float y,List<PointF> path){
+        float best=Float.MAX_VALUE;for(int i=1;i<path.size();i++)best=Math.min(best,distanceToScreenSegment(x,y,path.get(i-1),path.get(i)));return best;
+    }
+
+    private static float distanceToScreenSegment(float x,float y,PointF a,PointF b){
+        float dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;if(l2<1e-6f)return(float)Math.hypot(x-a.x,y-a.y);
+        float t=Math.max(0f,Math.min(1f,((x-a.x)*dx+(y-a.y)*dy)/l2));return(float)Math.hypot(x-(a.x+t*dx),y-(a.y+t*dy));
+    }
+
+    private static float clamp(float value,float min,float max){return Math.max(min,Math.min(max,value));}
 
     private void startSweep(){
         List<Object>s=selection();Object profile=null,path=null;
@@ -298,10 +560,11 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
 
     private void editFormFeature(FormFeature f){
         if(f instanceof RevolveFeature){
-            RevolveFeature r=(RevolveFeature)f;EditText input=new EditText(getContext());input.setSingleLine(true);input.setText(fmt(r.angleDeg));input.setSelectAllOnFocus(true);
+            RevolveFeature r=(RevolveFeature)f;LinearLayout box=revolveInputs(r.angleDeg,r.heightMm);
+            EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
             new AlertDialog.Builder(getContext()).setTitle("ویرایش "+r.detail())
-                    .setMessage("زاویه Revolve را عوض کن؛ Body و عملیات وابسته دوباره محاسبه می‌شوند.")
-                    .setView(input).setPositiveButton("اعمال",(d,w)->{try{r.angleDeg=Float.parseFloat(normalizeDigits(input.getText().toString()));toast(rebuildHistory());}catch(Exception e){toast("زاویه درست نیست");}})
+                    .setMessage("Angle و Height را عوض کن؛ Body و عملیات وابسته دوباره محاسبه می‌شوند.")
+                    .setView(box).setPositiveButton("اعمال",(d,w)->{try{float a=parseAngle(angle),h=parseMillimeters(height);validateRevolve(a,h);r.angleDeg=a;r.heightMm=h;toast(rebuildHistory());}catch(Exception e){toast("زاویه یا Height درست نیست");}})
                     .setNegativeButton("بستن",null).show();
             return;
         }

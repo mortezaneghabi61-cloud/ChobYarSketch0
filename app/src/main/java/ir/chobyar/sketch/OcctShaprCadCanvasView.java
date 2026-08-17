@@ -153,10 +153,13 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
 
     private void offsetDialog(){
         EditText v=input("10mm");
-        new AlertDialog.Builder(getContext()).setTitle("Offset Edge • cm/mm").setView(v).setPositiveButton("Offset",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle("Offset Edge • mm").setView(v).setPositiveButton("Offset",(d,w)->{
             try{msg(offsetSelected(lengthMm(v.getText().toString())));}catch(Exception ex){msg("فاصله درست نیست");}
         }).setNegativeButton("لغو",null).show();
     }
+
+    /** Selection-adaptive entry used by the production workspace. */
+    public void showOffsetEdgeTool(){offsetDialog();}
 
     private void transformDialog(){
         LinearLayout b=new LinearLayout(getContext());b.setOrientation(LinearLayout.VERTICAL);
@@ -208,7 +211,7 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
     private PointF world(float sx,float sy){try{float k=PX_PER_MM*viewScaleField.getFloat(this);return new PointF((sx-offsetXField.getFloat(this))/k,(sy-offsetYField.getFloat(this))/k);}catch(Exception ex){return new PointF(sx/PX_PER_MM,sy/PX_PER_MM);}}
 
     private EditText input(String text){EditText e=new EditText(getContext());e.setSingleLine(true);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setText(text);e.setSelectAllOnFocus(true);return e;}
-    private static float lengthMm(String raw){String s=digits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean mm=s.endsWith("mm")||s.endsWith("میلیمتر")||s.endsWith("میلی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return mm?v:v*10f;}
+    private static float lengthMm(String raw){String s=digits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
     private static String digits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString().trim();}
     private static Field findField(Class<?> c,String n){for(Class<?> x=c;x!=null;x=x.getSuperclass())try{Field f=x.getDeclaredField(n);f.setAccessible(true);return f;}catch(Exception ignored){}return null;}
     private static Method findMethod(Class<?> c,String n,Class<?>...t){for(Class<?> x=c;x!=null;x=x.getSuperclass())try{Method m=x.getDeclaredMethod(n,t);m.setAccessible(true);return m;}catch(Exception ignored){}return null;}

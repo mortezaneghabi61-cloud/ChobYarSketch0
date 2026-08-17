@@ -143,8 +143,8 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         EditText y=axisInput(box,"Y", "0mm");
         EditText z=axisInput(box,"Z", "0mm");
         new AlertDialog.Builder(getContext())
-                .setTitle("Move Body • cm/mm")
-                .setMessage("مقدار مثبت/منفی برای هر محور. مثال: 2cm یا -15mm")
+                .setTitle("Move Body • mm")
+                .setMessage("مقدار مثبت/منفی را برای هر محور به میلی‌متر وارد کن؛ مثال: -15")
                 .setView(box)
                 .setPositiveButton("حرکت",(d,w)->{
                     try{
@@ -157,7 +157,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     }
 
     private EditText axisInput(LinearLayout parent,String axis,String initial) {
-        TextView label=new TextView(getContext());label.setText(axis+"  (cm/mm)");label.setTextSize(13f);parent.addView(label);
+        TextView label=new TextView(getContext());label.setText(axis+"  (mm)");label.setTextSize(13f);parent.addView(label);
         EditText input=new EditText(getContext());input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(initial);input.setSelectAllOnFocus(true);parent.addView(input);
@@ -275,10 +275,10 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         if(s.isEmpty())return 0f;
         if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
-        return Float.parseFloat(s)*10f;
+        return Float.parseFloat(s);
     }
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

@@ -185,10 +185,10 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         EditText input=new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setText("2cm");input.setSelectAllOnFocus(true);
+        input.setText("20");input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("Extrude — cm / mm")
-                .setMessage("مثال: 2cm یا 20mm. عدد بدون پسوند سانتی‌متر است. عدد منفی جهت Extrude را برعکس می‌کند.")
+                .setTitle("Extrude — mm")
+                .setMessage("اندازه را به میلی‌متر وارد کن. عدد منفی جهت Extrude را برعکس می‌کند.")
                 .setView(input)
                 .setPositiveButton("ساخت Body",(d,w)->{
                     try{float mm=parseLengthMm(input.getText().toString());toast(extrudeSelectedBody(mm/10f));}
@@ -350,10 +350,10 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         EditText input=new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setText(num(f.heightMm/10f)+"cm");input.setSelectAllOnFocus(true);
+        input.setText(num(f.heightMm));input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
                 .setTitle("ویرایش Extrude #"+f.id)
-                .setMessage("فعلی: "+dual(f.heightMm)+"\nمثال: 18mm یا 1.8cm")
+                .setMessage("فعلی: "+dual(f.heightMm)+"\nمثال: 18 mm")
                 .setView(input)
                 .setPositiveButton("اعمال و بازسازی",(d,w)->{
                     try{f.heightMm=parseLengthMm(input.getText().toString());toast(rebuildHistory());}
@@ -510,11 +510,11 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");
         if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
-        return Float.parseFloat(s)*10f;
+        return Float.parseFloat(s);
     }
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private static boolean looksLikeError(String s){if(s==null)return true;return s.contains("اول")||s.contains("نیست")||s.contains("نشده")||s.contains("درست نیست")||s.contains("نامعتبر");}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

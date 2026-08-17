@@ -268,8 +268,8 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
         return null;
     }
 
-    private static String dualLength(double mm){return fmt(mm/10d)+" cm / "+fmt(mm)+" mm";}
-    private static String dualArea(double mm2){return fmt(mm2/100d)+" cm² / "+fmt(mm2)+" mm²";}
+    private static String dualLength(double mm){return fmt(mm)+" mm";}
+    private static String dualArea(double mm2){return fmt(mm2)+" mm²";}
     private static String fmt(double v){
         String s=String.format(Locale.US,"%.2f",v);
         while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);

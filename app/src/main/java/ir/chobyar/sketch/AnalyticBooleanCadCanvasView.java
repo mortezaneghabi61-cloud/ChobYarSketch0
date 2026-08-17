@@ -560,7 +560,7 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
     }
 
     private static String dual(float mm) {
-        return num(mm/10f) + " cm / " + num(mm) + " mm";
+        return num(mm) + " mm";
     }
 
     private void toast(String s) {

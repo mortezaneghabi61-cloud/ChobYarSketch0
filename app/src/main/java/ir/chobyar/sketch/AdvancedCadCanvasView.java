@@ -1,16 +1,7 @@
 package ir.chobyar.sketch;
 
-import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.PointF;
-import android.graphics.RectF;
-import android.text.InputType;
-import android.view.MotionEvent;
-import android.widget.EditText;
-import android.widget.Toast;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -22,18 +13,11 @@ import java.util.Locale;
 /**
  * Next 2D CAD editing layer.
  *
- * When exactly two Line entities are selected a small contextual palette appears
- * directly on the canvas with Trim / Extend / Fillet / Chamfer / Join.
- * This keeps the main toolbar from becoming even more crowded.
+ * Editing operations live here, while the production Activity owns their
+ * selection-adaptive presentation. The legacy bottom palette is deliberately
+ * not painted over the modeling canvas.
  */
 public class AdvancedCadCanvasView extends SmartCadCanvasView {
-
-    private final Paint toolPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint toolText = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint toolStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF[] toolRects = new RectF[5];
-    private final String[] toolLabels = {"Trim", "Extend", "Fillet", "Chamfer", "Join"};
-    private int pressedTool = -1;
 
     private Field smartSelectedField;
     private Field entitiesField;
@@ -42,17 +26,6 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
 
     public AdvancedCadCanvasView(Context context) {
         super(context);
-        for (int i = 0; i < toolRects.length; i++) toolRects[i] = new RectF();
-
-        toolPaint.setColor(Color.rgb(246, 248, 252));
-        toolPaint.setStyle(Paint.Style.FILL);
-        toolStroke.setColor(Color.rgb(42, 94, 175));
-        toolStroke.setStyle(Paint.Style.STROKE);
-        toolStroke.setStrokeWidth(2f);
-        toolText.setColor(Color.rgb(30, 65, 120));
-        toolText.setTextAlign(Paint.Align.CENTER);
-        toolText.setTextSize(24f);
-
         initAdvancedReflection();
     }
 
@@ -68,115 +41,6 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
             saveUndoMethod.setAccessible(true);
         } catch (Exception ignored) {
         }
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        layoutContextTools();
-        if (!hasExactlyTwoLines()) {
-            clearToolRects();
-            return;
-        }
-
-        for (int i = 0; i < toolRects.length; i++) {
-            RectF r = toolRects[i];
-            canvas.drawRoundRect(r, 16f, 16f, toolPaint);
-            canvas.drawRoundRect(r, 16f, 16f, toolStroke);
-            canvas.drawText(toolLabels[i], r.centerX(), r.centerY() + 8f, toolText);
-        }
-    }
-
-    private void layoutContextTools() {
-        if (!hasExactlyTwoLines() || getWidth() <= 0 || getHeight() <= 0) {
-            clearToolRects();
-            return;
-        }
-        float gap = 6f;
-        float margin = 8f;
-        float available = Math.max(300f, getWidth() - 2f * margin);
-        float w = Math.min(132f, (available - gap * 4f) / 5f);
-        float total = w * 5f + gap * 4f;
-        float left = Math.max(margin, (getWidth() - total) / 2f);
-        float h = 52f;
-        float top = Math.max(10f, getHeight() - h - 48f);
-        for (int i = 0; i < 5; i++) {
-            float x = left + i * (w + gap);
-            toolRects[i].set(x, top, x + w, top + h);
-        }
-    }
-
-    private void clearToolRects() {
-        for (RectF r : toolRects) r.setEmpty();
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        if (hasExactlyTwoLines()) {
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN) {
-                for (int i = 0; i < toolRects.length; i++) {
-                    if (!toolRects[i].isEmpty() && toolRects[i].contains(event.getX(), event.getY())) {
-                        pressedTool = i;
-                        return true;
-                    }
-                }
-            } else if (pressedTool >= 0) {
-                if (action == MotionEvent.ACTION_UP) {
-                    int index = pressedTool;
-                    pressedTool = -1;
-                    if (toolRects[index].contains(event.getX(), event.getY())) runContextTool(index);
-                } else if (action == MotionEvent.ACTION_CANCEL) {
-                    pressedTool = -1;
-                }
-                return true;
-            }
-        }
-        return super.onTouchEvent(event);
-    }
-
-    private void runContextTool(int index) {
-        switch (index) {
-            case 0:
-                showResult(trimSelectedLines());
-                break;
-            case 1:
-                showResult(extendSelectedLines());
-                break;
-            case 2:
-                askDistance("Fillet — شعاع", "شعاع mm، مثال 10", true);
-                break;
-            case 3:
-                askDistance("Chamfer — پخ", "فاصله از گوشه mm، مثال 10", false);
-                break;
-            case 4:
-                showResult(joinSelectedLines());
-                break;
-        }
-    }
-
-    private void askDistance(String title, String hint, boolean fillet) {
-        EditText input = new EditText(getContext());
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        input.setHint(hint);
-        input.setText("10");
-        input.setSelectAllOnFocus(true);
-
-        new AlertDialog.Builder(getContext())
-                .setTitle(title)
-                .setMessage("دو خط انتخاب‌شده روی گوشه ویرایش می‌شوند.")
-                .setView(input)
-                .setPositiveButton("اعمال", (d, w) -> {
-                    try {
-                        float value = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
-                        showResult(fillet ? filletSelectedLines(value) : chamferSelectedLines(value));
-                    } catch (Exception e) {
-                        showResult("عدد درست وارد نشده");
-                    }
-                })
-                .setNegativeButton("لغو", null)
-                .show();
     }
 
     /** Trim crossing line segments to their intersection, keeping the longer side of each line. */
@@ -337,11 +201,6 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
             return "فرمت عدد درست نیست";
         }
         return super.executeCommand(s);
-    }
-
-    private boolean hasExactlyTwoLines() {
-        List<Object> pair = selectedObjects();
-        return pair.size() == 2 && isLine(pair.get(0)) && isLine(pair.get(1));
     }
 
     private List<Object> twoSelectedLines() {
@@ -543,11 +402,6 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
             catch(Exception e){return null;}
         }
         return null;
-    }
-
-    private void showResult(String s) {
-        Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();
-        invalidate();
     }
 
     private static class LineData {

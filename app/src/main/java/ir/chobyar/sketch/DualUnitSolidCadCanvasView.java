@@ -15,13 +15,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Dual-unit presentation layer for ChobYar.
+ * Legacy compatibility layer retained in the inheritance chain.
  *
- * The model stays internally in millimeters. Existing centimeter labels remain
- * familiar for woodworking/general use, while this layer adds the exact mm value
- * directly beside every visible dimension. Numeric editors and typed commands
- * also accept explicit cm/mm suffixes (8cm == 80mm). Bare numbers keep the
- * current ChobYar convention and are interpreted as centimeters.
+ * The production unit policy is millimeter-first: geometry, bare numeric input
+ * and visible dimensions all use mm. Explicit legacy suffixes may still be
+ * parsed when an older document or command contains one.
  */
 public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
 

@@ -76,7 +76,7 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Finish 3D")
-                .setMessage(bodyText+"\n\nدر هسته فعلی این ابزارها روی Bodyهای Extrude/Prism اعمال می‌شوند. مقدار طول را cm یا mm وارد کن.")
+                .setMessage(bodyText+"\n\nدر هسته فعلی این ابزارها روی Bodyهای Extrude/Prism اعمال می‌شوند. مقدار طول را به mm وارد کن.")
                 .setItems(items,(d,w)->{
                     if(w==0)askFinish(Kind.FILLET);
                     else if(w==1)askFinish(Kind.CHAMFER);
@@ -104,7 +104,7 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         input.setText(kind==Kind.SHELL?"2mm":"5mm");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle(title+" • cm/mm")
+                .setTitle(title+" • mm")
                 .setMessage(kind==Kind.FILLET
                         ?"گوشه‌های عمودی Body گرد می‌شوند. شعاع نباید از ضلع‌های پروفایل بزرگ‌تر باشد."
                         :kind==Kind.CHAMFER
@@ -442,10 +442,10 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");
         if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
-        return Float.parseFloat(s)*10f;
+        return Float.parseFloat(s);
     }
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

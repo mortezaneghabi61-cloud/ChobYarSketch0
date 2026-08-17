@@ -2,8 +2,10 @@ package ir.chobyar.sketch;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
@@ -11,6 +13,9 @@ import android.graphics.RectF;
 import android.text.InputType;
 import android.view.MotionEvent;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
@@ -59,6 +64,15 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     private final Paint axisY = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint axisZ = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint spatialText = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private static final class ReferenceImage {
+        final Bitmap bitmap;final String name;final Geometry3D.Plane3D plane;
+        float widthMm=100f,centerU,centerV,rotationDeg,opacity=.55f;boolean visible=true;
+        ReferenceImage(Bitmap bitmap,String name,Geometry3D.Plane3D plane){this.bitmap=bitmap;this.name=name;this.plane=plane;}
+        float heightMm(){return bitmap.getWidth()==0?widthMm:widthMm*bitmap.getHeight()/bitmap.getWidth();}
+    }
+    private ReferenceImage referenceImage;
+    private final Paint referenceImagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
 
     public SpatialCadCanvasView(Context context) {
         super(context);
@@ -208,14 +222,14 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         input.setText("10");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("صفحه موازی — فاصله cm")
+                .setTitle("صفحه موازی — فاصله mm")
                 .setMessage("صفحه جدید موازی صفحه فعال ساخته می‌شود. مقدار مثبت در جهت Normal است.")
                 .setView(input)
                 .setPositiveButton("ساخت", (d,w) -> {
                     try {
-                        float cm = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
+                        float mm = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
                         Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
-                        Geometry3D.Plane3D p = base.offset(cm*10f, base.label + " + " + fmt(cm) + "cm");
+                        Geometry3D.Plane3D p = base.offset(mm, base.label + " + " + fmt(mm) + " mm");
                         createSketchOnPlane(p, "Offset Plane");
                     } catch (Exception e) { toast("فاصله درست وارد نشده"); }
                 })
@@ -237,10 +251,47 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         // 3D is the workspace itself, not a card layered over the 2D canvas.
         overviewCard.set(0f,0f,getWidth(),getHeight());
         canvas.save();
+        drawReferenceImage(canvas);
         drawSpatialPlanes(canvas);
         drawSpatialEntities(canvas);
         drawSpatialAxes(canvas);
         canvas.restore();
+    }
+
+    public String setReferenceImage(Bitmap bitmap,String name){
+        if(bitmap==null||bitmap.getWidth()<2||bitmap.getHeight()<2)return "تصویر مرجع معتبر نیست";
+        referenceImage=new ReferenceImage(bitmap,name==null?"Reference Image":name,activePlane==null?Geometry3D.xy():activePlane);
+        overview3D=true;invalidate();post(this::fitAll);return "تصویر مرجع روی Plane فعال اضافه شد • 100 mm";
+    }
+
+    public boolean hasReferenceImage(){return referenceImage!=null;}
+
+    public void showReferenceImageSettings(){
+        if(referenceImage==null){toast("ابتدا از Add > Image یک تصویر وارد کن");return;}ReferenceImage image=referenceImage;
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);int pad=(int)(16f*getResources().getDisplayMetrics().density);box.setPadding(pad,0,pad,0);
+        EditText width=referenceInput(box,"Width (mm)",fmt(image.widthMm)),x=referenceInput(box,"Position U (mm)",fmt(image.centerU)),y=referenceInput(box,"Position V (mm)",fmt(image.centerV)),angle=referenceInput(box,"Rotate (deg)",fmt(image.rotationDeg));
+        TextView opacityLabel=new TextView(getContext());opacityLabel.setText("Opacity • "+Math.round(image.opacity*100f)+"%");box.addView(opacityLabel);
+        SeekBar opacity=new SeekBar(getContext());opacity.setMax(100);opacity.setProgress(Math.round(image.opacity*100f));box.addView(opacity);
+        opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int value,boolean fromUser){image.opacity=Math.max(.05f,value/100f);opacityLabel.setText("Opacity • "+value+"%");invalidate();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
+        new AlertDialog.Builder(getContext()).setTitle(image.name+" • Reference")
+                .setMessage("ابعاد واقعی تصویر را وارد کن و مدل را مستقیماً روی آن مقایسه کن.").setView(box)
+                .setPositiveButton("اعمال",(d,w)->{try{image.widthMm=Math.max(1f,parseLocal(width));image.centerU=parseLocal(x);image.centerV=parseLocal(y);image.rotationDeg=parseLocal(angle);invalidate();}catch(Exception e){toast("مقادیر تصویر درست نیست");}})
+                .setNeutralButton(image.visible?"مخفی":"نمایش",(d,w)->{image.visible=!image.visible;invalidate();})
+                .setNegativeButton("بستن",null).show();
+    }
+
+    public String removeReferenceImage(){if(referenceImage==null)return "تصویر مرجعی وجود ندارد";referenceImage=null;invalidate();return "تصویر مرجع حذف شد";}
+
+    private EditText referenceInput(LinearLayout box,String label,String value){TextView text=new TextView(getContext());text.setText(label);box.addView(text);EditText input=new EditText(getContext());input.setSingleLine(true);input.setText(value);input.setSelectAllOnFocus(true);box.addView(input);return input;}
+    private static float parseLocal(EditText input){return Float.parseFloat(normalizeDigits(input.getText().toString()).replace("mm","").replace("°","").trim());}
+
+    private void drawReferenceImage(Canvas canvas){
+        ReferenceImage image=referenceImage;if(image==null||!image.visible||image.bitmap.isRecycled())return;
+        float halfW=image.widthMm*.5f,halfH=image.heightMm()*.5f;double rotation=Math.toRadians(image.rotationDeg);float c=(float)Math.cos(rotation),s=(float)Math.sin(rotation);
+        float[][] local={{-halfW,-halfH},{halfW,-halfH},{halfW,halfH},{-halfW,halfH}};float[] dst=new float[8];
+        for(int i=0;i<4;i++){float u=image.centerU+local[i][0]*c-local[i][1]*s,v=image.centerV+local[i][0]*s+local[i][1]*c;PointF q=project(image.plane.point(u,v));dst[i*2]=q.x;dst[i*2+1]=q.y;}
+        float[] src={0,0,image.bitmap.getWidth(),0,image.bitmap.getWidth(),image.bitmap.getHeight(),0,image.bitmap.getHeight()};Matrix transform=new Matrix();
+        if(!transform.setPolyToPoly(src,0,dst,0,4))return;referenceImagePaint.setAlpha(Math.max(13,Math.min(255,Math.round(image.opacity*255f))));canvas.drawBitmap(image.bitmap,transform,referenceImagePaint);
     }
 
     private void drawSpatialPlanes(Canvas c) {

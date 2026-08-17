@@ -400,6 +400,45 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateRevolve(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateHelicalRevolve(
+        JNIEnv* env, jclass, jint profileType, jdoubleArray profileData,
+        jdouble ox, jdouble oy, jdouble oz,jdouble ax, jdouble ay, jdouble az,
+        jdouble angleDeg,jdouble heightMm) {
+#ifdef CHOBYAR_WITH_OCCT
+    if (!validVector(ax,ay,az) || std::abs(angleDeg) < 1e-8 ||
+        std::abs(angleDeg) > 36000.000001 || std::abs(heightMm) < 1e-8) return 0;
+    try {
+        TopoDS_Wire source;
+        if (!buildProfileWire(env, profileType, profileData, source)) return 0;
+        const gp_Ax1 screwAxis(gp_Pnt(ox,oy,oz),gp_Dir(ax,ay,az));
+        const gp_Vec lead(gp_Dir(ax,ay,az));
+        // 15 degrees per section gives a smooth exact B-Rep surface while
+        // keeping ten-turn woodworking threads practical on mobile hardware.
+        const int sectionCount=std::max(8,std::min(720,
+                static_cast<int>(std::ceil(std::abs(angleDeg)/15.0))));
+        BRepOffsetAPI_ThruSections screw(true,false,1.0e-5);
+        screw.CheckCompatibility(true);
+        for(int i=0;i<=sectionCount;i++){
+            const double t=static_cast<double>(i)/sectionCount;
+            gp_Trsf rotation;rotation.SetRotation(screwAxis,angleDeg*PI/180.0*t);
+            BRepBuilderAPI_Transform rotate(source,rotation,true);rotate.Build();
+            if(!rotate.IsDone())return 0;
+            gp_Trsf translation;translation.SetTranslation(lead.Multiplied(heightMm*t));
+            BRepBuilderAPI_Transform move(rotate.Shape(),translation,true);move.Build();
+            if(!move.IsDone()||move.Shape().ShapeType()!=TopAbs_WIRE)return 0;
+            screw.AddWire(TopoDS::Wire(move.Shape()));
+        }
+        screw.Build();
+        if(!screw.IsDone()||!isSolidResult(screw.Shape()))return 0;
+        return storeShape(screw.Shape());
+    } catch (...) { return 0; }
+#else
+    (void)env;(void)profileType;(void)profileData;(void)ox;(void)oy;(void)oz;
+    (void)ax;(void)ay;(void)az;(void)angleDeg;(void)heightMm;return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jlong JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctCreateSweep(
         JNIEnv* env, jclass, jint profileType, jdoubleArray profileData, jdoubleArray pathXYZ) {
 #ifdef CHOBYAR_WITH_OCCT

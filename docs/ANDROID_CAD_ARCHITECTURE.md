@@ -10,7 +10,8 @@ of the reference iPad product without using its code, name, assets or private da
 - Selection drives the adaptive toolbar.
 - Sketch geometry, constraints, B-Rep bodies, display meshes and UI state are
   separate data. A display triangle is never the source of truth.
-- Exact dimensions are millimeters internally. The UI may display mm/cm/inch.
+- Exact dimensions and bare numeric input are millimeters; the production UI
+  shows one mm value instead of stacked cm/mm labels.
 - Every feature owns stable input/output references and can be rebuilt in order.
 - Pen hover/prediction is preview-only; committed geometry uses final samples.
 
@@ -44,6 +45,11 @@ Legacy Canvas classes remain only as a compatibility shell while their state is
 moved behind explicit APIs. New production UI code must not add reflection.
 Geometry operations must call `NativeBRepKernel`; analytic CSG is only a fallback
 for unsupported ABI or an unfinished migration path.
+
+`WorkspaceController` is the single interaction state machine. Every new tool
+must follow select → preview → commit/cancel, keep the camera usable while the
+tool is active, and expose one stable selection kind (sketch/region/body/face/
+edge/vertex). Tool-specific booleans in Activities are not allowed.
 
 ## Research references
 

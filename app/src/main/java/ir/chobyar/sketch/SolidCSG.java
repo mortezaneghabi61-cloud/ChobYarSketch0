@@ -297,6 +297,52 @@ final class SolidCSG {
         return fromPolygons(polys);
     }
 
+    /**
+     * Revolves a closed profile while translating it along the same axis.
+     *
+     * A zero axial height is an ordinary revolve.  A non-zero height is the
+     * helical-revolve operation used for real screw/lathe threads: angle
+     * controls the number of turns and axialHeightMm controls the total lead.
+     * The start and end profiles are capped, so the result is a closed solid
+     * that can immediately participate in Union/Subtract/Intersect.
+     */
+    static SolidCSG helicalRevolve(List<PointF> rawProfile,
+                                   Geometry3D.Plane3D profilePlane,
+                                   Geometry3D.Vec3 axisPoint,
+                                   Geometry3D.Vec3 axisDirection,
+                                   float signedAngleDeg,
+                                   float axialHeightMm,
+                                   int requestedSteps) {
+        if (Math.abs(axialHeightMm) < 1e-5f) {
+            return revolve(rawProfile,profilePlane,axisPoint,axisDirection,signedAngleDeg,requestedSteps);
+        }
+        List<PointF> profile=cleanProfile(rawProfile);
+        Geometry3D.Vec3 axis=axisDirection==null?null:axisDirection.normalized();
+        float abs=Math.abs(signedAngleDeg);
+        if(profile.size()<3||axis==null||axis.length()<1e-6f||abs<0.01f)return empty();
+        if(signedArea(profile)<0f)Collections.reverse(profile);
+
+        int steps=Math.max(8,Math.min(1440,requestedSteps));
+        double total=Math.toRadians(signedAngleDeg);
+        List<List<Geometry3D.Vec3>> rings=new ArrayList<>();
+        for(int i=0;i<=steps;i++){
+            float t=(float)i/steps;
+            double angle=total*t;
+            Geometry3D.Vec3 lead=axis.mul(axialHeightMm*t);
+            List<Geometry3D.Vec3> ring=new ArrayList<>();
+            for(PointF p:profile){
+                Geometry3D.Vec3 turned=rotateAroundAxis(profilePlane.point(p.x,p.y),axisPoint,axis,angle);
+                ring.add(turned.add(lead));
+            }
+            rings.add(ring);
+        }
+        List<Polygon> polys=new ArrayList<>();
+        addCap(polys,rings.get(0),true);
+        for(int i=0;i<steps;i++)connectRings(polys,rings.get(i),rings.get(i+1),true);
+        addCap(polys,rings.get(rings.size()-1),false);
+        return fromPolygons(polys);
+    }
+
     /** Sweeps a closed profile through a 3D polyline path using transported frames. */
     static SolidCSG sweep(List<PointF> rawProfile,
                           Geometry3D.Plane3D profilePlane,

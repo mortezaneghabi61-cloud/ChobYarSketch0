@@ -23,12 +23,12 @@ import java.util.Locale;
  * drawn next to the preview. After creation, the same field stays attached to
  * the selected shape. Tapping it opens a type-specific numeric editor:
  * line=length, rectangle=width/height, circle=diameter, arc/polygon=radius.
- * User-facing values are centimeters; the underlying CAD model remains mm.
+ * User-facing and internal values are millimeters. A single unit avoids the
+ * duplicate cm/mm labels that previously covered selected geometry.
  */
 public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     private static final float PX_PER_MM = 3f;
-    private static final float MM_PER_CM = 10f;
 
     private final Paint fieldFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fieldStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -156,10 +156,10 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         float dy = Math.abs(y2 - y1);
         float d = distance(x1, y1, x2, y2);
 
-        if (tool == TOOL_LINE || tool == TOOL_MEASURE) return "⌨ " + cm(d) + " cm";
-        if (tool == TOOL_RECT) return "⌨ " + cm(dx) + " × " + cm(dy) + " cm";
-        if (tool == TOOL_CIRCLE) return "⌨ Ø " + cm(d * 2f) + " cm";
-        if (tool == TOOL_ARC || tool == TOOL_POLYGON) return "⌨ R " + cm(d) + " cm";
+        if (tool == TOOL_LINE || tool == TOOL_MEASURE) return "⌨ " + mm(d) + " mm";
+        if (tool == TOOL_RECT) return "⌨ " + mm(dx) + " × " + mm(dy) + " mm";
+        if (tool == TOOL_CIRCLE) return "⌨ Ø " + mm(d * 2f) + " mm";
+        if (tool == TOOL_ARC || tool == TOOL_POLYGON) return "⌨ R " + mm(d) + " mm";
         return null;
     }
 
@@ -168,16 +168,16 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         String current = exactDimensionCurrentValue();
         if (current == null || current.trim().isEmpty()) return null;
 
-        if (title.startsWith("طول خط")) return "✎ " + current + " cm";
+        if (title.startsWith("طول خط")) return "✎ " + current + " mm";
         if (title.startsWith("عرض و ارتفاع")) {
             String[] a = current.trim().split("\\s+");
-            if (a.length >= 2) return "✎ " + a[0] + " × " + a[1] + " cm";
-            return "✎ " + current + " cm";
+            if (a.length >= 2) return "✎ " + a[0] + " × " + a[1] + " mm";
+            return "✎ " + current + " mm";
         }
-        if (title.startsWith("قطر دایره")) return "✎ Ø " + current + " cm";
-        if (title.startsWith("شعاع قوس")) return "✎ R " + current + " cm";
-        if (title.startsWith("شعاع چندضلعی")) return "✎ R " + current + " cm";
-        return "✎ " + current + " cm";
+        if (title.startsWith("قطر دایره")) return "✎ Ø " + current + " mm";
+        if (title.startsWith("شعاع قوس")) return "✎ R " + current + " mm";
+        if (title.startsWith("شعاع چندضلعی")) return "✎ R " + current + " mm";
+        return "✎ " + current + " mm";
     }
 
     @Override
@@ -211,7 +211,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                 && canEditExactDimension() && !firstDrawHintShown) {
             firstDrawHintShown = true;
             Toast.makeText(getContext(),
-                    "اندازه دقیق: روی کادر عددی کنار شکل بزن و مقدار cm را وارد کن",
+                    "اندازه دقیق: روی کادر عددی کنار شکل بزن و مقدار را به میلی‌متر وارد کن",
                     Toast.LENGTH_LONG).show();
         }
         return handled;
@@ -232,7 +232,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
         new AlertDialog.Builder(getContext())
                 .setTitle(exactDimensionTitle())
-                .setMessage(exactDimensionHint() + "\nمقدار را به سانتی‌متر وارد کن.")
+                .setMessage(exactDimensionHint() + "\nمقدار را به میلی‌متر وارد کن.")
                 .setView(input)
                 .setPositiveButton("اعمال", (d, w) -> {
                     String result = applySelectedDimension(input.getText().toString());
@@ -317,8 +317,8 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         return (float) Math.hypot(x2 - x1, y2 - y1);
     }
 
-    private static String cm(float mm) {
-        String s = String.format(Locale.US, "%.2f", mm / MM_PER_CM);
+    private static String mm(float value) {
+        String s = String.format(Locale.US, "%.2f", value);
         while (s.contains(".") && (s.endsWith("0") || s.endsWith("."))) {
             s = s.substring(0, s.length() - 1);
         }

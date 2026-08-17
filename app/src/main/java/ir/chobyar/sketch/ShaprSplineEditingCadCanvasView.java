@@ -627,11 +627,11 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         if (e == null) { super.showCurveEditor(); return; }
         LinearLayout box = new LinearLayout(getContext());
         box.setOrientation(LinearLayout.VERTICAL);
-        EditText major = input(cm(ellipseRx(e) * 2f));
-        EditText minor = input(cm(ellipseRy(e) * 2f));
+        EditText major = input(fmt(ellipseRx(e) * 2f));
+        EditText minor = input(fmt(ellipseRy(e) * 2f));
         EditText angle = input(fmt(ellipseAngle(e)));
-        major.setHint("Major axis • cm/mm");
-        minor.setHint("Minor axis • cm/mm");
+        major.setHint("Major axis • mm");
+        minor.setHint("Minor axis • mm");
         angle.setHint("Rotation °");
         box.addView(major); box.addView(minor); box.addView(angle);
         new AlertDialog.Builder(getContext()).setTitle("Ellipse • Driving dimensions")
@@ -825,10 +825,9 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
     private static float ellipseAngle(Object e){return floatField(e,"angle");}
 
     private EditText input(String text){EditText e=new EditText(getContext());e.setSingleLine(true);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setText(text);e.setSelectAllOnFocus(true);return e;}
-    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean mm=s.endsWith("mm")||s.endsWith("میلیمتر")||s.endsWith("میلی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return mm?v:v*10f;}
+    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
-    private static String cm(float mm){return fmt(mm/10f);}
-    private static String dual(float mm){return cm(mm)+" cm / "+fmt(mm)+" mm";}
+    private static String dual(float mm){return fmt(mm)+" mm";}
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private void toast(String s){Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

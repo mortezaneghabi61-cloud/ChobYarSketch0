@@ -3,6 +3,8 @@ package ir.chobyar.sketch;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -16,22 +18,36 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 /** Single production workspace. No activity swapping and no reflection wiring. */
 public final class ChobYarActivity extends Activity {
     private static final int REQUEST_EXPORT_CAD=1701;
+    private static final int REQUEST_REFERENCE_IMAGE=1702;
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
+    private LinearLayout primaryRail;
     private LinearLayout adaptive;
-    private TextView projectTitle;
+    private LinearLayout constraintRail;
+    private final WorkspaceController workspace=new WorkspaceController();
+    private LinearLayout sessionBar;
+    private TextView sessionTitle;
+    private TextView sessionDone;
+    private TextView sessionCopy;
+    private TextView instructionChip;
+    private String currentSelectionKind="NONE";
     private TextView snapButton;
     private File pendingCadExport;
+    private long feedbackRevision;
+    private boolean manualPalette;
+    private boolean sketchPalette;
 
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);immersive();
@@ -46,53 +62,190 @@ public final class ChobYarActivity extends Activity {
         cad.setWorkspaceListener(this::workspaceChanged);
         cad.setOnTouchListener((v,event)->{cad.post(this::syncGpuCamera);return false;});
         root.addView(cad,new FrameLayout.LayoutParams(-1,-1));
-        root.addView(topBar(),matchWrap(Gravity.TOP,8,7,8,0));
-        root.addView(mainTools(),wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
-        root.addView(viewTools(),wrap(Gravity.END|Gravity.TOP,0,62,8,0));
+        root.addView(topControls(),wrap(Gravity.START|Gravity.TOP,9,8,0,0));
+        primaryRail=mainTools();
+        root.addView(primaryRail,wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
+        root.addView(viewTools(),wrap(Gravity.END|Gravity.TOP,0,8,9,0));
+        root.addView(bottomLeftControls(),wrap(Gravity.START|Gravity.BOTTOM,9,0,0,8));
+        root.addView(bottomRightControls(),wrap(Gravity.END|Gravity.BOTTOM,0,0,9,8));
+        instructionChip=label("",10,true);instructionChip.setGravity(Gravity.CENTER);
+        instructionChip.setPadding(dp(12),dp(7),dp(12),dp(7));instructionChip.setMaxWidth(dp(430));
+        instructionChip.setBackground(round(Color.argb(246,255,255,255),Color.rgb(214,221,231),13));
+        instructionChip.setVisibility(View.GONE);
+        root.addView(instructionChip,wrap(Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,9,0,0));
         adaptive=adaptiveTools();adaptive.setVisibility(View.GONE);
-        root.addView(adaptive,wrap(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,12));
+        root.addView(adaptive,wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
+        constraintRail=sketchConstraints();constraintRail.setVisibility(View.GONE);
+        root.addView(constraintRail,wrap(Gravity.END|Gravity.CENTER_VERTICAL,0,0,8,0));
+        sessionBar=sessionTools();sessionBar.setVisibility(View.GONE);
+        root.addView(sessionBar,wrap(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,8));
         setContentView(root);
         cad.post(this::syncGpuMesh);
     }
 
-    private View topBar(){
-        LinearLayout b=card(false);b.setPadding(dp(4),dp(2),dp(4),dp(2));
-        b.addView(action("⌂",42,()->status("پروژه‌ها")));
-        projectTitle=label("چوب‌یار 3D",13,true);projectTitle.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams title=new LinearLayout.LayoutParams(0,dp(42),1);title.setMargins(dp(5),0,0,0);b.addView(projectTitle,title);
-        b.addView(action("↶",42,()->{cad.undo();status("برگشت");}));
-        b.addView(action("↷",42,()->status(cad.redoLastFeature())));
-        b.addView(action("◷",42,cad::showHistoryManager));
-        b.addView(action("⋯",42,this::more));return b;
+    private View topControls(){
+        LinearLayout b=plain(false);
+        b.addView(miniAction("▦",this::showItems));
+        b.addView(miniAction("?",this::showWorkspaceHelp));
+        b.addView(miniAction("⇧",this::showCadExport));
+        return b;
     }
 
-    private View mainTools(){
-        LinearLayout b=card(true);b.setPadding(dp(2),dp(3),dp(2),dp(3));
-        b.addView(tool("⌕","جستجو",this::search));
-        b.addView(tool("✎","Sketch",cad::showShaprSketchMenu));
-        b.addView(tool("＋","Add",cad::showShaprModelingToolsMenu));
-        b.addView(tool("◇","Construct",cad::showPlaneManager));
-        b.addView(tool("↗","Transform",this::transformTools));
-        b.addView(tool("⌁","Tools",this::tools));return b;
+    private LinearLayout mainTools(){
+        LinearLayout b=plain(true);
+        b.addView(tool("✎","Sketch",this::showSketchPalette));
+        b.addView(tool("＋","Add",this::showAddPalette));
+        b.addView(tool("↗","Transform",this::showTransformPalette));
+        b.addView(tool("⌁","Tools",this::showToolsPalette));return b;
     }
 
     private View viewTools(){
-        LinearLayout b=card(true);b.setPadding(dp(2),dp(3),dp(2),dp(3));
-        Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(44),dp(44)));
-        b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
-        snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
-        b.addView(tool("mm","Units",()->toast(cad.dualUnitSummary())));updateSnap();return b;
+        LinearLayout b=plain(true);
+        Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        b.addView(miniAction("◇",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
+        return b;
+    }
+
+    private View bottomLeftControls(){
+        LinearLayout b=plain(false);
+        b.addView(miniAction("↶",()->{cad.undo();status("برگشت");}));
+        b.addView(miniAction("↷",()->status(cad.redoLastFeature())));
+        b.addView(miniAction("▱",cad::showHistoryManager));
+        return b;
+    }
+
+    private View bottomRightControls(){
+        LinearLayout b=plain(false);
+        b.addView(miniAction("▣",this::showItems));
+        snapButton=miniAction("⌁",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
+        b.addView(miniAction("⚙",this::more));
+        updateSnap();return b;
     }
 
     private LinearLayout adaptiveTools(){
-        LinearLayout b=card(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));return b;
+        return plain(true);
+    }
+
+    private LinearLayout sketchConstraints(){
+        LinearLayout b=plain(true);
+        b.addView(tool("H/V","Horizontal\nVertical",()->status(cad.applyHorizontalVerticalConstraint())));
+        b.addView(tool("⊥","Perpendicular",()->status(cad.applyPerpendicularConstraint())));
+        b.addView(tool("∥","Parallel",()->status(cad.applyParallelConstraint())));
+        b.addView(tool("⌑","Constraints",cad::showSmartConstraintMenu));
+        return b;
+    }
+
+    private LinearLayout sessionTools(){
+        LinearLayout b=plain(false);b.setPadding(dp(2),dp(1),dp(2),dp(1));
+        b.addView(sessionButton("لغو",this::cancelWorkspaceTool));
+        sessionCopy=sessionButton("Copy",()->status(cad.toggleBodyTransformCopy()));sessionCopy.setVisibility(View.GONE);b.addView(sessionCopy);
+        sessionTitle=label("",9,true);sessionTitle.setGravity(Gravity.CENTER);
+        sessionTitle.setOnClickListener(v->editSessionValue());
+        b.addView(sessionTitle,new LinearLayout.LayoutParams(dp(116),dp(38)));
+        sessionDone=sessionButton("انجام",this::finishWorkspaceTool);b.addView(sessionDone);
+        return b;
     }
 
     private void workspaceChanged(String info,boolean exact,int tool){
-        boolean selected=info!=null&&!info.trim().isEmpty()&&!info.startsWith("هیچ")&&!info.startsWith("اول")
-                &&!info.contains("انتخاب نبود")&&!info.contains("انتخاب نشده")&&!info.contains("داخل کادر");
-        if(adaptive!=null){if(selected)renderAdaptive(cad.selectionKind());adaptive.setVisibility(selected?View.VISIBLE:View.GONE);}
+        boolean selected=cad.hasWorkspaceSelection();
+        currentSelectionKind=selected?cad.selectionKind():"NONE";
+        WorkspaceController.State state=workspace.onCanvasState(cad.is3DOverview(),currentSelectionKind);
+        if(state.tool==WorkspaceController.Tool.ALIGN&&cad.isAlignPreviewReady())state=workspace.previewReady();
+        if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&state.canCommit()
+                &&!cad.is3DOverview()&&!cad.isTransformSessionActive())cad.showTransformGizmo();
+        updateSessionUi(state);
+        if(adaptive!=null){
+            if(selected&&!manualPalette)renderAdaptive(currentSelectionKind);
+            boolean contextual=(manualPalette||selected)&&!state.sessionActive();
+            adaptive.setVisibility(contextual?View.VISIBLE:View.GONE);
+            if(primaryRail!=null)primaryRail.setVisibility(contextual||state.sessionActive()?View.GONE:View.VISIBLE);
+        }
+        updateConstraintRail(tool,state.sessionActive());
         syncGpuMesh();
+    }
+
+    private void beginMoveRotate(){
+        if(cad.is3DOverview()&&!"NONE".equals(currentSelectionKind)){
+            closeManualPalette();String result=cad.beginBodyTransformSession();
+            if(!cad.isBodyTransformSessionActive()){status(result);return;}
+            workspace.begin(WorkspaceController.Tool.MOVE_ROTATE);updateSessionUi(workspace.previewReady());status(result);return;
+        }
+        WorkspaceController.State state=workspace.begin(WorkspaceController.Tool.MOVE_ROTATE);
+        if(state.canCommit())cad.showTransformGizmo();
+        updateSessionUi(state);
+    }
+
+    private void beginAlign(){
+        closeManualPalette();String result=cad.beginAlignSession();
+        if(!cad.isAlignSessionActive()){status(result);return;}
+        workspace.begin(WorkspaceController.Tool.ALIGN);updateSessionUi(workspace.primaryAccepted());status(result);
+    }
+
+    private void finishWorkspaceTool(){
+        WorkspaceController.State state=workspace.state();
+        if(!state.canCommit())return;
+        String result=null;
+        if(state.tool==WorkspaceController.Tool.MOVE_ROTATE){
+            if(cad.isBodyTransformSessionActive())result=cad.commitBodyTransformSession();else cad.finishTransformSession();
+        }
+        if(state.tool==WorkspaceController.Tool.EXTRUDE)result=cad.commitInteractiveExtrude();
+        if(state.tool==WorkspaceController.Tool.REVOLVE)result=cad.commitInteractiveRevolve();
+        if(state.tool==WorkspaceController.Tool.ALIGN)result=cad.commitAlignSession();
+        updateSessionUi(workspace.finish());
+        if(result!=null)status(result);
+    }
+
+    private void cancelWorkspaceTool(){
+        WorkspaceController.State state=workspace.state();
+        if(state.tool==WorkspaceController.Tool.MOVE_ROTATE){if(cad.isBodyTransformSessionActive())cad.cancelBodyTransformSession();else cad.cancelTransformSession();}
+        if(state.tool==WorkspaceController.Tool.EXTRUDE)cad.cancelInteractiveExtrude();
+        if(state.tool==WorkspaceController.Tool.REVOLVE)cad.cancelInteractiveRevolve();
+        if(state.tool==WorkspaceController.Tool.ALIGN)cad.cancelAlignSession();
+        updateSessionUi(workspace.cancel());
+    }
+
+    private void beginExtrude(){
+        closeManualPalette();
+        String result=cad.beginInteractiveExtrudeSession();
+        if(!cad.isInteractiveExtrudeActive()){status(result);return;}
+        workspace.begin(WorkspaceController.Tool.EXTRUDE);updateSessionUi(workspace.previewReady());
+        status(result);
+    }
+
+    private void beginRevolve(){
+        closeManualPalette();
+        String result=cad.beginInteractiveRevolveSession();
+        if(!cad.isInteractiveRevolveActive()){status(result);return;}
+        workspace.begin(WorkspaceController.Tool.REVOLVE);updateSessionUi(workspace.previewReady());
+    }
+
+    private void editSessionValue(){
+        WorkspaceController.State state=workspace.state();
+        if(state.tool==WorkspaceController.Tool.REVOLVE)cad.showInteractiveRevolveAngleEditor();
+        else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad.isBodyTransformSessionActive())cad.showBodyTransformExactEditor();
+        else if(state.tool==WorkspaceController.Tool.ALIGN)status(cad.flipAlignSession());
+    }
+
+    private void updateSessionUi(WorkspaceController.State state){
+        boolean active=state.sessionActive();
+        if(sessionBar!=null)sessionBar.setVisibility(active?View.VISIBLE:View.GONE);
+        if(instructionChip!=null){instructionChip.setText(state.instruction());instructionChip.setVisibility(active?View.VISIBLE:View.GONE);}
+        if(sessionTitle!=null){
+            String title=state.title();
+            if(state.tool==WorkspaceController.Tool.REVOLVE&&cad!=null&&cad.isInteractiveRevolveActive())title=cad.interactiveRevolveSummary();
+            else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad!=null&&cad.isBodyTransformSessionActive())title=cad.bodyTransformSummary();
+            else if(state.tool==WorkspaceController.Tool.ALIGN&&cad!=null&&cad.isAlignSessionActive())title=cad.alignSummary();
+            sessionTitle.setText(title);
+        }
+        if(sessionDone!=null){sessionDone.setEnabled(state.canCommit());sessionDone.setAlpha(state.canCommit()?1f:.38f);}
+        if(sessionCopy!=null){boolean copy=active&&state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad!=null&&cad.isBodyTransformSessionActive();sessionCopy.setVisibility(copy?View.VISIBLE:View.GONE);sessionCopy.setText(copy&&cad.isBodyTransformCopy()?"Copy ✓":"Copy");}
+        if(adaptive!=null&&active)adaptive.setVisibility(View.GONE);
+        updateConstraintRail(cad==null?CadCanvasView.TOOL_SELECT:cad.getTool(),active);
+        if(primaryRail!=null){
+            boolean contextual=(manualPalette||(cad!=null&&cad.hasWorkspaceSelection()))&&!active;
+            primaryRail.setVisibility(active||contextual?View.GONE:View.VISIBLE);
+            if(adaptive!=null)adaptive.setVisibility(contextual?View.VISIBLE:View.GONE);
+        }
     }
 
     private void syncGpuMesh(){
@@ -104,28 +257,130 @@ public final class ChobYarActivity extends Activity {
 
     private void renderAdaptive(String kind){
         adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
+        adaptive.addView(tool("×","Deselect All",cad::clearWorkspaceSelection));
         if("EDGE".equals(k)){
             adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
             adaptive.addView(tool("⌨","اندازه",this::editDimension));
         }else if("FACE".equals(k)){
-            adaptive.addView(tool("⇧","Offset Face",cad::showSelectedPushPull));adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
-            adaptive.addView(tool("▱","Sketch",()->status(cad.sketchOnSelectedFace())));
+            adaptive.addView(tool("✎","Sketch",this::sketchOnSelectedFace));
+            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
+            adaptive.addView(tool("⇥","Align",this::beginAlign));
+            adaptive.addView(tool("⇲","Scale",cad::showScaleTool));
+            adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
+            adaptive.addView(tool("◎","Offset Edge",cad::showOffsetEdgeTool));
+            adaptive.addView(tool("◇","Add Plane",cad::showPlaneManager));
+            adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
+            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
         }else if("BODY".equals(k)){
-            adaptive.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
+            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));adaptive.addView(tool("⇲","Scale",cad::showScaleTool));
+            adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
             adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
+            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
         }else if("VERTEX".equals(k)){
-            adaptive.addView(tool("↗","Move",()->status(cad.showTransformGizmo())));adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
+            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
         }else{
-            adaptive.addView(tool("⌨","اندازه",this::editDimension));adaptive.addView(tool("⬆","Extrude",cad::showInteractiveExtrude));
+            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
+            adaptive.addView(tool("⧉","Offset",cad::showOffsetEdgeTool));
+            adaptive.addView(tool("✂","Trim",()->status(cad.trimSelectedLines())));
+            adaptive.addView(tool("╱","Extend",()->status(cad.extendSelectedLines())));
+            adaptive.addView(tool("⌨","اندازه",this::editDimension));
+            adaptive.addView(tool("⬆","Extrude",this::beginExtrude));
         }
         adaptive.addView(tool("⌁","More",this::tools));
+        adaptive.addView(tool("⌫","Delete",()->{cad.deleteSelected();cad.dispatchWorkspaceState();}));
     }
+
+    private Runnable beginMoveRotateRunnable(){return this::beginMoveRotate;}
+
+    private void sketchOnSelectedFace(){
+        String result=cad.sketchOnSelectedFace();status(result);
+        if(!cad.is3DOverview())showSketchPalette();
+    }
+
+    private void showSketchPalette(){
+        sketchPalette=true;
+        openManualPalette();
+        adaptive.addView(tool("×","Close",this::closeManualPalette));
+        adaptive.addView(tool("╱","Line",()->activateSketchTool(CadCanvasView.TOOL_LINE,"Line")));
+        adaptive.addView(tool("⌒","Arc",()->activateSketchTool(CadCanvasView.TOOL_ARC,"Arc")));
+        adaptive.addView(tool("▭","Rectangle",()->activateSketchTool(CadCanvasView.TOOL_RECT,"Rectangle")));
+        adaptive.addView(tool("○","Circle",()->activateSketchTool(CadCanvasView.TOOL_CIRCLE,"Circle")));
+        adaptive.addView(tool("⬡","Polygon",()->activateSketchTool(CadCanvasView.TOOL_POLYGON,"Polygon")));
+        adaptive.addView(tool("⌁","Constraints",cad::showSmartConstraintMenu));
+        adaptive.addView(tool("…","More",cad::showShaprSketchMenu));
+    }
+
+    private void showAddPalette(){
+        sketchPalette=false;
+        openManualPalette();
+        adaptive.addView(tool("×","Close",this::closeManualPalette));
+        adaptive.addView(tool("⬆","Extrude",this::beginExtrude));
+        adaptive.addView(tool("⟳","Revolve",this::beginRevolve));
+        adaptive.addView(tool("➜","Sweep",()->runAndClose(cad::showSweepTool)));
+        adaptive.addView(tool("≋","Loft",()->runAndClose(cad::showLoftTool)));
+        adaptive.addView(tool("▧","Image",this::importReferenceImage));
+        adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
+        adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
+    }
+
+    private void showTransformPalette(){
+        sketchPalette=false;
+        openManualPalette();
+        adaptive.addView(tool("×","Close",this::closeManualPalette));
+        adaptive.addView(tool("↗","Move/Rotate",()->runAndClose(this::beginMoveRotate)));
+        adaptive.addView(tool("⇥","Align",()->runAndClose(this::beginAlign)));
+        adaptive.addView(tool("⇲","Scale",()->runAndClose(cad::showScaleTool)));
+        adaptive.addView(tool("⇋","Mirror",()->runAndClose(cad::showMirrorTool)));
+        adaptive.addView(tool("⠿","Pattern",()->runAndClose(cad::showLinearPatternTool)));
+    }
+
+    private void showToolsPalette(){
+        sketchPalette=false;
+        openManualPalette();
+        adaptive.addView(tool("×","Close",this::closeManualPalette));
+        adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));
+        adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
+        adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
+        adaptive.addView(tool("◉","Material",this::showMaterialPalette));
+        adaptive.addView(tool("⌖","Measure",cad::showSketchMeasureInspector));
+        adaptive.addView(tool("⌁","Snaps",cad::showShaprSnappingOptions));
+        adaptive.addView(tool("▱","History",cad::showHistoryManager));
+        adaptive.addView(tool("…","More",this::tools));
+    }
+
+    private void openManualPalette(){
+        manualPalette=true;adaptive.removeAllViews();adaptive.setVisibility(View.VISIBLE);
+        if(primaryRail!=null)primaryRail.setVisibility(View.GONE);
+    }
+
+    private void closeManualPalette(){
+        manualPalette=false;sketchPalette=false;adaptive.removeAllViews();
+        boolean selected=cad!=null&&cad.hasWorkspaceSelection();
+        if(selected){renderAdaptive(cad.selectionKind());adaptive.setVisibility(View.VISIBLE);}
+        else adaptive.setVisibility(View.GONE);
+        if(primaryRail!=null)primaryRail.setVisibility(selected?View.GONE:View.VISIBLE);
+        updateConstraintRail(cad==null?CadCanvasView.TOOL_SELECT:cad.getTool(),false);
+    }
+
+    private void activateSketchTool(int tool,String name){
+        cad.setTool(tool);status(name+" فعال شد");
+        updateConstraintRail(tool,false);
+    }
+
+    private void updateConstraintRail(int activeTool,boolean sessionActive){
+        if(constraintRail==null||cad==null)return;
+        boolean sketching=!sessionActive&&!cad.is3DOverview()
+                &&(sketchPalette||activeTool!=CadCanvasView.TOOL_SELECT);
+        constraintRail.setVisibility(sketching?View.VISIBLE:View.GONE);
+    }
+
+    private void runAndClose(Runnable action){closeManualPalette();action.run();}
 
     private void search(){
         String[] x={"Sketch","Extrude","Move / Rotate","Measure","Constraints","History","Plane","Snaps"};
         new AlertDialog.Builder(this).setTitle("جستجوی فرمان").setItems(x,(d,w)->{
             if(w==0)cad.showShaprSketchMenu();else if(w==1)cad.showShaprModelingToolsMenu();
-            else if(w==2)status(cad.showTransformGizmo());else if(w==3)cad.showSketchMeasureInspector();
+            else if(w==2)beginMoveRotate();else if(w==3)cad.showSketchMeasureInspector();
             else if(w==4)cad.showSmartConstraintMenu();else if(w==5)cad.showHistoryManager();
             else if(w==6)cad.showPlaneManager();else cad.showShaprSnappingOptions();
         }).show();
@@ -143,7 +398,7 @@ public final class ChobYarActivity extends Activity {
     private void transformTools(){
         String[] items={"↗ Move / Rotate","⇲ Scale","⇋ Mirror","⠿ Linear Pattern"};
         new AlertDialog.Builder(this).setTitle("Transform").setItems(items,(d,w)->{
-            if(w==0)status(cad.showTransformGizmo());
+            if(w==0)beginMoveRotate();
             else if(w==1)cad.showScaleTool();
             else if(w==2)cad.showMirrorTool();
             else cad.showLinearPatternTool();
@@ -151,12 +406,38 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","Export STEP / STL","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides"};
+        String[] x={"Items / Layers","Export STEP / STL","Reference Image","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2)setView("TOP");
-            else if(w==3)setView("FRONT");else if(w==4)setView("RIGHT");
-            else if(w==5)setView("ISO");else cad.showShaprSnappingOptions();
+            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}else if(w==3)setView("TOP");
+            else if(w==4)setView("FRONT");else if(w==5)setView("RIGHT");
+            else if(w==6)setView("ISO");else if(w==7)cad.showShaprSnappingOptions();else status(cad.dualUnitSummary());
         }).show();
+    }
+
+    private void importReferenceImage(){
+        closeManualPalette();
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("image/*");startActivityForResult(intent,REQUEST_REFERENCE_IMAGE);
+    }
+
+    private void showWorkspaceHelp(){
+        new AlertDialog.Builder(this).setTitle("راهنمای Workspace")
+                .setMessage("قلم: طراحی و انتخاب دقیق\nانگشت: چرخش، جابه‌جایی و زوم\n\nیک سطح، لبه یا بدنه را لمس کن تا فقط ابزارهای مربوط به همان انتخاب ظاهر شوند. همه اندازه‌ها میلی‌متر هستند.")
+                .setPositiveButton("باشه",null).show();
+    }
+
+    private void showMaterialPalette(){
+        String[] names={"Wood • چوب طبیعی","Fabric • پارچه","Plastic • مات","Metal • فلز","Paint • رنگ سفید"};
+        int[] colors={Color.rgb(156,102,55),Color.rgb(116,71,160),Color.rgb(77,132,190),Color.rgb(126,135,145),Color.rgb(226,229,232)};
+        float[] rough={.58f,.88f,.48f,.24f,.42f},metal={0f,0f,0f,.92f,0f};
+        new AlertDialog.Builder(this).setTitle("Material Properties").setItems(names,(d,w)->showAppearanceEditor(names[w],colors[w],rough[w],metal[w])).setNegativeButton("بستن",null).show();
+    }
+
+    private void showAppearanceEditor(String name,int color,float initialRoughness,float metallic){
+        LinearLayout box=plain(true);box.setPadding(dp(18),dp(6),dp(18),0);TextView value=label("Roughness • "+Math.round(initialRoughness*100f)+"%",12,true);box.addView(value);
+        SeekBar roughness=new SeekBar(this);roughness.setMax(100);roughness.setProgress(Math.round(initialRoughness*100f));box.addView(roughness,new LinearLayout.LayoutParams(dp(280),dp(48)));
+        roughness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int progress,boolean fromUser){value.setText("Roughness • "+progress+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){gpuSurface.setAppearance(color,Math.max(.04f,s.getProgress()/100f),metallic);}});
+        new AlertDialog.Builder(this).setTitle(name).setMessage("متریال فقط ظاهر رندر را تغییر می‌دهد؛ هندسه و اندازه‌ها ثابت می‌مانند.").setView(box)
+                .setPositiveButton("اعمال",(d,w)->gpuSurface.setAppearance(color,Math.max(.04f,roughness.getProgress()/100f),metallic)).setNegativeButton("لغو",null).show();
     }
 
     private void showCadExport(){
@@ -174,6 +455,11 @@ public final class ChobYarActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQUEST_REFERENCE_IMAGE){
+            if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+            try{Bitmap bitmap=decodeReferenceBitmap(data);status(cad.setReferenceImage(bitmap,"Reference Image"));cad.showReferenceImageSettings();}
+            catch(Exception e){toast("خواندن تصویر مرجع انجام نشد");}return;
+        }
         if(requestCode!=REQUEST_EXPORT_CAD||resultCode!=RESULT_OK||data==null||data.getData()==null||pendingCadExport==null)return;
         try(FileInputStream in=new FileInputStream(pendingCadExport);OutputStream out=getContentResolver().openOutputStream(data.getData())){
             if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))>0)out.write(buffer,0,n);
@@ -181,14 +467,23 @@ public final class ChobYarActivity extends Activity {
         }catch(Exception e){toast("ذخیره فایل انجام نشد");}finally{pendingCadExport=null;}
     }
 
+    private Bitmap decodeReferenceBitmap(Intent data)throws Exception{
+        BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;
+        try(InputStream in=getContentResolver().openInputStream(data.getData())){if(in==null)throw new IllegalStateException();BitmapFactory.decodeStream(in,null,bounds);}
+        int max=Math.max(bounds.outWidth,bounds.outHeight),sample=1;while(max/sample>2048)sample*=2;
+        BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=sample;options.inPreferredConfig=Bitmap.Config.ARGB_8888;
+        try(InputStream in=getContentResolver().openInputStream(data.getData())){if(in==null)throw new IllegalStateException();Bitmap bitmap=BitmapFactory.decodeStream(in,null,options);if(bitmap==null)throw new IllegalStateException();return bitmap;}
+    }
+
     private void setView(String view){cad.setStandardView(view);syncGpuCamera();}
 
     private void showItems(){
-        String[] rows=cad.itemRows();
-        if(rows.length==0){toast("هنوز Body ساخته نشده");return;}
-        new AlertDialog.Builder(this).setTitle("Items • Bodies")
-                .setMessage("یک Body را انتخاب کن؛ لمس طولانی با دکمه‌های پایین جایگزین شده تا روی گوشی هم دقیق باشد.")
-                .setItems(rows,(d,w)->{status(cad.selectItem(w));showItemActions(w);})
+        String[] bodies=cad.itemRows();boolean image=cad.hasReferenceImage();
+        if(bodies.length==0&&!image){toast("هنوز Body یا تصویر مرجعی وجود ندارد");return;}
+        String[] rows=new String[bodies.length+(image?1:0)];System.arraycopy(bodies,0,rows,0,bodies.length);if(image)rows[rows.length-1]="▧ Reference Image";
+        new AlertDialog.Builder(this).setTitle("Items")
+                .setMessage("Bodyها و تصویر مرجع از همین‌جا انتخاب و مدیریت می‌شوند.")
+                .setItems(rows,(d,w)->{if(image&&w==rows.length-1)cad.showReferenceImageSettings();else{status(cad.selectItem(w));showItemActions(w);}})
                 .setNegativeButton("بستن",null).show();
     }
 
@@ -217,20 +512,23 @@ public final class ChobYarActivity extends Activity {
                 .setNegativeButton("لغو",null).show();
     }
 
-    private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁\nSnap");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
+    private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
     private void status(String s){
-        // Project identity must stay stable; command feedback already exists in
-        // the workspace status line and dialogs.
-        if(projectTitle!=null)projectTitle.setText("چوب‌یار 3D");
+        if(instructionChip==null||s==null||s.trim().isEmpty()||workspace.state().sessionActive())return;
+        final long revision=++feedbackRevision;
+        instructionChip.setText(s);instructionChip.setVisibility(View.VISIBLE);
+        instructionChip.postDelayed(()->{
+            if(revision==feedbackRevision&&!workspace.state().sessionActive())instructionChip.setVisibility(View.GONE);
+        },2200L);
     }
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
 
-    private LinearLayout card(boolean vertical){LinearLayout x=new LinearLayout(this);x.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);x.setGravity(Gravity.CENTER);x.setElevation(dp(4));x.setBackground(round(Color.argb(246,255,255,255),Color.rgb(222,226,232),14));return x;}
-    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,8,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(46));v.setMinHeight(dp(43));v.setPadding(dp(2),dp(2),dp(2),dp(2));v.setOnClickListener(q->r.run());return v;}
-    private TextView action(String text,int size,Runnable r){TextView v=label(text,17,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(size));v.setMinHeight(dp(38));v.setOnClickListener(q->r.run());return v;}
+    private LinearLayout plain(boolean vertical){LinearLayout x=new LinearLayout(this);x.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);x.setGravity(Gravity.CENTER);return x;}
+    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,8,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(64));v.setMinHeight(dp(51));v.setPadding(dp(3),dp(2),dp(3),dp(2));v.setBackground(round(Color.argb(224,255,255,255),Color.TRANSPARENT,12));v.setOnClickListener(q->r.run());return v;}
+    private TextView miniAction(String text,Runnable r){TextView v=label(text,15,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(34));v.setMinHeight(dp(34));v.setBackground(round(Color.argb(205,255,255,255),Color.TRANSPARENT,17));v.setOnClickListener(q->r.run());return v;}
+    private TextView sessionButton(String text,Runnable r){TextView v=label(text,9,true);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(58));v.setMinHeight(dp(38));v.setPadding(dp(7),0,dp(7),0);v.setBackground(round(Color.argb(232,255,255,255),Color.rgb(213,220,229),12));v.setOnClickListener(q->r.run());return v;}
     private TextView label(String s,float size,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(Color.rgb(38,45,56));if(bold)v.setTypeface(null,Typeface.BOLD);return v;}
     private GradientDrawable round(int fill,int stroke,int radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));d.setStroke(dp(1),stroke);return d;}
-    private FrameLayout.LayoutParams matchWrap(int g,int l,int t,int r,int b){FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(-1,-2,g);p.setMargins(dp(l),dp(t),dp(r),dp(b));return p;}
     private FrameLayout.LayoutParams wrap(int g,int l,int t,int r,int b){FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(-2,-2,g);p.setMargins(dp(l),dp(t),dp(r),dp(b));return p;}
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     private void immersive(){getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}

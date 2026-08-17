@@ -143,8 +143,8 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private void showCylinderDialog(){
         LinearLayout box=form();
-        EditText diameter=input(box,"قطر / Diameter (cm یا mm)","40mm");
-        EditText height=input(box,"ارتفاع / Height (cm یا mm)","60mm");
+        EditText diameter=input(box,"قطر / Diameter (mm)","40");
+        EditText height=input(box,"ارتفاع / Height (mm)","60");
         new AlertDialog.Builder(getContext())
                 .setTitle("Cylinder دقیق")
                 .setMessage("مرکز استوانه روی Origin صفحه Sketch فعال ساخته می‌شود. پارامتر اصلی دقیق می‌ماند.")
@@ -190,7 +190,7 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private void showSphereDialog(){
         LinearLayout box=form();
-        EditText d=input(box,"قطر / Diameter (cm یا mm)","50mm");
+        EditText d=input(box,"قطر / Diameter (mm)","50");
         new AlertDialog.Builder(getContext()).setTitle("Sphere دقیق")
                 .setMessage("مرکز کره روی Origin صفحه فعال قرار می‌گیرد.")
                 .setView(box)
@@ -335,11 +335,11 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     private void ensure3D(){if(!is3DOverview())toggle3DOverview();}
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 
-    private static float parseLengthMm(String raw){String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");if(s.isEmpty())return 0f;if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;return Float.parseFloat(s)*10f;}
+    private static float parseLengthMm(String raw){String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");if(s.isEmpty())return 0f;if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;return Float.parseFloat(s);}
     private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(double mm){return num(mm/10.0)+" cm / "+num(mm)+" mm";}
-    private static String areaDual(double mm2){return num(mm2/100.0)+" cm² / "+num(mm2)+" mm²";}
-    private static String volumeDual(double mm3){return num(mm3/1000.0)+" cm³ / "+num(mm3)+" mm³";}
+    private static String dual(double mm){return num(mm)+" mm";}
+    private static String areaDual(double mm2){return num(mm2)+" mm²";}
+    private static String volumeDual(double mm3){return num(mm3)+" mm³";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

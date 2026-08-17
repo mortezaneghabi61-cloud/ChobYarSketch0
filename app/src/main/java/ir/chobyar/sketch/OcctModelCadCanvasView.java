@@ -120,7 +120,12 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
 
     @Override
     public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg){
-        String result=super.createRevolve(profileEntity,axisEntity,xAxis,angleDeg);
+        return createRevolve(profileEntity,axisEntity,xAxis,angleDeg,0f);
+    }
+
+    @Override
+    public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg,float heightMm){
+        String result=super.createRevolve(profileEntity,axisEntity,xAxis,angleDeg,heightMm);
         lastHistorySignature="";
         syncNativeHistory(true);
         return withSelectedNativeResult(result);
@@ -372,6 +377,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
                 Object axisEntity=value(feature,"axisEntity");
                 boolean xAxis=bool(feature,"xAxis");
                 float angle=number(feature,"angleDeg");
+                float height=number(feature,"heightMm");
                 ProfileRecord profile=profileRecord(profileEntity);
                 if(profile==null||plane==null)return 0L;
                 Object axis=axisForMethod==null?null:axisForMethod.invoke(this,axisEntity,plane,xAxis);
@@ -380,6 +386,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
                 if(origin==null||direction==null||direction.length()<1e-6f){
                     origin=plane.origin;direction=xAxis?plane.u:plane.v;
                 }
+                if(Math.abs(height)>1e-6f)return NativeBRepKernel.occtCreateHelicalRevolve(profile.type,profile.data,origin,direction,angle,height);
                 return NativeBRepKernel.occtCreateRevolve(profile.type,profile.data,origin,direction,angle);
             }
 
@@ -523,7 +530,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
                 +"✓ Circle profile در Formها → analytic OCCT Circle\n"
                 +"✓ History Union/Subtract/Intersect → BRepAlgoAPI\n"
                 +"✓ TopoDS_Shape → OCCT triangulation → نمایش در workspace\n"
-                +"✓ واحد داخلی: mm؛ UI: cm + mm\n\n"
+                +"✓ واحد داخلی و رابط کاربری: mm\n\n"
                 +"مرحله باقی‌مانده در این شاخه: Direct Editهای Face/Edge، Fillet/Chamfer/Shell و Transform باید از backend قدیمی به خود OCCT Shape History منتقل شوند.";
         new AlertDialog.Builder(getContext()).setTitle("Exact Model Migration")
                 .setMessage(msg).setPositiveButton("باشه",null).show();
@@ -584,7 +591,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
             if(f==null)continue;
             Object out=value(f,"outputBody");
             s.append(f.getClass().getSimpleName()).append(':').append(System.identityHashCode(out)).append(':');
-            if("RevolveFeature".equals(f.getClass().getSimpleName()))s.append(number(f,"angleDeg"));
+            if("RevolveFeature".equals(f.getClass().getSimpleName()))s.append(number(f,"angleDeg")).append(':').append(number(f,"heightMm"));
             s.append(':').append(bodyGeometrySignature(out)).append(':').append(hasDirectEdits(out)).append('|');
         }
         return s.toString();
@@ -667,7 +674,7 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         return"Exact Intersect";
     }
 
-    private static String dualVolume(double mm3){return num(mm3/1000.0)+" cm³ / "+num(mm3)+" mm³";}
+    private static String dualVolume(double mm3){return num(mm3)+" mm³";}
     private static String num(double v){
         String s=String.format(Locale.US,"%.4f",v);
         while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);

@@ -124,7 +124,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         Geometry3D.Vec3 b=new Geometry3D.Vec3(40,0,0);
         double[] r=NativeBRepKernel.sphereSphere(a,30,b,30);
         if(r.length!=7){toast("تقاطع Native پیدا نشد");return;}
-        String msg="Sphere A: R 3 cm / 30 mm\nSphere B: R 3 cm / 30 mm\nCenter distance: 4 cm / 40 mm"
+        String msg="Sphere A: R 30 mm\nSphere B: R 30 mm\nCenter distance: 40 mm"
                 +"\n\nIntersection circle radius: "+dual((float)r[6])
                 +"\nCenter: ("+num(r[0])+", "+num(r[1])+", "+num(r[2])+") mm"
                 +"\nNormal: ("+num(r[3])+", "+num(r[4])+", "+num(r[5])+")";
@@ -137,7 +137,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
                 new Geometry3D.Vec3(0,0,10),new Geometry3D.Vec3(0,0,1),
                 new Geometry3D.Vec3(0,0,0),30);
         if(r.length!=7){toast("تقاطع Native پیدا نشد");return;}
-        String msg="Sphere radius: 3 cm / 30 mm\nPlane offset: 1 cm / 10 mm"
+        String msg="Sphere radius: 30 mm\nPlane offset: 10 mm"
                 +"\n\nIntersection circle radius: "+dual((float)r[6])
                 +"\nDiameter: "+dual((float)r[6]*2f)
                 +"\nCenter: ("+num(r[0])+", "+num(r[1])+", "+num(r[2])+") mm";
@@ -149,8 +149,8 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         Toast.makeText(getContext(),text,Toast.LENGTH_LONG).show();
     }
 
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
-    private static String dualVolume(double mm3){return num(mm3/1000.0)+" cm³ / "+num(mm3)+" mm³";}
+    private static String dual(float mm){return num(mm)+" mm";}
+    private static String dualVolume(double mm3){return num(mm3)+" mm³";}
     private static String num(double v){
         String s=String.format(Locale.US,"%.4f",v);
         while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);

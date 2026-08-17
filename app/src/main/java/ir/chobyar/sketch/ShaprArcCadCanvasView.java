@@ -478,7 +478,7 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
     }
 
     private static String dual(float mm) {
-        return fmt(mm / 10f) + " cm / " + fmt(mm) + " mm";
+        return fmt(mm) + " mm";
     }
 
     private void toast(String s) {

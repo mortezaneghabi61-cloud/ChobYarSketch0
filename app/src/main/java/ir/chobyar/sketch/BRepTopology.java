@@ -218,7 +218,7 @@ final class BRepTopology {
     private static String shortHash(String s){return Integer.toHexString(s.hashCode()).toUpperCase(Locale.US);}
     private static float clamp(float v,float a,float b){return Math.max(a,Math.min(b,v));}
     private static String num(float v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dualLength(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
-    private static String dualArea(float mm2){return num(mm2/100f)+" cm² / "+num(mm2)+" mm²";}
-    private static String dualVolume(float mm3){return num(mm3/1000f)+" cm³ / "+num(mm3)+" mm³";}
+    private static String dualLength(float mm){return num(mm)+" mm";}
+    private static String dualArea(float mm2){return num(mm2)+" mm²";}
+    private static String dualVolume(float mm3){return num(mm3)+" mm³";}
 }

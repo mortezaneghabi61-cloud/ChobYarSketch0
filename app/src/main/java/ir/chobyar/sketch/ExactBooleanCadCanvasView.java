@@ -151,7 +151,7 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
             msg.append("\nCenter: ").append(vec(s.center));
             msg.append("\nNormal: ").append(vec(s.planeNormal)).append("\n\n");
         }
-        new AlertDialog.Builder(getContext()).setTitle("Exact Hole Loops • cm/mm")
+        new AlertDialog.Builder(getContext()).setTitle("Exact Hole Loops • mm")
                 .setMessage(msg.toString().trim()).setPositiveButton("باشه",null).show();
     }
 
@@ -161,7 +161,7 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
         String msg="✓ Plane B-Rep faces: exact\n"
                 +"✓ Cylinder/Cone/Sphere master surfaces: analytic\n"
                 +"✓ Plane ↔ analytic surface intersections: exact conic equation\n"
-                +"✓ Circle/Ellipse edge dimensions: exact cm/mm\n"
+                +"✓ Circle/Ellipse edge dimensions: exact mm\n"
                 +"✓ Sphere ↔ Sphere intersection circle: exact\n"
                 +"\nSelected Body exact edges: "+edges.size()
                 +"\n\nهنوز Polygonal: حجم نهایی Union/Subtract/Intersect و Trim عمومی curved↔curved. قدم بعدی جایگزینی همین بخش با Native B-Rep است.";
@@ -264,6 +264,6 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
     private static String friendly(String op){return"UNION".equals(op)?"Union":"SUBTRACT".equals(op)?"Subtract":"Intersect";}
     private static long q(float v){return Math.round(v*1000f);}
     private static String num(float v){String s=String.format(Locale.US,"%.4f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private static String vec(Geometry3D.Vec3 v){return v==null?"—":"("+num(v.x)+", "+num(v.y)+", "+num(v.z)+")";}
 }

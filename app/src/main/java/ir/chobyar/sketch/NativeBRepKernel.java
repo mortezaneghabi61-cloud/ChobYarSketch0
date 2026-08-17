@@ -122,6 +122,17 @@ final class NativeBRepKernel {
         catch(Throwable t){return 0L;}
     }
 
+    /** Exact B-Rep screw motion: simultaneous rotation and axial translation. */
+    static long occtCreateHelicalRevolve(int profileType,double[] profileData,
+                                         Geometry3D.Vec3 axisOrigin,Geometry3D.Vec3 axisDirection,
+                                         double angleDeg,double heightMm){
+        if(!occtAvailable()||profileData==null||axisOrigin==null||axisDirection==null)return 0L;
+        try{return nativeOcctCreateHelicalRevolve(profileType,profileData,
+                axisOrigin.x,axisOrigin.y,axisOrigin.z,
+                axisDirection.x,axisDirection.y,axisDirection.z,angleDeg,heightMm);}
+        catch(Throwable t){return 0L;}
+    }
+
     static long occtCreateSweep(int profileType,double[] profileData,double[] pathXYZ){
         if(!occtAvailable()||profileData==null||pathXYZ==null||pathXYZ.length<6)return 0L;
         try{return nativeOcctCreateSweep(profileType,profileData,pathXYZ);}
@@ -254,6 +265,10 @@ final class NativeBRepKernel {
             int profileType,double[] profileData,
             double ox,double oy,double oz,
             double ax,double ay,double az,double angleDeg);
+    private static native long nativeOcctCreateHelicalRevolve(
+            int profileType,double[] profileData,
+            double ox,double oy,double oz,
+            double ax,double ay,double az,double angleDeg,double heightMm);
     private static native long nativeOcctCreateSweep(int profileType,double[] profileData,double[] pathXYZ);
     private static native long nativeOcctCreateLoft(
             int firstType,double[] firstProfileData,

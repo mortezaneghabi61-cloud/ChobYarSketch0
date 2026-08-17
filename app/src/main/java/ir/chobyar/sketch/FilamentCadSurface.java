@@ -1,6 +1,7 @@
 package ir.chobyar.sketch;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.view.Choreographer;
 import android.view.Surface;
 import android.view.SurfaceView;
@@ -48,7 +49,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private final Camera camera;
     private final int cameraEntity;
     private final Skybox skybox;
-    private final Material cadMaterial;
+    private Material cadMaterial;
     private final int keyLightEntity;
     private final int fillLightEntity;
     private final UiHelper uiHelper;
@@ -59,6 +60,8 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private int renderableEntity;
     private int meshHash;
     private int meshLength;
+    private double[] meshSnapshot=new double[0];
+    private float materialRed=.38f,materialGreen=.64f,materialBlue=.90f,materialRoughness=.62f,materialMetallic=0f;
     private int surfaceWidth,surfaceHeight;
     private SpatialCadCanvasView.GpuCameraState cameraState;
 
@@ -76,18 +79,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         skybox=new Skybox.Builder().color(0.965f,0.972f,0.982f,1.0f).build(engine);
         scene.setSkybox(skybox);view.setScene(scene);view.setCamera(camera);
         MaterialBuilder.init();
-        MaterialPackage materialPackage=new MaterialBuilder()
-                .name("ChobYar CAD Surface")
-                .shading(MaterialBuilder.Shading.LIT)
-                .doubleSided(true)
-                .platform(MaterialBuilder.Platform.MOBILE)
-                .targetApi(MaterialBuilder.TargetApi.ALL)
-                .optimization(MaterialBuilder.Optimization.PERFORMANCE)
-                .material("void material(inout MaterialInputs material) { prepareMaterial(material); material.baseColor = float4(0.38, 0.64, 0.90, 1.0); material.roughness = 0.62; material.metallic = 0.0; material.reflectance = 0.35; }")
-                .build(engine);
-        if(!materialPackage.isValid())throw new IllegalStateException("CAD material compilation failed");
-        ByteBuffer materialBuffer=materialPackage.getBuffer();
-        cadMaterial=new Material.Builder().payload(materialBuffer,materialBuffer.remaining()).build(engine);
+        cadMaterial=buildCadMaterial();
         keyLightEntity=EntityManager.get().create();
         new LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1.0f,0.97f,0.92f).intensity(92000f)
                 .direction(-0.55f,-0.70f,-0.85f).castShadows(false).build(engine,keyLightEntity);
@@ -113,6 +105,32 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
             }
         });
         uiHelper.attachTo(this);
+    }
+
+    private Material buildCadMaterial(){
+        String shader="void material(inout MaterialInputs material) { prepareMaterial(material); material.baseColor = float4("+
+                materialRed+", "+materialGreen+", "+materialBlue+", 1.0); material.roughness = "+materialRoughness+
+                "; material.metallic = "+materialMetallic+"; material.reflectance = 0.35; }";
+        MaterialPackage materialPackage=new MaterialBuilder()
+                .name("ChobYar CAD Surface")
+                .shading(MaterialBuilder.Shading.LIT)
+                .doubleSided(true)
+                .platform(MaterialBuilder.Platform.MOBILE)
+                .targetApi(MaterialBuilder.TargetApi.ALL)
+                .optimization(MaterialBuilder.Optimization.PERFORMANCE)
+                .material(shader)
+                .build(engine);
+        if(!materialPackage.isValid())throw new IllegalStateException("CAD material compilation failed");
+        ByteBuffer materialBuffer=materialPackage.getBuffer();
+        return new Material.Builder().payload(materialBuffer,materialBuffer.remaining()).build(engine);
+    }
+
+    void setAppearance(int color,float roughness,float metallic){
+        float r=Color.red(color)/255f,g=Color.green(color)/255f,b=Color.blue(color)/255f;
+        roughness=Math.max(.04f,Math.min(1f,roughness));metallic=Math.max(0f,Math.min(1f,metallic));
+        if(Math.abs(r-materialRed)<.001f&&Math.abs(g-materialGreen)<.001f&&Math.abs(b-materialBlue)<.001f&&Math.abs(roughness-materialRoughness)<.001f&&Math.abs(metallic-materialMetallic)<.001f)return;
+        double[] restore=meshSnapshot;clearMesh();Material old=cadMaterial;materialRed=r;materialGreen=g;materialBlue=b;materialRoughness=roughness;materialMetallic=metallic;
+        cadMaterial=buildCadMaterial();engine.destroyMaterial(old);meshLength=-1;meshHash=0;if(restore.length>=9)setMesh(restore);
     }
 
     void setCameraState(SpatialCadCanvasView.GpuCameraState state){cameraState=state;applyCameraState();}
@@ -144,7 +162,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         if(xyz==null)xyz=new double[0];
         int nextHash=Arrays.hashCode(xyz);
         if(meshLength==xyz.length&&meshHash==nextHash)return;
-        clearMesh();meshLength=xyz.length;meshHash=nextHash;
+        clearMesh();meshSnapshot=Arrays.copyOf(xyz,xyz.length);meshLength=xyz.length;meshHash=nextHash;
         int vertexCount=xyz.length/3;
         if(vertexCount<3)return;
 

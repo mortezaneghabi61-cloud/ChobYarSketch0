@@ -148,21 +148,20 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
         if ("LineEntity".equals(type)) {
             c.drawLine(sx(num(e,"x1"),k,ox), sy(num(e,"y1"),k,oy),
                     sx(num(e,"x2"),k,ox), sy(num(e,"y2"),k,oy), statePaint);
-            drawPoint(c, num(e,"x1"), num(e,"y1"), k, ox, oy);
-            drawPoint(c, num(e,"x2"), num(e,"y2"), k, ox, oy);
+            if(handles){drawPoint(c,num(e,"x1"),num(e,"y1"),k,ox,oy);drawPoint(c,num(e,"x2"),num(e,"y2"),k,ox,oy);}
             return;
         }
         if ("CircleEntity".equals(type)) {
             float x=num(e,"x"), y=num(e,"y"), r=Math.abs(num(e,"r"));
             c.drawCircle(sx(x,k,ox), sy(y,k,oy), r*k, statePaint);
-            drawPoint(c,x,y,k,ox,oy);
+            if(handles)drawPoint(c,x,y,k,ox,oy);
             return;
         }
         if ("ArcEntity".equals(type)) {
             float x=num(e,"x"), y=num(e,"y"), r=Math.abs(num(e,"r"));
             RectF box=new RectF(sx(x-r,k,ox),sy(y-r,k,oy),sx(x+r,k,ox),sy(y+r,k,oy));
             c.drawArc(box,num(e,"start"),num(e,"sweep"),false,statePaint);
-            drawPoint(c,x,y,k,ox,oy);
+            if(handles)drawPoint(c,x,y,k,ox,oy);
             return;
         }
         if ("RectEntity".equals(type)) {

@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PointF;
 import android.text.InputType;
 import android.view.MotionEvent;
@@ -75,8 +76,14 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         TimelineEntry(Object body,StableEdit edit){this.body=body;this.edit=edit;}
     }
 
+    private static final class ManualCopy {
+        final Object source,output;final Geometry3D.Vec3 move,rotate;
+        ManualCopy(Object source,Object output,Geometry3D.Vec3 move,Geometry3D.Vec3 rotate){this.source=source;this.output=output;this.move=move;this.rotate=rotate;}
+    }
+
     private final IdentityHashMap<Object,List<StableEdit>> stableByBody=new IdentityHashMap<>();
     private final List<TimelineEntry> timeline=new ArrayList<>();
+    private final List<ManualCopy> manualCopies=new ArrayList<>();
     private int directSerial=1;
     private int topologySerial=1;
 
@@ -102,6 +109,30 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private long featurePreviewHandle=0L;
     private double[] featurePreviewMesh=new double[0];
 
+    private boolean bodyTransformActive;
+    private boolean bodyTransformCopy;
+    private Object bodyTransformBody;
+    private Geometry3D.Vec3 bodyTransformMove=new Geometry3D.Vec3(0,0,0);
+    private Geometry3D.Vec3 bodyTransformRotate=new Geometry3D.Vec3(0,0,0);
+    private Geometry3D.Vec3 bodyTransformCenter;
+    private final PointF[] bodyAxisTips={new PointF(),new PointF(),new PointF()};
+    @SuppressWarnings("unchecked")
+    private final List<PointF>[] bodyRotationRings=new List[]{new ArrayList<>(),new ArrayList<>(),new ArrayList<>()};
+    private PointF bodyGizmoOrigin;
+    private int bodyGizmoDrag;
+    private boolean bodyGizmoMoved;
+    private float bodyGizmoDownX,bodyGizmoDownY,bodyGizmoStartValue;
+    private long lastBodyPreviewNs;
+    private final Paint[] bodyAxisPaint={new Paint(Paint.ANTI_ALIAS_FLAG),new Paint(Paint.ANTI_ALIAS_FLAG),new Paint(Paint.ANTI_ALIAS_FLAG)};
+    private final Paint bodyGizmoText=new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private boolean alignActive,alignReady,alignFlip=true;
+    private Object alignBody;
+    private Geometry3D.Vec3 alignSourcePoint,alignSourceNormal,alignTargetPoint,alignTargetNormal;
+    private Geometry3D.Vec3 alignRotationAxis=new Geometry3D.Vec3(0,0,1),alignMove=new Geometry3D.Vec3(0,0,0);
+    private float alignRotationDeg;
+    private final Paint alignPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+
     public OcctStableCadCanvasView(Context context){
         super(context);
         stableEdgePaint.setColor(Color.rgb(0,115,210));
@@ -110,6 +141,10 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         featurePreviewPaint.setColor(Color.rgb(0,120,225));
         featurePreviewPaint.setStrokeWidth(2.4f);
         featurePreviewPaint.setStyle(Paint.Style.STROKE);
+        int[] colors={Color.rgb(220,67,73),Color.rgb(34,157,93),Color.rgb(43,111,222)};float density=getResources().getDisplayMetrics().density;
+        for(int i=0;i<3;i++){bodyAxisPaint[i].setColor(colors[i]);bodyAxisPaint[i].setStrokeWidth(3f*density);bodyAxisPaint[i].setStyle(Paint.Style.STROKE);bodyAxisPaint[i].setStrokeCap(Paint.Cap.ROUND);}
+        bodyGizmoText.setColor(Color.rgb(39,54,75));bodyGizmoText.setTextSize(12f*density);bodyGizmoText.setTextAlign(Paint.Align.CENTER);
+        alignPaint.setColor(Color.rgb(139,83,205));alignPaint.setStrokeWidth(3f*density);alignPaint.setStyle(Paint.Style.STROKE);alignPaint.setStrokeCap(Paint.Cap.ROUND);
         initStableReflection();
     }
 
@@ -358,6 +393,129 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                 }).setNegativeButton("لغو",null).show();
     }
 
+    /** Entry used by the production workspace: transform stays on the canvas. */
+    public void showBodyMoveTool(){
+        String result=beginBodyTransformSession();toast(result);
+    }
+
+    public String beginBodyTransformSession(){
+        Object body=selectedBody();if(body==null)return "اول Body را انتخاب کن";
+        Object record=ensureNativeRecord(body);if(record==null)return "Shape دقیق این Body آماده نیست";
+        clearFeaturePreview();bodyTransformBody=body;bodyTransformActive=true;
+        bodyTransformCopy=false;
+        bodyTransformMove=new Geometry3D.Vec3(0,0,0);bodyTransformRotate=new Geometry3D.Vec3(0,0,0);
+        bodyTransformCenter=bodyCenter(bodyCsg(body));bodyGizmoDrag=0;ensure3D();invalidate();dispatchWorkspaceState();
+        return "Move / Rotate • فلش‌های X/Y/Z یا حلقه‌ها را بکش";
+    }
+
+    public boolean isBodyTransformSessionActive(){return bodyTransformActive;}
+
+    public String bodyTransformSummary(){
+        if(!bodyTransformActive)return "Move / Rotate";
+        String copy=bodyTransformCopy?"Copy • ":"";
+        if(bodyTransformRotate.length()>1e-4f)return copy+"R  "+num(bodyTransformRotate.x)+"°  "+num(bodyTransformRotate.y)+"°  "+num(bodyTransformRotate.z)+"°";
+        return copy+"X "+mmText(bodyTransformMove.x)+"  Y "+mmText(bodyTransformMove.y)+"  Z "+mmText(bodyTransformMove.z);
+    }
+
+    public String toggleBodyTransformCopy(){if(!bodyTransformActive)return "Move / Rotate فعال نیست";bodyTransformCopy=!bodyTransformCopy;invalidate();dispatchWorkspaceState();return bodyTransformCopy?"Copy روشن شد • بدنهٔ جدید ساخته می‌شود":"Copy خاموش شد";}
+    public boolean isBodyTransformCopy(){return bodyTransformCopy;}
+
+    public String commitBodyTransformSession(){
+        if(!bodyTransformActive||bodyTransformBody==null)return "Move / Rotate فعال نیست";
+        Object body=bodyTransformBody;Geometry3D.Vec3 move=bodyTransformMove,rotate=bodyTransformRotate;boolean copy=bodyTransformCopy;
+        if(copy){
+            String result=commitExactBodyCopy(body,move,rotate);endBodyTransformPreview();return result;
+        }
+        endBodyTransformPreview();int count=0;
+        if(move.length()>1e-5f){recordStable(body,new StableEdit(directSerial++,Kind.MOVE,0,move,null));count++;}
+        Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
+        float[] angles={rotate.x,rotate.y,rotate.z};
+        for(int i=0;i<3;i++)if(Math.abs(angles[i])>1e-4f){recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,angles[i],axes[i],null));count++;}
+        return count==0?"Transform بدون تغییر بسته شد":"Move / Rotate دقیق ثبت شد • "+count+" Feature";
+    }
+
+    public void cancelBodyTransformSession(){if(!bodyTransformActive)return;endBodyTransformPreview();dispatchWorkspaceState();}
+
+    private void endBodyTransformPreview(){
+        clearFeaturePreview();bodyTransformActive=false;bodyTransformCopy=false;bodyTransformBody=null;bodyTransformCenter=null;bodyGizmoDrag=0;invalidate();
+    }
+
+    public void showBodyTransformExactEditor(){
+        if(!bodyTransformActive)return;
+        LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0);
+        EditText x=axisInput(box,"Move X",mmText(bodyTransformMove.x)),y=axisInput(box,"Move Y",mmText(bodyTransformMove.y)),z=axisInput(box,"Move Z",mmText(bodyTransformMove.z));
+        EditText rx=axisInput(box,"Rotate X",num(bodyTransformRotate.x)+"°"),ry=axisInput(box,"Rotate Y",num(bodyTransformRotate.y)+"°"),rz=axisInput(box,"Rotate Z",num(bodyTransformRotate.z)+"°");
+        new AlertDialog.Builder(getContext()).setTitle("Move / Rotate • مقدار دقیق")
+                .setMessage("جابجایی بر حسب mm و دوران بر حسب درجه است.").setView(box)
+                .setPositiveButton("پیش‌نمایش",(d,w)->{try{
+                    bodyTransformMove=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),(float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
+                    bodyTransformRotate=new Geometry3D.Vec3(parseAngleDeg(rx),parseAngleDeg(ry),parseAngleDeg(rz));refreshBodyTransformPreview(true);dispatchWorkspaceState();
+                }catch(Exception e){toast("مقادیر Move / Rotate درست نیست");}}).setNegativeButton("لغو",null).show();
+    }
+
+    private static float parseAngleDeg(EditText e){
+        String s=normalizeDigits(e.getText().toString()).toLowerCase(Locale.US).replace("°","").replace("deg","").trim();return Float.parseFloat(s);
+    }
+
+    public String beginAlignSession(){
+        Object body=selectedBody();SolidCSG.Polygon face=selectedFace();
+        if(body==null||face==null)return "برای Align ابتدا Face مبدأ را انتخاب کن";
+        if(ensureNativeRecord(body)==null)return "Shape دقیق Face مبدأ آماده نیست";
+        cancelBodyTransformSession();clearFeaturePreview();alignActive=true;alignReady=false;alignFlip=true;alignBody=body;
+        alignSourcePoint=face.centroid();alignSourceNormal=face.plane.normal.normalized();alignTargetPoint=null;alignTargetNormal=null;
+        invalidate();dispatchWorkspaceState();return "Align • حالا Face مقصد را لمس کن";
+    }
+
+    public boolean isAlignSessionActive(){return alignActive;}
+    public boolean isAlignPreviewReady(){return alignActive&&alignReady;}
+    public String alignSummary(){return !alignReady?"Align • Face مقصد":"Align "+(alignFlip?"Opposed":"Same")+" • R "+num(alignRotationDeg)+"°";}
+
+    public String flipAlignSession(){
+        if(!alignReady)return "ابتدا Face مقصد را انتخاب کن";alignFlip=!alignFlip;
+        return refreshAlignPreview()?"Align • جهت برعکس شد":"پیش‌نمایش Align ساخته نشد";
+    }
+
+    public String commitAlignSession(){
+        if(!alignActive||!alignReady||alignBody==null)return "Align هنوز مقصد معتبر ندارد";
+        Object body=alignBody;Geometry3D.Vec3 axis=alignRotationAxis,move=alignMove;float angle=alignRotationDeg;
+        endAlignSession();try{selectedBodyField.set(this,body);}catch(Exception ignored){}
+        int count=0;if(Math.abs(angle)>1e-4f){recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,angle,axis,null));count++;}
+        if(move.length()>1e-5f){recordStable(body,new StableEdit(directSerial++,Kind.MOVE,0,move,null));count++;}
+        return count==0?"دو Face از قبل هم‌راستا بودند":"Align دقیق ثبت شد • "+count+" Feature";
+    }
+
+    public void cancelAlignSession(){if(!alignActive)return;endAlignSession();dispatchWorkspaceState();}
+
+    private void endAlignSession(){
+        clearFeaturePreview();alignActive=false;alignReady=false;alignBody=null;alignSourcePoint=null;alignSourceNormal=null;alignTargetPoint=null;alignTargetNormal=null;invalidate();
+    }
+
+    private boolean captureAlignTarget(Object body,SolidCSG.Polygon face){
+        if(!alignActive||body==null||face==null||body==alignBody)return false;
+        alignTargetPoint=face.centroid();alignTargetNormal=face.plane.normal.normalized();alignReady=refreshAlignPreview();dispatchWorkspaceState();return alignReady;
+    }
+
+    private boolean refreshAlignPreview(){
+        if(!alignActive||alignBody==null||alignSourcePoint==null||alignTargetPoint==null)return false;
+        Geometry3D.Vec3 desired=alignFlip?alignTargetNormal.mul(-1f):alignTargetNormal;
+        float dot=Math.max(-1f,Math.min(1f,alignSourceNormal.dot(desired)));Geometry3D.Vec3 axis=alignSourceNormal.cross(desired);
+        float angle=(float)Math.toDegrees(Math.acos(dot));
+        if(axis.length()<1e-5f){axis=Math.abs(alignSourceNormal.z)<.9f?alignSourceNormal.cross(new Geometry3D.Vec3(0,0,1)):alignSourceNormal.cross(new Geometry3D.Vec3(0,1,0));}
+        axis=axis.normalized();Geometry3D.Vec3 center=bodyCenter(bodyCsg(alignBody));
+        Geometry3D.Vec3 turned=rotatePoint(alignSourcePoint,center,axis,Math.toRadians(angle));
+        alignRotationAxis=axis;alignRotationDeg=angle;alignMove=alignTargetPoint.sub(turned);
+        Object record=ensureNativeRecord(alignBody);if(record==null)return false;clearFeaturePreview();long current=recordHandle(record);List<Long> temp=new ArrayList<>();
+        if(Math.abs(angle)>1e-4f){long next=NativeBRepKernel.occtRotate(current,axis,angle);if(next==0L)return false;temp.add(next);current=next;}
+        if(alignMove.length()>1e-5f){long next=NativeBRepKernel.occtTranslate(current,alignMove);if(next==0L){for(long h:temp)NativeBRepKernel.occtRelease(h);return false;}temp.add(next);current=next;}
+        if(temp.isEmpty())return true;featurePreviewHandle=current;featurePreviewMesh=NativeBRepKernel.occtTriangulate(current,.22);
+        for(int i=0;i<temp.size()-1;i++)NativeBRepKernel.occtRelease(temp.get(i));invalidate();return featurePreviewMesh.length>=9;
+    }
+
+    private static Geometry3D.Vec3 rotatePoint(Geometry3D.Vec3 point,Geometry3D.Vec3 origin,Geometry3D.Vec3 axis,double angle){
+        Geometry3D.Vec3 r=point.sub(origin);float c=(float)Math.cos(angle),s=(float)Math.sin(angle);
+        return origin.add(r.mul(c).add(axis.cross(r).mul(s)).add(axis.mul(axis.dot(r)*(1f-c))));
+    }
+
     private EditText axisInput(LinearLayout parent,String axis,String initial){
         TextView t=new TextView(getContext());t.setText(axis+"  (mm)");parent.addView(t);
         EditText e=new EditText(getContext());e.setSingleLine(true);e.setText(initial);e.setSelectAllOnFocus(true);parent.addView(e);return e;
@@ -470,10 +628,27 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private String replayAllAfterParentSync(){
         pruneDeadBodies();int ok=0,broken=0;
         for(Object body:new ArrayList<>(stableByBody.keySet())){
+            if(isManualCopyOutput(body))continue;
             if(replayOneBody(body))ok++;else broken++;
         }
+        int copyFailures=rebuildManualCopies();broken+=copyFailures;ok+=manualCopies.size()-copyFailures;
+        for(Object body:new ArrayList<>(stableByBody.keySet()))if(isManualCopyOutput(body)){if(replayOneBody(body))ok++;else broken++;}
         invalidate();dispatchWorkspaceState();
         return "Stable History بازسازی شد • "+ok+" Body"+(broken>0?" • "+broken+" خطا":"");
+    }
+
+    private boolean isManualCopyOutput(Object body){for(ManualCopy copy:manualCopies)if(copy.output==body)return true;return false;}
+
+    private int rebuildManualCopies(){
+        int failed=0;Map<Object,Object> map=nativeMap();if(map==null)return manualCopies.size();
+        for(ManualCopy copy:manualCopies){
+            Object sourceRecord=map.get(copy.source);if(sourceRecord==null){failed++;continue;}
+            long handle=transformedCopyHandle(recordHandle(sourceRecord),copy.move,copy.rotate);if(handle==0L){failed++;continue;}
+            double[] mesh=NativeBRepKernel.occtTriangulate(handle,.24);if(mesh.length<9){NativeBRepKernel.occtRelease(handle);failed++;continue;}
+            try{Object old=map.remove(copy.output);if(old!=null)NativeBRepKernel.occtRelease(recordHandle(old));map.put(copy.output,nativeRecordConstructor.newInstance(handle,"Exact Transform Copy",mesh));updateFallbackFromNative(copy.output);}
+            catch(Exception e){NativeBRepKernel.occtRelease(handle);failed++;}
+        }
+        return failed;
     }
 
     private boolean replayOneBody(Object body){
@@ -585,6 +760,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event){
+        if(bodyTransformActive&&event.getPointerCount()==1&&handleBodyGizmoTouch(event))return true;
         int action=event.getActionMasked();
         if(edgePickMode){
             if(action==MotionEvent.ACTION_DOWN){edgeDownX=event.getX();edgeDownY=event.getY();edgeMoved=false;}
@@ -613,7 +789,124 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                 canvas.drawLine(a.x,a.y,b.x,b.y,featurePreviewPaint);canvas.drawLine(b.x,b.y,c.x,c.y,featurePreviewPaint);canvas.drawLine(c.x,c.y,a.x,a.y,featurePreviewPaint);
             }
         }
+        if(bodyTransformActive&&is3DOverview())drawBodyTransformGizmo(canvas);
+        if(alignActive&&alignSourcePoint!=null){
+            PointF a=project(alignSourcePoint);canvas.drawCircle(a.x,a.y,9f,alignPaint);
+            if(alignTargetPoint!=null){PointF b=project(alignTargetPoint);canvas.drawCircle(b.x,b.y,9f,alignPaint);canvas.drawLine(a.x,a.y,b.x,b.y,alignPaint);}
+        }
     }
+
+    private void drawBodyTransformGizmo(Canvas canvas){
+        if(bodyTransformCenter==null)return;Geometry3D.Vec3 gizmoCenter=bodyTransformCenter.add(bodyTransformMove);bodyGizmoOrigin=project(gizmoCenter);
+        float axisLength=Math.max(22f,bodyRadius(bodyCsg(bodyTransformBody))*.72f);
+        Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
+        for(int i=0;i<3;i++){
+            bodyAxisTips[i]=project(gizmoCenter.add(axes[i].mul(axisLength)));
+            drawArrow(canvas,bodyGizmoOrigin,bodyAxisTips[i],bodyAxisPaint[i]);
+            canvas.drawText(i==0?"X":i==1?"Y":"Z",bodyAxisTips[i].x,bodyAxisTips[i].y-10f,bodyGizmoText);
+        }
+        for(int axis=0;axis<3;axis++){
+            List<PointF> points=bodyRotationRings[axis];points.clear();Path path=new Path();
+            Geometry3D.Vec3 u=axis==0?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(1,0,0);
+            Geometry3D.Vec3 v=axis==2?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
+            float radius=axisLength*.72f;
+            for(int i=0;i<=48;i++){
+                double a=2*Math.PI*i/48d;PointF q=project(gizmoCenter.add(u.mul((float)Math.cos(a)*radius)).add(v.mul((float)Math.sin(a)*radius)));
+                points.add(q);if(i==0)path.moveTo(q.x,q.y);else path.lineTo(q.x,q.y);
+            }
+            Paint ring=bodyAxisPaint[axis];float old=ring.getStrokeWidth();ring.setStrokeWidth(old*.62f);canvas.drawPath(path,ring);ring.setStrokeWidth(old);
+        }
+        canvas.drawText(bodyTransformSummary(),bodyGizmoOrigin.x,bodyGizmoOrigin.y-28f,bodyGizmoText);
+    }
+
+    private boolean handleBodyGizmoTouch(MotionEvent event){
+        int action=event.getActionMasked();float x=event.getX(),y=event.getY();float density=getResources().getDisplayMetrics().density;
+        if(action==MotionEvent.ACTION_DOWN){
+            if(bodyGizmoOrigin==null)return false;float best=Float.MAX_VALUE;int picked=0;
+            for(int i=0;i<3;i++){float d=distanceToSegment(x,y,bodyGizmoOrigin.x,bodyGizmoOrigin.y,bodyAxisTips[i].x,bodyAxisTips[i].y);if(d<best){best=d;picked=i+1;}}
+            for(int i=0;i<3;i++){float d=distanceToPolyline(x,y,bodyRotationRings[i]);if(d<best){best=d;picked=i+4;}}
+            if(best>25f*density)return false;bodyGizmoDrag=picked;bodyGizmoMoved=false;bodyGizmoDownX=x;bodyGizmoDownY=y;
+            bodyGizmoStartValue=transformComponent(picked);return true;
+        }
+        if(bodyGizmoDrag==0)return false;
+        if(action==MotionEvent.ACTION_MOVE){
+            float dx=x-bodyGizmoDownX,dy=y-bodyGizmoDownY;if(dx*dx+dy*dy>16f)bodyGizmoMoved=true;
+            if(bodyGizmoDrag<=3){
+                PointF tip=bodyAxisTips[bodyGizmoDrag-1];float vx=tip.x-bodyGizmoOrigin.x,vy=tip.y-bodyGizmoOrigin.y,len=Math.max(1f,(float)Math.hypot(vx,vy));
+                float axisMm=Math.max(22f,bodyRadius(bodyCsg(bodyTransformBody))*.72f);float delta=((dx*vx+dy*vy)/len)/(len/axisMm);
+                setTransformComponent(bodyGizmoDrag,bodyGizmoStartValue+delta);
+            }else{
+                double a0=Math.atan2(bodyGizmoDownY-bodyGizmoOrigin.y,bodyGizmoDownX-bodyGizmoOrigin.x),a1=Math.atan2(y-bodyGizmoOrigin.y,x-bodyGizmoOrigin.x);
+                double delta=Math.toDegrees(a1-a0);if(delta>180)delta-=360;if(delta<-180)delta+=360;setTransformComponent(bodyGizmoDrag,bodyGizmoStartValue+(float)delta);
+            }
+            long now=System.nanoTime();if(now-lastBodyPreviewNs>55_000_000L){lastBodyPreviewNs=now;refreshBodyTransformPreview(false);}invalidate();return true;
+        }
+        if(action==MotionEvent.ACTION_UP){boolean edit=!bodyGizmoMoved;bodyGizmoDrag=0;refreshBodyTransformPreview(true);dispatchWorkspaceState();if(edit)showBodyTransformExactEditor();return true;}
+        if(action==MotionEvent.ACTION_CANCEL){bodyGizmoDrag=0;return true;}return true;
+    }
+
+    private void refreshBodyTransformPreview(boolean force){
+        if(!bodyTransformActive||bodyTransformBody==null)return;Object record=ensureNativeRecord(bodyTransformBody);if(record==null)return;
+        clearFeaturePreview();long current=recordHandle(record);List<Long> temporary=new ArrayList<>();
+        if(bodyTransformMove.length()>1e-5f){long next=NativeBRepKernel.occtTranslate(current,bodyTransformMove);if(next==0L)return;temporary.add(next);current=next;}
+        Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
+        float[] angle={bodyTransformRotate.x,bodyTransformRotate.y,bodyTransformRotate.z};
+        for(int i=0;i<3;i++)if(Math.abs(angle[i])>1e-4f){long next=NativeBRepKernel.occtRotate(current,axes[i],angle[i]);if(next==0L){for(long h:temporary)NativeBRepKernel.occtRelease(h);return;}temporary.add(next);current=next;}
+        if(temporary.isEmpty()){invalidate();return;}featurePreviewHandle=current;featurePreviewMesh=NativeBRepKernel.occtTriangulate(current,force ? .22 : .38);
+        for(int i=0;i<temporary.size()-1;i++)NativeBRepKernel.occtRelease(temporary.get(i));invalidate();
+    }
+
+    private String commitExactBodyCopy(Object source,Geometry3D.Vec3 move,Geometry3D.Vec3 rotate){
+        Object sourceRecord=ensureNativeRecord(source);if(sourceRecord==null)return "Shape دقیق برای Copy آماده نیست";
+        long handle=transformedCopyHandle(recordHandle(sourceRecord),move,rotate);if(handle==0L)return "Copy دقیق ساخته نشد";
+        double[] mesh=NativeBRepKernel.occtTriangulate(handle,.24);SolidCSG csg=csgFromMesh(mesh);
+        if(csg==null||csg.isEmpty()){NativeBRepKernel.occtRelease(handle);return "مش Copy ساخته نشد";}
+        Object output=addIndependentBody(bodyName(source)+" Copy",csg);if(output==null){NativeBRepKernel.occtRelease(handle);return "Body جدید ساخته نشد";}
+        try{
+            Object nativeRecord=nativeRecordConstructor.newInstance(handle,"Exact Transform Copy",mesh);Map<Object,Object> map=nativeMap();if(map==null)throw new IllegalStateException();map.put(output,nativeRecord);
+            manualCopies.add(new ManualCopy(source,output,move,rotate));selectedBodyField.set(this,output);clearSubSelection();invalidate();dispatchWorkspaceState();
+            return "Copy دقیق ساخته شد • Body مستقل";
+        }catch(Exception e){NativeBRepKernel.occtRelease(handle);return "ثبت Copy دقیق انجام نشد";}
+    }
+
+    private long transformedCopyHandle(long base,Geometry3D.Vec3 move,Geometry3D.Vec3 rotate){
+        if(base==0L)return 0L;long current=base;boolean owned=false;
+        if(move!=null&&move.length()>1e-5f){long next=NativeBRepKernel.occtTranslate(current,move);if(next==0L)return 0L;current=next;owned=true;}
+        Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
+        float[] angles=rotate==null?new float[]{0,0,0}:new float[]{rotate.x,rotate.y,rotate.z};
+        for(int i=0;i<3;i++)if(Math.abs(angles[i])>1e-4f){long next=NativeBRepKernel.occtRotate(current,axes[i],angles[i]);if(next==0L){if(owned)NativeBRepKernel.occtRelease(current);return 0L;}if(owned)NativeBRepKernel.occtRelease(current);current=next;owned=true;}
+        if(!owned)current=NativeBRepKernel.occtScale(base,1.0);return current;
+    }
+
+    private static SolidCSG csgFromMesh(double[] mesh){
+        if(mesh==null||mesh.length<9)return null;List<SolidCSG.Polygon> polygons=new ArrayList<>();
+        for(int i=0;i+8<mesh.length;i+=9){List<SolidCSG.Vertex> vertices=new ArrayList<>(3);
+            vertices.add(new SolidCSG.Vertex(new Geometry3D.Vec3((float)mesh[i],(float)mesh[i+1],(float)mesh[i+2])));
+            vertices.add(new SolidCSG.Vertex(new Geometry3D.Vec3((float)mesh[i+3],(float)mesh[i+4],(float)mesh[i+5])));
+            vertices.add(new SolidCSG.Vertex(new Geometry3D.Vec3((float)mesh[i+6],(float)mesh[i+7],(float)mesh[i+8])));polygons.add(new SolidCSG.Polygon(vertices));}
+        return SolidCSG.fromPolygons(polygons);
+    }
+
+    private float transformComponent(int picked){
+        if(picked==1)return bodyTransformMove.x;if(picked==2)return bodyTransformMove.y;if(picked==3)return bodyTransformMove.z;
+        if(picked==4)return bodyTransformRotate.x;if(picked==5)return bodyTransformRotate.y;return bodyTransformRotate.z;
+    }
+
+    private void setTransformComponent(int picked,float value){
+        if(picked==1)bodyTransformMove=new Geometry3D.Vec3(value,bodyTransformMove.y,bodyTransformMove.z);
+        else if(picked==2)bodyTransformMove=new Geometry3D.Vec3(bodyTransformMove.x,value,bodyTransformMove.z);
+        else if(picked==3)bodyTransformMove=new Geometry3D.Vec3(bodyTransformMove.x,bodyTransformMove.y,value);
+        else if(picked==4)bodyTransformRotate=new Geometry3D.Vec3(value,bodyTransformRotate.y,bodyTransformRotate.z);
+        else if(picked==5)bodyTransformRotate=new Geometry3D.Vec3(bodyTransformRotate.x,value,bodyTransformRotate.z);
+        else bodyTransformRotate=new Geometry3D.Vec3(bodyTransformRotate.x,bodyTransformRotate.y,value);
+    }
+
+    private static void drawArrow(Canvas canvas,PointF a,PointF b,Paint paint){
+        canvas.drawLine(a.x,a.y,b.x,b.y,paint);float dx=b.x-a.x,dy=b.y-a.y,len=Math.max(1f,(float)Math.hypot(dx,dy));dx/=len;dy/=len;float wing=13f;
+        canvas.drawLine(b.x,b.y,b.x-dx*wing-dy*wing*.55f,b.y-dy*wing+dx*wing*.55f,paint);canvas.drawLine(b.x,b.y,b.x-dx*wing+dy*wing*.55f,b.y-dy*wing-dx*wing*.55f,paint);
+    }
+
+    private static float distanceToPolyline(float x,float y,List<PointF> p){float best=Float.MAX_VALUE;for(int i=1;i<p.size();i++)best=Math.min(best,distanceToSegment(x,y,p.get(i-1).x,p.get(i-1).y,p.get(i).x,p.get(i).y));return best;}
 
     private boolean pickWorkspaceEdge(float sx,float sy){
         Object body=selectedBody();SolidCSG csg=bodyCsg(body);if(body==null||csg==null)return false;
@@ -634,6 +927,11 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     @Override
     protected void onTopologyPicked(Object body,String kind,Geometry3D.Vec3 anchor,
                                     Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB){
+        if(alignActive&&"FACE".equals(kind)){
+            SolidCSG.Polygon target=selectedFace();
+            if(captureAlignTarget(body,target)){toast("Align • پیش‌نمایش آماده است");return;}
+            if(body==alignBody)toast("Face مقصد باید روی Body دیگری باشد");
+        }
         if(body==null||!"EDGE".equals(kind)||anchor==null||selectedA==null||selectedB==null){
             selectedEdgeRef=null;selectedEdgeBody=null;edgeA=edgeB=edgeAnchor=null;return;
         }
@@ -697,6 +995,18 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private SolidCSG.Polygon selectedFace(){try{Object v=selectedFaceField==null?null:selectedFaceField.get(this);return v instanceof SolidCSG.Polygon?(SolidCSG.Polygon)v:null;}catch(Exception e){return null;}}
     private SolidCSG bodyCsg(Object body){try{Field f=body==null?null:findField(body.getClass(),"csg");Object v=f==null?null:f.get(body);return v instanceof SolidCSG?(SolidCSG)v:null;}catch(Exception e){return null;}}
 
+    private static Geometry3D.Vec3 bodyCenter(SolidCSG csg){
+        if(csg==null)return new Geometry3D.Vec3(0,0,0);double x=0,y=0,z=0;int n=0;
+        for(SolidCSG.Polygon p:csg.polygons())for(SolidCSG.Vertex v:p.vertices){x+=v.pos.x;y+=v.pos.y;z+=v.pos.z;n++;}
+        return n==0?new Geometry3D.Vec3(0,0,0):new Geometry3D.Vec3((float)(x/n),(float)(y/n),(float)(z/n));
+    }
+
+    private static float bodyRadius(SolidCSG csg){
+        if(csg==null)return 30f;Geometry3D.Vec3 center=bodyCenter(csg);float radius=0f;
+        for(SolidCSG.Polygon p:csg.polygons())for(SolidCSG.Vertex v:p.vertices)radius=Math.max(radius,v.pos.sub(center).length());
+        return Math.max(8f,radius);
+    }
+
     @SuppressWarnings("unchecked")
     private List<Object> bodies(){try{Object v=bodiesField==null?null:bodiesField.get(this);return v instanceof List?(List<Object>)v:new ArrayList<>();}catch(Exception e){return new ArrayList<>();}}
 
@@ -705,6 +1015,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         Iterator<Map.Entry<Object,List<StableEdit>>> it=stableByBody.entrySet().iterator();
         while(it.hasNext())if(!alive.contains(it.next().getKey()))it.remove();
         for(int i=timeline.size()-1;i>=0;i--)if(!alive.contains(timeline.get(i).body))timeline.remove(i);
+        for(int i=manualCopies.size()-1;i>=0;i--){ManualCopy copy=manualCopies.get(i);if(!alive.contains(copy.source)||!alive.contains(copy.output))manualCopies.remove(i);}
     }
 
     private Object bodyFor(StableEdit edit){for(TimelineEntry e:timeline)if(e.edit==edit)return e.body;return null;}
@@ -738,7 +1049,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     private static String signedDual(double mm){return(mm>=0?"+":"")+dual(mm);}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String mmText(double mm){return num(mm)+"mm";}
-    private static String axisName(Geometry3D.Vec3 a){if(a==null)return"?";if(Math.abs(a.x)>0.9f)return"X";if(Math.abs(a.y)>0.9f)return"Y";return"Z";}
+    private static String axisName(Geometry3D.Vec3 a){if(a==null)return"?";if(Math.abs(a.x)>0.999f)return"X";if(Math.abs(a.y)>0.999f)return"Y";if(Math.abs(a.z)>0.999f)return"Z";return"("+num(a.x)+", "+num(a.y)+", "+num(a.z)+")";}
     private static String appendKind(String base,StableEdit e){return(base==null?"OCCT":base)+" + D"+e.id+"/"+e.kind.name();}
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_LONG).show();}

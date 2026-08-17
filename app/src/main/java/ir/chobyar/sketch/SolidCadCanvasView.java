@@ -12,8 +12,6 @@ import android.text.InputType;
 import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.SeekBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
@@ -88,6 +86,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     private boolean solidGesture = false;
     private boolean solidOrbit = false;
+    private boolean solidGesturePen = false;
     private float solidDownX, solidDownY, solidLastX, solidLastY;
 
     private final Paint bodyFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -97,8 +96,26 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private final Paint bodyText = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint extrudePreviewFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint extrudePreviewWire = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint extrudeHandle = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint extrudeHandleFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private SolidCSG extrudePreview;
+    private SolidCSG formPreview;
+    private String formPreviewLabel="";
     private float extrudePreviewHeightMm = 20f;
+    private ProfileData extrudeSessionProfile;
+    private Geometry3D.Plane3D extrudeSessionPlane;
+    private Geometry3D.Vec3 extrudeSessionOrigin;
+    private boolean extrudeSessionActive;
+    private boolean extrudeDragging;
+    private boolean extrudeDragMoved;
+    private float extrudeDragStartX;
+    private float extrudeDragStartY;
+    private float extrudeDragStartHeightMm;
+    private float extrudeDragUx;
+    private float extrudeDragUy;
+    private float extrudePixelsPerMm;
+    private PointF extrudeBaseScreen;
+    private PointF extrudeTipScreen;
 
     public SolidCadCanvasView(Context context) {
         super(context);
@@ -145,6 +162,12 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         extrudePreviewWire.setColor(Color.rgb(0,105,210));
         extrudePreviewWire.setStyle(Paint.Style.STROKE);
         extrudePreviewWire.setStrokeWidth(3.2f);
+        extrudeHandle.setColor(Color.rgb(0,105,210));
+        extrudeHandle.setStyle(Paint.Style.STROKE);
+        extrudeHandle.setStrokeWidth(4.2f);
+        extrudeHandle.setStrokeCap(Paint.Cap.ROUND);
+        extrudeHandleFill.setColor(Color.WHITE);
+        extrudeHandleFill.setStyle(Paint.Style.FILL);
     }
 
     // ------------------------------------------------------------------
@@ -205,53 +228,63 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         // evaluated against the real body and the final viewport size.
         post(this::fitAll);
         invalidate();
-        return body.name+" ساخته شد | Extrude = "+fmt(heightCm)+" cm";
+        return body.name+" ساخته شد | Extrude = "+fmt(heightCm*10f)+" mm";
     }
 
     /** Selection-first Boolean entry used by the production adaptive toolbar. */
     public void startBooleanTool(String operation){startBoolean(operation);}
 
-    /** Live Shapr-style extrusion preview with drag slider and exact input. */
+    /**
+     * Start a canvas-native extrusion. The body preview and arrow stay in the
+     * workspace, so the user can still orbit with a finger instead of being
+     * trapped inside a modal slider.
+     */
     public void showInteractiveExtrude(){
-        ProfileData profile=profileFromSelection();
-        if(profile==null||profile.points.size()<3){toast("اول یک سطح بسته را انتخاب کن");return;}
-        Geometry3D.Plane3D plane=planeForLayer(profile.layer);
-        setOverview(true);
+        toast(beginInteractiveExtrudeSession());
+    }
 
+    public String beginInteractiveExtrudeSession(){
+        ProfileData profile=profileFromSelection();
+        if(profile==null||profile.points.size()<3)return "اول داخل یک پروفایل بسته را انتخاب کن";
+        Geometry3D.Plane3D plane=planeForLayer(profile.layer);
+        float cx=0f,cy=0f;for(PointF p:profile.points){cx+=p.x;cy+=p.y;}
+        cx/=profile.points.size();cy/=profile.points.size();
+        extrudeSessionProfile=profile;extrudeSessionPlane=plane;extrudeSessionOrigin=plane.point(cx,cy);
+        extrudeSessionActive=true;extrudeDragging=false;extrudePreviewHeightMm=20f;
+        setOverview(true);
+        rebuildExtrudePreview(true);dispatchWorkspaceState();
+        return "Extrude فعال شد • فلش آبی را بکش یا روی آن بزن";
+    }
+
+    public boolean isInteractiveExtrudeActive(){return extrudeSessionActive;}
+
+    public String commitInteractiveExtrude(){
+        if(!extrudeSessionActive)return "Extrude فعال نیست";
+        float mm=extrudePreviewHeightMm;clearExtrudeSession();
+        String result=extrudeSelectedBody(mm/10f);dispatchWorkspaceState();return result;
+    }
+
+    public void cancelInteractiveExtrude(){clearExtrudeSession();dispatchWorkspaceState();}
+
+    private void rebuildExtrudePreview(boolean fit){
+        if(!extrudeSessionActive||extrudeSessionProfile==null||extrudeSessionPlane==null)return;
+        if(Math.abs(extrudePreviewHeightMm)<.1f)extrudePreviewHeightMm=extrudePreviewHeightMm<0f?-.1f:.1f;
+        extrudePreview=SolidCSG.extrude(extrudeSessionProfile.points,extrudeSessionPlane,extrudePreviewHeightMm);
+        if(fit)fitPreview();invalidate();
+    }
+
+    private void promptInteractiveExtrudeValue(){
+        if(!extrudeSessionActive)return;
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(18f*getResources().getDisplayMetrics().density);box.setPadding(pad,pad/2,pad,pad/2);
-        TextView value=new TextView(getContext());value.setTextSize(18f);value.setTextColor(Color.rgb(30,45,65));
         EditText exact=new EditText(getContext());exact.setSingleLine();exact.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        SeekBar slider=new SeekBar(getContext());slider.setMax(4000);slider.setProgress(2200);
-        box.addView(value);box.addView(slider);box.addView(exact);
-
-        final float[] height={20f};
-        Runnable refresh=()->{
-            float h=Math.abs(height[0])<.1f?(height[0]<0?-.1f:.1f):height[0];
-            height[0]=h;extrudePreviewHeightMm=h;
-            extrudePreview=SolidCSG.extrude(profile.points,plane,h);
-            value.setText("Extrude  "+fmt(h)+" mm  /  "+fmt(h/10f)+" cm");
-            exact.setText(fmt(h)+"mm");exact.setSelection(exact.length());
-            fitPreview();invalidate();
-        };
-        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar s,int progress,boolean fromUser){if(fromUser){height[0]=(progress-2000)/10f;refresh.run();}}
-            public void onStartTrackingTouch(SeekBar s){}
-            public void onStopTrackingTouch(SeekBar s){}
-        });
-        refresh.run();
-
-        AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle("Extrude • پیش‌نمایش زنده")
-                .setMessage("نوار را بکش یا اندازه دقیق را با mm / cm وارد کن. مقدار منفی جهت حجم را برعکس می‌کند.")
-                .setView(box).setPositiveButton("ساخت",null).setNegativeButton("لغو",null).create();
-        dialog.setOnShowListener(x->{
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                try{float mm=parseLengthInput(exact.getText().toString());clearExtrudePreview();dialog.dismiss();toast(extrudeSelectedBody(mm/10f));}
-                catch(Exception e){exact.setError("مثال: 20mm یا 2cm");}
-            });
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearExtrudePreview();dialog.dismiss();});
-        });
-        dialog.setOnCancelListener(x->clearExtrudePreview());dialog.show();
+        exact.setText(fmt(extrudePreviewHeightMm)+"mm");exact.setSelectAllOnFocus(true);box.addView(exact);
+        new AlertDialog.Builder(getContext()).setTitle("Extrude • mm")
+                .setMessage("مقدار منفی جهت حجم را برعکس می‌کند.")
+                .setView(box).setPositiveButton("اعمال",(d,w)->{
+                    try{extrudePreviewHeightMm=parseLengthInput(exact.getText().toString());rebuildExtrudePreview(true);}
+                    catch(Exception e){toast("اندازه درست نیست • مثال: 20 mm");}
+                }).setNegativeButton("لغو",null).show();
     }
 
     private float parseLengthInput(String raw){
@@ -261,13 +294,36 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         return Float.parseFloat(s);
     }
 
-    private void clearExtrudePreview(){extrudePreview=null;invalidate();}
+    private void clearExtrudeSession(){
+        extrudePreview=null;extrudeSessionProfile=null;extrudeSessionPlane=null;extrudeSessionOrigin=null;
+        extrudeSessionActive=false;extrudeDragging=false;extrudeBaseScreen=null;extrudeTipScreen=null;invalidate();
+    }
 
     private void fitPreview(){
-        if(extrudePreview==null||extrudePreview.isEmpty())return;
+        fitSolidPreview(extrudePreview);
+    }
+
+    protected void setFormPreview(SolidCSG preview,String label,boolean fit){
+        formPreview=preview;formPreviewLabel=label==null?"":label;
+        if(fit)fitSolidPreview(preview);invalidate();
+    }
+
+    protected void clearFormPreview(){formPreview=null;formPreviewLabel="";invalidate();}
+
+    /** Creates a separately selectable body for exact Copy/Pattern workflows. */
+    protected final Object addIndependentBody(String requestedName,SolidCSG csg){
+        if(csg==null||csg.isEmpty())return null;saveSolidUndo();
+        String name=requestedName==null||requestedName.trim().isEmpty()?"Body "+bodySerial:requestedName.trim();
+        SolidBody body=new SolidBody(bodySerial++,name,csg);bodies.add(body);selectedBody=body;selectedFace=null;clearSubSelection();setOverview(true);invalidate();return body;
+    }
+
+    protected void showModelOverview(){setOverview(true);}
+
+    private void fitSolidPreview(SolidCSG preview){
+        if(preview==null||preview.isEmpty())return;
         float minX=Float.POSITIVE_INFINITY,minY=Float.POSITIVE_INFINITY,minZ=Float.POSITIVE_INFINITY;
         float maxX=Float.NEGATIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY,maxZ=Float.NEGATIVE_INFINITY;
-        for(SolidCSG.Polygon p:extrudePreview.polygons())for(SolidCSG.Vertex v:p.vertices){Geometry3D.Vec3 q=v.pos;
+        for(SolidCSG.Polygon p:preview.polygons())for(SolidCSG.Vertex v:p.vertices){Geometry3D.Vec3 q=v.pos;
             minX=Math.min(minX,q.x);minY=Math.min(minY,q.y);minZ=Math.min(minZ,q.z);
             maxX=Math.max(maxX,q.x);maxY=Math.max(maxY,q.y);maxZ=Math.max(maxZ,q.z);}
         final float a=minX,b=minY,c=minZ,d=maxX,e=maxY,f=maxZ;post(()->fitSpatialBounds(a,b,c,d,e,f));
@@ -371,8 +427,8 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         String cmd=a[0].toUpperCase(Locale.US);
         try{
             if("P".equals(cmd)||"PUSHPULL".equals(cmd)||"EXTRUDE".equals(cmd)){
-                if(a.length<2)return"ارتفاع Extrude را به cm وارد کن";
-                return extrudeSelectedBody(Float.parseFloat(a[1]));
+                if(a.length<2)return"ارتفاع Extrude را به mm وارد کن";
+                return extrudeSelectedBody(Float.parseFloat(a[1])/10f);
             }
             if("UNION".equals(cmd)||"SUBTRACT".equals(cmd)||"INTERSECT".equals(cmd)){
                 startBoolean(cmd);
@@ -402,6 +458,20 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         return "SKETCH";
     }
 
+    /** Exact selection state for the production workspace; no message parsing. */
+    public boolean hasWorkspaceSelection(){
+        if(is3DOverview())return selectedBody!=null||selectedFace!=null||selectedVertex!=null
+                ||(selectedEdgeA!=null&&selectedEdgeB!=null);
+        return !selectionObjects().isEmpty();
+    }
+
+    /** Clears either a sketch selection or any 3D sub-selection in one action. */
+    public void clearWorkspaceSelection(){
+        clearSmartSelection();
+        selectedBody=null;selectedFace=null;selectedEdgeA=null;selectedEdgeB=null;selectedVertex=null;
+        invalidate();dispatchWorkspaceState();
+    }
+
     private void clearSubSelection(){selectedEdgeA=null;selectedEdgeB=null;selectedVertex=null;}
 
     // ------------------------------------------------------------------
@@ -412,13 +482,13 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         EditText input=new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
-        input.setText("2");input.setSelectAllOnFocus(true);
+        input.setText("20");input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("Extrude — ارتفاع cm")
+                .setTitle("Extrude — ارتفاع mm")
                 .setMessage("سطح بسته را انتخاب کن. عدد منفی Extrude را به سمت دیگر Plane می‌برد.")
                 .setView(input)
                 .setPositiveButton("ساخت Body",(d,w)->{
-                    try{toast(extrudeSelectedBody(Float.parseFloat(normalizeDigits(input.getText().toString().trim()))));}
+                    try{toast(extrudeSelectedBody(Float.parseFloat(normalizeDigits(input.getText().toString().trim()))/10f));}
                     catch(Exception e){toast("ارتفاع درست وارد نشده");}
                 })
                 .setNegativeButton("لغو",null).show();
@@ -493,6 +563,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         super.onDraw(canvas);
         if(is3DOverview()){
             if(gpuBodyRendering)drawGpuSelection(canvas);else drawSolidBodies(canvas);
+            drawFormPreview(canvas);
             drawExtrudePreview(canvas);
         }
     }
@@ -520,7 +591,37 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
             Path shape=path(points);if(shape!=null){canvas.drawPath(shape,extrudePreviewFill);canvas.drawPath(shape,extrudePreviewWire);}
         }
         canvas.restore();
-        canvas.drawText("Extrude "+fmt(extrudePreviewHeightMm)+" mm",card.centerX(),card.bottom-72f,bodyText);
+        drawExtrudeManipulator(canvas);
+    }
+
+    private void drawFormPreview(Canvas canvas){
+        if(formPreview==null||formPreview.isEmpty())return;
+        RectF card=overviewCard();if(card==null||card.isEmpty())return;
+        canvas.save();canvas.clipRect(card);
+        for(SolidCSG.Polygon polygon:formPreview.polygons()){
+            List<PointF> points=new ArrayList<>();for(SolidCSG.Vertex vertex:polygon.vertices)points.add(project(vertex.pos));
+            Path shape=path(points);if(shape!=null){canvas.drawPath(shape,extrudePreviewFill);canvas.drawPath(shape,extrudePreviewWire);}
+        }
+        canvas.restore();
+        if(!formPreviewLabel.isEmpty())canvas.drawText(formPreviewLabel,card.centerX(),card.bottom-52f,bodyText);
+    }
+
+    private void drawExtrudeManipulator(Canvas canvas){
+        if(!extrudeSessionActive||extrudeSessionOrigin==null||extrudeSessionPlane==null)return;
+        Geometry3D.Vec3 end=extrudeSessionOrigin.add(extrudeSessionPlane.normal.mul(extrudePreviewHeightMm));
+        PointF base=project(extrudeSessionOrigin),tip=project(end);extrudeBaseScreen=base;extrudeTipScreen=tip;
+        float dx=tip.x-base.x,dy=tip.y-base.y,len=(float)Math.hypot(dx,dy);
+        if(len<2f){dx=0f;dy=-1f;len=1f;}else{dx/=len;dy/=len;}
+        canvas.drawLine(base.x,base.y,tip.x,tip.y,extrudeHandle);
+        float wing=13f*getResources().getDisplayMetrics().density;
+        canvas.drawLine(tip.x,tip.y,tip.x-dx*wing-dy*wing*.55f,tip.y-dy*wing+dx*wing*.55f,extrudeHandle);
+        canvas.drawLine(tip.x,tip.y,tip.x-dx*wing+dy*wing*.55f,tip.y-dy*wing-dx*wing*.55f,extrudeHandle);
+        float r=9f*getResources().getDisplayMetrics().density;
+        canvas.drawCircle(tip.x,tip.y,r,extrudeHandleFill);canvas.drawCircle(tip.x,tip.y,r,extrudeHandle);
+        String text=fmt(extrudePreviewHeightMm)+" mm";float tw=bodyText.measureText(text);
+        float left=tip.x-tw*.5f-12f,top=tip.y-r-43f,right=tip.x+tw*.5f+12f,bottom=top+32f;
+        Paint chip=new Paint(Paint.ANTI_ALIAS_FLAG);chip.setColor(Color.argb(238,255,255,255));canvas.drawRoundRect(left,top,right,bottom,12f,12f,chip);
+        canvas.drawText(text,tip.x,bottom-8f,bodyText);
     }
 
     private void drawSolidBodies(Canvas canvas) {
@@ -559,13 +660,21 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if(extrudeSessionActive&&is3DOverview()&&event.getPointerCount()==1&&handleExtrudeTouch(event))return true;
         if(is3DOverview()&&event.getPointerCount()==1){
             RectF card=overviewCard();float x=event.getX(),y=event.getY();int a=event.getActionMasked();
+            int pointer=event.getActionIndex()<event.getPointerCount()?event.getActionIndex():0;
+            int pointerType=event.getToolType(pointer);
+            boolean pen=pointerType==MotionEvent.TOOL_TYPE_STYLUS||pointerType==MotionEvent.TOOL_TYPE_ERASER;
             if(a==MotionEvent.ACTION_DOWN&&card!=null&&card.contains(x,y)){
-                solidGesture=true;solidOrbit=false;solidDownX=x;solidDownY=y;solidLastX=x;solidLastY=y;return true;
+                solidGesture=true;solidOrbit=false;solidGesturePen=pen;solidDownX=x;solidDownY=y;solidLastX=x;solidLastY=y;return true;
             }
             if(solidGesture){
                 if(a==MotionEvent.ACTION_MOVE){
+                    // Pen is the precision selector/manipulator; a finger owns
+                    // orbit. This keeps a slightly moving S Pen tap from
+                    // unexpectedly rotating the entire workspace.
+                    if(solidGesturePen)return true;
                     float move=(float)Math.hypot(x-solidDownX,y-solidDownY);
                     if(move>8f)solidOrbit=true;
                     if(solidOrbit){orbitBy(x-solidLastX,y-solidLastY);solidLastX=x;solidLastY=y;invalidate();}
@@ -573,13 +682,45 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
                 }
                 if(a==MotionEvent.ACTION_UP){
                     if(!solidOrbit)pickFace(x,y);
-                    solidGesture=false;solidOrbit=false;return true;
+                    solidGesture=false;solidOrbit=false;solidGesturePen=false;return true;
                 }
-                if(a==MotionEvent.ACTION_CANCEL){solidGesture=false;solidOrbit=false;return true;}
+                if(a==MotionEvent.ACTION_CANCEL){solidGesture=false;solidOrbit=false;solidGesturePen=false;return true;}
                 return true;
             }
         }
         return super.onTouchEvent(event);
+    }
+
+    private boolean handleExtrudeTouch(MotionEvent event){
+        int action=event.getActionMasked();float x=event.getX(),y=event.getY();
+        if(action==MotionEvent.ACTION_DOWN){
+            if(extrudeBaseScreen==null||extrudeTipScreen==null)return false;
+            float hit=distanceToSegment(x,y,extrudeBaseScreen.x,extrudeBaseScreen.y,extrudeTipScreen.x,extrudeTipScreen.y);
+            float tipHit=(float)Math.hypot(x-extrudeTipScreen.x,y-extrudeTipScreen.y);
+            float threshold=28f*getResources().getDisplayMetrics().density;
+            if(Math.min(hit,tipHit)>threshold)return false;
+            float vx=extrudeTipScreen.x-extrudeBaseScreen.x,vy=extrudeTipScreen.y-extrudeBaseScreen.y;
+            float length=Math.max(1f,(float)Math.hypot(vx,vy));
+            extrudeDragUx=vx/length;extrudeDragUy=vy/length;
+            extrudePixelsPerMm=Math.max(.25f,length/Math.max(.1f,Math.abs(extrudePreviewHeightMm)));
+            extrudeDragging=true;extrudeDragMoved=false;extrudeDragStartX=x;extrudeDragStartY=y;
+            extrudeDragStartHeightMm=extrudePreviewHeightMm;return true;
+        }
+        if(!extrudeDragging)return false;
+        if(action==MotionEvent.ACTION_MOVE){
+            float dx=x-extrudeDragStartX,dy=y-extrudeDragStartY;
+            if(dx*dx+dy*dy>16f)extrudeDragMoved=true;
+            float along=dx*extrudeDragUx+dy*extrudeDragUy;
+            float sign=extrudeDragStartHeightMm<0f?-1f:1f;
+            float magnitude=Math.max(.1f,Math.abs(extrudeDragStartHeightMm)+along/extrudePixelsPerMm);
+            extrudePreviewHeightMm=sign*magnitude;rebuildExtrudePreview(false);return true;
+        }
+        if(action==MotionEvent.ACTION_UP){
+            boolean edit=!extrudeDragMoved;extrudeDragging=false;
+            if(edit)promptInteractiveExtrudeValue();return true;
+        }
+        if(action==MotionEvent.ACTION_CANCEL){extrudeDragging=false;return true;}
+        return true;
     }
 
     private void pickFace(float sx,float sy) {
@@ -716,6 +857,10 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         try{Object o=projectMethod.invoke(this,p);if(o instanceof PointF)return(PointF)o;}catch(Exception ignored){}
         return new PointF();
     }
+
+    /** Projection hooks for on-canvas feature manipulators in derived tools. */
+    protected final PointF projectSolidPoint(Geometry3D.Vec3 p){return project(p);}
+    protected final RectF solidViewport(){return overviewCard();}
 
     private float cameraDepth(Geometry3D.Vec3 p) {
         try{

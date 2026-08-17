@@ -157,6 +157,10 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
         if(is3DOverview())return;
+        // Off-plane topology is a transient snapping aid. Keeping every OCCT
+        // edge and point visible while idle recreated the purple line forest
+        // from the old workspace and obscured the user's sketch.
+        if(!isSketchGesture()&&externalCandidate==null)return;
         if(snapDistantEdges)drawDistantEdges(canvas);
         if(snap3DGuidepoints && baseBool(baseShowPointsField,true))draw3DGuidepoints(canvas);
         if(externalCandidate!=null && baseBool(baseHintsField,true))drawExternalHint(canvas,externalCandidate);

@@ -28,8 +28,7 @@ import java.util.Map;
  * - an on-canvas Move/Rotate gizmo for selected geometry
  * - constraint badges and filled coincidence points
  *
- * All user-facing length values remain centimeters through the parent layer;
- * the geometry model itself stays in millimeters.
+ * User-facing and model-space length values are millimeters.
  */
 public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
 
@@ -88,6 +87,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     private float gizmoLastAngle;
     private float gizmoDelta;
     private boolean gizmoVisible = false;
+    private int gizmoSessionUndoSteps = 0;
 
     private final Paint gizmoXPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint gizmoYPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -179,15 +179,30 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         super.setTool(TOOL_SELECT);
         gizmoVisible = true;
         gizmoMode = GIZMO_NONE;
+        gizmoSessionUndoSteps = 0;
         invalidate();
         return "Move / Rotate فعال شد";
     }
 
     public void hideTransformGizmo() {
-        gizmoVisible = false;
-        cancelGizmo();
-        invalidate();
+        finishTransformSession();
     }
+
+    /** Commit all manipulator drags made since the tool was opened. */
+    public void finishTransformSession() {
+        gizmoVisible=false;gizmoSessionUndoSteps=0;cancelGizmo();invalidate();dispatchWorkspaceState();
+    }
+
+    /** Restore the selection to its state before the current transform tool. */
+    public void cancelTransformSession() {
+        int steps=gizmoSessionUndoSteps;
+        gizmoVisible=false;gizmoSessionUndoSteps=0;cancelGizmo();
+        for(int i=0;i<steps;i++)super.undo();
+        axisLocks.clear();lineRelations.clear();coincidenceLinks.clear();lastLineCreated=null;
+        invalidate();dispatchWorkspaceState();
+    }
+
+    public boolean isTransformSessionActive(){ return gizmoVisible; }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -546,7 +561,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         if (gizmoMode != GIZMO_NONE && Math.abs(gizmoDelta) > 0.001f) {
             String text = gizmoMode == GIZMO_ROTATE
                     ? trim(String.format(Locale.US, "%.1f", gizmoDelta)) + "°"
-                    : trim(String.format(Locale.US, "%.2f", gizmoDelta / 10f)) + " cm";
+                    : trim(String.format(Locale.US, "%.2f", gizmoDelta)) + " mm";
             float tx = s.x + (gizmoMode == GIZMO_X ? arm + 38f : 42f);
             float ty = s.y + (gizmoMode == GIZMO_Y ? -arm - 18f : -18f);
             canvas.drawText(text, tx, ty, gizmoTextPaint);
@@ -582,6 +597,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
             if (!gizmoUndoSaved) {
                 saveUndo();
                 gizmoUndoSaved = true;
+                gizmoSessionUndoSteps++;
             }
             if (gizmoMode == GIZMO_X || gizmoMode == GIZMO_Y) {
                 float wx = screenToWorldX(x), wy = screenToWorldY(y);

@@ -134,7 +134,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         new AlertDialog.Builder(getContext())
                 .setTitle("Edit 3D • OCCT Exact")
                 .setMessage(state+"\n"+edge+"\n"+face
-                        +"\n\nEdge یا Face را انتخاب کن و عملیات را بزن. محاسبه روی B-Rep واقعی انجام می‌شود؛ واحد طول cm/mm است.")
+                        +"\n\nEdge یا Face را انتخاب کن و عملیات را بزن. محاسبه روی B-Rep واقعی انجام می‌شود؛ واحد طول mm است.")
                 .setItems(items,(d,w)->{
                     if(w==0)beginExactEdgePick();
                     else if(w==1)askExactEdge(ExactKind.FILLET_EDGE);
@@ -205,7 +205,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(initial);input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(getContext()).setTitle(title+" • cm/mm")
+        new AlertDialog.Builder(getContext()).setTitle(title+" • mm")
                 .setMessage(message).setView(input)
                 .setPositiveButton("اعمال",(d,w)->{
                     try{
@@ -222,7 +222,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"X","0mm"),y=axisInput(box,"Y","0mm"),z=axisInput(box,"Z","0mm");
         new AlertDialog.Builder(getContext()).setTitle("Move Body • OCCT")
-                .setMessage("مقدار مثبت یا منفی؛ cm یا mm")
+                .setMessage("مقدار مثبت یا منفی به میلی‌متر")
                 .setView(box).setPositiveButton("حرکت",(d,w)->{
                     try{
                         Geometry3D.Vec3 v=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
@@ -234,7 +234,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     }
 
     private EditText axisInput(LinearLayout parent,String axis,String initial){
-        TextView t=new TextView(getContext());t.setText(axis+"  (cm/mm)");parent.addView(t);
+        TextView t=new TextView(getContext());t.setText(axis+"  (mm)");parent.addView(t);
         EditText e=new EditText(getContext());e.setSingleLine(true);e.setText(initial);e.setSelectAllOnFocus(true);parent.addView(e);return e;
     }
 
@@ -493,10 +493,9 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
 
     private static double parseLengthMm(String raw){
         String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');
-        boolean mm=s.endsWith("mm")||s.endsWith("میلیمتر")||s.endsWith("میلی‌متر");
         boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");
         s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();
-        double v=Double.parseDouble(s);return mm?v:v*10.0; // bare number stays cm for compatibility
+        double v=Double.parseDouble(s);return cm?v*10.0:v;
     }
 
     private static String normalizeDigits(String s){
@@ -505,7 +504,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         }return b.toString().trim();
     }
 
-    private static String dual(double mm){return num(mm/10.0)+" cm / "+num(mm)+" mm";}
+    private static String dual(double mm){return num(mm)+" mm";}
     private static String signedDual(double mm){return(mm>=0?"+":"")+dual(mm);}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String axisName(Geometry3D.Vec3 a){if(a==null)return"?";if(Math.abs(a.x)>0.9f)return"X";if(Math.abs(a.y)>0.9f)return"Y";return"Z";}

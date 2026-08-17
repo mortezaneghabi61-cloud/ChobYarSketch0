@@ -361,6 +361,6 @@ final class ExactIntersectionKernel {
     private static Geometry3D.Vec3 perpendicular(Geometry3D.Vec3 n){Geometry3D.Vec3 ref=Math.abs(n.z)<0.85f?new Geometry3D.Vec3(0,0,1):new Geometry3D.Vec3(0,1,0);return ref.cross(n).normalized();}
     private static Geometry3D.Vec3 mid(Geometry3D.Vec3 a,Geometry3D.Vec3 b){return a==null||b==null?null:a.add(b).mul(0.5f);}
     private static String num(float v){String s=String.format(Locale.US,"%.4f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String dual(float mm){return num(mm/10f)+" cm / "+num(mm)+" mm";}
+    private static String dual(float mm){return num(mm)+" mm";}
     private static String vec(Geometry3D.Vec3 v){return v==null?"—":"("+num(v.x)+", "+num(v.y)+", "+num(v.z)+")";}
 }
