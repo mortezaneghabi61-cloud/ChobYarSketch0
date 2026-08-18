@@ -86,6 +86,37 @@ def click_contains(root, needle):
     time.sleep(1.0)
 
 
+def dismiss_android_first_run_overlays():
+    # A fresh emulator shows Android's own immersive-mode tutorial above the
+    # app the first time a full-screen activity starts. It is not an app bug,
+    # but it blocks accessibility and touch automation until acknowledged.
+    for attempt in range(3):
+        root = dump_ui(f"00-system-overlay-{attempt}")
+        got_it, _ = find_node(root, "Got it")
+        if got_it is None:
+            got_it, _ = find_node(root, "android:id/ok")
+        if got_it is None:
+            return
+        screenshot(f"00-system-overlay-{attempt}")
+        click_contains(root, "Got it" if find_node(root, "Got it")[0] is not None else "android:id/ok")
+        time.sleep(2.0)
+
+
+def wait_for_workspace(timeout_seconds=25):
+    deadline = time.time() + timeout_seconds
+    last = None
+    attempt = 0
+    while time.time() < deadline:
+        last = dump_ui(f"01-workspace-wait-{attempt}")
+        title, _ = find_node(last, "چوب‌یار 3D")
+        sketch, _ = find_node(last, "Sketch")
+        if title is not None and sketch is not None:
+            return last
+        time.sleep(1.5)
+        attempt += 1
+    return last
+
+
 def display_size_from_ui(root):
     max_right = 0
     max_bottom = 0
@@ -129,15 +160,16 @@ def main():
     launch = shell("am", "start", "-W", "-n", ACTIVITY)
     if "Status: ok" not in launch.stdout and "Status: timeout" not in launch.stdout:
         raise AssertionError("Android did not report a successful activity launch")
-    time.sleep(4.0)
+    time.sleep(2.0)
 
     pid = assert_alive("launch")
+    dismiss_android_first_run_overlays()
+    launch_ui = wait_for_workspace()
     screenshot("01-launch")
-    launch_ui = dump_ui("01-launch-ui")
 
     title, _ = find_node(launch_ui, "چوب‌یار 3D")
     if title is None:
-        raise AssertionError("Workspace title 'چوب‌یار 3D' is missing from the launch UI")
+        raise AssertionError("Workspace title 'چوب‌یار 3D' is missing after Android overlays were dismissed")
     sketch, _ = find_node(launch_ui, "Sketch")
     if sketch is None:
         raise AssertionError("Primary Sketch tool is missing from the launch UI")
@@ -180,6 +212,7 @@ def main():
     summary = (
         "PASS\n"
         "- App installed and ChobYarActivity launched\n"
+        "- Android first-run full-screen overlay was handled\n"
         "- Main workspace title and Sketch tool were visible\n"
         "- Sketch palette opened and Rectangle tool was visible\n"
         "- Rectangle gesture completed without process death\n"
