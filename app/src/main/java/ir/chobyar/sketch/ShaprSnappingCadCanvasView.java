@@ -233,6 +233,11 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
         return false;
     }
 
+    /** True only while the pointer is actively creating sketch geometry. */
+    protected final boolean isSnapGestureActive() {
+        return gestureStart != null;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);

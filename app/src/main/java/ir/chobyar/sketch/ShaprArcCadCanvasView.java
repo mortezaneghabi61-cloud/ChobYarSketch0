@@ -47,7 +47,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
     private final Paint guidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint handleFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint handleStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public ShaprArcCadCanvasView(Context context) {
         super(context);
@@ -70,9 +69,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
         handleStrokePaint.setStrokeWidth(1.8f*density());
         handleStrokePaint.setColor(Color.rgb(48,118,218));
 
-        labelPaint.setColor(Color.rgb(44, 76, 130));
-        labelPaint.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
-        labelPaint.setTextAlign(Paint.Align.CENTER);
     }
 
     private void initArcReflection() {
@@ -118,7 +114,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
         super.setTool(TOOL_SELECT);
         internalToolChange = false;
         arcMode = true;
-        toast("Arc • با قلم قوس را بکش؛ دیگر نیم‌دایره ثابت نیست");
         invalidate();
     }
 
@@ -171,7 +166,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
             // the sketch. A pen tap without a drawn chord serves that role here.
             if (strokeLength(arcStroke) < MIN_ARC_CHORD_MM) {
                 finishShaprArc();
-                toast("Arc تمام شد");
                 return true;
             }
 
@@ -205,7 +199,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
                     canvas.drawLine(a.x, a.y, b.x, b.y, previewPaint);
                 }
             }
-            canvas.drawText("Arc • Pen", getWidth() * .5f, 34f * density(), labelPaint);
         }
 
         Object selected = singleSelected();
@@ -256,7 +249,6 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
             if (setLayer != null) setLayer.invoke(arc, getCurrentLayer());
             entities().add(arc);
             selectOne(arc);
-            toast("Arc • R " + dual(fit.r) + " • " + fmt(Math.abs(sweep)) + "°");
             return arc;
         } catch (Exception e) {
             toast("Arc ساخته نشد");
@@ -310,8 +302,8 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
         dot(canvas, center);
         dot(canvas, a);
         dot(canvas, b);
-        canvas.drawText("R " + dual(r), center.x, center.y - 18f * density(), labelPaint);
-        canvas.drawText(fmt(Math.abs(sweep)) + "°", (a.x + b.x) * .5f, (a.y + b.y) * .5f - 10f * density(), labelPaint);
+        // The base dimension layer already owns radius/angle text. Drawing it
+        // again here produced the stacked labels visible in the screen record.
     }
 
     @Override

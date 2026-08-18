@@ -212,7 +212,8 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
         final List<Runnable> actions=new ArrayList<>();
 
         if(s.isEmpty()){
-            labels.add("اول Sketch element را انتخاب کن");actions.add(()->toast("اول خط، دایره یا قوس را انتخاب کن"));
+            toast("اول خط، دایره یا قوس را انتخاب کن");
+            return;
         }else{
             if(!lines.isEmpty()) add(labels,actions,"H/V — افقی / عمودی",()->toast(applyHorizontalVerticalConstraint()));
             if(lines.size()==2&&s.size()==2){
