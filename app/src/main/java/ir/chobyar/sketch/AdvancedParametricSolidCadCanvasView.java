@@ -20,6 +20,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -109,6 +110,9 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     }
 
     private final List<FormFeature> formHistory=new ArrayList<>();
+    /** Synthetic region -> original sketch edges. Identity semantics are
+     * intentional because sketch entities do not have stable value equality. */
+    private final IdentityHashMap<Object,List<Object>> autoProfileSources=new IdentityHashMap<>();
     private int formSerial=1;
     private boolean rebuildingForms=false;
     private Object interactiveRevolveProfile;
@@ -298,12 +302,28 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         revolveRingScreen.clear();revolveRingCenterScreen=null;revolveHeightBaseScreen=null;revolveHeightTipScreen=null;revolveDragMode=0;clearFormPreview();
     }
 
-    @Override public void showInteractiveExtrude(){
+    @Override public String beginInteractiveExtrudeSession(){
+        // ChobYarActivity starts the session directly.  Resolve the whole
+        // region here (not only in showInteractiveExtrude), so touching one
+        // edge of a closed outline behaves like selecting a Shapr-style face.
         if(!hasSelectedClosedProfile()){
             AutoProfile auto=autoProfile(selection(),false);
             if(auto!=null)selectAutoProfile(auto.profile);
         }
-        super.showInteractiveExtrude();
+        return super.beginInteractiveExtrudeSession();
+    }
+
+    @Override public void showInteractiveExtrude(){toast(beginInteractiveExtrudeSession());}
+
+    @Override protected List<Object> historySourceEntities(){
+        List<Object> selected=super.historySourceEntities();
+        List<Object> expanded=new ArrayList<>();
+        for(Object entity:selected){
+            List<Object> sources=autoProfileSources.get(entity);
+            if(sources==null)expanded.add(entity);
+            else for(Object source:sources)if(!expanded.contains(source))expanded.add(source);
+        }
+        return expanded;
     }
 
     private void showRevolveAngle(Object profile,Object axis,boolean xAxis){
@@ -574,7 +594,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     }
 
     @Override
-    public void clearAll(){super.clearAll();formHistory.clear();formSerial=1;}
+    public void clearAll(){super.clearAll();formHistory.clear();autoProfileSources.clear();formSerial=1;}
 
     // ------------------------------------------------------------------
     // Profile/path extraction
@@ -583,6 +603,12 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private Profile profile(Object e){
         if(e==null||!entities().contains(e))return null;
         String type=e.getClass().getSimpleName();String layer=entityLayer(e);Geometry3D.Plane3D plane=planeForLayer(layer);
+        List<Object> derivedSources=autoProfileSources.get(e);
+        if(derivedSources!=null){
+            for(Object source:derivedSources)if(!entities().contains(source))return null;
+            List<PointF> fresh=stitchLoop(derivedSources);
+            return fresh==null?null:new Profile(e,fresh,layer,plane);
+        }
         if("RectEntity".equals(type)){
             PointF[]p=pointArray(e,"p");if(p==null)return null;List<PointF>out=new ArrayList<>();for(PointF q:p)out.add(new PointF(q.x,q.y));return new Profile(e,out,layer,plane);
         }
@@ -599,6 +625,10 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
      * closed loop from its Sketch layer.  A spare line is treated as a revolve
      * axis, so woodworking profiles do not require fragile multi-selection. */
     private static final class AutoProfile{final Object profile,axis;AutoProfile(Object p,Object a){profile=p;axis=a;}}
+    private static final class LoopMatch{
+        final List<PointF> points;final List<Object> lines;
+        LoopMatch(List<PointF> points,List<Object> lines){this.points=points;this.lines=lines;}
+    }
 
     private boolean hasSelectedClosedProfile(){for(Object e:selection())if(isClosedProfile(e))return true;return false;}
 
@@ -606,32 +636,65 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         String layer=null;Object explicitAxis=null;
         for(Object e:picked){if(e==null)continue;if(layer==null)layer=entityLayer(e);if(isClosedProfile(e))return new AutoProfile(e,null);}
         if(layer==null)layer=getCurrentLayer();
+
+        // When there is one ordinary closed entity on the active Sketch, the
+        // user should not have to reselect it after pressing Done.  A selected
+        // Line is still retained as the explicit Revolve axis.
+        List<Object> closed=new ArrayList<>();
+        for(Object e:entities())if(isClosedProfile(e)&&!boolField(e,"construction")&&layer.equals(entityLayer(e)))closed.add(e);
+        if(closed.size()==1&&picked.isEmpty())return new AutoProfile(closed.get(0),null);
+
         List<Object> lines=new ArrayList<>();
-        for(Object e:entities())if(isLine(e)&&layer.equals(entityLayer(e)))lines.add(e);
-        if(lines.size()<3)return null;
-        // Prefer exactly what the user selected when it already forms a loop.
+        for(Object e:entities())if(isLine(e)&&!boolField(e,"construction")&&layer.equals(entityLayer(e)))lines.add(e);
         List<Object> selectedLines=new ArrayList<>();for(Object e:picked)if(isLine(e))selectedLines.add(e);
-        List<PointF> loop=stitchLoop(selectedLines);
-        if(loop==null)loop=stitchLoop(lines);
-        if(loop==null&&allowAxis){
-            // Typical turning Sketch = one closed perimeter plus one axis line.
-            for(int skip=0;skip<lines.size();skip++){
-                List<Object> candidate=new ArrayList<>(lines);Object spare=candidate.remove(skip);List<PointF> test=stitchLoop(candidate);
-                if(test!=null){loop=test;explicitAxis=spare;break;}
-            }
+        if(lines.size()<3){
+            if(allowAxis&&closed.size()==1&&!selectedLines.isEmpty())return new AutoProfile(closed.get(0),selectedLines.get(0));
+            return null;
         }
-        if(loop==null)return null;
-        Object profile=addAutoPolyline(loop,layer);if(profile==null)return null;
+
+        LoopMatch match=null;
+        // First respect an explicitly multi-selected loop.
+        List<PointF> exact=stitchLoop(selectedLines);
+        if(exact!=null)match=new LoopMatch(exact,new ArrayList<>(selectedLines));
+        // The common mobile workflow is a single tap on any boundary edge.
+        if(match==null)for(Object seed:selectedLines){match=findLoopContaining(lines,seed);if(match!=null)break;}
+
+        if(match!=null&&allowAxis){
+            for(Object line:selectedLines)if(!containsIdentity(match.lines,line)){explicitAxis=line;break;}
+        }
+        if(match==null){
+            if(allowAxis&&!selectedLines.isEmpty()&&closed.size()==1)
+                return new AutoProfile(closed.get(0),selectedLines.get(0));
+            List<Object> candidates=new ArrayList<>(lines);
+            if(allowAxis&&!selectedLines.isEmpty()){
+                // If the picked line is not part of a loop, it is almost always
+                // the centerline in a turning profile.
+                explicitAxis=selectedLines.get(0);removeIdentity(candidates,explicitAxis);
+            }else if(!selectedLines.isEmpty())return null;
+            match=findUniqueLoop(candidates);
+        }
+        if(match==null)return null;
+        Object profile=findExistingAutoProfile(match.lines);
+        if(profile==null)profile=addAutoPolyline(match.points,layer,match.lines);
+        if(profile==null)return null;
         return new AutoProfile(profile,explicitAxis);
     }
 
-    private Object addAutoPolyline(List<PointF> loop,String layer){
+    private Object addAutoPolyline(List<PointF> loop,String layer,List<Object> sources){
         try{
             if(autoPolylineConstructor==null)return null;if(saveUndoMethod!=null)saveUndoMethod.invoke(this);
             List<PointF> copy=new ArrayList<>();for(PointF p:loop)copy.add(new PointF(p.x,p.y));
             Object entity=autoPolylineConstructor.newInstance(copy,true);Method setLayer=findMethod(entity.getClass(),"setLayer",String.class);
-            if(setLayer!=null)setLayer.invoke(entity,layer);entities().add(entity);selectAutoProfile(entity);invalidate();return entity;
+            if(setLayer!=null)setLayer.invoke(entity,layer);entities().add(entity);
+            autoProfileSources.put(entity,new ArrayList<>(sources));selectAutoProfile(entity);invalidate();return entity;
         }catch(Exception e){return null;}
+    }
+
+    private Object findExistingAutoProfile(List<Object> sources){
+        for(Map.Entry<Object,List<Object>> entry:autoProfileSources.entrySet()){
+            if(entities().contains(entry.getKey())&&sameIdentitySet(entry.getValue(),sources))return entry.getKey();
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked") private void selectAutoProfile(Object entity){
@@ -650,6 +713,57 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             if(found<0)return null;used[found]=true;current=next;out.add(current);
         }
         if(distance(current,first)>0.35f)return null;out.remove(out.size()-1);return out.size()>=3?out:null;
+    }
+
+    /** Finds a simple closed cycle that contains the edge the user touched. */
+    private LoopMatch findLoopContaining(List<Object> all,Object seed){
+        if(seed==null||!containsIdentity(all,seed)||all.size()>256)return null;
+        for(int direction=0;direction<2;direction++){
+            PointF start=lineEnd(seed,direction),next=lineEnd(seed,1-direction);
+            if(start==null||next==null||distance(start,next)<1e-5f)continue;
+            List<Object> used=new ArrayList<>();used.add(seed);
+            List<PointF> points=new ArrayList<>();points.add(start);points.add(next);
+            LoopMatch found=searchLoop(all,start,next,used,points);
+            if(found!=null)return found;
+        }
+        return null;
+    }
+
+    private LoopMatch searchLoop(List<Object> all,PointF start,PointF current,List<Object> used,List<PointF> points){
+        if(used.size()>=3&&distance(current,start)<=0.35f){
+            List<PointF> result=new ArrayList<>(points);result.remove(result.size()-1);
+            return result.size()>=3?new LoopMatch(result,new ArrayList<>(used)):null;
+        }
+        if(used.size()>=all.size()||used.size()>=256)return null;
+        for(Object line:all){
+            if(containsIdentity(used,line))continue;
+            PointF a=lineEnd(line,0),b=lineEnd(line,1);PointF next=null;
+            if(a!=null&&distance(current,a)<=0.35f)next=b;
+            else if(b!=null&&distance(current,b)<=0.35f)next=a;
+            if(next==null)continue;
+            used.add(line);points.add(next);
+            LoopMatch found=searchLoop(all,start,next,used,points);
+            points.remove(points.size()-1);used.remove(used.size()-1);
+            if(found!=null)return found;
+        }
+        return null;
+    }
+
+    /** Returns a loop only when the unselected Sketch has one unambiguous region. */
+    private LoopMatch findUniqueLoop(List<Object> lines){
+        LoopMatch unique=null;
+        for(Object seed:lines){
+            LoopMatch found=findLoopContaining(lines,seed);if(found==null)continue;
+            if(unique==null)unique=found;
+            else if(!sameIdentitySet(unique.lines,found.lines))return null;
+        }
+        return unique;
+    }
+
+    private static boolean containsIdentity(List<Object> list,Object target){for(Object value:list)if(value==target)return true;return false;}
+    private static void removeIdentity(List<Object> list,Object target){for(int i=list.size()-1;i>=0;i--)if(list.get(i)==target)list.remove(i);}
+    private static boolean sameIdentitySet(List<Object>a,List<Object>b){
+        if(a.size()!=b.size())return false;for(Object value:a)if(!containsIdentity(b,value))return false;return true;
     }
 
     private static PointF lineEnd(Object e,int which){return which==0?new PointF(getFloat(e,"x1"),getFloat(e,"y1")):new PointF(getFloat(e,"x2"),getFloat(e,"y2"));}

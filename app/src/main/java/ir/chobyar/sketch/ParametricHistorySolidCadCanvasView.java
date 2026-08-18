@@ -132,7 +132,11 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     @Override
     public String extrudeSelectedBody(float heightCm) {
         if(rebuilding) return super.extrudeSelectedBody(heightCm);
-        List<Object> sources=selectionObjects();
+        // Derived region resolvers may temporarily select a synthetic closed
+        // profile so the solid kernel receives one clean contour.  History must
+        // still depend on the user's original sketch edges, otherwise editing a
+        // line would leave the Extrude detached from its Sketch.
+        List<Object> sources=historySourceEntities();
         Profile p=profileFromSources(sources);
         Geometry3D.Plane3D plane=p==null?activePlane():planeForLayer(p.layer);
         String result=super.extrudeSelectedBody(heightCm);
@@ -147,6 +151,13 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         }
         return result;
     }
+
+    /**
+     * Hook for higher-level region resolvers.  The default is the literal
+     * selection; subclasses can expand a generated region back to the sketch
+     * entities that define it.
+     */
+    protected List<Object> historySourceEntities(){return selectionObjects();}
 
     /** Solid menu with History-aware Boolean operations. */
     @Override
