@@ -236,6 +236,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if (is3DOverview()) return;
         // Guides are transient drawing aids, never permanent model geometry.
         if (isSketchCreationGesture() && gestureStart != null) {
             if (snapSketchGuidepoints && showGuidepoints) drawNearbyGuidepoints(canvas);

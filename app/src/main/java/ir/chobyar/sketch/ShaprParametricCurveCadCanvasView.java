@@ -251,6 +251,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
     @Override
     protected void onDraw(Canvas c){
         super.onDraw(c);
+        if(is3DOverview())return;
         if(curveMode==MODE_SPLINE_CONTROL&&controlBuild.size()>0)drawControlBuild(c);
         Object s=singleSelected();if(s==null)return;
         EllipseParam ep=ellipses.get(s);if(ep!=null){drawEllipseHandles(c,ep);return;}

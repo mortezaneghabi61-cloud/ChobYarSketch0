@@ -83,6 +83,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if (is3DOverview()) return;
         drawSketchStates(canvas);
     }
 

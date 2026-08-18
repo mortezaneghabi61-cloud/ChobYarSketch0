@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.view.MotionEvent;
@@ -44,7 +45,8 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
 
     private final Paint previewPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint guidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handleFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handleStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public ShaprArcCadCanvasView(Context context) {
@@ -58,14 +60,18 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
         previewPaint.setColor(Color.rgb(55, 125, 225));
 
         guidePaint.setStyle(Paint.Style.STROKE);
-        guidePaint.setStrokeWidth(1.6f * density());
-        guidePaint.setColor(Color.rgb(154, 92, 205));
+        guidePaint.setStrokeWidth(1f * density());
+        guidePaint.setColor(Color.argb(145, 86, 111, 145));
+        guidePaint.setPathEffect(new DashPathEffect(new float[]{5f*density(),5f*density()},0f));
 
-        handlePaint.setStyle(Paint.Style.FILL);
-        handlePaint.setColor(Color.rgb(242, 135, 36));
+        handleFillPaint.setStyle(Paint.Style.FILL);
+        handleFillPaint.setColor(Color.WHITE);
+        handleStrokePaint.setStyle(Paint.Style.STROKE);
+        handleStrokePaint.setStrokeWidth(1.8f*density());
+        handleStrokePaint.setColor(Color.rgb(48,118,218));
 
         labelPaint.setColor(Color.rgb(44, 76, 130));
-        labelPaint.setTextSize(13f * getResources().getDisplayMetrics().scaledDensity);
+        labelPaint.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
         labelPaint.setTextAlign(Paint.Align.CENTER);
     }
 
@@ -189,6 +195,7 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if (is3DOverview()) return;
 
         if (arcMode) {
             if (arcStroke.size() > 1) {
@@ -390,7 +397,8 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
     }
 
     private void dot(Canvas c, PointF p) {
-        c.drawCircle(p.x, p.y, 5.2f * density(), handlePaint);
+        c.drawCircle(p.x, p.y, 4.2f * density(), handleFillPaint);
+        c.drawCircle(p.x, p.y, 4.2f * density(), handleStrokePaint);
     }
 
     private float density() { return getResources().getDisplayMetrics().density; }

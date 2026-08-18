@@ -142,6 +142,23 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     public boolean is3DOverview() { return overview3D; }
 
+    /**
+     * Enter the active sketch as a true orthographic workspace.
+     *
+     * Previously the Sketch button only changed the drawing tool.  When it was
+     * pressed from the model view, the 2D sketch and the projected 3D scene were
+     * therefore painted on top of each other.  Keeping this transition explicit
+     * also gives the rest of the UI one reliable source of truth for 2D/3D mode.
+     */
+    public String enterActiveSketchView() {
+        overview3D = false;
+        orbiting = false;
+        navigating2D = false;
+        invalidate();
+        post(this::fitAll);
+        return "Sketch • " + activePlaneLabel() + " • mm";
+    }
+
     /** Immutable camera contract shared with the Filament renderer. */
     public static final class GpuCameraState {
         public final boolean visible;
@@ -243,8 +260,11 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
+        // A model view must never contain the flat 2D canvas underneath it.
+        // Android already draws this View's background before onDraw, so the
+        // spatial renderer can safely own the whole frame while in 3D.
         if (overview3D) drawSpatialOverview(canvas);
+        else super.onDraw(canvas);
     }
 
     private void drawSpatialOverview(Canvas canvas) {

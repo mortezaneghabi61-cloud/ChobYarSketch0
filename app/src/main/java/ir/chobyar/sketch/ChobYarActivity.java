@@ -42,8 +42,11 @@ public final class ChobYarActivity extends Activity {
     private TextView sessionDone;
     private TextView sessionCopy;
     private TextView instructionChip;
+    private TextView workspaceTitle;
+    private TextView modeButton;
     private String currentSelectionKind="NONE";
     private TextView snapButton;
+    private FrameLayout.LayoutParams adaptiveParams;
     private File pendingCadExport;
     private long feedbackRevision;
     private boolean manualPalette;
@@ -62,37 +65,45 @@ public final class ChobYarActivity extends Activity {
         cad.setWorkspaceListener(this::workspaceChanged);
         cad.setOnTouchListener((v,event)->{cad.post(this::syncGpuCamera);return false;});
         root.addView(cad,new FrameLayout.LayoutParams(-1,-1));
-        root.addView(topControls(),wrap(Gravity.START|Gravity.TOP,9,8,0,0));
+        root.addView(topControls(),topLayout());
         primaryRail=mainTools();
         root.addView(primaryRail,wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
-        root.addView(viewTools(),wrap(Gravity.END|Gravity.TOP,0,8,9,0));
-        root.addView(bottomLeftControls(),wrap(Gravity.START|Gravity.BOTTOM,9,0,0,8));
-        root.addView(bottomRightControls(),wrap(Gravity.END|Gravity.BOTTOM,0,0,9,8));
+        root.addView(viewTools(),wrap(Gravity.END|Gravity.TOP,0,76,8,0));
         instructionChip=label("",10,true);instructionChip.setGravity(Gravity.CENTER);
         instructionChip.setPadding(dp(12),dp(7),dp(12),dp(7));instructionChip.setMaxWidth(dp(430));
         instructionChip.setBackground(round(Color.argb(246,255,255,255),Color.rgb(214,221,231),13));
         instructionChip.setVisibility(View.GONE);
-        root.addView(instructionChip,wrap(Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,9,0,0));
+        root.addView(instructionChip,wrap(Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,76,0,0));
         adaptive=adaptiveTools();adaptive.setVisibility(View.GONE);
-        root.addView(adaptive,wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0));
+        adaptiveParams=wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0);
+        root.addView(adaptive,adaptiveParams);
         constraintRail=sketchConstraints();constraintRail.setVisibility(View.GONE);
         root.addView(constraintRail,wrap(Gravity.END|Gravity.CENTER_VERTICAL,0,0,8,0));
         sessionBar=sessionTools();sessionBar.setVisibility(View.GONE);
-        root.addView(sessionBar,wrap(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,8));
+        root.addView(sessionBar,wrap(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,12));
         setContentView(root);
-        cad.post(this::syncGpuMesh);
+        cad.post(()->{syncGpuMesh();updateWorkspaceChrome();});
     }
 
     private View topControls(){
         LinearLayout b=plain(false);
-        b.addView(miniAction("▦",this::showItems));
-        b.addView(miniAction("?",this::showWorkspaceHelp));
-        b.addView(miniAction("⇧",this::showCadExport));
+        b.setPadding(dp(6),dp(3),dp(6),dp(3));
+        b.setBackground(round(Color.argb(248,255,255,255),Color.rgb(214,220,228),22));
+        b.addView(topAction("⌂",this::showItems),new LinearLayout.LayoutParams(dp(42),dp(48)));
+        workspaceTitle=label("چوب‌یار 3D",13,true);workspaceTitle.setGravity(Gravity.CENTER);
+        b.addView(workspaceTitle,new LinearLayout.LayoutParams(0,dp(48),1f));
+        modeButton=topAction("تمام",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
+        b.addView(modeButton,new LinearLayout.LayoutParams(dp(48),dp(40)));
+        b.addView(topAction("↶",()->{cad.undo();status("برگشت");}),new LinearLayout.LayoutParams(dp(38),dp(48)));
+        b.addView(topAction("↷",()->status(cad.redoLastFeature())),new LinearLayout.LayoutParams(dp(38),dp(48)));
+        b.addView(topAction("◷",cad::showHistoryManager),new LinearLayout.LayoutParams(dp(38),dp(48)));
+        b.addView(topAction("•••",this::more),new LinearLayout.LayoutParams(dp(42),dp(48)));
         return b;
     }
 
     private LinearLayout mainTools(){
-        LinearLayout b=plain(true);
+        LinearLayout b=rail(true);
+        b.addView(tool("⌕","Search",this::search));
         b.addView(tool("✎","Sketch",this::showSketchPalette));
         b.addView(tool("＋","Add",this::showAddPalette));
         b.addView(tool("↗","Transform",this::showTransformPalette));
@@ -100,9 +111,12 @@ public final class ChobYarActivity extends Activity {
     }
 
     private View viewTools(){
-        LinearLayout b=plain(true);
-        Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        b.addView(miniAction("◇",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
+        LinearLayout b=rail(true);
+        Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
+        snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
+        b.addView(tool("mm","Units",()->status("واحد پروژه: میلی‌متر")));
+        updateSnap();
         return b;
     }
 
@@ -123,11 +137,11 @@ public final class ChobYarActivity extends Activity {
     }
 
     private LinearLayout adaptiveTools(){
-        return plain(true);
+        return rail(true);
     }
 
     private LinearLayout sketchConstraints(){
-        LinearLayout b=plain(true);
+        LinearLayout b=rail(true);
         b.addView(tool("H/V","Horizontal\nVertical",()->status(cad.applyHorizontalVerticalConstraint())));
         b.addView(tool("⊥","Perpendicular",()->status(cad.applyPerpendicularConstraint())));
         b.addView(tool("∥","Parallel",()->status(cad.applyParallelConstraint())));
@@ -136,7 +150,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private LinearLayout sessionTools(){
-        LinearLayout b=plain(false);b.setPadding(dp(2),dp(1),dp(2),dp(1));
+        LinearLayout b=plain(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));
+        b.setBackground(round(Color.argb(248,255,255,255),Color.rgb(210,218,228),18));
         b.addView(sessionButton("لغو",this::cancelWorkspaceTool));
         sessionCopy=sessionButton("Copy",()->status(cad.toggleBodyTransformCopy()));sessionCopy.setVisibility(View.GONE);b.addView(sessionCopy);
         sessionTitle=label("",9,true);sessionTitle.setGravity(Gravity.CENTER);
@@ -161,6 +176,7 @@ public final class ChobYarActivity extends Activity {
             if(primaryRail!=null)primaryRail.setVisibility(contextual||state.sessionActive()?View.GONE:View.VISIBLE);
         }
         updateConstraintRail(tool,state.sessionActive());
+        updateWorkspaceChrome();
         syncGpuMesh();
     }
 
@@ -256,26 +272,20 @@ public final class ChobYarActivity extends Activity {
     private void syncGpuCamera(){if(gpuSurface!=null&&cad!=null)gpuSurface.setCameraState(cad.gpuCameraState());}
 
     private void renderAdaptive(String kind){
+        setAdaptivePlacement(false);
         adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
         adaptive.addView(tool("×","Deselect All",cad::clearWorkspaceSelection));
         if("EDGE".equals(k)){
             adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
-            adaptive.addView(tool("⌨","اندازه",this::editDimension));
+            adaptive.addView(tool("⌨","Measure",this::editDimension));
         }else if("FACE".equals(k)){
             adaptive.addView(tool("✎","Sketch",this::sketchOnSelectedFace));
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
-            adaptive.addView(tool("⇥","Align",this::beginAlign));
-            adaptive.addView(tool("⇲","Scale",cad::showScaleTool));
             adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
-            adaptive.addView(tool("◎","Offset Edge",cad::showOffsetEdgeTool));
-            adaptive.addView(tool("◇","Add Plane",cad::showPlaneManager));
-            adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
-            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
         }else if("BODY".equals(k)){
-            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));adaptive.addView(tool("⇲","Scale",cad::showScaleTool));
+            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
             adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
-            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
         }else if("VERTEX".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
         }else{
@@ -298,6 +308,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showSketchPalette(){
+        if(cad.is3DOverview())status(cad.enterActiveSketchView());
+        updateWorkspaceChrome();syncGpuCamera();
         sketchPalette=true;
         openManualPalette();
         adaptive.addView(tool("×","Close",this::closeManualPalette));
@@ -349,7 +361,7 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void openManualPalette(){
-        manualPalette=true;adaptive.removeAllViews();adaptive.setVisibility(View.VISIBLE);
+        manualPalette=true;setAdaptivePlacement(true);adaptive.removeAllViews();adaptive.setVisibility(View.VISIBLE);
         if(primaryRail!=null)primaryRail.setVisibility(View.GONE);
     }
 
@@ -363,8 +375,17 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void activateSketchTool(int tool,String name){
+        if(cad.is3DOverview())cad.enterActiveSketchView();
         cad.setTool(tool);status(name+" فعال شد");
+        updateWorkspaceChrome();
         updateConstraintRail(tool,false);
+    }
+
+    private void finishSketchView(){
+        if(cad==null||cad.is3DOverview())return;
+        closeManualPalette();cad.setTool(CadCanvasView.TOOL_SELECT);
+        cad.setStandardView("ISO");cad.post(cad::fitAll);syncGpuCamera();
+        updateWorkspaceChrome();status("نمای 3D");
     }
 
     private void updateConstraintRail(int activeTool,boolean sessionActive){
@@ -475,7 +496,10 @@ public final class ChobYarActivity extends Activity {
         try(InputStream in=getContentResolver().openInputStream(data.getData())){if(in==null)throw new IllegalStateException();Bitmap bitmap=BitmapFactory.decodeStream(in,null,options);if(bitmap==null)throw new IllegalStateException();return bitmap;}
     }
 
-    private void setView(String view){cad.setStandardView(view);syncGpuCamera();}
+    private void setView(String view){
+        if(manualPalette)closeManualPalette();
+        cad.setStandardView(view);cad.post(cad::fitAll);syncGpuCamera();updateWorkspaceChrome();
+    }
 
     private void showItems(){
         String[] bodies=cad.itemRows();boolean image=cad.hasReferenceImage();
@@ -512,7 +536,16 @@ public final class ChobYarActivity extends Activity {
                 .setNegativeButton("لغو",null).show();
     }
 
-    private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
+    private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁\nSnap");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
+    private void updateWorkspaceChrome(){
+        if(cad==null)return;boolean model=cad.is3DOverview();
+        if(workspaceTitle!=null){
+            String title=model?"چوب‌یار 3D":"Sketch • "+cad.activePlaneLabel()+" • mm";
+            if(model&&!"NONE".equals(currentSelectionKind))title=currentSelectionKind+" انتخاب شد";
+            workspaceTitle.setText(title);
+        }
+        if(modeButton!=null)modeButton.setVisibility(model?View.GONE:View.VISIBLE);
+    }
     private void status(String s){
         if(instructionChip==null||s==null||s.trim().isEmpty()||workspace.state().sessionActive())return;
         final long revision=++feedbackRevision;
@@ -524,12 +557,20 @@ public final class ChobYarActivity extends Activity {
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
 
     private LinearLayout plain(boolean vertical){LinearLayout x=new LinearLayout(this);x.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);x.setGravity(Gravity.CENTER);return x;}
-    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,8,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(64));v.setMinHeight(dp(51));v.setPadding(dp(3),dp(2),dp(3),dp(2));v.setBackground(round(Color.argb(224,255,255,255),Color.TRANSPARENT,12));v.setOnClickListener(q->r.run());return v;}
+    private LinearLayout rail(boolean vertical){LinearLayout x=plain(vertical);x.setPadding(dp(2),dp(3),dp(2),dp(3));x.setBackground(round(Color.argb(246,255,255,255),Color.rgb(217,223,231),18));return x;}
+    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,7.5f,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(56));v.setMinHeight(dp(48));v.setPadding(dp(2),dp(2),dp(2),dp(2));v.setBackgroundColor(Color.TRANSPARENT);v.setOnClickListener(q->r.run());return v;}
     private TextView miniAction(String text,Runnable r){TextView v=label(text,15,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(34));v.setMinHeight(dp(34));v.setBackground(round(Color.argb(205,255,255,255),Color.TRANSPARENT,17));v.setOnClickListener(q->r.run());return v;}
+    private TextView topAction(String text,Runnable r){TextView v=label(text,14,false);v.setGravity(Gravity.CENTER);v.setBackgroundColor(Color.TRANSPARENT);v.setOnClickListener(q->r.run());return v;}
     private TextView sessionButton(String text,Runnable r){TextView v=label(text,9,true);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(58));v.setMinHeight(dp(38));v.setPadding(dp(7),0,dp(7),0);v.setBackground(round(Color.argb(232,255,255,255),Color.rgb(213,220,229),12));v.setOnClickListener(q->r.run());return v;}
     private TextView label(String s,float size,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(Color.rgb(38,45,56));if(bold)v.setTypeface(null,Typeface.BOLD);return v;}
     private GradientDrawable round(int fill,int stroke,int radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));d.setStroke(dp(1),stroke);return d;}
     private FrameLayout.LayoutParams wrap(int g,int l,int t,int r,int b){FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(-2,-2,g);p.setMargins(dp(l),dp(t),dp(r),dp(b));return p;}
+    private FrameLayout.LayoutParams topLayout(){FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(-1,dp(56),Gravity.TOP);p.setMargins(dp(10),dp(8),dp(10),0);return p;}
+    private void setAdaptivePlacement(boolean palette){
+        if(adaptive==null)return;adaptive.setOrientation(palette?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);
+        adaptiveParams=wrap(palette?Gravity.START|Gravity.CENTER_VERTICAL:Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,palette?8:0,0,0,palette?0:12);
+        adaptive.setLayoutParams(adaptiveParams);
+    }
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     private void immersive(){getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}
     @Override public void onWindowFocusChanged(boolean h){super.onWindowFocusChanged(h);if(h)immersive();}

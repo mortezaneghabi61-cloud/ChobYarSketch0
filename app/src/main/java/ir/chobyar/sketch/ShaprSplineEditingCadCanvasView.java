@@ -132,6 +132,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if (is3DOverview()) { clearBadges(); return; }
         pruneEditingState();
         Object selected = singleSelectedLocal();
         if (selected != null && selected == activeSpline && isSpline(selected) && activePoint >= 0) {

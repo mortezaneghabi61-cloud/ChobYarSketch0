@@ -392,8 +392,10 @@ public class CadCanvasView extends View {
         }
         if (all == null) {
             viewScale = 1f;
-            offsetX = getWidth() * 0.25f;
-            offsetY = getHeight() * 0.25f;
+            // A new sketch starts at the visual centre, not in the upper-left
+            // quarter of the display.  This is especially important on phones.
+            offsetX = getWidth() * 0.5f;
+            offsetY = getHeight() * 0.5f;
             invalidate();
             return;
         }

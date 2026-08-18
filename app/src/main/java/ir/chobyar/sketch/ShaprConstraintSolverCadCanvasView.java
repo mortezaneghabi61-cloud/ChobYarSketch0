@@ -426,7 +426,7 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
         solveNow(4);
         super.onDraw(canvas);
         solveNow(2);
-        drawSolvedState(canvas);
+        if (!is3DOverview()) drawSolverErrors(canvas);
     }
 
     @Override
@@ -445,12 +445,11 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
         return "Fully-defined: "+full+"\nUnder-defined: "+under+"\nRemaining DOF: "+totalDof+"\nErrors: "+error+"\n\nDriving dimensions: "+(lineDrives.size()+radiusDrives.size()+rectDrives.size()+polygonRadiusDrives.size())+"\nConcentric: "+concentricDrives.size()+"\nAngle drives: "+pairAngleDrives.size();
     }
 
-    private void drawSolvedState(Canvas c){
-        float scale=floatField(viewScaleField,1f),k=PX_PER_MM*Math.max(.0001f,scale),ox=floatField(offsetXField,0f),oy=floatField(offsetYField,0f);solverStroke.setStrokeWidth(Math.max(3.2f,3.4f*getResources().getDisplayMetrics().density));
-        IdentityHashMap<Object,Integer>dof=computeDof();List<Object>sel=selection();
-        for(Object e:dof.keySet()){
-            if(!isVisible(e))continue;int color=hasSolverError(e)?ERROR:containsIdentity(sel,e)?SELECTED_COLOR:dofOf(dof,e)==0?FULL:UNDER;solverStroke.setColor(color);solverPoint.setColor(color);drawOverlay(c,e,k,ox,oy);
-        }
+    private void drawSolverErrors(Canvas c){
+        float scale=floatField(viewScaleField,1f),k=PX_PER_MM*Math.max(.0001f,scale),ox=floatField(offsetXField,0f),oy=floatField(offsetYField,0f);
+        solverStroke.setStrokeWidth(Math.max(1.8f,1.65f*getResources().getDisplayMetrics().density));
+        solverStroke.setColor(ERROR);solverPoint.setColor(ERROR);
+        for(Object e:computeDof().keySet())if(isVisible(e)&&hasSolverError(e))drawOverlay(c,e,k,ox,oy);
     }
 
     private boolean hasSolverError(Object e){
