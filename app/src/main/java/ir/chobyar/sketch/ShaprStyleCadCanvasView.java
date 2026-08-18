@@ -14,26 +14,28 @@ import android.widget.Toast;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.IdentityHashMap;
 import java.util.Locale;
 
 /**
- * Shapr3D-style numeric interaction layer.
+ * Shapr-style numeric interaction layer.
  *
  * While a geometric tool is being dragged, a compact live dimension field is
  * drawn next to the preview. After creation, the same field stays attached to
- * the selected shape. Tapping it opens a type-specific numeric editor:
- * line=length, rectangle=width/height, circle=diameter, arc/polygon=radius.
- * User-facing and internal values are millimeters. A single unit avoids the
- * duplicate cm/mm labels that previously covered selected geometry.
+ * the selected shape. Tapping it opens a type-specific numeric editor and
+ * dragging it repositions only the dimension label while the sketch geometry
+ * remains untouched. User-facing and internal values are millimeters.
  */
 public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     private static final float PX_PER_MM = 3f;
+    private static final float LABEL_DRAG_SLOP_PX = 7f;
 
     private final Paint fieldFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fieldStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fieldText = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF exactFieldRect = new RectF();
+    private final IdentityHashMap<Object, PointF> dimensionLabelOffsets = new IdentityHashMap<>();
 
     private Field selectedField;
     private Field viewScaleField;
@@ -45,7 +47,20 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
     private Field endXField;
     private Field endYField;
 
+    // SmartCadCanvasView has an older generic "exact dimension" chip. The
+    // Shapr-style numeric chip supersedes it, so hide that legacy paint/hit box
+    // to avoid a duplicate chip becoming visible after the numeric label moves.
+    private Paint legacyChipPaint;
+    private Paint legacyChipTextPaint;
+    private RectF legacyDimensionChip;
+
     private boolean exactFieldPressed = false;
+    private boolean exactFieldDragging = false;
+    private float fieldDownX;
+    private float fieldDownY;
+    private float fieldStartOffsetX;
+    private float fieldStartOffsetY;
+    private Object fieldGestureEntity;
     private boolean firstDrawHintShown = false;
 
     public ShaprStyleCadCanvasView(Context context) {
@@ -76,6 +91,16 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
             startYField = field(CadCanvasView.class, "startY");
             endXField = field(CadCanvasView.class, "endX");
             endYField = field(CadCanvasView.class, "endY");
+
+            Field legacyPaintField = field(SmartCadCanvasView.class, "chipPaint");
+            Field legacyTextField = field(SmartCadCanvasView.class, "chipTextPaint");
+            Field legacyRectField = field(SmartCadCanvasView.class, "dimensionChip");
+            Object p = legacyPaintField.get(this);
+            Object t = legacyTextField.get(this);
+            Object r = legacyRectField.get(this);
+            if (p instanceof Paint) legacyChipPaint = (Paint) p;
+            if (t instanceof Paint) legacyChipTextPaint = (Paint) t;
+            if (r instanceof RectF) legacyDimensionChip = (RectF) r;
         } catch (Exception ignored) {
         }
     }
@@ -88,9 +113,24 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        exactFieldRect.setEmpty();
+        int oldLegacyAlpha = -1;
+        int oldLegacyTextAlpha = -1;
+        if (legacyChipPaint != null) {
+            oldLegacyAlpha = legacyChipPaint.getAlpha();
+            legacyChipPaint.setAlpha(0);
+        }
+        if (legacyChipTextPaint != null) {
+            oldLegacyTextAlpha = legacyChipTextPaint.getAlpha();
+            legacyChipTextPaint.setAlpha(0);
+        }
 
+        super.onDraw(canvas);
+
+        if (legacyChipPaint != null && oldLegacyAlpha >= 0) legacyChipPaint.setAlpha(oldLegacyAlpha);
+        if (legacyChipTextPaint != null && oldLegacyTextAlpha >= 0) legacyChipTextPaint.setAlpha(oldLegacyTextAlpha);
+        if (legacyDimensionChip != null) legacyDimensionChip.setEmpty();
+
+        exactFieldRect.setEmpty();
         if (isDrawingGeometry()) {
             drawLiveExactField(canvas);
         } else if (getTool() == TOOL_SELECT && canEditExactDimension()) {
@@ -132,10 +172,11 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         if (text == null || text.isEmpty()) return;
 
         PointF s = worldToScreen(center.x, center.y);
-        // Same area as the older generic "اندازه دقیق" chip, but slightly
-        // larger so this numeric field completely replaces it visually.
-        float cy = clamp(s.y - 58f, 34f, Math.max(34f, getHeight() - 76f));
-        drawField(canvas, text, s.x, cy, true);
+        PointF offset = dimensionLabelOffsets.get(selected);
+        float dx = offset == null ? 0f : offset.x;
+        float dy = offset == null ? 0f : offset.y;
+        float cy = s.y - 58f + dy;
+        drawField(canvas, text, s.x + dx, cy, true);
     }
 
     private void drawField(Canvas canvas, String text, float cx, float cy, boolean interactive) {
@@ -188,18 +229,51 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                 && !exactFieldRect.isEmpty()
                 && exactFieldRect.contains(event.getX(), event.getY())) {
             exactFieldPressed = true;
+            exactFieldDragging = false;
+            fieldDownX = event.getX();
+            fieldDownY = event.getY();
+            fieldGestureEntity = selectedObject();
+            PointF current = fieldGestureEntity == null ? null : dimensionLabelOffsets.get(fieldGestureEntity);
+            fieldStartOffsetX = current == null ? 0f : current.x;
+            fieldStartOffsetY = current == null ? 0f : current.y;
             return true;
         }
 
         if (exactFieldPressed) {
-            if (action == MotionEvent.ACTION_UP) {
-                exactFieldPressed = false;
-                if (exactFieldRect.contains(event.getX(), event.getY())) {
-                    showInlineDimensionEditor();
+            if (action == MotionEvent.ACTION_MOVE) {
+                float dx = event.getX() - fieldDownX;
+                float dy = event.getY() - fieldDownY;
+                if (!exactFieldDragging && Math.hypot(dx, dy) >= LABEL_DRAG_SLOP_PX) {
+                    exactFieldDragging = true;
                 }
-            } else if (action == MotionEvent.ACTION_CANCEL) {
-                exactFieldPressed = false;
+                if (exactFieldDragging && fieldGestureEntity != null) {
+                    dimensionLabelOffsets.put(fieldGestureEntity,
+                            new PointF(fieldStartOffsetX + dx, fieldStartOffsetY + dy));
+                    invalidate();
+                }
+                return true;
             }
+
+            if (action == MotionEvent.ACTION_UP) {
+                boolean wasDragging = exactFieldDragging;
+                exactFieldPressed = false;
+                exactFieldDragging = false;
+                fieldGestureEntity = null;
+                if (!wasDragging && exactFieldRect.contains(event.getX(), event.getY())) {
+                    showInlineDimensionEditor();
+                } else if (wasDragging) {
+                    invalidate();
+                }
+                return true;
+            }
+
+            if (action == MotionEvent.ACTION_CANCEL) {
+                exactFieldPressed = false;
+                exactFieldDragging = false;
+                fieldGestureEntity = null;
+                return true;
+            }
+
             return true;
         }
 
@@ -211,7 +285,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                 && canEditExactDimension() && !firstDrawHintShown) {
             firstDrawHintShown = true;
             Toast.makeText(getContext(),
-                    "اندازه دقیق: روی کادر عددی کنار شکل بزن و مقدار را به میلی‌متر وارد کن",
+                    "کادر اندازه: لمس = ویرایش عدد • بکش = جابه‌جایی کادر بدون حرکت شکل",
                     Toast.LENGTH_LONG).show();
         }
         return handled;
