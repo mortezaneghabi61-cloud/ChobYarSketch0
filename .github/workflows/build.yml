@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      CHOBYAR_VERSION_CODE: ${{ github.run_number }}
+      CHOBYAR_VERSION_CODE: 10${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.1.${{ github.run_number }}
       CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
 

@@ -19,6 +19,9 @@ jobs:
     name: Launch and sketch on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      CHOBYAR_VERSION_CODE: 10${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.1.smoke.${{ github.run_number }}
 
     steps:
       - name: Checkout
