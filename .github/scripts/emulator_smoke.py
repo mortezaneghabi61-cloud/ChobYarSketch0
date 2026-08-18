@@ -96,7 +96,6 @@ def find_label(root, label):
             bounds = parse_bounds(node.attrib.get("bounds"))
             if bounds:
                 return node, bounds
-    # Fall back for accessibility descriptions if a future UI stops using TextView labels.
     for node in root.iter("node"):
         desc = node.attrib.get("content-desc", "").strip().casefold()
         if desc == wanted:
@@ -144,6 +143,20 @@ def wait_for_label(label, prefix, timeout=30):
         if node is not None:
             return last
         time.sleep(1.25)
+        attempt += 1
+    return last
+
+
+def wait_for_contains(text, prefix, timeout=12):
+    deadline = time.time() + timeout
+    attempt = 0
+    last = None
+    while time.time() < deadline:
+        last = dump_ui(f"{prefix}-{attempt}")
+        node, _ = find_contains(last, text)
+        if node is not None:
+            return last
+        time.sleep(0.8)
         attempt += 1
     return last
 
@@ -210,7 +223,6 @@ def main():
     active = dump_ui("03-rectangle-active")
     width, height = display_size(active)
 
-    # Draw in the central canvas, safely away from left/right toolbars and top chrome.
     x1, y1 = int(width * 0.38), int(height * 0.35)
     x2, y2 = int(width * 0.66), int(height * 0.66)
     print(f"Drawing rectangle from ({x1},{y1}) to ({x2},{y2}) on {width}x{height}", flush=True)
@@ -219,13 +231,35 @@ def main():
 
     pid = assert_alive("rectangle gesture")
     screenshot("03-rectangle-drawn")
-    after = dump_ui("04-after-rectangle")
 
+    # The selected rectangle's Shapr-style exact-dimension chip is screen-space
+    # UI anchored to the geometry center at y-58 px. Drag that chip, then tap
+    # its new position. The numeric editor opening at the new location proves
+    # that the annotation moved independently instead of moving the rectangle.
+    label_x = (x1 + x2) // 2
+    label_y = (y1 + y2) // 2 - 58
+    moved_x = min(width - 170, label_x + 115)
+    moved_y = min(height - 120, label_y + 85)
+    print(f"Dragging dimension label ({label_x},{label_y}) -> ({moved_x},{moved_y})", flush=True)
+    shell("input", "swipe", str(label_x), str(label_y), str(moved_x), str(moved_y), "550")
+    time.sleep(0.8)
+    assert_alive("dimension-label drag")
+    screenshot("04-dimension-label-moved")
+
+    shell("input", "tap", str(moved_x), str(moved_y))
+    editor = wait_for_contains("عرض و ارتفاع", "05-dimension-editor", timeout=10)
+    if editor is None or find_contains(editor, "عرض و ارتفاع")[0] is None:
+        raise AssertionError("Moved rectangle dimension label did not open its numeric editor")
+    screenshot("05-moved-dimension-editor")
+    shell("input", "keyevent", "KEYCODE_BACK")
+    time.sleep(0.8)
+
+    after = dump_ui("06-after-dimension-test")
     fit_node, fit_bounds = find_label(after, "Fit")
     if fit_node is not None:
         tap_bounds(fit_bounds, "Fit")
         assert_alive("Fit")
-        screenshot("04-after-fit")
+        screenshot("06-after-fit")
 
     logcat = save_logcat(pid)
     if "FATAL EXCEPTION" in logcat:
@@ -237,6 +271,8 @@ def main():
         "- Main CAD workspace controls were accessible\n"
         "- Sketch palette opened\n"
         "- Rectangle tool accepted a real ADB touch gesture\n"
+        "- Rectangle dimension label was dragged to a new screen position\n"
+        "- Tapping the moved label opened the numeric dimension editor\n"
         "- Fit was exercised when present\n"
         "- No FATAL EXCEPTION was found\n"
     )
