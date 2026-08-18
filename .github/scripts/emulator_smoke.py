@@ -43,13 +43,26 @@ def screenshot(name):
         raise RuntimeError(result.stderr.decode("utf-8", "replace"))
 
 
-def dump_ui(name):
+def dump_ui(name, attempts=5):
     remote = "/sdcard/chobyar-window.xml"
-    shell("uiautomator", "dump", remote)
     local = ARTIFACTS / f"{name}.xml"
-    adb("pull", remote, str(local))
-    tree = ET.parse(local)
-    return tree.getroot()
+    last_error = None
+    for attempt in range(attempts):
+        shell("rm", "-f", remote, check=False)
+        result = shell("uiautomator", "dump", remote, check=False)
+        pull = adb("pull", remote, str(local), check=False)
+        if result.returncode == 0 and pull.returncode == 0 and local.exists():
+            try:
+                return ET.parse(local).getroot()
+            except ET.ParseError as exc:
+                last_error = exc
+        else:
+            last_error = RuntimeError(
+                f"uiautomator dump attempt {attempt + 1} failed: "
+                f"dump={result.returncode}, pull={pull.returncode}"
+            )
+        time.sleep(1.25)
+    raise RuntimeError(f"Could not capture Android UI hierarchy after {attempts} attempts: {last_error}")
 
 
 def parse_bounds(raw):
@@ -87,9 +100,9 @@ def click_contains(root, needle):
 
 
 def dismiss_android_first_run_overlays():
-    # A fresh emulator shows Android's own immersive-mode tutorial above the
-    # app the first time a full-screen activity starts. It is not an app bug,
-    # but it blocks accessibility and touch automation until acknowledged.
+    # A fresh emulator can show Android's own immersive-mode tutorial above
+    # the app. We pre-confirm it through Settings, but retain this fallback for
+    # images where that setting is ignored.
     for attempt in range(3):
         root = dump_ui(f"00-system-overlay-{attempt}")
         got_it, _ = find_node(root, "Got it")
@@ -102,7 +115,7 @@ def dismiss_android_first_run_overlays():
         time.sleep(2.0)
 
 
-def wait_for_workspace(timeout_seconds=25):
+def wait_for_workspace(timeout_seconds=30):
     deadline = time.time() + timeout_seconds
     last = None
     attempt = 0
@@ -153,6 +166,9 @@ def main():
     adb("wait-for-device")
     shell("settings", "put", "system", "accelerometer_rotation", "0", check=False)
     shell("settings", "put", "system", "user_rotation", "1", check=False)
+    # Prevent Android's own one-time full-screen tutorial from obscuring the
+    # application on a newly-created CI emulator.
+    shell("settings", "put", "secure", "immersive_mode_confirmations", "confirmed", check=False)
     adb("install", "-r", str(APK))
     adb("logcat", "-c")
     shell("am", "force-stop", PACKAGE, check=False)
