@@ -234,8 +234,10 @@ def main():
 
     # The selected rectangle's Shapr-style exact-dimension chip is screen-space
     # UI anchored to the geometry center at y-58 px. Drag that chip, then tap
-    # its new position. The numeric editor opening at the new location proves
-    # that the annotation moved independently instead of moving the rectangle.
+    # an unobscured area near its left side. The constraint-state badge can
+    # overlap the chip visually at its center/right, so using the clear left
+    # side makes this gesture test the dimension control itself rather than the
+    # independent constraint badge.
     label_x = (x1 + x2) // 2
     label_y = (y1 + y2) // 2 - 58
     moved_x = min(width - 170, label_x + 115)
@@ -246,7 +248,9 @@ def main():
     assert_alive("dimension-label drag")
     screenshot("04-dimension-label-moved")
 
-    shell("input", "tap", str(moved_x), str(moved_y))
+    edit_x = max(24, moved_x - 90)
+    print(f"Tapping unobscured moved dimension label at ({edit_x},{moved_y})", flush=True)
+    shell("input", "tap", str(edit_x), str(moved_y))
     editor = wait_for_contains("عرض و ارتفاع", "05-dimension-editor", timeout=10)
     if editor is None or find_contains(editor, "عرض و ارتفاع")[0] is None:
         raise AssertionError("Moved rectangle dimension label did not open its numeric editor")
