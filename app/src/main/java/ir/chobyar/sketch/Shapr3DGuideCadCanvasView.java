@@ -45,6 +45,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private boolean snapDistantEdges=true;
 
     private Field viewScaleField,offsetXField,offsetYField,activePlaneField,nativeByBodyField;
+    private Field overview3DField,cameraYawField,cameraPitchField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
@@ -52,7 +53,8 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private ExternalCandidate externalCandidate;
 
     private boolean fingerSketchTouch;
-    private float fingerDownX,fingerDownY;
+    private boolean fingerSketchOrbit;
+    private float fingerDownX,fingerDownY,fingerLastX,fingerLastY;
 
     private final Paint pointFill=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pointStroke=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -82,6 +84,9 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             offsetYField=field(CadCanvasView.class,"offsetY");
             activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
             nativeByBodyField=field(OcctModelCadCanvasView.class,"nativeByBody");
+            overview3DField=field(SpatialCadCanvasView.class,"overview3D");
+            cameraYawField=field(SpatialCadCanvasView.class,"cameraYaw");
+            cameraPitchField=field(SpatialCadCanvasView.class,"cameraPitch");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -123,19 +128,30 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event){
+        boolean sketchGesture=isSketchGesture();
+
+        // After a one-finger orbit the spatial overview remains visible. The
+        // next pen stroke returns to the active orthographic sketch plane and
+        // continues with the still-armed sketch tool instead of forcing the
+        // user through another Sketch-menu round trip.
+        if(is3DOverview()&&sketchGesture&&ShaprInteractionPolicy.isPen(event)){
+            enterActiveSketchView();
+        }
+
         if(event.getPointerCount()>1||is3DOverview()){
             fingerSketchTouch=false;
+            fingerSketchOrbit=false;
             externalCandidate=null;
             return super.onTouchEvent(event);
         }
 
-        boolean sketchGesture=isSketchGesture();
+        sketchGesture=isSketchGesture();
 
         // Public Shapr touch/pen behavior: sketch creation is pen-first. A
         // finger may still select when Select is active, while two fingers keep
         // their native pan/zoom path. A single finger must never leave an
         // accidental line, arc or profile behind merely because a sketch tool
-        // is armed. A short empty-grid tap exits the active sketch tool.
+        // is armed. A tap finishes the current tool; a drag orbits the view.
         if(sketchGesture&&ShaprInteractionPolicy.isFinger(event)){
             return handleFingerDuringSketchTool(event);
         }
@@ -179,32 +195,57 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     }
 
     /**
-     * While a sketch creation tool is armed, a finger is navigation/selection
-     * input rather than geometry input. Two-finger pan/zoom is handled below
-     * this layer before this method is reached. A short single-finger tap ends
-     * the current sketch tool so the same gesture can immediately be used for
-     * selection, matching the empty-grid finish gesture.
+     * Touch while a pen sketch tool is armed follows the current tablet
+     * navigation model: a short empty-grid tap ends the active tool; dragging
+     * one finger orbits the model; two-finger pan/zoom is handled by the lower
+     * canvas before this method is reached. No finger gesture creates geometry.
      */
     private boolean handleFingerDuringSketchTool(MotionEvent event){
         int action=event.getActionMasked();
         if(action==MotionEvent.ACTION_DOWN){
-            fingerSketchTouch=true;fingerDownX=event.getX();fingerDownY=event.getY();
+            fingerSketchTouch=true;fingerSketchOrbit=false;
+            fingerDownX=fingerLastX=event.getX();fingerDownY=fingerLastY=event.getY();
             externalCandidate=null;invalidate();return true;
         }
         if(!fingerSketchTouch)return true;
+        if(action==MotionEvent.ACTION_MOVE){
+            float total=(float)Math.hypot(event.getX()-fingerDownX,event.getY()-fingerDownY);
+            if(total>FINGER_TAP_SLOP_PX*density()){
+                if(!fingerSketchOrbit){
+                    fingerSketchOrbit=true;
+                    setOverview3D(true);
+                    dispatchWorkspaceState();
+                }
+                rotateOverview(event.getX()-fingerLastX,event.getY()-fingerLastY);
+                fingerLastX=event.getX();fingerLastY=event.getY();invalidate();
+            }
+            return true;
+        }
         if(action==MotionEvent.ACTION_UP){
             float d=(float)Math.hypot(event.getX()-fingerDownX,event.getY()-fingerDownY);
-            fingerSketchTouch=false;
-            if(d<=FINGER_TAP_SLOP_PX*density()){
+            boolean wasOrbit=fingerSketchOrbit;
+            fingerSketchTouch=false;fingerSketchOrbit=false;
+            if(!wasOrbit&&d<=FINGER_TAP_SLOP_PX*density()){
                 setTool(TOOL_SELECT);
                 dispatchWorkspaceState();
             }
             externalCandidate=null;invalidate();return true;
         }
         if(action==MotionEvent.ACTION_CANCEL){
-            fingerSketchTouch=false;externalCandidate=null;invalidate();return true;
+            fingerSketchTouch=false;fingerSketchOrbit=false;externalCandidate=null;invalidate();return true;
         }
         return true;
+    }
+
+    private void setOverview3D(boolean on){
+        try{if(overview3DField!=null)overview3DField.setBoolean(this,on);}catch(Exception ignored){}
+    }
+
+    private void rotateOverview(float dx,float dy){
+        try{
+            if(cameraYawField!=null)cameraYawField.setFloat(this,cameraYawField.getFloat(this)+dx*.45f);
+            if(cameraPitchField!=null)cameraPitchField.setFloat(this,clamp(cameraPitchField.getFloat(this)+dy*.35f,-85f,85f));
+        }catch(Exception ignored){}
     }
 
     private boolean isSketchGesture(){try{return baseSketchGestureMethod!=null&&Boolean.TRUE.equals(baseSketchGestureMethod.invoke(this));}catch(Exception e){return false;}}
