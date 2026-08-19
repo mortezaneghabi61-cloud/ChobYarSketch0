@@ -27,7 +27,7 @@ import java.util.Set;
  * handles. Body triangulation is converted into logical CAD references by
  * OcctSnapTopology rather than exposing raw triangle vertices.
  */
-public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
+public class Shapr3DGuideCadCanvasView extends ProductionSnappingCadCanvasView {
     private static final String PREFS="shapr_snap_settings";
     private static final float PX_PER_MM=3f;
     private static final float POINT_HIT_PX=30f;
@@ -80,7 +80,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             baseHintsField=field(ShaprSnappingCadCanvasView.class,"showHints");
             baseSaveSettingsMethod=ShaprSnappingCadCanvasView.class.getDeclaredMethod("saveSettings");baseSaveSettingsMethod.setAccessible(true);
             baseSketchGestureMethod=ShaprSnappingCadCanvasView.class.getDeclaredMethod("isSketchCreationGesture");baseSketchGestureMethod.setAccessible(true);
-            baseFindBestSnapMethod=ShaprSnappingCadCanvasView.class.getDeclaredMethod("findBestSnap",PointF.class,boolean.class);baseFindBestSnapMethod.setAccessible(true);
+            baseFindBestSnapMethod=ProductionSnappingCadCanvasView.class.getDeclaredMethod("findBestSnap",PointF.class,boolean.class);baseFindBestSnapMethod.setAccessible(true);
         }catch(Exception ignored){}
     }
 
@@ -157,11 +157,6 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
         if(is3DOverview())return;
-        // Off-plane topology is a transient snapping aid. Keeping every OCCT
-        // edge and point visible while idle recreated the purple line forest
-        // from the old workspace and obscured the user's sketch.
-        // Merely choosing Line/Arc/etc. must not reveal every projected edge.
-        // Show these references only during the actual pen/finger gesture.
         if(!isSnapGestureActive()&&externalCandidate==null)return;
         if(snapDistantEdges)drawDistantEdges(canvas);
         if(snap3DGuidepoints && baseBool(baseShowPointsField,true))draw3DGuidepoints(canvas);
