@@ -30,6 +30,9 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     private static final float PX_PER_MM = 3f;
     private static final float LABEL_DRAG_SLOP_PX = 7f;
+    // The visual chip is intentionally compact, but its touch target should be
+    // forgiving enough for a finger / S Pen near the rounded border.
+    private static final float LABEL_HIT_SLOP_DP = 8f;
 
     private final Paint fieldFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fieldStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -225,9 +228,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
-        if (action == MotionEvent.ACTION_DOWN
-                && !exactFieldRect.isEmpty()
-                && exactFieldRect.contains(event.getX(), event.getY())) {
+        if (action == MotionEvent.ACTION_DOWN && exactFieldHit(event.getX(), event.getY())) {
             exactFieldPressed = true;
             exactFieldDragging = false;
             fieldDownX = event.getX();
@@ -259,7 +260,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                 exactFieldPressed = false;
                 exactFieldDragging = false;
                 fieldGestureEntity = null;
-                if (!wasDragging && exactFieldRect.contains(event.getX(), event.getY())) {
+                if (!wasDragging && exactFieldHit(event.getX(), event.getY())) {
                     showInlineDimensionEditor();
                 } else if (wasDragging) {
                     invalidate();
@@ -289,6 +290,18 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                     Toast.LENGTH_LONG).show();
         }
         return handled;
+    }
+
+    /**
+     * Keep the dimension annotation visually compact but use a slightly larger
+     * interaction envelope. This prevents near-border taps from falling through
+     * to geometry selection after the annotation has been dragged.
+     */
+    private boolean exactFieldHit(float x, float y) {
+        if (exactFieldRect.isEmpty()) return false;
+        float slop = LABEL_HIT_SLOP_DP * getResources().getDisplayMetrics().density;
+        return x >= exactFieldRect.left - slop && x <= exactFieldRect.right + slop
+                && y >= exactFieldRect.top - slop && y <= exactFieldRect.bottom + slop;
     }
 
     private void showInlineDimensionEditor() {
