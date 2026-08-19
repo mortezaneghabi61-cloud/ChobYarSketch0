@@ -225,11 +225,14 @@ def main():
 
     x1, y1 = int(width * 0.38), int(height * 0.35)
     x2, y2 = int(width * 0.66), int(height * 0.66)
-    print(f"Drawing rectangle from ({x1},{y1}) to ({x2},{y2}) on {width}x{height}", flush=True)
-    shell("input", "swipe", str(x1), str(y1), str(x2), str(y2), "700")
+    print(f"Drawing rectangle with stylus from ({x1},{y1}) to ({x2},{y2}) on {width}x{height}", flush=True)
+    # Sketch creation is pen-first. Use Android's explicit stylus input source so
+    # this smoke test verifies the same routing used by an S Pen instead of
+    # silently relying on touchscreen events that should navigate/select.
+    shell("input", "stylus", "swipe", str(x1), str(y1), str(x2), str(y2), "700")
     time.sleep(1.5)
 
-    pid = assert_alive("rectangle gesture")
+    pid = assert_alive("rectangle stylus gesture")
     screenshot("03-rectangle-drawn")
 
     # The selected rectangle's Shapr-style exact-dimension chip is screen-space
@@ -274,7 +277,7 @@ def main():
         "- APK built, installed, and ChobYarActivity stayed alive\n"
         "- Main CAD workspace controls were accessible\n"
         "- Sketch palette opened\n"
-        "- Rectangle tool accepted a real ADB touch gesture\n"
+        "- Rectangle tool accepted a real ADB stylus gesture\n"
         "- Rectangle dimension label was dragged to a new screen position\n"
         "- Tapping the moved label opened the numeric dimension editor\n"
         "- Fit was exercised when present\n"
