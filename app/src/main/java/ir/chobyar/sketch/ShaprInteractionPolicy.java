@@ -6,9 +6,10 @@ import android.view.MotionEvent;
  * Central interaction policy for the touch + pen workspace.
  *
  * This class deliberately contains no rendering or geometry code. It defines
- * which input device owns sketch creation and which sketch tools remain armed
- * after a completed pen stroke, so the same behavior can be reused by the
- * snapping, constraint and modeling layers without duplicating conditionals.
+ * which input device owns sketch creation and which legacy tools need to be
+ * re-armed after a committed pen stroke. Dedicated Arc / Automatic / Spline
+ * modes already own their own continuation lifecycle and must not be forced
+ * through the legacy TOOL_SELECT reset path.
  */
 final class ShaprInteractionPolicy {
     private ShaprInteractionPolicy() {}
@@ -24,19 +25,17 @@ final class ShaprInteractionPolicy {
                 && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER;
     }
 
+    /**
+     * The legacy Line implementation resets to Select after each segment, but
+     * the tablet workflow needs a connected line sequence to continue from the
+     * previous endpoint. Profile primitives such as Rectangle/Circle/Polygon
+     * intentionally return to the edit context so their dimension controls are
+     * immediately available. Arc/Spline/Automatic have dedicated mode state.
+     */
     static boolean isPersistentSketchTool(int tool) {
-        return tool == CadCanvasView.TOOL_LINE
-                || tool == CadCanvasView.TOOL_ARC
-                || tool == CadCanvasView.TOOL_RECT
-                || tool == CadCanvasView.TOOL_CIRCLE
-                || tool == CadCanvasView.TOOL_POLYGON;
+        return tool == CadCanvasView.TOOL_LINE;
     }
 
-    /**
-     * Shapr-style pen sketching keeps the chosen primitive armed after lifting
-     * the pen. Selection, measure and one-shot utility tools are intentionally
-     * excluded.
-     */
     static boolean shouldRearmAfterCommit(MotionEvent event, int tool) {
         return isPen(event) && isPersistentSketchTool(tool)
                 && event.getActionMasked() == MotionEvent.ACTION_UP;
