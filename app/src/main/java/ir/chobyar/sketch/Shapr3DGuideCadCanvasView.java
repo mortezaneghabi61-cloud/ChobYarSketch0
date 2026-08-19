@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.PointF;
+import android.graphics.RectF;
 import android.view.MotionEvent;
 
 import java.lang.reflect.Field;
@@ -20,12 +21,18 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Shapr3D-aligned off-plane snapping layer.
+ * Shapr3D-aligned off-plane snapping and touch/pen interaction layer.
  *
- * Adds the two Snaps / Guides options that require real 3D model geometry:
- * 3D Guidepoints and Distant Edges. Data comes from the active exact OCCT body
+ * Adds Snaps / Guides options that require real 3D model geometry: 3D
+ * Guidepoints and Distant Edges. Data comes from the active exact OCCT body
  * handles. Body triangulation is converted into logical CAD references by
  * OcctSnapTopology rather than exposing raw triangle vertices.
+ *
+ * This layer is also the final input router before the activity. Sketch
+ * creation belongs to the pen; finger input must never accidentally create a
+ * sketch entity while a pen tool is armed. Two-finger navigation is left to
+ * the lower camera/canvas layers. Explicit pen sketch primitives remain armed
+ * after a completed stroke, matching the continuous pen workflow.
  */
 public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private static final String PREFS="shapr_snap_settings";
@@ -33,16 +40,23 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private static final float POINT_HIT_PX=30f;
     private static final float EDGE_HIT_PX=26f;
     private static final float OFF_PLANE_TOL_MM=.05f;
+    private static final float FINGER_TAP_SLOP_PX=18f;
 
     private boolean snap3DGuidepoints=true;
     private boolean snapDistantEdges=true;
 
     private Field viewScaleField,offsetXField,offsetYField,activePlaneField,nativeByBodyField;
+    private Field overview3DField,cameraYawField,cameraPitchField,dimensionChipField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
     private final Map<Long,OcctSnapTopology.Result> topologyCache=new HashMap<>();
     private ExternalCandidate externalCandidate;
+
+    private boolean fingerSketchTouch;
+    private boolean fingerSketchOrbit;
+    private boolean fingerOverlayGesture;
+    private float fingerDownX,fingerDownY,fingerLastX,fingerLastY;
 
     private final Paint pointFill=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pointStroke=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -72,6 +86,10 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             offsetYField=field(CadCanvasView.class,"offsetY");
             activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
             nativeByBodyField=field(OcctModelCadCanvasView.class,"nativeByBody");
+            overview3DField=field(SpatialCadCanvasView.class,"overview3D");
+            cameraYawField=field(SpatialCadCanvasView.class,"cameraYaw");
+            cameraPitchField=field(SpatialCadCanvasView.class,"cameraPitch");
+            dimensionChipField=field(SmartCadCanvasView.class,"dimensionChip");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -113,31 +131,142 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event){
-        if(event.getPointerCount()>1||is3DOverview()){
-            externalCandidate=null;return super.onTouchEvent(event);
-        }
         boolean sketchGesture=isSketchGesture();
-        if(!sketchGesture||!isSnapEnabled()||(!snap3DGuidepoints&&!snapDistantEdges)){
-            externalCandidate=null;return super.onTouchEvent(event);
+
+        // After a one-finger orbit the spatial overview remains visible. The
+        // next pen stroke returns to the active orthographic sketch plane and
+        // continues with the still-armed sketch tool instead of forcing the
+        // user through another Sketch-menu round trip.
+        if(is3DOverview()&&sketchGesture&&ShaprInteractionPolicy.isPen(event)){
+            enterActiveSketchView();
         }
 
+        if(event.getPointerCount()>1||is3DOverview()){
+            fingerSketchTouch=false;
+            fingerSketchOrbit=false;
+            fingerOverlayGesture=false;
+            externalCandidate=null;
+            return super.onTouchEvent(event);
+        }
+
+        sketchGesture=isSketchGesture();
+
+        // Keep screen-space edit controls interactive even while a persistent
+        // pen tool remains armed. In particular, Shapr-like dimension chips are
+        // touch-editable immediately after drawing a profile.
+        if(sketchGesture&&ShaprInteractionPolicy.isFinger(event)){
+            int action=event.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN&&isDimensionChipHit(event.getX(),event.getY())){
+                fingerOverlayGesture=true;
+            }
+            if(fingerOverlayGesture){
+                boolean handled=dispatchToBase(event,event,getTool());
+                if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)fingerOverlayGesture=false;
+                return handled;
+            }
+            return handleFingerDuringSketchTool(event);
+        }
+
+        if(!sketchGesture||!isSnapEnabled()||(!snap3DGuidepoints&&!snapDistantEdges)){
+            externalCandidate=null;
+            return dispatchToBase(event,event,getTool());
+        }
+
+        int activeTool=getTool();
         int action=event.getActionMasked();
         PointF raw=world(event.getX(),event.getY());
         ExternalCandidate ext=bestExternal(raw);
         Object base=baseCandidate(raw,action!=MotionEvent.ACTION_DOWN);
-        if(ext!=null && beatsBase(ext,base)){
+        if(ext!=null&&beatsBase(ext,base)){
             externalCandidate=ext;
             PointF s=screen(ext.local);
             MotionEvent forwarded=MotionEvent.obtain(event);forwarded.setLocation(s.x,s.y);
-            boolean handled=super.onTouchEvent(forwarded);forwarded.recycle();
+            boolean handled=dispatchToBase(forwarded,event,activeTool);forwarded.recycle();
             if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)lingerExternal(ext);
             invalidate();return handled;
         }
         externalCandidate=null;
-        return super.onTouchEvent(event);
+        return dispatchToBase(event,event,activeTool);
     }
 
-    private boolean isSketchGesture(){try{return baseSketchGestureMethod!=null && Boolean.TRUE.equals(baseSketchGestureMethod.invoke(this));}catch(Exception e){return false;}}
+    /**
+     * Keeps explicit pen primitives armed after the lower legacy canvas commits
+     * an entity and resets itself to Select. Automatic Line/Arc and spline
+     * modes own their persistence in their dedicated layers and therefore do
+     * not need special handling here.
+     */
+    private boolean dispatchToBase(MotionEvent forwarded,MotionEvent original,int activeTool){
+        boolean rearm=ShaprInteractionPolicy.shouldRearmAfterCommit(original,activeTool);
+        boolean handled=super.onTouchEvent(forwarded);
+        if(rearm&&getTool()==TOOL_SELECT&&!is3DOverview()){
+            setTool(activeTool);
+            dispatchWorkspaceState();
+        }
+        return handled;
+    }
+
+    /**
+     * Touch while a pen sketch tool is armed follows the current tablet
+     * navigation model: a short empty-grid tap ends the active tool; dragging
+     * one finger orbits the model; two-finger pan/zoom is handled by the lower
+     * canvas before this method is reached. No finger gesture creates geometry.
+     */
+    private boolean handleFingerDuringSketchTool(MotionEvent event){
+        int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            fingerSketchTouch=true;fingerSketchOrbit=false;
+            fingerDownX=fingerLastX=event.getX();fingerDownY=fingerLastY=event.getY();
+            externalCandidate=null;invalidate();return true;
+        }
+        if(!fingerSketchTouch)return true;
+        if(action==MotionEvent.ACTION_MOVE){
+            float total=(float)Math.hypot(event.getX()-fingerDownX,event.getY()-fingerDownY);
+            if(total>FINGER_TAP_SLOP_PX*density()){
+                if(!fingerSketchOrbit){
+                    fingerSketchOrbit=true;
+                    setOverview3D(true);
+                    dispatchWorkspaceState();
+                }
+                rotateOverview(event.getX()-fingerLastX,event.getY()-fingerLastY);
+                fingerLastX=event.getX();fingerLastY=event.getY();invalidate();
+            }
+            return true;
+        }
+        if(action==MotionEvent.ACTION_UP){
+            float d=(float)Math.hypot(event.getX()-fingerDownX,event.getY()-fingerDownY);
+            boolean wasOrbit=fingerSketchOrbit;
+            fingerSketchTouch=false;fingerSketchOrbit=false;
+            if(!wasOrbit&&d<=FINGER_TAP_SLOP_PX*density()){
+                setTool(TOOL_SELECT);
+                dispatchWorkspaceState();
+            }
+            externalCandidate=null;invalidate();return true;
+        }
+        if(action==MotionEvent.ACTION_CANCEL){
+            fingerSketchTouch=false;fingerSketchOrbit=false;externalCandidate=null;invalidate();return true;
+        }
+        return true;
+    }
+
+    private boolean isDimensionChipHit(float x,float y){
+        try{
+            Object v=dimensionChipField==null?null:dimensionChipField.get(this);
+            return v instanceof RectF&&!((RectF)v).isEmpty()&&((RectF)v).contains(x,y);
+        }catch(Exception e){return false;}
+    }
+
+    private void setOverview3D(boolean on){
+        try{if(overview3DField!=null)overview3DField.setBoolean(this,on);}catch(Exception ignored){}
+    }
+
+    private void rotateOverview(float dx,float dy){
+        try{
+            if(cameraYawField!=null)cameraYawField.setFloat(this,cameraYawField.getFloat(this)+dx*.45f);
+            if(cameraPitchField!=null)cameraPitchField.setFloat(this,clamp(cameraPitchField.getFloat(this)+dy*.35f,-85f,85f));
+        }catch(Exception ignored){}
+    }
+
+    private boolean isSketchGesture(){try{return baseSketchGestureMethod!=null&&Boolean.TRUE.equals(baseSketchGestureMethod.invoke(this));}catch(Exception e){return false;}}
     private Object baseCandidate(PointF raw,boolean directional){try{return baseFindBestSnapMethod==null?null:baseFindBestSnapMethod.invoke(this,raw,directional);}catch(Exception e){return null;}}
     private boolean beatsBase(ExternalCandidate ext,Object base){
         if(base==null)return true;
@@ -158,14 +287,12 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         super.onDraw(canvas);
         if(is3DOverview())return;
         // Off-plane topology is a transient snapping aid. Keeping every OCCT
-        // edge and point visible while idle recreated the purple line forest
-        // from the old workspace and obscured the user's sketch.
-        // Merely choosing Line/Arc/etc. must not reveal every projected edge.
-        // Show these references only during the actual pen/finger gesture.
+        // edge and point visible while idle recreates a line forest and hides
+        // the user's sketch. Show references only during an actual pen gesture.
         if(!isSnapGestureActive()&&externalCandidate==null)return;
         if(snapDistantEdges)drawDistantEdges(canvas);
-        if(snap3DGuidepoints && baseBool(baseShowPointsField,true))draw3DGuidepoints(canvas);
-        if(externalCandidate!=null && baseBool(baseHintsField,true))drawExternalHint(canvas,externalCandidate);
+        if(snap3DGuidepoints&&baseBool(baseShowPointsField,true))draw3DGuidepoints(canvas);
+        if(externalCandidate!=null&&baseBool(baseHintsField,true))drawExternalHint(canvas,externalCandidate);
     }
 
     private ExternalCandidate bestExternal(PointF raw){
