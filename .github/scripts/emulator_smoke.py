@@ -226,21 +226,18 @@ def main():
     x1, y1 = int(width * 0.38), int(height * 0.35)
     x2, y2 = int(width * 0.66), int(height * 0.66)
     print(f"Drawing rectangle with stylus from ({x1},{y1}) to ({x2},{y2}) on {width}x{height}", flush=True)
-    # Sketch creation is pen-first. Use Android's explicit stylus input source so
-    # this smoke test verifies the same routing used by an S Pen instead of
-    # silently relying on touchscreen events that should navigate/select.
     shell("input", "stylus", "swipe", str(x1), str(y1), str(x2), str(y2), "700")
     time.sleep(1.5)
 
     pid = assert_alive("rectangle stylus gesture")
     screenshot("03-rectangle-drawn")
 
-    # The selected rectangle's Shapr-style exact-dimension chip is screen-space
-    # UI anchored to the geometry center at y-58 px. Drag that chip, then tap
-    # an unobscured area near its left side. The constraint-state badge can
-    # overlap the chip visually at its center/right, so using the clear left
-    # side makes this gesture test the dimension control itself rather than the
-    # independent constraint badge.
+    # Drag the movable exact-dimension chip and tap a safe interior point.
+    # The chip is grabbed below its center and its lock/state badge partially
+    # overlaps the right side, so using the raw drag endpoint as the tap Y can
+    # land on the lower border. Tap 26 px above the endpoint and left of the
+    # state badge instead; this is safely inside the visual chip on mdpi/xhdpi
+    # emulator layouts while still verifying that the chip really moved.
     label_x = (x1 + x2) // 2
     label_y = (y1 + y2) // 2 - 58
     moved_x = min(width - 170, label_x + 115)
@@ -252,8 +249,9 @@ def main():
     screenshot("04-dimension-label-moved")
 
     edit_x = max(24, moved_x - 90)
-    print(f"Tapping unobscured moved dimension label at ({edit_x},{moved_y})", flush=True)
-    shell("input", "tap", str(edit_x), str(moved_y))
+    edit_y = max(24, moved_y - 26)
+    print(f"Tapping safe interior of moved dimension label at ({edit_x},{edit_y})", flush=True)
+    shell("input", "tap", str(edit_x), str(edit_y))
     editor = wait_for_contains("عرض و ارتفاع", "05-dimension-editor", timeout=10)
     if editor is None or find_contains(editor, "عرض و ارتفاع")[0] is None:
         raise AssertionError("Moved rectangle dimension label did not open its numeric editor")
