@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.PointF;
+import android.graphics.RectF;
 import android.view.MotionEvent;
 
 import java.lang.reflect.Field;
@@ -45,7 +46,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private boolean snapDistantEdges=true;
 
     private Field viewScaleField,offsetXField,offsetYField,activePlaneField,nativeByBodyField;
-    private Field overview3DField,cameraYawField,cameraPitchField;
+    private Field overview3DField,cameraYawField,cameraPitchField,dimensionChipField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
@@ -54,6 +55,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     private boolean fingerSketchTouch;
     private boolean fingerSketchOrbit;
+    private boolean fingerOverlayGesture;
     private float fingerDownX,fingerDownY,fingerLastX,fingerLastY;
 
     private final Paint pointFill=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -87,6 +89,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             overview3DField=field(SpatialCadCanvasView.class,"overview3D");
             cameraYawField=field(SpatialCadCanvasView.class,"cameraYaw");
             cameraPitchField=field(SpatialCadCanvasView.class,"cameraPitch");
+            dimensionChipField=field(SmartCadCanvasView.class,"dimensionChip");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -141,18 +144,26 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         if(event.getPointerCount()>1||is3DOverview()){
             fingerSketchTouch=false;
             fingerSketchOrbit=false;
+            fingerOverlayGesture=false;
             externalCandidate=null;
             return super.onTouchEvent(event);
         }
 
         sketchGesture=isSketchGesture();
 
-        // Public Shapr touch/pen behavior: sketch creation is pen-first. A
-        // finger may still select when Select is active, while two fingers keep
-        // their native pan/zoom path. A single finger must never leave an
-        // accidental line, arc or profile behind merely because a sketch tool
-        // is armed. A tap finishes the current tool; a drag orbits the view.
+        // Keep screen-space edit controls interactive even while a persistent
+        // pen tool remains armed. In particular, Shapr-like dimension chips are
+        // touch-editable immediately after drawing a profile.
         if(sketchGesture&&ShaprInteractionPolicy.isFinger(event)){
+            int action=event.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN&&isDimensionChipHit(event.getX(),event.getY())){
+                fingerOverlayGesture=true;
+            }
+            if(fingerOverlayGesture){
+                boolean handled=dispatchToBase(event,event,getTool());
+                if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)fingerOverlayGesture=false;
+                return handled;
+            }
             return handleFingerDuringSketchTool(event);
         }
 
@@ -235,6 +246,13 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             fingerSketchTouch=false;fingerSketchOrbit=false;externalCandidate=null;invalidate();return true;
         }
         return true;
+    }
+
+    private boolean isDimensionChipHit(float x,float y){
+        try{
+            Object v=dimensionChipField==null?null:dimensionChipField.get(this);
+            return v instanceof RectF&&!((RectF)v).isEmpty()&&((RectF)v).contains(x,y);
+        }catch(Exception e){return false;}
     }
 
     private void setOverview3D(boolean on){
