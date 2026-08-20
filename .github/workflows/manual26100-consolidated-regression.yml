@@ -7,11 +7,13 @@ on:
       - refactor/sketch-core-type-safe-20260820
     paths:
       - .github/workflows/manual26100-consolidated-regression.yml
+      - .github/scripts/run-production-cad-regression.sh
   pull_request:
     branches:
       - main
     paths:
       - .github/workflows/manual26100-consolidated-regression.yml
+      - .github/scripts/run-production-cad-regression.sh
 
 permissions:
   contents: read
@@ -72,49 +74,13 @@ jobs:
           profile: pixel_7_pro
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: |
-            set -eu
-            mkdir -p test-artifacts
-            : > test-artifacts/consolidated-summary.txt
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          script: bash .github/scripts/run-production-cad-regression.sh
 
-            run_contract() {
-              class="$1"
-              slug="$2"
-              expected="$3"
-              adb logcat -c
-              adb shell am instrument -w -e class "ir.chobyar.sketch.${class}" ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee "test-artifacts/${slug}.txt"
-              grep -Fq "$expected" "test-artifacts/${slug}.txt"
-              adb logcat -d -v brief > "test-artifacts/${slug}-logcat.txt"
-              printf '%s | %s\n' "$class" "$expected" | tee -a test-artifacts/consolidated-summary.txt
-            }
-
-            # Sketch interaction, primitives, selection, dimensions and constraints: 16 tests
-            run_contract TouchInputContractInstrumentationTest touch 'OK (3 tests)'
-            run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
-            run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
-            run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
-            run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5 tests)'
-            run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
-
-            # Solid / History / Boolean / Direct modeling: 16 tests
-            run_contract SolidCommandInstrumentationTest solid 'OK (2 tests)'
-            run_contract BooleanCommandInstrumentationTest boolean 'OK (3 tests)'
-            run_contract BooleanKeepOriginalsInstrumentationTest boolean-keep 'OK (3 tests)'
-            run_contract DirectFinishInstrumentationTest direct-finish 'OK (2 tests)'
-            run_contract ShellPushPullInstrumentationTest shell-pushpull 'OK (2 tests)'
-            run_contract SweepCommandInstrumentationTest sweep 'OK (1 test)'
-            run_contract LoftCommandInstrumentationTest loft 'OK (1 test)'
-
-            # Construction / exact Project / selected Body / associative reference: 10 tests
-            run_contract ConstructionProjectInstrumentationTest construction-project 'OK (2 tests)'
-            run_contract Project3DExactInstrumentationTest project-exact 'OK (3 tests)'
-            run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 tests)'
-            run_contract AssociativeProjectProvenanceInstrumentationTest project-associative 'OK (4 tests)'
-
-            test "$(wc -l < test-artifacts/consolidated-summary.txt)" -eq 17
-            echo 'CONSOLIDATED_RESULT classes=17 tests=42 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
+      - name: Record consolidated result
+        if: success()
+        run: |
+          cp test-artifacts/production-cad-summary.txt test-artifacts/consolidated-summary.txt
+          echo 'CONSOLIDATED_RESULT classes=17 tests=42 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
 
       - name: Upload consolidated regression evidence
         if: always()
