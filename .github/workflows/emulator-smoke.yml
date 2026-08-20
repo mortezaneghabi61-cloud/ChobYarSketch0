@@ -155,7 +155,7 @@ jobs:
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.TouchInputContractInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/touch-input-contract.txt
             grep -q 'OK (3 tests)' test-artifacts/touch-input-contract.txt
-            adb logcat -d -v brief | grep 'TouchInputContract.*_RESULT' | sed -E 's/^.*TouchInputContract: //' | tee test-artifacts/touch-viewscale.txt
+            adb logcat -d -v brief | grep 'TouchInputContract.*_RESULT' | sed -E 's/^.*(STYLUS_RESULT|PAN_RESULT|DIMENSION_LABEL_PINCH_RESULT)/\1/' | tee test-artifacts/touch-viewscale.txt
             test $(grep -c '_RESULT' test-artifacts/touch-viewscale.txt) -eq 3
             grep -q '^STYLUS_RESULT viewScale=' test-artifacts/touch-viewscale.txt
             grep -q '^PAN_RESULT before=' test-artifacts/touch-viewscale.txt
