@@ -23,13 +23,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Production-canvas regression tests for core Sketch primitives, guidepoints,
- * intersection snapping, and exact numeric dimensions.
- */
+/** Production-canvas coverage for Sketch primitives, snaps, and numeric dimensions. */
 @RunWith(AndroidJUnit4.class)
 public final class SketchPrimitivesSnapInstrumentationTest {
-
     private static final String TAG = "SketchPrimitivesSnap";
     private static final float EPS = 0.08f;
     private static final float PX_PER_MM = 3f;
@@ -42,19 +38,14 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
-                // Horizontal reference: endpoint (100,100), midpoint (160,100).
                 c.executeCommand("LINE 100 100 220 100");
-                // Crossing reference: intersection with first line at (200,100).
                 c.executeCommand("LINE 200 55 200 145");
                 c.setTool(CadCanvasView.TOOL_LINE);
             });
             inst.waitForIdleSync();
 
-            // Intentionally miss the reference points by 1-2 mm. Production
-            // snapping must place the new geometry exactly on the guidepoints.
             stylusLine(inst, frame(scenario), 101.4f, 101.2f, 159.1f, 101.3f);
             inst.waitForIdleSync();
-
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 CadCanvasView.Entity made = c.selected;
@@ -70,7 +61,6 @@ public final class SketchPrimitivesSnapInstrumentationTest {
 
             stylusLine(inst, frame(scenario), 130.5f, 70.5f, 201.3f, 101.2f);
             inst.waitForIdleSync();
-
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 CadCanvasView.Entity made = c.selected;
@@ -97,26 +87,21 @@ public final class SketchPrimitivesSnapInstrumentationTest {
 
             stylusLine(inst, frame(scenario), 320f, 220f, 360f, 220f);
             inst.waitForIdleSync();
-
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 assertNotNull(c.selected);
                 assertEquals("دایره", c.selected.shortName());
-                assertEquals("قطر = 80 mm", c.applySelectedDimension("80"));
+                assertEquals("قطر = 80.0 mm", c.applySelectedDimension("80"));
                 PointF center = c.selected.center();
                 assertNear("circle center x", 320f, center.x);
                 assertNear("circle center y", 220f, center.y);
-                float radius = farthestSnapDistance(c.selected, center);
-                assertNear("numeric circle radius", 40f, radius);
-                // Keep the circle and switch to Line so the next real pen gesture
-                // has to snap to center and a quadrant, not merely expose labels.
+                assertNear("numeric circle radius", 40f, farthestSnapDistance(c.selected, center));
                 c.setTool(CadCanvasView.TOOL_LINE);
             });
             inst.waitForIdleSync();
 
             stylusLine(inst, frame(scenario), 321.5f, 221.2f, 359.1f, 221.0f);
             inst.waitForIdleSync();
-
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 CadCanvasView.Entity line = c.selected;
@@ -142,7 +127,6 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             });
             inst.waitForIdleSync();
 
-            // A visibly curved stroke is required by ShaprArcCadCanvasView.
             float[][] worldPath = {
                     {420f, 120f}, {450f, 80f}, {480f, 70f}, {510f, 80f}, {540f, 120f}
             };
@@ -154,7 +138,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
                 assertNotNull("Curved pen stroke did not create an Arc", c.selected);
                 assertEquals("قوس", c.selected.shortName());
                 String result = c.applySelectedDimension("75");
-                assertTrue("Arc numeric dimension rejected: " + result, result.startsWith("شعاع ="));
+                assertEquals("شعاع = 75.0 mm", result);
                 PointF center = c.selected.center();
                 List<CadCanvasView.SnapPoint> snaps = c.selected.snapPoints();
                 assertTrue("Arc must expose center + endpoints", snaps.size() >= 3);
@@ -177,18 +161,18 @@ public final class SketchPrimitivesSnapInstrumentationTest {
                 c.clearAll();
 
                 c.executeCommand("LINE 40 40 90 40");
-                assertEquals("طول = 125 mm", c.applySelectedDimension("125"));
+                assertEquals("طول = 125.0 mm", c.applySelectedDimension("125"));
                 List<CadCanvasView.SnapPoint> l = c.selected.snapPoints();
                 assertNear("line dimension", 125f, distance(l.get(0).x, l.get(0).y, l.get(1).x, l.get(1).y));
 
                 c.executeCommand("RECT 260 300 50 30");
-                assertEquals("اندازه = 120 mm × 80 mm", c.applySelectedDimension("120 80"));
+                assertEquals("اندازه = 120.0 mm × 80.0 mm", c.applySelectedDimension("120 80"));
                 RectF rb = c.selected.bounds();
                 assertNear("rectangle width", 120f, rb.width());
                 assertNear("rectangle height", 80f, rb.height());
 
                 c.executeCommand("CIRCLE 500 300 20");
-                assertEquals("قطر = 90 mm", c.applySelectedDimension("90"));
+                assertEquals("قطر = 90.0 mm", c.applySelectedDimension("90"));
                 PointF cc = c.selected.center();
                 assertNear("circle radius from exact diameter", 45f, farthestSnapDistance(c.selected, cc));
 
