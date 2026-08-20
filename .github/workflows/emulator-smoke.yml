@@ -142,7 +142,8 @@ jobs:
             adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
             python3 .github/scripts/emulator_smoke.py
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w -e class ir.chobyar.sketch.PinchZoomInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner
+            adb shell am instrument -w -e class ir.chobyar.sketch.PinchZoomInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/pinch-instrumentation.txt
+            grep -q 'OK (1 test)' test-artifacts/pinch-instrumentation.txt
 
       - name: Upload smoke-test evidence
         if: always()
