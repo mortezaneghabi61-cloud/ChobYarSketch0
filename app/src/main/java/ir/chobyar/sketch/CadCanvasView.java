@@ -56,12 +56,13 @@ public class CadCanvasView extends View {
     private final Paint centerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint screenTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private final List<Entity> entities = new ArrayList<>();
+    protected final List<Entity> entities = new ArrayList<>();
     private final ArrayDeque<List<Entity>> undoStack = new ArrayDeque<>();
+    private final ArrayDeque<List<Entity>> redoStack = new ArrayDeque<>();
     private final Map<String, Boolean> layers = new LinkedHashMap<>();
     private final Map<String, Scene> scenes = new HashMap<>();
 
-    private Entity selected;
+    protected Entity selected;
     private int tool = TOOL_SELECT;
     private boolean showGrid = true;
     private boolean showAxes = true;
@@ -75,16 +76,16 @@ public class CadCanvasView extends View {
     private int polygonSides = 6;
 
     private final ScaleGestureDetector scaleDetector;
-    private float viewScale = 1f;
-    private float offsetX = 120f;
-    private float offsetY = 160f;
+    protected float viewScale = 1f;
+    protected float offsetX = 120f;
+    protected float offsetY = 160f;
     private boolean multiTouch = false;
     private float lastMultiX;
     private float lastMultiY;
 
-    private float startX, startY, endX, endY;
+    protected float startX, startY, endX, endY;
     private float downScreenX, downScreenY;
-    private boolean drawing = false;
+    protected boolean drawing = false;
     private boolean draggingSelection = false;
     private boolean dragUndoSaved = false;
     private int activeHandle = -1;
@@ -208,14 +209,22 @@ public class CadCanvasView extends View {
         invalidate();
     }
 
+    public boolean canUndoSketch() { return !undoStack.isEmpty(); }
+    public boolean canRedoSketch() { return !redoStack.isEmpty(); }
+
     public void undo() {
         if (undoStack.isEmpty()) return;
-        List<Entity> snapshot = undoStack.removeLast();
-        entities.clear();
-        for (Entity e : snapshot) entities.add(e.copy());
-        selected = null;
-        tool = TOOL_SELECT;
-        invalidate();
+        redoStack.addLast(snapshotEntities());
+        while (redoStack.size() > MAX_UNDO) redoStack.removeFirst();
+        restoreSnapshot(undoStack.removeLast());
+    }
+
+    public boolean redoSketch() {
+        if (redoStack.isEmpty()) return false;
+        undoStack.addLast(snapshotEntities());
+        while (undoStack.size() > MAX_UNDO) undoStack.removeFirst();
+        restoreSnapshot(redoStack.removeLast());
+        return true;
     }
 
     public void deleteSelected() {
@@ -385,7 +394,7 @@ public class CadCanvasView extends View {
     public void fitAll() {
         RectF all = null;
         for (Entity e : entities) {
-            if (!isVisible(e) || e.isConstruction()) continue;
+            if (!isVisible(e)) continue;
             RectF b = e.bounds();
             if (all == null) all = new RectF(b);
             else all.union(b);
@@ -690,7 +699,7 @@ public class CadCanvasView extends View {
         SnapCandidate best=null;
 
         for(Entity e:entities){
-            if(e==exclude||!isVisible(e)||e.isConstruction())continue;
+            if(e==exclude||!isVisible(e))continue;
             for(SnapPoint q:e.snapPoints()){
                 float d=dist(x,y,q.x,q.y);
                 if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(q.x,q.y,d,q.label);
@@ -742,18 +751,39 @@ public class CadCanvasView extends View {
         Entity best=null;float bd=Float.MAX_VALUE;
         for(int i=entities.size()-1;i>=0;i--){
             Entity e=entities.get(i);
-            if(!isVisible(e)||e.isConstruction())continue;
+            if(!isVisible(e))continue;
             float d=e.selectionDistance(x,y);
             if(d<=tol&&d<bd){best=e;bd=d;}
         }
         return best;
     }
 
-    private void saveUndo(){
+    private List<Entity> snapshotEntities(){
         List<Entity> snapshot=new ArrayList<>();
         for(Entity e:entities)snapshot.add(e.copy());
-        undoStack.addLast(snapshot);
+        return snapshot;
+    }
+
+    private void restoreSnapshot(List<Entity> snapshot){
+        entities.clear();
+        for(Entity e:snapshot)entities.add(e.copy());
+        selected=null;
+        tool=TOOL_SELECT;
+        drawing=false;
+        draggingSelection=false;
+        dragUndoSaved=false;
+        activeHandle=-1;
+        multiTouch=false;
+        freePoints.clear();
+        snapVisible=false;
+        invalidate();
+    }
+
+    private void saveUndo(){
+        undoStack.addLast(snapshotEntities());
         while(undoStack.size()>MAX_UNDO)undoStack.removeFirst();
+        // Any new edit after Undo starts a new branch and invalidates Redo.
+        redoStack.clear();
     }
 
     private void addPrepared(Entity e){e.setLayer(currentLayer);e.setColor(currentColor);entities.add(e);}
@@ -761,6 +791,47 @@ public class CadCanvasView extends View {
     private boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
     private float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
     private float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
+
+    // Stable subclass-facing Sketch core contract. Unique names intentionally
+    // avoid collisions with legacy private helpers in intermediate subclasses.
+    protected final Entity coreFindHit(float x, float y) { return findHit(x, y); }
+    protected final void coreSaveUndo() { saveUndo(); }
+    protected final boolean coreIsVisible(Entity e) { return isVisible(e); }
+    protected final float coreScreenToWorldX(float sx) { return screenToWorldX(sx); }
+    protected final float coreScreenToWorldY(float sy) { return screenToWorldY(sy); }
+    protected final void coreObserveScaleGesture(MotionEvent event) {
+        scaleDetector.onTouchEvent(event);
+    }
+
+    /** Adds exact projected/reference sketch geometry without exposing private entity classes. */
+    protected final Entity coreAddConstructionLine(float x1,float y1,float x2,float y2) {
+        Entity e=new LineEntity(x1,y1,x2,y2);e.setConstruction(true);addPrepared(e);return e;
+    }
+    protected final Entity coreAddConstructionCircle(float cx,float cy,float radius) {
+        Entity e=new CircleEntity(cx,cy,Math.abs(radius));e.setConstruction(true);addPrepared(e);return e;
+    }
+    protected final Entity coreAddConstructionArc(float cx,float cy,float radius,float startDeg,float sweepDeg) {
+        Entity e=new ArcEntity(cx,cy,Math.abs(radius),startDeg,sweepDeg);e.setConstruction(true);addPrepared(e);return e;
+    }
+
+    /** Typed associative-reference metadata lives inside Sketch snapshots. */
+    protected final void coreSetReferenceSource(Entity e,int bodyId,int edgeIndex,int edgeKind){
+        if(e!=null)e.setReferenceSource(bodyId,edgeIndex,edgeKind);
+    }
+    protected final boolean coreIsAssociativeReference(Entity e){return e!=null&&e.getReferenceBodyId()>=0&&e.getReferenceEdgeIndex()>=0;}
+    protected final List<Entity> coreAssociativeReferenceSnapshot(){
+        List<Entity> out=new ArrayList<>();for(Entity e:entities)if(coreIsAssociativeReference(e))out.add(e);return out;
+    }
+    protected final int coreAssociativeReferenceCount(){int n=0;for(Entity e:entities)if(coreIsAssociativeReference(e))n++;return n;}
+    protected final boolean coreUpdateReferenceLine(Entity e,float x1,float y1,float x2,float y2){
+        if(!(e instanceof LineEntity))return false;LineEntity v=(LineEntity)e;v.x1=x1;v.y1=y1;v.x2=x2;v.y2=y2;return true;
+    }
+    protected final boolean coreUpdateReferenceCircle(Entity e,float cx,float cy,float radius){
+        if(!(e instanceof CircleEntity)||radius<=0f)return false;CircleEntity v=(CircleEntity)e;v.x=cx;v.y=cy;v.r=radius;return true;
+    }
+    protected final boolean coreUpdateReferenceArc(Entity e,float cx,float cy,float radius,float startDeg,float sweepDeg){
+        if(!(e instanceof ArcEntity)||radius<=0f)return false;ArcEntity v=(ArcEntity)e;v.x=cx;v.y=cy;v.r=radius;v.start=startDeg;v.sweep=sweepDeg;return true;
+    }
 
     public String executeCommand(String raw){
         if(raw==null)return"";
@@ -796,7 +867,9 @@ public class CadCanvasView extends View {
                 case"LAYERSHOW":require(a,2);return setLayerVisible(a[1],true);
                 case"MATERIAL":require(a,2);return setMaterial(a[1]);
                 case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=clamp(sc.scale,MIN_VIEW_SCALE,MAX_VIEW_SCALE);offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
-                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(selected.isConstruction())return"Construction قابل Extrude نیست";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"CONSTRUCTION":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(true);invalidate();return"Construction روشن شد";
+                case"NORMAL":case"REGULAR":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(false);invalidate();return"Construction خاموش شد";
                 case"ERASE":case"DELETE":if(selected==null)return"اول شکل را انتخاب کن";deleteSelected();return"حذف شد";
                 case"U":case"UNDO":undo();return"Undo";
                 case"ZOOMIN":case"ZIN":zoomBy(1.8f);return"Zoom In";
@@ -827,7 +900,7 @@ public class CadCanvasView extends View {
         return d.toString();
     }
 
-    private interface Entity{
+    protected interface Entity{
         void draw(Canvas c,Paint p,Paint text,Paint measure,float px,boolean dims);
         float selectionDistance(float x,float y);
         List<SnapPoint> snapPoints();
@@ -851,24 +924,38 @@ public class CadCanvasView extends View {
         int getColor();
         void setColor(int color);
         boolean isConstruction();
+        void setConstruction(boolean construction);
         boolean canExtrude();
         void setExtrusion(float h);
         float getExtrusion();
+        int getReferenceBodyId();
+        int getReferenceEdgeIndex();
+        int getReferenceEdgeKind();
+        void setReferenceSource(int bodyId,int edgeIndex,int edgeKind);
     }
 
     private abstract static class BaseEntity implements Entity{
         String layer="0";
         int color=Color.rgb(25,25,25);
         float extrusion=0f;
+        boolean construction=false;
+        int referenceBodyId=-1;
+        int referenceEdgeIndex=-1;
+        int referenceEdgeKind=0;
         public String getLayer(){return layer;}
         public void setLayer(String l){layer=l==null?"0":l;}
         public int getColor(){return color;}
         public void setColor(int c){color=c;}
-        public boolean isConstruction(){return false;}
+        public boolean isConstruction(){return construction;}
+        public void setConstruction(boolean value){construction=value;}
         public boolean canExtrude(){return false;}
         public void setExtrusion(float h){extrusion=h;}
         public float getExtrusion(){return extrusion;}
-        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;}
+        public int getReferenceBodyId(){return referenceBodyId;}
+        public int getReferenceEdgeIndex(){return referenceEdgeIndex;}
+        public int getReferenceEdgeKind(){return referenceEdgeKind;}
+        public void setReferenceSource(int bodyId,int edgeIndex,int edgeKind){referenceBodyId=bodyId;referenceEdgeIndex=edgeIndex;referenceEdgeKind=edgeKind;}
+        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;e.referenceBodyId=referenceBodyId;e.referenceEdgeIndex=referenceEdgeIndex;e.referenceEdgeKind=referenceEdgeKind;}
     }
 
     private static class PointEntity extends BaseEntity{
@@ -894,7 +981,7 @@ public class CadCanvasView extends View {
         public void appendDxf(StringBuilder d){d.append("0\nPOINT\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n");}
     }
 
-    private static class LineEntity extends BaseEntity{
+    protected static class LineEntity extends BaseEntity{
         float x1,y1,x2,y2;
         LineEntity(float a,float b,float c,float d){x1=a;y1=b;x2=c;y2=d;}
         void setLength(float len){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f){x2=x1+len;y2=y1;}else{x2=x1+dx/l*len;y2=y1+dy/l*len;}}
@@ -1111,12 +1198,12 @@ public class CadCanvasView extends View {
         public void appendDxf(StringBuilder d){}
     }
 
-    private static class SnapPoint{
+    protected static class SnapPoint{
         float x,y;String label;
         SnapPoint(float x,float y,String label){this.x=x;this.y=y;this.label=label;}
     }
 
-    private static class ControlPoint{
+    protected static class ControlPoint{
         float x,y;
         ControlPoint(float x,float y){this.x=x;this.y=y;}
     }

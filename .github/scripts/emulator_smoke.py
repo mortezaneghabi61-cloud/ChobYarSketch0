@@ -232,12 +232,6 @@ def main():
     pid = assert_alive("rectangle gesture")
     screenshot("03-rectangle-drawn")
 
-    # The selected rectangle's Shapr-style exact-dimension chip is screen-space
-    # UI anchored to the geometry center at y-58 px. Drag that chip, then tap
-    # an unobscured area near its left side. The constraint-state badge can
-    # overlap the chip visually at its center/right, so using the clear left
-    # side makes this gesture test the dimension control itself rather than the
-    # independent constraint badge.
     label_x = (x1 + x2) // 2
     label_y = (y1 + y2) // 2 - 58
     moved_x = min(width - 170, label_x + 115)
@@ -258,12 +252,42 @@ def main():
     shell("input", "keyevent", "KEYCODE_BACK")
     time.sleep(0.8)
 
-    after = dump_ui("06-after-dimension-test")
-    fit_node, fit_bounds = find_label(after, "Fit")
-    if fit_node is not None:
-        tap_bounds(fit_bounds, "Fit")
-        assert_alive("Fit")
-        screenshot("06-after-fit")
+    # Explicit selection regression: leave the Sketch palette, clear the
+    # auto-selection created by Rectangle, then select the rectangle again by
+    # touching an unobscured edge. The adaptive Deselect All command is our
+    # accessibility-visible proof that the production selection path fired.
+    after_editor = dump_ui("06-before-selection-test")
+    close_node, close_bounds = find_label(after_editor, "Close")
+    if close_node is not None:
+        tap_bounds(close_bounds, "Close")
+    closed = dump_ui("06-palette-closed")
+    deselect_node, deselect_bounds = find_label(closed, "Deselect All")
+    if deselect_node is not None:
+        tap_bounds(deselect_bounds, "Deselect All")
+    cleared = wait_for_label("Search", "06-selection-cleared", timeout=10)
+    if cleared is None or find_label(cleared, "Search")[0] is None:
+        raise AssertionError("Selection could not be cleared back to the primary tool rail")
+
+    edge_x = x1 + 8
+    edge_y = (y1 + y2) // 2
+    print(f"Selecting rectangle edge at ({edge_x},{edge_y})", flush=True)
+    shell("input", "tap", str(edge_x), str(edge_y))
+    selected_ui = wait_for_label("Deselect All", "07-rectangle-reselected", timeout=10)
+    if selected_ui is None or find_label(selected_ui, "Deselect All")[0] is None:
+        raise AssertionError("Rectangle could not be reselected after clearing selection")
+    assert_alive("rectangle reselection")
+    screenshot("07-rectangle-reselected")
+
+    # Viewport zoom regression: Fit is the production zoom-to-fit path and
+    # recalculates viewScale/offsets through the same core viewport state used
+    # by pinch zoom. Exercise it after reselection to catch viewport/selection
+    # coupling regressions introduced by the architecture refactor.
+    fit_node, fit_bounds = find_label(selected_ui, "Fit")
+    if fit_node is None:
+        raise AssertionError("Fit zoom control disappeared after refactor")
+    tap_bounds(fit_bounds, "Fit")
+    assert_alive("Fit zoom")
+    screenshot("08-after-fit-zoom")
 
     logcat = save_logcat(pid)
     if "FATAL EXCEPTION" in logcat:
@@ -277,7 +301,8 @@ def main():
         "- Rectangle tool accepted a real ADB touch gesture\n"
         "- Rectangle dimension label was dragged to a new screen position\n"
         "- Tapping the moved label opened the numeric dimension editor\n"
-        "- Fit was exercised when present\n"
+        "- Rectangle selection was cleared and then reacquired by a fresh edge tap\n"
+        "- Fit zoom exercised the refactored viewport state while selection remained active\n"
         "- No FATAL EXCEPTION was found\n"
     )
     (ARTIFACTS / "summary.txt").write_text(summary, encoding="utf-8")

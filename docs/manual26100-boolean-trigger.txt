@@ -1,0 +1,2 @@
+manual26100_boolean_keep_recheck=2026-08-20T18:00+03:30
+purpose=trigger clean Boolean Keep Originals diagnostic run before exact 3D Project work

@@ -1,0 +1,92 @@
+name: Sketch Primitives and Snap Test
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - refactor/sketch-core-type-safe-20260820
+
+concurrency:
+  group: chobyar-sketch-primitives-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sketch-primitives:
+    name: Line Circle Arc Snap Dimension Commands on API 35
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CHOBYAR_VERSION_CODE: 20${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.2.sketch.${{ github.run_number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Build app and instrumentation APKs
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run production-canvas primitive, snap and command contract
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            mkdir -p test-artifacts
+            adb shell am force-stop com.google.android.apps.nexuslauncher || true
+            adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.SketchPrimitivesSnapInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sketch-primitives-instrumentation.txt
+            grep -q 'OK (5 tests)' test-artifacts/sketch-primitives-instrumentation.txt
+            adb logcat -d -v brief | grep 'SketchPrimitivesSnap.*_RESULT' | sed -E 's/^.*(LINE_SNAP_RESULT|CIRCLE_RESULT|ARC_RESULT|DIMENSION_RESULT|COMMAND_RESULT)/\1/' | tee test-artifacts/sketch-primitives-result.txt
+            test $(grep -c '_RESULT' test-artifacts/sketch-primitives-result.txt) -eq 5
+            grep -q '^LINE_SNAP_RESULT endpoint=100,100 midpoint=160,100 intersection=200,100' test-artifacts/sketch-primitives-result.txt
+            grep -q '^CIRCLE_RESULT center=320,220 diameter=80 centerSnap=320,220 quadrantSnap=360,220' test-artifacts/sketch-primitives-result.txt
+            grep -q '^ARC_RESULT type=Arc radius=' test-artifacts/sketch-primitives-result.txt
+            grep -q '^DIMENSION_RESULT line=125 rect=120x80 circleDiameter=90' test-artifacts/sketch-primitives-result.txt
+            grep -q '^COMMAND_RESULT rect=600x400 move=25,-10 copy=50,0 offset=18 rotate=90 scale=0.5 mirror=X array=3 line=500 circleR=45 arcR=75 entities=8$' test-artifacts/sketch-primitives-result.txt
+
+      - name: Upload Sketch primitive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar-sketch-primitives-evidence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7

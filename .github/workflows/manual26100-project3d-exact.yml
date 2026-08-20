@@ -1,0 +1,174 @@
+name: Manual 26.100 Exact Project 3D
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/sketch-core-type-safe-20260820
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual26100-project3d-exact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  project3d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CHOBYAR_VERSION_CODE: 38${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.3.manual26100.project3d.${{ github.run_number }}
+      CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/sketch-core-type-safe-20260820
+          fetch-depth: 0
+
+      - name: Apply exact Project 3D production patch
+        id: patch
+        continue-on-error: true
+        run: python3 .github/scripts/apply-manual26100-project3d-exact.py
+
+      - uses: actions/setup-java@v5
+        if: steps.patch.outcome == 'success'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        if: steps.patch.outcome == 'success'
+
+      - name: Install Android 35 native toolchain
+        if: steps.patch.outcome == 'success'
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Cache OCCT 8 Android arm64
+        if: steps.patch.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: .occt/install-arm64
+          key: occt-v8.0.0-d3056ef80c9668f395da40f5fd7be186cae4501f-android26-arm64-ndk27-step-stl1
+
+      - name: Build OCCT 8 exact arm64 backend
+        id: occt
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        run: bash .github/scripts/build_occt_android.sh
+
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.occt.outcome == 'success'
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore development signing key
+        if: steps.occt.outcome == 'success'
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Build production and instrumentation APKs with arm64 OCCT
+        id: build
+        if: steps.occt.outcome == 'success'
+        continue-on-error: true
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+
+      - name: Verify exact arm64 JNI edge descriptor is linked
+        id: native
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p test-artifacts
+          LIB="$(find app/build -type f -path '*arm64-v8a*' -name 'libchobyar_brep.so' | head -n 1)"
+          test -n "$LIB"
+          echo "arm64_library=$LIB" | tee test-artifacts/native-project3d-symbol.txt
+          nm -D "$LIB" | grep 'Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctEdgeDescriptors' | tee -a test-artifacts/native-project3d-symbol.txt
+          grep -q 'BRepAdaptor_Curve' app/src/main/cpp/occt_brep_jni.cpp
+          grep -q 'nativeOcctEdgeDescriptors' app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java
+
+      - name: Enable KVM
+        if: steps.build.outcome == 'success'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run exact Project descriptor-to-Sketch contracts on API 35
+        id: contracts
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -eu
+            mkdir -p test-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.Project3DExactInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project3d-contracts.txt
+            grep -q 'OK (3 tests)' test-artifacts/project3d-contracts.txt
+            adb logcat -d -v brief | grep 'Manual26100Project3D.*PROJECT3D_.*_RESULT' | sed -E 's/^.*(PROJECT3D_[A-Z_]+_RESULT)/\1/' | tee test-artifacts/project3d-results.txt
+            grep -q '^PROJECT3D_MAPPER_RESULT lines=1 circles=1 arcs=1 construction=true undo=true redo=true dxfStable=true$' test-artifacts/project3d-results.txt
+            grep -q '^PROJECT3D_TILTED_CURVE_RESULT unsupported=1 entities=0 exactnessGuard=true$' test-artifacts/project3d-results.txt
+            grep -q '^PROJECT3D_DEDUPE_RESULT lines=1 circles=1 skipped=2 entities=2$' test-artifacts/project3d-results.txt
+
+      - name: Persist verified Project source or diagnostic status
+        if: always()
+        shell: bash
+        run: |
+          set -eu
+          VERIFIED=false
+          if [ '${{ steps.patch.outcome }}' = 'success' ] && [ '${{ steps.occt.outcome }}' = 'success' ] && [ '${{ steps.build.outcome }}' = 'success' ] && [ '${{ steps.native.outcome }}' = 'success' ] && [ '${{ steps.contracts.outcome }}' = 'success' ]; then VERIFIED=true; fi
+          if [ "$VERIFIED" != true ]; then
+            git restore -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java app/src/main/cpp/occt_brep_jni.cpp app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java || true
+          fi
+          mkdir -p docs
+          cat > docs/manual26100-project3d-status.txt <<EOF
+          source_sha=${{ github.sha }}
+          workflow_run=${{ github.run_id }}
+          patch=${{ steps.patch.outcome }}
+          occt=${{ steps.occt.outcome }}
+          build=${{ steps.build.outcome }}
+          native_symbol=${{ steps.native.outcome }}
+          emulator_contracts=${{ steps.contracts.outcome }}
+          verified=$VERIFIED
+          runtime_note=arm64_OCCT_compiled_and_symbol_checked; descriptor_mapper_executed_on_x86_64; full_OCCT_runtime_requires_arm64_device_or_runner
+          EOF
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ "$VERIFIED" = true ]; then
+            git add app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java app/src/main/cpp/occt_brep_jni.cpp app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java docs/manual26100-project3d-status.txt
+            git commit -m 'Integrate verified exact OCCT Project 3D mapping [skip ci]' || true
+          else
+            git add docs/manual26100-project3d-status.txt
+            git commit -m 'Record exact Project 3D validation status [skip ci]' || true
+          fi
+          git fetch origin refactor/sketch-core-type-safe-20260820
+          git rebase origin/refactor/sketch-core-type-safe-20260820
+          git push origin HEAD:refactor/sketch-core-type-safe-20260820
+
+      - name: Upload Project 3D evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar-manual26100-project3d-evidence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce exact Project contract
+        if: always()
+        run: |
+          test '${{ steps.patch.outcome }}' = 'success'
+          test '${{ steps.occt.outcome }}' = 'success'
+          test '${{ steps.build.outcome }}' = 'success'
+          test '${{ steps.native.outcome }}' = 'success'
+          test '${{ steps.contracts.outcome }}' = 'success'

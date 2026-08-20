@@ -37,7 +37,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private boolean snap3DGuidepoints=true;
     private boolean snapDistantEdges=true;
 
-    private Field viewScaleField,offsetXField,offsetYField,activePlaneField,nativeByBodyField;
+    private Field viewScaleField,offsetXField,offsetYField,activePlaneField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
@@ -71,7 +71,6 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             offsetXField=field(CadCanvasView.class,"offsetX");
             offsetYField=field(CadCanvasView.class,"offsetY");
             activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
-            nativeByBodyField=field(OcctModelCadCanvasView.class,"nativeByBody");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -110,6 +109,202 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         try{if(baseSaveSettingsMethod!=null)baseSaveSettingsMethod.invoke(this);}catch(Exception ignored){}
         getContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putBoolean("guide3d",snap3DGuidepoints).putBoolean("distant_edges",snapDistantEdges).apply();
     }
+
+    @Override
+    public String executeCommand(String raw){
+        if(raw!=null){
+            String s=raw.trim().replace(',',' ');
+            if("PROJECT3D".equalsIgnoreCase(s)||"PROJECTBODY".equalsIgnoreCase(s))return projectExactBodyEdges();
+            if("PROJECTREF".equalsIgnoreCase(s)||"PROJECTASSOC".equalsIgnoreCase(s))return projectSelectedBodyReference();
+            if("PROJECTREFRESH".equalsIgnoreCase(s))return refreshAssociativeProjectReferences();
+        }
+        return super.executeCommand(raw);
+    }
+
+    /** Manual 26.100 Project: only the explicitly selected exact Body is projected. */
+    public String projectExactBodyEdges(){
+        List<Long> handles=projectSourceHandles();
+        if(handles.isEmpty())return hasSelectedSolidBody()
+                ?"Project 3D • Body انتخاب‌شده Shape دقیق OCCT ندارد"
+                :"Project 3D • اول یک Body را انتخاب کن";
+        List<double[]> batches=new ArrayList<>();
+        for(long handle:handles){
+            double[] d=exactProjectDescriptors(handle);
+            if(d!=null&&d.length>=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)batches.add(d);
+        }
+        if(batches.isEmpty())return "Project 3D • لبه دقیق قابل Project پیدا نشد";
+        return projectDescriptorBatches(batches);
+    }
+
+    protected List<Long> projectSourceHandles(){
+        List<Long> out=new ArrayList<>();
+        if(!hasSelectedSolidBody())return out;
+        long selected=selectedExactNativeHandle();
+        if(selected!=0L)out.add(selected);
+        return out;
+    }
+
+    protected double[] exactProjectDescriptors(long handle){
+        return NativeBRepKernel.occtEdgeDescriptors(handle);
+    }
+
+    /** Package-visible deterministic mapper used by x86 emulator tests. */
+    String projectExactDescriptorsForTest(double[] descriptors){
+        List<double[]> batches=new ArrayList<>();
+        if(descriptors!=null)batches.add(descriptors);
+        return projectDescriptorBatches(batches);
+    }
+
+    private String projectDescriptorBatches(List<double[]> batches){
+        Geometry3D.Plane3D plane=activePlane();
+        if(plane==null)return "Project 3D • Sketch Plane فعال نیست";
+        Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
+        int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;
+        boolean undoSaved=false;
+        final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
+        for(double[] d:batches){
+            if(d==null)continue;
+            for(int i=0;i+n-1<d.length;i+=n){
+                int kind=(int)Math.round(d[i]);
+                Geometry3D.Vec3 p1=new Geometry3D.Vec3((float)d[i+2],(float)d[i+3],(float)d[i+4]);
+                Geometry3D.Vec3 p2=new Geometry3D.Vec3((float)d[i+5],(float)d[i+6],(float)d[i+7]);
+                if(kind==NativeBRepKernel.OCCT_EDGE_LINE){
+                    PointF a=toLocal(plane,p1),b=toLocal(plane,p2);
+                    if(Math.hypot(a.x-b.x,a.y-b.y)<1.0e-4){skipped++;continue;}
+                    String key=projectLineKey(a,b);if(!lineKeys.add(key)){skipped++;continue;}
+                    if(!undoSaved){coreSaveUndo();undoSaved=true;} coreAddConstructionLine(a.x,a.y,b.x,b.y);lines++;continue;
+                }
+                if(kind==NativeBRepKernel.OCCT_EDGE_CIRCLE||kind==NativeBRepKernel.OCCT_EDGE_ARC){
+                    Geometry3D.Vec3 center3=new Geometry3D.Vec3((float)d[i+8],(float)d[i+9],(float)d[i+10]);
+                    Geometry3D.Vec3 normal3=new Geometry3D.Vec3((float)d[i+11],(float)d[i+12],(float)d[i+13]);
+                    float radius=Math.abs((float)d[i+14]);
+                    if(radius<1.0e-5f||normal3.length()<1.0e-6f){unsupported++;continue;}
+                    float alignment=normal3.normalized().dot(plane.normal.normalized());
+                    if(Math.abs(Math.abs(alignment)-1f)>1.0e-4f){unsupported++;continue;}
+                    PointF c=toLocal(plane,center3);
+                    if(kind==NativeBRepKernel.OCCT_EDGE_CIRCLE){
+                        String key=projectCircleKey(c,radius);if(!circleKeys.add(key)){skipped++;continue;}
+                        if(!undoSaved){coreSaveUndo();undoSaved=true;} coreAddConstructionCircle(c.x,c.y,radius);circles++;continue;
+                    }
+                    PointF startPoint=toLocal(plane,p1);
+                    float start=(float)Math.toDegrees(Math.atan2(startPoint.y-c.y,startPoint.x-c.x));
+                    float span=(float)Math.toDegrees(Math.abs(d[i+16]-d[i+15]));
+                    if(!(span>1.0e-4f)||span>=359.999f){unsupported++;continue;}
+                    float sweep=alignment>=0f?span:-span;
+                    String key=projectArcKey(c,radius,start,sweep);if(!arcKeys.add(key)){skipped++;continue;}
+                    if(!undoSaved){coreSaveUndo();undoSaved=true;} coreAddConstructionArc(c.x,c.y,radius,start,sweep);arcs++;continue;
+                }
+                unsupported++;
+            }
+        }
+        if(undoSaved)invalidate();
+        return "Project 3D • Line "+lines+" • Circle "+circles+" • Arc "+arcs+" • Unsupported "+unsupported+" • Skipped "+skipped;
+    }
+
+    /** Creates typed associative Construction geometry from the selected exact Body. */
+    public String projectSelectedBodyReference(){
+        if(!hasSelectedSolidBody())return "Project Reference • اول Body را انتخاب کن";
+        int bodyId=selectedExactBodyId();long handle=selectedExactNativeHandle();
+        if(bodyId<0||handle==0L)return "Project Reference • Shape دقیق Body انتخاب‌شده آماده نیست";
+        double[] d=exactProjectDescriptors(handle);
+        if(d==null||d.length<NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)return "Project Reference • لبه دقیق قابل Project پیدا نشد";
+        return projectReferenceDescriptors(bodyId,d,activePlane(),true);
+    }
+
+    String projectAssociativeDescriptorsForTest(int bodyId,double[] descriptors){
+        return projectReferenceDescriptors(bodyId,descriptors,activePlane(),true);
+    }
+
+    private String projectReferenceDescriptors(int bodyId,double[] d,Geometry3D.Plane3D plane,boolean saveUndo){
+        if(bodyId<0||plane==null||d==null)return "Project Reference • منبع نامعتبر";
+        Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
+        int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;boolean undoSaved=false;
+        final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
+        for(int i=0;i+n-1<d.length;i+=n){
+            int kind=(int)Math.round(d[i]),edgeIndex=(int)Math.round(d[i+1]);
+            if(edgeIndex<0){unsupported++;continue;}
+            Geometry3D.Vec3 p1=new Geometry3D.Vec3((float)d[i+2],(float)d[i+3],(float)d[i+4]);
+            Geometry3D.Vec3 p2=new Geometry3D.Vec3((float)d[i+5],(float)d[i+6],(float)d[i+7]);
+            if(kind==NativeBRepKernel.OCCT_EDGE_LINE){
+                PointF a=toLocal(plane,p1),b=toLocal(plane,p2);if(Math.hypot(a.x-b.x,a.y-b.y)<1.0e-4){skipped++;continue;}
+                String key=projectLineKey(a,b);if(!lineKeys.add(key)){skipped++;continue;}
+                if(saveUndo&&!undoSaved){coreSaveUndo();undoSaved=true;}Entity e=coreAddConstructionLine(a.x,a.y,b.x,b.y);coreSetReferenceSource(e,bodyId,edgeIndex,kind);lines++;continue;
+            }
+            if(kind==NativeBRepKernel.OCCT_EDGE_CIRCLE||kind==NativeBRepKernel.OCCT_EDGE_ARC){
+                Geometry3D.Vec3 center3=new Geometry3D.Vec3((float)d[i+8],(float)d[i+9],(float)d[i+10]);
+                Geometry3D.Vec3 normal3=new Geometry3D.Vec3((float)d[i+11],(float)d[i+12],(float)d[i+13]);float radius=Math.abs((float)d[i+14]);
+                if(radius<1.0e-5f||normal3.length()<1.0e-6f){unsupported++;continue;}
+                float alignment=normal3.normalized().dot(plane.normal.normalized());if(Math.abs(Math.abs(alignment)-1f)>1.0e-4f){unsupported++;continue;}
+                PointF c=toLocal(plane,center3);
+                if(kind==NativeBRepKernel.OCCT_EDGE_CIRCLE){
+                    String key=projectCircleKey(c,radius);if(!circleKeys.add(key)){skipped++;continue;}
+                    if(saveUndo&&!undoSaved){coreSaveUndo();undoSaved=true;}Entity e=coreAddConstructionCircle(c.x,c.y,radius);coreSetReferenceSource(e,bodyId,edgeIndex,kind);circles++;continue;
+                }
+                PointF startPoint=toLocal(plane,p1);float start=(float)Math.toDegrees(Math.atan2(startPoint.y-c.y,startPoint.x-c.x));
+                float span=(float)Math.toDegrees(Math.abs(d[i+16]-d[i+15]));if(!(span>1.0e-4f)||span>=359.999f){unsupported++;continue;}
+                float sweep=alignment>=0f?span:-span;String key=projectArcKey(c,radius,start,sweep);if(!arcKeys.add(key)){skipped++;continue;}
+                if(saveUndo&&!undoSaved){coreSaveUndo();undoSaved=true;}Entity e=coreAddConstructionArc(c.x,c.y,radius,start,sweep);coreSetReferenceSource(e,bodyId,edgeIndex,kind);arcs++;continue;
+            }
+            unsupported++;
+        }
+        if(undoSaved)invalidate();
+        return "Project Reference • Line "+lines+" • Circle "+circles+" • Arc "+arcs+" • Unsupported "+unsupported+" • Skipped "+skipped;
+    }
+
+    /**
+     * Refreshes only references that still exist in the Sketch snapshot.
+     * It never creates or re-adds an Entity, so Undo/Delete cannot resurrect geometry.
+     */
+    public String refreshAssociativeProjectReferences(){
+        List<Entity> refs=coreAssociativeReferenceSnapshot();if(refs.isEmpty())return "Project Refresh • 0 Reference";
+        Map<Integer,double[]> descriptorsByBody=new HashMap<>();int updated=0,missingBody=0,missingEdge=0,typeMismatch=0,invalid=0;
+        for(Entity e:refs){
+            int bodyId=e.getReferenceBodyId(),edgeIndex=e.getReferenceEdgeIndex(),expectedKind=e.getReferenceEdgeKind();
+            long handle=exactNativeHandleForBodyId(bodyId);if(handle==0L){missingBody++;continue;}
+            double[] d=descriptorsByBody.get(bodyId);if(d==null){d=exactProjectDescriptors(handle);descriptorsByBody.put(bodyId,d==null?new double[0]:d);}
+            int offset=findReferenceDescriptor(d,edgeIndex);if(offset<0){missingEdge++;continue;}
+            int kind=(int)Math.round(d[offset]);if(kind!=expectedKind){typeMismatch++;continue;}
+            Geometry3D.Plane3D plane=spatialPlaneForLayer(e.getLayer());
+            if(updateReferenceFromDescriptor(e,plane,d,offset,kind))updated++;else invalid++;
+        }
+        if(updated>0)invalidate();
+        return "Project Refresh • Updated "+updated+" • BodyMissing "+missingBody+" • EdgeMissing "+missingEdge+" • TypeMismatch "+typeMismatch+" • Invalid "+invalid;
+    }
+
+    private static int findReferenceDescriptor(double[] d,int edgeIndex){
+        if(d==null||edgeIndex<0)return-1;int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
+        for(int i=0;i+n-1<d.length;i+=n)if((int)Math.round(d[i+1])==edgeIndex)return i;return-1;
+    }
+
+    private boolean updateReferenceFromDescriptor(Entity e,Geometry3D.Plane3D plane,double[] d,int i,int kind){
+        if(e==null||plane==null||d==null||i<0)return false;
+        Geometry3D.Vec3 p1=new Geometry3D.Vec3((float)d[i+2],(float)d[i+3],(float)d[i+4]);
+        Geometry3D.Vec3 p2=new Geometry3D.Vec3((float)d[i+5],(float)d[i+6],(float)d[i+7]);
+        if(kind==NativeBRepKernel.OCCT_EDGE_LINE){PointF a=toLocal(plane,p1),b=toLocal(plane,p2);return Math.hypot(a.x-b.x,a.y-b.y)>=1.0e-4&&coreUpdateReferenceLine(e,a.x,a.y,b.x,b.y);}
+        if(kind!=NativeBRepKernel.OCCT_EDGE_CIRCLE&&kind!=NativeBRepKernel.OCCT_EDGE_ARC)return false;
+        Geometry3D.Vec3 center3=new Geometry3D.Vec3((float)d[i+8],(float)d[i+9],(float)d[i+10]);
+        Geometry3D.Vec3 normal3=new Geometry3D.Vec3((float)d[i+11],(float)d[i+12],(float)d[i+13]);float radius=Math.abs((float)d[i+14]);
+        if(radius<1.0e-5f||normal3.length()<1.0e-6f)return false;float alignment=normal3.normalized().dot(plane.normal.normalized());
+        if(Math.abs(Math.abs(alignment)-1f)>1.0e-4f)return false;PointF c=toLocal(plane,center3);
+        if(kind==NativeBRepKernel.OCCT_EDGE_CIRCLE)return coreUpdateReferenceCircle(e,c.x,c.y,radius);
+        PointF startPoint=toLocal(plane,p1);float start=(float)Math.toDegrees(Math.atan2(startPoint.y-c.y,startPoint.x-c.x));
+        float span=(float)Math.toDegrees(Math.abs(d[i+16]-d[i+15]));if(!(span>1.0e-4f)||span>=359.999f)return false;float sweep=alignment>=0f?span:-span;
+        return coreUpdateReferenceArc(e,c.x,c.y,radius,start,sweep);
+    }
+
+    int associativeProjectEntityCountForTest(){return coreAssociativeReferenceCount();}
+    Entity firstAssociativeProjectEntityForTest(){List<Entity> r=coreAssociativeReferenceSnapshot();return r.isEmpty()?null:r.get(0);}
+
+    @Override
+    public String rebuildHistory(){String result=super.rebuildHistory();String refs=refreshAssociativeProjectReferences();return result+(coreAssociativeReferenceCount()>0?" • "+refs:"");}
+
+    @Override
+    public String undoLastFeature(){String result=super.undoLastFeature();refreshAssociativeProjectReferences();return result;}
+
+    private static String projectLineKey(PointF a,PointF b){String x=projectPointKey(a),y=projectPointKey(b);return x.compareTo(y)<=0?x+"|"+y:y+"|"+x;}
+    private static String projectPointKey(PointF p){return Math.round(p.x*100f)+":"+Math.round(p.y*100f);}
+    private static String projectCircleKey(PointF c,float r){return projectPointKey(c)+":"+Math.round(r*100f);}
+    private static String projectArcKey(PointF c,float r,float start,float sweep){return projectCircleKey(c,r)+":"+Math.round(start*100f)+":"+Math.round(sweep*100f);}
 
     @Override
     public boolean onTouchEvent(MotionEvent event){
@@ -245,20 +440,9 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         pruneCache();OcctSnapTopology.Result r=topologyCache.get(handle);if(r==null){r=OcctSnapTopology.analyze(handle);topologyCache.put(handle,r);}return r;
     }
 
-    private void pruneCache(){Set<Long> live=new HashSet<>(nativeHandlesRaw());topologyCache.keySet().retainAll(live);}
+    private void pruneCache(){Set<Long> live=new HashSet<>(nativeHandles());topologyCache.keySet().retainAll(live);}
 
-    private List<Long> nativeHandles(){return nativeHandlesRaw();}
-    @SuppressWarnings("unchecked")
-    private List<Long> nativeHandlesRaw(){
-        List<Long> out=new ArrayList<>();
-        try{
-            Object v=nativeByBodyField==null?null:nativeByBodyField.get(this);if(!(v instanceof Map))return out;
-            for(Object rec:((Map<Object,Object>)v).values()){
-                if(rec==null)continue;Field h=findField(rec.getClass(),"handle");if(h!=null){long x=h.getLong(rec);if(x!=0L&&!out.contains(x))out.add(x);}
-            }
-        }catch(Exception ignored){}
-        return out;
-    }
+    private List<Long> nativeHandles(){return exactNativeHandlesSnapshot();}
 
     private Geometry3D.Plane3D activePlane(){try{Object p=activePlaneField==null?null:activePlaneField.get(this);return p instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)p:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}}
     private static PointF toLocal(Geometry3D.Plane3D p,Geometry3D.Vec3 world){Geometry3D.Vec3 d=world.sub(p.origin);return new PointF(d.dot(p.u),d.dot(p.v));}

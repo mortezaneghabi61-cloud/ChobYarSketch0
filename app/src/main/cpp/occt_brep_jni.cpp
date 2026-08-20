@@ -43,17 +43,20 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepGProp.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <Geom_Circle.hxx>
 #include <GeomAbs_SurfaceType.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <NCollection_List.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Poly_Triangle.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -643,6 +646,44 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctLinearPattern(
         return storeShape(compound);}catch(...){return 0;}
 #else
     (void)handle;(void)dx;(void)dy;(void)dz;(void)count;return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctEdgeDescriptors(JNIEnv* env, jclass, jlong handle) {
+#ifdef CHOBYAR_WITH_OCCT
+    TopoDS_Shape shape;if(!loadShape(handle,shape))return emptyArray(env);
+    try {
+        constexpr int RECORD=18;
+        std::vector<double> data;
+        const int edgeCount=countSubShapes(shape,TopAbs_EDGE);
+        data.reserve(static_cast<size_t>(std::max(0,edgeCount))*RECORD);
+        int edgeIndex=0;
+        for(TopExp_Explorer ex(shape,TopAbs_EDGE);ex.More();ex.Next(),++edgeIndex){
+            const TopoDS_Edge edge=TopoDS::Edge(ex.Current());
+            BRepAdaptor_Curve curve(edge);
+            const double first=curve.FirstParameter(),last=curve.LastParameter();
+            if(!std::isfinite(first)||!std::isfinite(last))continue;
+            const gp_Pnt p1=curve.Value(first),p2=curve.Value(last);
+            int kind=0;
+            gp_Pnt center(0.0,0.0,0.0);gp_Dir normal(0.0,0.0,1.0);double radius=0.0;
+            const GeomAbs_CurveType type=curve.GetType();
+            if(type==GeomAbs_Line){kind=1;}
+            else if(type==GeomAbs_Circle){
+                const gp_Circ circle=curve.Circle();center=circle.Location();normal=circle.Axis().Direction();radius=circle.Radius();
+                const double span=std::abs(last-first);kind=std::abs(span-2.0*PI)<1.0e-6?2:3;
+            }
+            const double orientation=edge.Orientation()==TopAbs_REVERSED?-1.0:1.0;
+            const double rec[RECORD]={static_cast<double>(kind),static_cast<double>(edgeIndex),p1.X(),p1.Y(),p1.Z(),p2.X(),p2.Y(),p2.Z(),center.X(),center.Y(),center.Z(),normal.X(),normal.Y(),normal.Z(),radius,first,last,orientation};
+            data.insert(data.end(),rec,rec+RECORD);
+        }
+        if(data.empty())return emptyArray(env);
+        jdoubleArray out=env->NewDoubleArray(static_cast<jsize>(data.size()));
+        if(out)env->SetDoubleArrayRegion(out,0,static_cast<jsize>(data.size()),data.data());
+        return out?out:emptyArray(env);
+    }catch(...){return emptyArray(env);}
+#else
+    (void)handle;return emptyArray(env);
 #endif
 }
 

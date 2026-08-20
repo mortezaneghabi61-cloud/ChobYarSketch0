@@ -1,0 +1,2 @@
+Validation trigger for the persistent manual Coincident production fix.
+The existing hard constraint instrumentation remains unchanged.

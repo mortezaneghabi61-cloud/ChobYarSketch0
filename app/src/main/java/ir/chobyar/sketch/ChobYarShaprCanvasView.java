@@ -8,8 +8,6 @@ import android.graphics.PointF;
 import android.graphics.RectF;
 import android.view.MotionEvent;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -44,16 +42,6 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     private static final float GIZMO_ARM_PX = 74f;
 
     private WorkspaceListener workspaceListener;
-
-    private Field selectedField;
-    private Field entitiesField;
-    private Field selectedObjectsField;
-    private Field viewScaleField;
-    private Field offsetXField;
-    private Field offsetYField;
-    private Field startXField;
-    private Field startYField;
-    private Method saveUndoMethod;
 
     private Object lastLineCreated;
     private char pendingAxis = 0; // H / V
@@ -97,7 +85,6 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
 
     public ChobYarShaprCanvasView(Context context) {
         super(context);
-        initReflection();
         initPaints();
     }
 
@@ -133,28 +120,6 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         gizmoTextPaint.setColor(Color.rgb(40, 55, 75));
         gizmoTextPaint.setTextSize(23f);
         gizmoTextPaint.setTextAlign(Paint.Align.CENTER);
-    }
-
-    private void initReflection() {
-        try {
-            selectedField = field(CadCanvasView.class, "selected");
-            entitiesField = field(CadCanvasView.class, "entities");
-            selectedObjectsField = field(SmartCadCanvasView.class, "selectedObjects");
-            viewScaleField = field(CadCanvasView.class, "viewScale");
-            offsetXField = field(CadCanvasView.class, "offsetX");
-            offsetYField = field(CadCanvasView.class, "offsetY");
-            startXField = field(CadCanvasView.class, "startX");
-            startYField = field(CadCanvasView.class, "startY");
-            saveUndoMethod = CadCanvasView.class.getDeclaredMethod("saveUndo");
-            saveUndoMethod.setAccessible(true);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static Field field(Class<?> owner, String name) throws NoSuchFieldException {
-        Field f = owner.getDeclaredField(name);
-        f.setAccessible(true);
-        return f;
     }
 
     public void setWorkspaceListener(WorkspaceListener listener) {
@@ -283,11 +248,10 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
 
     private MotionEvent inferLineMotion(MotionEvent source, Object previousLine) {
         try {
-            if (startXField == null || startYField == null) return null;
-            float sx = startXField.getFloat(this);
-            float sy = startYField.getFloat(this);
-            float wx = screenToWorldX(source.getX());
-            float wy = screenToWorldY(source.getY());
+            float sx = startX;
+            float sy = startY;
+            float wx = coreScreenToWorldX(source.getX());
+            float wy = coreScreenToWorldY(source.getY());
             float dx = wx - sx;
             float dy = wy - sy;
             float len = (float) Math.hypot(dx, dy);
@@ -380,7 +344,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyHorizontalVerticalConstraint() {
         List<Object> lines = selectedLines();
         if (lines.isEmpty()) return "برای H/V یک یا چند خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         for (Object line : lines) {
             alignLineToNearestAxis(line);
             float dx = safeGet(line, "x2") - safeGet(line, "x1");
@@ -397,7 +361,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyPerpendicularConstraint() {
         List<Object> lines = selectedLines();
         if (lines.size() != 2) return "برای Perpendicular دقیقاً دو خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), false);
         addRelation(lines.get(0), lines.get(1), false);
         enforceConstraints();
@@ -409,7 +373,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyParallelConstraint() {
         List<Object> lines = selectedLines();
         if (lines.size() != 2) return "برای Parallel دقیقاً دو خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), true);
         addRelation(lines.get(0), lines.get(1), true);
         enforceConstraints();
@@ -471,6 +435,13 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
                     || (c.a.line == b && c.a.index == bi && c.b.line == a && c.b.index == ai)) return;
         }
         coincidenceLinks.add(new CoincidentLink(new EndpointRef(a, ai), new EndpointRef(b, bi)));
+    }
+
+    /** Register a persistent endpoint coincidence for manual and automatic sketch tools. */
+    protected final void registerPersistentCoincident(Object a, int ai, Object b, int bi) {
+        if (!isLine(a) || !isLine(b)) return;
+        addCoincident(a, ai, b, bi);
+        enforceConstraints();
     }
 
     private void enforceConstraints() {
@@ -595,12 +566,12 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         if (gizmoMode == GIZMO_NONE) return false;
         if (action == MotionEvent.ACTION_MOVE) {
             if (!gizmoUndoSaved) {
-                saveUndo();
+                coreSaveUndo();
                 gizmoUndoSaved = true;
                 gizmoSessionUndoSteps++;
             }
             if (gizmoMode == GIZMO_X || gizmoMode == GIZMO_Y) {
-                float wx = screenToWorldX(x), wy = screenToWorldY(y);
+                float wx = coreScreenToWorldX(x), wy = coreScreenToWorldY(y);
                 float dx = gizmoMode == GIZMO_X ? wx - gizmoLastWorldX : 0f;
                 float dy = gizmoMode == GIZMO_Y ? wy - gizmoLastWorldY : 0f;
                 for (Object e : selectionObjects()) translate(e, dx, dy);
@@ -633,8 +604,8 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         gizmoMode = mode;
         gizmoUndoSaved = false;
         gizmoDelta = 0f;
-        gizmoLastWorldX = screenToWorldX(event.getX());
-        gizmoLastWorldY = screenToWorldY(event.getY());
+        gizmoLastWorldX = coreScreenToWorldX(event.getX());
+        gizmoLastWorldY = coreScreenToWorldY(event.getY());
         gizmoLastAngle = angleScreen(gizmoCenterScreen.x, gizmoCenterScreen.y, event.getX(), event.getY());
     }
 
@@ -816,19 +787,15 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     }
 
     // ---------------------------------------------------------------------
-    // Reflection / geometry helpers
-    // ---------------------------------------------------------------------
+    // Direct sketch-core helpers ------------------------------------------------
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private List<Object> entities() {
-        try { return entitiesField == null ? new ArrayList<>() : (List<Object>) entitiesField.get(this); }
-        catch (Exception e) { return new ArrayList<>(); }
+        return (List<Object>) (List<?>) super.entities;
     }
 
-    @SuppressWarnings("unchecked")
     private List<Object> smartSelection() {
-        try { return selectedObjectsField == null ? new ArrayList<>() : (List<Object>) selectedObjectsField.get(this); }
-        catch (Exception e) { return new ArrayList<>(); }
+        return smartSelectionSnapshot();
     }
 
     private List<Object> selectionObjects() {
@@ -846,37 +813,13 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         return out;
     }
 
-    private Object selectedObject() {
-        try { return selectedField == null ? null : selectedField.get(this); }
-        catch (Exception e) { return null; }
-    }
+    private Object selectedObject() { return selected; }
 
-    private void saveUndo() {
-        try { if (saveUndoMethod != null) saveUndoMethod.invoke(this); }
-        catch (Exception ignored) {}
-    }
+    private boolean isLine(Object e) { return e instanceof LineEntity; }
 
-    private boolean isLine(Object e) {
-        return e != null && "LineEntity".equals(e.getClass().getSimpleName());
-    }
-
-    private float viewScale() {
-        try { return viewScaleField == null ? 1f : viewScaleField.getFloat(this); }
-        catch (Exception e) { return 1f; }
-    }
-
-    private float offsetX() {
-        try { return offsetXField == null ? 0f : offsetXField.getFloat(this); }
-        catch (Exception e) { return 0f; }
-    }
-
-    private float offsetY() {
-        try { return offsetYField == null ? 0f : offsetYField.getFloat(this); }
-        catch (Exception e) { return 0f; }
-    }
-
-    private float screenToWorldX(float sx) { return (sx - offsetX()) / (PX_PER_MM * viewScale()); }
-    private float screenToWorldY(float sy) { return (sy - offsetY()) / (PX_PER_MM * viewScale()); }
+    private float viewScale() { return super.viewScale; }
+    private float offsetX() { return super.offsetX; }
+    private float offsetY() { return super.offsetY; }
 
     private PointF worldToScreen(float x, float y) {
         float s = PX_PER_MM * viewScale();
@@ -884,13 +827,9 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     }
 
     private PointF endpoint(Object line, int index) {
-        if (!isLine(line)) return null;
-        try {
-            if (index == 0) return new PointF(getFloat(line, "x1"), getFloat(line, "y1"));
-            return new PointF(getFloat(line, "x2"), getFloat(line, "y2"));
-        } catch (Exception e) {
-            return null;
-        }
+        if (!(line instanceof LineEntity)) return null;
+        LineEntity l = (LineEntity) line;
+        return index == 0 ? new PointF(l.x1, l.y1) : new PointF(l.x2, l.y2);
     }
 
     private PointF lineMidpoint(Object line) {
@@ -914,77 +853,57 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     }
 
     private void setLine(Object line, float x1, float y1, float x2, float y2) {
-        setFloat(line, "x1", x1); setFloat(line, "y1", y1);
-        setFloat(line, "x2", x2); setFloat(line, "y2", y2);
+        if (!(line instanceof LineEntity)) return;
+        LineEntity l = (LineEntity) line;
+        l.x1 = x1; l.y1 = y1; l.x2 = x2; l.y2 = y2;
     }
 
     private void setEndpoint(Object line, int index, float x, float y) {
-        if (index == 0) { setFloat(line, "x1", x); setFloat(line, "y1", y); }
-        else { setFloat(line, "x2", x); setFloat(line, "y2", y); }
+        if (!(line instanceof LineEntity)) return;
+        LineEntity l = (LineEntity) line;
+        if (index == 0) { l.x1 = x; l.y1 = y; }
+        else { l.x2 = x; l.y2 = y; }
     }
 
     private PointF selectionCenter(List<Object> selection) {
         RectF all = null;
         for (Object e : selection) {
-            Object b = call(e, "bounds");
-            if (!(b instanceof RectF)) continue;
-            RectF r = new RectF((RectF) b);
+            if (!(e instanceof Entity)) continue;
+            RectF r = new RectF(((Entity) e).bounds());
             if (all == null) all = r; else all.union(r);
         }
         return all == null ? null : new PointF(all.centerX(), all.centerY());
     }
 
     private void translate(Object e, float dx, float dy) {
-        call(e, "translate", new Class<?>[]{float.class, float.class}, dx, dy);
+        if (e instanceof Entity) ((Entity) e).translate(dx, dy);
     }
 
     private void rotate(Object e, float cx, float cy, float deg) {
-        call(e, "rotate", new Class<?>[]{float.class, float.class, float.class}, cx, cy, deg);
+        if (e instanceof Entity) ((Entity) e).rotate(cx, cy, deg);
     }
 
-    private Object call(Object target, String name) { return call(target, name, new Class<?>[0]); }
-
-    private Object call(Object target, String name, Class<?>[] types, Object... args) {
-        if (target == null) return null;
-        Class<?> c = target.getClass();
-        while (c != null) {
-            try {
-                Method m = c.getDeclaredMethod(name, types);
-                m.setAccessible(true);
-                return m.invoke(target, args);
-            } catch (NoSuchMethodException e) {
-                c = c.getSuperclass();
-            } catch (Exception e) {
-                return null;
-            }
-        }
-        return null;
+    private float getFloat(Object o, String name) throws Exception {
+        if (!(o instanceof LineEntity)) throw new NoSuchFieldException(name);
+        LineEntity l = (LineEntity) o;
+        if ("x1".equals(name)) return l.x1;
+        if ("y1".equals(name)) return l.y1;
+        if ("x2".equals(name)) return l.x2;
+        if ("y2".equals(name)) return l.y2;
+        throw new NoSuchFieldException(name);
     }
 
-    private static Field findField(Class<?> c, String name) {
-        Class<?> x = c;
-        while (x != null) {
-            try { Field f = x.getDeclaredField(name); f.setAccessible(true); return f; }
-            catch (Exception e) { x = x.getSuperclass(); }
-        }
-        return null;
-    }
-
-    private static float getFloat(Object o, String name) throws Exception {
-        Field f = findField(o.getClass(), name);
-        if (f == null) throw new NoSuchFieldException(name);
-        return f.getFloat(o);
-    }
-
-    private static float safeGet(Object o, String name) {
+    private float safeGet(Object o, String name) {
         try { return getFloat(o, name); } catch (Exception e) { return 0f; }
     }
 
-    private static void setFloat(Object o, String name, float v) {
-        try {
-            Field f = findField(o.getClass(), name);
-            if (f != null) f.setFloat(o, v);
-        } catch (Exception ignored) {}
+    private void setFloat(Object o, String name, float v) {
+        if (!(o instanceof LineEntity)) return;
+        LineEntity l = (LineEntity) o;
+        if ("x1".equals(name)) l.x1 = v;
+        else if ("y1".equals(name)) l.y1 = v;
+        else if ("x2".equals(name)) l.x2 = v;
+        else if ("y2".equals(name)) l.y2 = v;
     }
 
     private static boolean containsIdentity(List<Object> list, Object value) {

@@ -604,9 +604,10 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (target == null) return "اتصال ممکن نشد";
         saveUndo();
         setEndpoint(b, bi, target.x, target.y);
-        // The parent detects persistent endpoint coincidence on subsequent draws;
-        // we also keep our endpoint-to-line system clean by removing conflicting links.
+        // Manual Coincident must create the same persistent relation as auto-connect.
+        // Register it explicitly instead of relying on a later draw-time proximity scan.
         removePointLink(b, bi);
+        registerPersistentCoincident(a, ai, b, bi);
         invalidate();
         return "دو خط به هم متصل شدند";
     }
