@@ -96,3 +96,18 @@ jobs:
           path: test-artifacts/**
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Persist refactor smoke result
+        if: always() && github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
+        env:
+          CHOBYAR_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p docs
+          printf 'status=%s\nsource_sha=%s\nworkflow_run=%s\n' "$CHOBYAR_JOB_STATUS" "$GITHUB_SHA" "$GITHUB_RUN_ID" > docs/sketch-core-smoke-status.txt
+          git config user.name "chobyar-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- docs/sketch-core-smoke-status.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Record Sketch core smoke result [skip ci]"
+            git push origin HEAD:refactor/sketch-core-type-safe-20260820
+          fi
