@@ -1,0 +1,93 @@
+name: Manual 26.100 Boolean Keep Originals
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/sketch-core-type-safe-20260820
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual26100-boolean-keep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boolean-keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CHOBYAR_VERSION_CODE: 37${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.3.manual26100.boolean.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/sketch-core-type-safe-20260820
+          fetch-depth: 0
+      - name: Apply Boolean Keep Originals semantics
+        run: python3 .github/scripts/apply-manual26100-boolean-keep.py
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+      - name: Restore development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+      - name: Build production and instrumentation APKs
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run baseline Boolean and Keep Originals contracts
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            mkdir -p test-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.BooleanCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/boolean-baseline.txt
+            grep -q 'OK (3 tests)' test-artifacts/boolean-baseline.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.BooleanKeepOriginalsInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/boolean-keep.txt
+            grep -q 'OK (3 tests)' test-artifacts/boolean-keep.txt
+            adb logcat -d -v brief | grep 'Manual26100Boolean.*_RESULT' | sed -E 's/^.*(BOOLEAN_KEEP_BOTH_RESULT|BOOLEAN_KEEP_TARGET_RESULT|BOOLEAN_KEEP_TOOL_RESULT)/\1/' | tee test-artifacts/boolean-keep-results.txt
+            test $(grep -c '_RESULT' test-artifacts/boolean-keep-results.txt) -eq 3
+            grep -q '^BOOLEAN_KEEP_BOTH_RESULT after=3 rebuild=3 undo=2 redo=3 keepLeft=true keepRight=true' test-artifacts/boolean-keep-results.txt
+            grep -q '^BOOLEAN_KEEP_TARGET_RESULT after=2 rebuild=2 undo=2 redo=2 keepLeft=true keepRight=false' test-artifacts/boolean-keep-results.txt
+            grep -q '^BOOLEAN_KEEP_TOOL_RESULT after=2 rebuild=2 undo=2 redo=2 keepLeft=false keepRight=true' test-artifacts/boolean-keep-results.txt
+      - name: Persist verified production source
+        if: success()
+        run: |
+          if git diff --quiet -- app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java; then
+            echo 'Boolean Keep Originals implementation already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
+          git commit -m 'Implement Boolean Keep Originals history semantics [skip ci]'
+          git fetch origin refactor/sketch-core-type-safe-20260820
+          git rebase origin/refactor/sketch-core-type-safe-20260820
+          git push origin HEAD:refactor/sketch-core-type-safe-20260820
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar-manual26100-boolean-keep-evidence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7
