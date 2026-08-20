@@ -1,7 +1,7 @@
-source_sha=2053c59fe0bb5fa8b0339b8e4847e172e33ed60d
-workflow_run=32394654632
+source_sha=926819e0f792683a3093ee7695e5e73bafa6996e
+workflow_run=32395040077
 patch=success
 occt=success
-build=failure
-native_symbol=skipped
-contracts=skipped
+build=success
+native_symbol=success
+contracts=cancelled
