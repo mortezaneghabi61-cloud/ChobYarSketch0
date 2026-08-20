@@ -56,7 +56,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run persistent constraint contract
+      - name: Run persistent constraint and command-selection contracts
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -71,6 +71,13 @@ jobs:
             adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.SmartCommandSelectionInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/command-selection-instrumentation.txt
+            grep -q 'OK (1 test)' test-artifacts/command-selection-instrumentation.txt
+            adb logcat -d -v brief | grep 'SmartCommandSelection.*COMMAND_SELECTION_RESULT' | tail -n 1 | sed -E 's/^.*COMMAND_SELECTION_RESULT /COMMAND_SELECTION_RESULT /' | tee test-artifacts/command-selection-result.txt
+            grep -q '^COMMAND_SELECTION_RESULT selected=true smartCount=1 newest=true$' test-artifacts/command-selection-result.txt
+
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.SketchConstraintSolverInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sketch-constraints-instrumentation.txt
             grep -q 'OK (5 tests)' test-artifacts/sketch-constraints-instrumentation.txt
