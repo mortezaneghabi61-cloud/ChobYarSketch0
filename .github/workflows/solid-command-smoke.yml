@@ -8,7 +8,10 @@ on:
   pull_request:
   push:
     branches:
-      - refactor/sketch-core-type-safe-20260820
+      - main
+      - 'feature/**'
+      - 'fix/**'
+      - 'refactor/**'
 
 concurrency:
   group: chobyar-production-cad-${{ github.ref }}
@@ -16,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 42 production CAD contracts on API 35
+    name: 45 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -39,6 +42,7 @@ jobs:
           SPATIAL=app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           GUIDE=app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java
           NATIVE=app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java
+          TOPOLOGY=app/src/main/java/ir/chobyar/sketch/OcctTopologyRef.java
           KERNEL=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
           grep -q 'applyHistoryBooleanByIndex' "$BOOL"
           grep -q 'keepLeft' "$BOOL"
@@ -54,6 +58,7 @@ jobs:
           grep -q 'projectSelectedBodyReference' "$GUIDE"
           grep -q 'refreshAssociativeProjectReferences' "$GUIDE"
           grep -q 'OCCT_EDGE_RECORD_SIZE' "$NATIVE"
+          grep -q 'occtEdgeDescriptors' "$TOPOLOGY"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
           test -f .github/scripts/run-production-cad-regression.sh
           for t in \
@@ -73,7 +78,8 @@ jobs:
             ConstructionProjectInstrumentationTest \
             Project3DExactInstrumentationTest \
             Project3DSelectedBodyInstrumentationTest \
-            AssociativeProjectProvenanceInstrumentationTest; do
+            AssociativeProjectProvenanceInstrumentationTest \
+            ExactEdgeTopologyInstrumentationTest; do
               test -f "app/src/androidTest/java/ir/chobyar/sketch/${t}.java"
           done
 
