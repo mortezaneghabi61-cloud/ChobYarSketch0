@@ -58,6 +58,7 @@ public class CadCanvasView extends View {
 
     protected final List<Entity> entities = new ArrayList<>();
     private final ArrayDeque<List<Entity>> undoStack = new ArrayDeque<>();
+    private final ArrayDeque<List<Entity>> redoStack = new ArrayDeque<>();
     private final Map<String, Boolean> layers = new LinkedHashMap<>();
     private final Map<String, Scene> scenes = new HashMap<>();
 
@@ -208,14 +209,22 @@ public class CadCanvasView extends View {
         invalidate();
     }
 
+    public boolean canUndoSketch() { return !undoStack.isEmpty(); }
+    public boolean canRedoSketch() { return !redoStack.isEmpty(); }
+
     public void undo() {
         if (undoStack.isEmpty()) return;
-        List<Entity> snapshot = undoStack.removeLast();
-        entities.clear();
-        for (Entity e : snapshot) entities.add(e.copy());
-        selected = null;
-        tool = TOOL_SELECT;
-        invalidate();
+        redoStack.addLast(snapshotEntities());
+        while (redoStack.size() > MAX_UNDO) redoStack.removeFirst();
+        restoreSnapshot(undoStack.removeLast());
+    }
+
+    public boolean redoSketch() {
+        if (redoStack.isEmpty()) return false;
+        undoStack.addLast(snapshotEntities());
+        while (undoStack.size() > MAX_UNDO) undoStack.removeFirst();
+        restoreSnapshot(redoStack.removeLast());
+        return true;
     }
 
     public void deleteSelected() {
@@ -749,11 +758,32 @@ public class CadCanvasView extends View {
         return best;
     }
 
-    private void saveUndo(){
+    private List<Entity> snapshotEntities(){
         List<Entity> snapshot=new ArrayList<>();
         for(Entity e:entities)snapshot.add(e.copy());
-        undoStack.addLast(snapshot);
+        return snapshot;
+    }
+
+    private void restoreSnapshot(List<Entity> snapshot){
+        entities.clear();
+        for(Entity e:snapshot)entities.add(e.copy());
+        selected=null;
+        tool=TOOL_SELECT;
+        drawing=false;
+        draggingSelection=false;
+        dragUndoSaved=false;
+        activeHandle=-1;
+        multiTouch=false;
+        freePoints.clear();
+        snapVisible=false;
+        invalidate();
+    }
+
+    private void saveUndo(){
+        undoStack.addLast(snapshotEntities());
         while(undoStack.size()>MAX_UNDO)undoStack.removeFirst();
+        // Any new edit after Undo starts a new branch and invalidates Redo.
+        redoStack.clear();
     }
 
     private void addPrepared(Entity e){e.setLayer(currentLayer);e.setColor(currentColor);entities.add(e);}

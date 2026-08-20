@@ -94,8 +94,8 @@ public final class ChobYarActivity extends Activity {
         b.addView(workspaceTitle,new LinearLayout.LayoutParams(0,dp(48),1f));
         modeButton=topAction("تمام",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
         b.addView(modeButton,new LinearLayout.LayoutParams(dp(48),dp(40)));
-        b.addView(topAction("↶",()->{cad.undo();status("برگشت");}),new LinearLayout.LayoutParams(dp(38),dp(48)));
-        b.addView(topAction("↷",()->status(cad.redoLastFeature())),new LinearLayout.LayoutParams(dp(38),dp(48)));
+        b.addView(topAction("↶",this::undoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
+        b.addView(topAction("↷",this::redoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
         b.addView(topAction("◷",cad::showHistoryManager),new LinearLayout.LayoutParams(dp(38),dp(48)));
         b.addView(topAction("•••",this::more),new LinearLayout.LayoutParams(dp(42),dp(48)));
         return b;
@@ -120,10 +120,31 @@ public final class ChobYarActivity extends Activity {
         return b;
     }
 
+    private void undoAction(){
+        if(cad.is3DOverview()){
+            status(cad.undoLastFeature());
+            return;
+        }
+        if(!cad.canUndoSketch()){
+            status("Undo خالی است");
+            return;
+        }
+        cad.undo();
+        status("برگشت");
+    }
+
+    private void redoAction(){
+        if(cad.is3DOverview()){
+            status(cad.redoLastFeature());
+            return;
+        }
+        status(cad.redoSketch()?"جلو":"Redo خالی است");
+    }
+
     private View bottomLeftControls(){
         LinearLayout b=plain(false);
-        b.addView(miniAction("↶",()->{cad.undo();status("برگشت");}));
-        b.addView(miniAction("↷",()->status(cad.redoLastFeature())));
+        b.addView(miniAction("↶",this::undoAction));
+        b.addView(miniAction("↷",this::redoAction));
         b.addView(miniAction("▱",cad::showHistoryManager));
         return b;
     }
