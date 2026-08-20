@@ -1,5 +1,5 @@
-source_sha=986e38f3d69d6db3728f4d0c8f823d95c7b9c5a8
-workflow_run=32398415285
+source_sha=882e5d7a0130e98137b29bcdc000765c9b62a6e6
+workflow_run=32398856663
 patch=success
 build=success
-contracts=cancelled
+contracts=success
