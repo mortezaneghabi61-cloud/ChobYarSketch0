@@ -53,17 +53,18 @@ run_contract ShellPushPullInstrumentationTest shell-pushpull 'OK (2 tests)'
 run_contract SweepCommandInstrumentationTest sweep 'OK (1 test)'
 run_contract LoftCommandInstrumentationTest loft 'OK (1 test)'
 
-# Construction / exact Project / associative references / exact topology: 15 tests
+# Construction / exact Project / associative references / exact topology: 18 tests
 run_contract ConstructionProjectInstrumentationTest construction-project 'OK (2 tests)'
 run_contract Project3DExactInstrumentationTest project-exact 'OK (3 tests)'
 run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 tests)'
 run_contract AssociativeProjectProvenanceInstrumentationTest project-associative 'OK (4 tests)'
 run_contract ExactEdgeTopologyInstrumentationTest exact-edge-topology 'OK (3 tests)'
+run_contract ExactFaceTopologyInstrumentationTest exact-face-topology 'OK (3 tests)'
 
 passed_classes=$(grep -c ' | OK (' test-artifacts/production-cad-summary.txt || true)
-if [[ "$passed_classes" -ne 18 ]]; then
-  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=18" | tee -a test-artifacts/production-cad-summary.txt
+if [[ "$passed_classes" -ne 19 ]]; then
+  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=19" | tee -a test-artifacts/production-cad-summary.txt
   exit 1
 fi
 
-echo 'PRODUCTION_CAD_REGRESSION OK classes=18 tests=45' | tee -a test-artifacts/production-cad-summary.txt
+echo 'PRODUCTION_CAD_REGRESSION OK classes=19 tests=48' | tee -a test-artifacts/production-cad-summary.txt
