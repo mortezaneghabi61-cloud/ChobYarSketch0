@@ -1,4 +1,4 @@
-# Validation trigger: selected-body Project routing
+# Validation trigger: selected-only Project routing
 name: Selected Body Project 3D Contract
 
 on:
@@ -34,7 +34,7 @@ jobs:
           ref: refactor/sketch-core-type-safe-20260820
           fetch-depth: 0
 
-      - name: Apply selected-body Project 3D contract
+      - name: Apply selected-only Project 3D contract
         id: patch
         continue-on-error: true
         run: python3 .github/scripts/apply-selected-body-project3d.py
@@ -74,7 +74,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run selected-body and mapper contracts on API 35
+      - name: Run selected-only and mapper contracts on API 35
         id: contracts
         if: steps.build.outcome == 'success'
         continue-on-error: true
@@ -96,13 +96,13 @@ jobs:
             grep -q 'OK (3 tests)' test-artifacts/project3d-selected.txt
             adb logcat -d -v brief | grep 'Manual26100Project3D.*PROJECT3D_.*_RESULT' | sed -E 's/^.*(PROJECT3D_[A-Z_]+_RESULT)/\1/' | tee test-artifacts/project3d-selected-results.txt
             grep -q '^PROJECT3D_SELECTED_RESULT requested=22 lines=1 fallback=false$' test-artifacts/project3d-selected-results.txt
-            grep -q '^PROJECT3D_ALL_RESULT requested=2 lines=2 fallback=true$' test-artifacts/project3d-selected-results.txt
+            grep -q '^PROJECT3D_NO_SELECTION_RESULT requested=0 guarded=true$' test-artifacts/project3d-selected-results.txt
             grep -q '^PROJECT3D_NO_EXACT_RESULT requested=0 guarded=true$' test-artifacts/project3d-selected-results.txt
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.Project3DExactInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project3d-regression.txt
             grep -q 'OK (3 tests)' test-artifacts/project3d-regression.txt
 
-      - name: Persist verified selected-body source or diagnostics
+      - name: Persist verified selected-only source or diagnostics
         if: always()
         shell: bash
         run: |
@@ -127,16 +127,16 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if [ "$VERIFIED" = true ]; then
             git add app/src/main/java/ir/chobyar/sketch/OcctModelCadCanvasView.java app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/Project3DSelectedBodyInstrumentationTest.java docs/project3d-selected-body-status.txt
-            git commit -m 'Route Project 3D through selected exact Body [skip ci]' || true
+            git commit -m 'Require selected exact Body for Project 3D [skip ci]' || true
           else
             git add docs/project3d-selected-body-status.txt
-            git commit -m 'Record selected-body Project 3D status [skip ci]' || true
+            git commit -m 'Record selected-only Project 3D status [skip ci]' || true
           fi
           git fetch origin refactor/sketch-core-type-safe-20260820
           git rebase origin/refactor/sketch-core-type-safe-20260820
           git push origin HEAD:refactor/sketch-core-type-safe-20260820
 
-      - name: Upload selected-body Project evidence
+      - name: Upload selected-only Project evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -145,7 +145,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Enforce selected-body Project contract
+      - name: Enforce selected-only Project contract
         if: always()
         run: |
           test '${{ steps.patch.outcome }}' = 'success'
