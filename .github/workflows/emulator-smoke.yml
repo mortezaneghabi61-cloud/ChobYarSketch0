@@ -28,6 +28,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply collision-safe Sketch core API
+        if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
+        run: |
+          python3 .github/scripts/refactor_sketch_core.py
+          git config user.name "chobyar-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java
+          if ! git diff --cached --quiet; then
+            git commit -m "Use collision-safe Sketch core API [skip ci]"
+            git push origin HEAD:refactor/sketch-core-type-safe-20260820
+          fi
+
       - name: Validate Sketch core refactor
         if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
         run: |
@@ -43,19 +55,36 @@ jobs:
               'protected float viewScale',
               'protected float offsetX',
               'protected float offsetY',
-              'protected void saveUndo()',
-              'protected Entity findHit',
+              'protected final Entity coreFindHit',
+              'protected final void coreSaveUndo',
+              'protected final boolean coreIsVisible',
+              'protected final float coreScreenToWorldX',
+              'protected final float coreScreenToWorldY',
           ]
           for token in required:
               if token not in cad:
                   raise SystemExit(f'Missing Sketch core contract: {token}')
+          forbidden = [
+              'protected Entity findHit(float x,float y)',
+              'protected void saveUndo()',
+              'protected boolean isVisible(Entity e)',
+              'protected float screenToWorldX(float sx)',
+              'protected float screenToWorldY(float sy)',
+          ]
+          for token in forbidden:
+              if token in cad:
+                  raise SystemExit(f'Legacy helper was incorrectly widened: {token}')
           for name, src in [('SmartCadCanvasView', smart), ('ChobYarShaprCanvasView', chob)]:
               for token in ('java.lang.reflect.Field', 'java.lang.reflect.Method', 'getDeclaredField', 'getDeclaredMethod'):
                   if token in src:
                       raise SystemExit(f'{name} still uses reflection token: {token}')
+          if 'coreFindHit(wx, wy)' not in smart:
+              raise SystemExit('Smart selection is not routed through coreFindHit')
           if 'smartSelectionSnapshot()' not in chob:
               raise SystemExit('ChobYarShaprCanvasView is not using Smart selection contract')
-          print('Sketch core source contract validated')
+          if 'coreSaveUndo();' not in smart or 'coreSaveUndo();' not in chob:
+              raise SystemExit('Undo is not routed through the Sketch core contract')
+          print('Collision-safe Sketch core source contract validated')
           PY
 
       - name: Set up JDK 17
