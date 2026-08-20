@@ -231,6 +231,23 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         toast(result);
     }
 
+    /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
+    public String createOffsetSketchSpace(float offsetMm, String requestedName) {
+        if (!Float.isFinite(offsetMm)) return "فاصله Plane معتبر نیست";
+        Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
+        String label = base.label + " + " + fmt(offsetMm) + " mm";
+        pendingPlane = base.offset(offsetMm, label);
+        String name = requestedName == null || requestedName.trim().isEmpty()
+                ? "Offset Plane " + (planeByLayer.size() + 1)
+                : requestedName.trim();
+        String result = createSketchSpace(name);
+        overview3D = false;
+        orbiting = false;
+        navigating2D = false;
+        invalidate();
+        return result;
+    }
+
     private void showOffsetPlaneDialog() {
         EditText input = new EditText(getContext());
         input.setSingleLine(true);

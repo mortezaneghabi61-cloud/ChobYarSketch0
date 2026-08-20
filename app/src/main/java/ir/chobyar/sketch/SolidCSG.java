@@ -385,10 +385,17 @@ final class SolidCSG {
                          int sampleCount) {
         List<PointF> a=cleanProfile(rawA),b=cleanProfile(rawB);
         if(a.size()<3||b.size()<3)return empty();
-        int n=Math.max(8,Math.min(128,Math.max(sampleCount,Math.max(a.size(),b.size()))));
-        a=resampleClosed(a,n);b=resampleClosed(b,n);
         if(signedArea(a)<0f)Collections.reverse(a);
         if(signedArea(b)<0f)Collections.reverse(b);
+        // Preserve authored corners whenever possible. Uniform perimeter sampling
+        // can cut across a sharp corner when the corner does not fall exactly on
+        // a sample interval, shrinking the section and changing volume.
+        if(a.size()!=b.size()){
+            int n=Math.max(8,Math.min(128,Math.max(sampleCount,Math.max(a.size(),b.size()))));
+            a=resampleClosedPreservingVertices(a,n);
+            b=resampleClosedPreservingVertices(b,n);
+        }
+        b=alignClosedProfilePhase(a,b);
         List<Geometry3D.Vec3> ra=new ArrayList<>(),rb=new ArrayList<>();
         for(PointF p:a)ra.add(planeA.point(p.x,p.y));
         for(PointF p:b)rb.add(planeB.point(p.x,p.y));
@@ -463,6 +470,69 @@ final class SolidCSG {
         }
         if (out.size() > 2 && dist(out.get(0), out.get(out.size()-1)) < 1e-4f) out.remove(out.size()-1);
         return out;
+    }
+
+    /**
+     * Resamples a polygon without deleting any authored vertex. Extra points are
+     * distributed by edge length, so corners remain exact and only straight edge
+     * interiors are subdivided.
+     */
+    private static List<PointF> resampleClosedPreservingVertices(List<PointF> p,int count){
+        int m=p==null?0:p.size();
+        if(m<2||count<=m){
+            List<PointF> copy=new ArrayList<>();
+            if(p!=null)for(PointF q:p)copy.add(new PointF(q.x,q.y));
+            return copy;
+        }
+        float[] len=new float[m];float total=0f;
+        for(int i=0;i<m;i++){len[i]=dist(p.get(i),p.get((i+1)%m));total+=len[i];}
+        if(total<1e-6f)return new ArrayList<>(p);
+        int extra=count-m;int[] interior=new int[m];double[] remainder=new double[m];int assigned=0;
+        for(int i=0;i<m;i++){
+            double exact=(double)extra*len[i]/total;
+            interior[i]=(int)Math.floor(exact);remainder[i]=exact-interior[i];assigned+=interior[i];
+        }
+        while(assigned<extra){
+            int best=0;for(int i=1;i<m;i++)if(remainder[i]>remainder[best])best=i;
+            interior[best]++;remainder[best]=-1d;assigned++;
+        }
+        List<PointF> out=new ArrayList<>(count);
+        for(int i=0;i<m;i++){
+            PointF a=p.get(i),b=p.get((i+1)%m);out.add(new PointF(a.x,a.y));
+            int n=interior[i];
+            for(int j=1;j<=n;j++){
+                float t=(float)j/(n+1f);
+                out.add(new PointF(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t));
+            }
+        }
+        return out;
+    }
+
+    /** Cyclically aligns equal-size rings by normalized 2D shape, avoiding an accidental Loft twist. */
+    private static List<PointF> alignClosedProfilePhase(List<PointF> a,List<PointF> b){
+        if(a==null||b==null||a.size()!=b.size()||a.isEmpty())return b;
+        PointF ca=centroid2(a),cb=centroid2(b);float sa=profileScale(a,ca),sb=profileScale(b,cb);
+        if(sa<1e-6f||sb<1e-6f)return b;
+        int n=a.size(),bestShift=0;double best=Double.POSITIVE_INFINITY;
+        for(int shift=0;shift<n;shift++){
+            double score=0d;
+            for(int i=0;i<n;i++){
+                PointF pa=a.get(i),pb=b.get((i+shift)%n);
+                double ax=(pa.x-ca.x)/sa,ay=(pa.y-ca.y)/sa;
+                double bx=(pb.x-cb.x)/sb,by=(pb.y-cb.y)/sb;
+                double dx=ax-bx,dy=ay-by;score+=dx*dx+dy*dy;
+            }
+            if(score<best){best=score;bestShift=shift;}
+        }
+        if(bestShift==0)return b;
+        List<PointF> out=new ArrayList<>(n);
+        for(int i=0;i<n;i++){PointF q=b.get((i+bestShift)%n);out.add(new PointF(q.x,q.y));}
+        return out;
+    }
+
+    private static float profileScale(List<PointF> p,PointF c){
+        double sum=0d;for(PointF q:p){double dx=q.x-c.x,dy=q.y-c.y;sum+=dx*dx+dy*dy;}
+        return(float)Math.sqrt(sum/Math.max(1,p.size()));
     }
 
     private static List<PointF> resampleClosed(List<PointF> p,int count){

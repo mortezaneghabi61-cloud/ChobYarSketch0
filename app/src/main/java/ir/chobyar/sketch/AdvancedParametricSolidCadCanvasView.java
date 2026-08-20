@@ -528,6 +528,11 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
                     try{return createSweepByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
                     catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
                 }
+                if("LOFT3D".equalsIgnoreCase(a[0])){
+                    if(a.length!=3)return "LOFT3D — شماره دو پروفایل لازم است؛ مثال: LOFT3D 1 2";
+                    try{return createLoftByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
+                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                }
             }
         }
         return super.executeCommand(raw);
@@ -549,6 +554,15 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         Object body=addBody("Sweep "+f.id,csg);if(body==null)return"ساخت Body انجام نشد";
         f.outputBody=body;formHistory.add(f);setOverview3D();invalidate();
         return "Sweep ساخته شد • پروفایل روی مسیر حرکت کرد";
+    }
+
+    /** Deterministic non-modal Loft entry using 1-based sketch entity numbers. */
+    public String createLoftByEntityIndex(int firstNumber,int secondNumber){
+        List<Object> all=entities();
+        if(firstNumber<1||secondNumber<1||firstNumber>all.size()||secondNumber>all.size())
+            return "شماره Entity باید بین 1 تا "+all.size()+" باشد";
+        if(firstNumber==secondNumber)return "دو پروفایل Loft باید متفاوت باشند";
+        return createLoft(all.get(firstNumber-1),all.get(secondNumber-1));
     }
 
     private void startLoft(){
