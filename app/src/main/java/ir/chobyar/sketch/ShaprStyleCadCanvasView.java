@@ -238,6 +238,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         if (action == MotionEvent.ACTION_DOWN
                 && !exactFieldRect.isEmpty()
                 && exactFieldRect.contains(event.getX(), event.getY())) {
+            coreObserveScaleGesture(event);
             exactFieldPressed = true;
             exactFieldDragging = false;
             fieldDownX = event.getX();
@@ -250,6 +251,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         }
 
         if (exactFieldPressed) {
+            coreObserveScaleGesture(event);
             if (action == MotionEvent.ACTION_MOVE) {
                 float dx = event.getX() - fieldDownX;
                 float dy = event.getY() - fieldDownY;
