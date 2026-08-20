@@ -229,6 +229,16 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         // dimension-label press must never trap pinch/pan in this presentation
         // layer; cancel the label gesture and hand multi-touch to the CAD core.
         if (event.getPointerCount() >= 2) {
+            if (exactFieldPressed) {
+                // Dimension-label pinch transition: the first DOWN was
+                // already observed directly, so observe POINTER_DOWN
+                // here exactly once before returning navigation to core.
+                coreObserveScaleGesture(event);
+                exactFieldPressed = false;
+                exactFieldDragging = false;
+                fieldGestureEntity = null;
+                return true;
+            }
             exactFieldPressed = false;
             exactFieldDragging = false;
             fieldGestureEntity = null;
