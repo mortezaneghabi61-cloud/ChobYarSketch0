@@ -124,6 +124,26 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctEdgeDescriptors(JNIEnv* env, j
 
 
 def patch_guide(text):
+    # Project 3D has evolved beyond the original monolithic block: selected-body
+    # routing plus associative provenance/refresh now live around the same mapper.
+    # Detect that production contract structurally and never insert a second copy.
+    current_tokens = [
+        'if("PROJECT3D".equalsIgnoreCase(s)||"PROJECTBODY".equalsIgnoreCase(s))return projectExactBodyEdges();',
+        'public String projectExactBodyEdges()',
+        'String projectExactDescriptorsForTest(double[] descriptors)',
+        'private String projectDescriptorBatches(List<double[]> batches)',
+        'private static String projectLineKey(PointF a,PointF b)',
+        'private static String projectPointKey(PointF p)',
+        'private static String projectCircleKey(PointF c,float r)',
+        'private static String projectArcKey(PointF c,float r,float start,float sweep)',
+    ]
+    present = [token in text for token in current_tokens]
+    if all(present):
+        return text
+    if any(present):
+        missing = [token for token, ok in zip(current_tokens, present) if not ok]
+        raise SystemExit('Shapr3DGuide exact Project contract is partial; missing: ' + ' | '.join(missing))
+
     anchor = '''    @Override
     public boolean onTouchEvent(MotionEvent event){
 '''
@@ -212,4 +232,4 @@ patch('app/src/main/java/ir/chobyar/sketch/CadCanvasView.java', patch_cad)
 patch('app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java', patch_kernel_java)
 patch('app/src/main/cpp/occt_brep_jni.cpp', patch_cpp)
 patch('app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java', patch_guide)
-print('Manual 26.100 exact Project 3D patch ready')
+print('Manual 26.100 exact Project 3D contract verified')
