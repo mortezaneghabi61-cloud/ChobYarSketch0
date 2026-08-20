@@ -40,11 +40,13 @@ p.write_text(text,encoding='utf-8')
 solid='app/src/main/java/ir/chobyar/sketch/SolidCadCanvasView.java'
 history='app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java'
 
-# Construction references must never become a closed Solid profile.
+# Construction references must never become a closed Solid profile. Detect the
+# executable guard itself, not a comment, so repeated CI runs stay idempotent.
 p=Path(solid); t=p.read_text(encoding='utf-8')
 anchor='''        if(sel.isEmpty())return null;\n        if(sel.size()==1){'''
 repl='''        if(sel.isEmpty())return null;\n        // Construction geometry is reference-only and must never define a Solid profile.\n        for(Object e:sel)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        if(sel.size()==1){'''
-if 'Construction geometry is reference-only.' not in t:
+solid_guard='for(Object e:sel)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;'
+if solid_guard not in t:
     if anchor not in t: raise SystemExit('Solid profile anchor not found')
     t=t.replace(anchor,repl,1)
 p.write_text(t,encoding='utf-8')
@@ -52,7 +54,8 @@ p.write_text(t,encoding='utf-8')
 p=Path(history); t=p.read_text(encoding='utf-8')
 anchor='''        if(src==null||src.isEmpty())return null;\n        List<Object> current=entities();'''
 repl='''        if(src==null||src.isEmpty())return null;\n        // Construction geometry cannot be a History profile source.\n        for(Object e:src)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        List<Object> current=entities();'''
-if 'Construction geometry cannot be a History profile source.' not in t:
+history_guard='for(Object e:src)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;'
+if history_guard not in t:
     if anchor not in t: raise SystemExit('History profile anchor not found')
     t=t.replace(anchor,repl,1)
 p.write_text(t,encoding='utf-8')
