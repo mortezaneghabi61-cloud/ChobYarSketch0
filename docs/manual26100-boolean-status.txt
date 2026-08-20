@@ -1,0 +1,4 @@
+source_sha=09ddef1f705b84e26f06f310292c4644f275f747
+patch=success
+build=failure
+contracts=skipped
