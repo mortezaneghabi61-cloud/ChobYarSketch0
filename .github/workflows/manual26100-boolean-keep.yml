@@ -113,6 +113,11 @@ jobs:
       - name: Record diagnostic status
         if: always()
         run: |
+          # A failed contract leaves the runtime Production patch unstaged.
+          # Restore it before the status-only commit so git rebase can always run.
+          if [ '${{ steps.contracts.outcome }}' != 'success' ]; then
+            git restore -- app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java || true
+          fi
           mkdir -p docs
           cat > docs/manual26100-boolean-status.txt <<EOF
           source_sha=${{ github.sha }}
