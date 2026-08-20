@@ -2,13 +2,11 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project(chobyar_brep LANGUAGES CXX)
 
-# Exact face topology is compiled in the same translation unit as the mature
-# OCCT kernel so it can reuse the private shape registry without widening JNI state.
 add_library(
         chobyar_brep
         SHARED
         native_brep_jni.cpp
-        occt_brep_with_face.cpp
+        occt_brep_jni.cpp
 )
 
 target_compile_features(chobyar_brep PRIVATE cxx_std_17)
