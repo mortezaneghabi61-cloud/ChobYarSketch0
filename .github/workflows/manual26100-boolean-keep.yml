@@ -57,7 +57,11 @@ jobs:
         id: build
         if: steps.patch.outcome == 'success'
         continue-on-error: true
-        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p test-artifacts
+          gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/boolean-build.log
 
       - name: Enable KVM
         if: steps.build.outcome == 'success'
@@ -113,14 +117,13 @@ jobs:
       - name: Record diagnostic status
         if: always()
         run: |
-          # A failed contract leaves the runtime Production patch unstaged.
-          # Restore it before the status-only commit so git rebase can always run.
           if [ '${{ steps.contracts.outcome }}' != 'success' ]; then
             git restore -- app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java || true
           fi
           mkdir -p docs
           cat > docs/manual26100-boolean-status.txt <<EOF
           source_sha=${{ github.sha }}
+          workflow_run=${{ github.run_id }}
           patch=${{ steps.patch.outcome }}
           build=${{ steps.build.outcome }}
           contracts=${{ steps.contracts.outcome }}
