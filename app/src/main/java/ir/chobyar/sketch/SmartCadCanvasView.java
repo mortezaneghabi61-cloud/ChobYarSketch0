@@ -421,8 +421,19 @@ public class SmartCadCanvasView extends CadCanvasView {
                 case "UNGROUP":
                     return ungroupSelected();
                 default:
+                    int beforeEntityCount = entities().size();
                     String result = super.executeCommand(normalized);
-                    syncFromBaseIfNeeded();
+                    Object commandSelected = baseSelected();
+                    if (entities().size() > beforeEntityCount && commandSelected != null) {
+                        // A creation command makes its new entity the authoritative
+                        // single selection.  Do not let stale multi-selection state
+                        // clear CadCanvasView.selected immediately after creation.
+                        selectedObjects.clear();
+                        selectedObjects.add(commandSelected);
+                        syncBaseSelectionWithSmart();
+                    } else {
+                        syncFromBaseIfNeeded();
+                    }
                     return result;
             }
         } catch (Exception e) {
