@@ -24,7 +24,7 @@ replace_once(cad,
 '''        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;}''',
 '''        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;}''','construction copy')
 
-# Construction geometry remains a normal selectable/snappable sketch reference.
+# Construction geometry remains selectable/snappable reference geometry.
 p=Path(cad); text=p.read_text(encoding='utf-8')
 text=text.replace('if (!isVisible(e) || e.isConstruction()) continue;','if (!isVisible(e)) continue;',1)
 text=text.replace('if(e==exclude||!isVisible(e)||e.isConstruction())continue;','if(e==exclude||!isVisible(e))continue;',1)
@@ -37,19 +37,24 @@ if new not in text:
     text=text.replace(old,new,1)
 p.write_text(text,encoding='utf-8')
 
+solid='app/src/main/java/ir/chobyar/sketch/SolidCadCanvasView.java'
+history='app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java'
+
 # Construction references must never become a closed Solid profile.
-for target,anchor in [
- ('app/src/main/java/ir/chobyar/sketch/SolidCadCanvasView.java','''        if(sel.isEmpty())return null;\n        if(sel.size()==1){'''),
- ('app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java','''        if(src==null||src.isEmpty())return null;\n        List<Object> current=entities();''')]:
-    p=Path(target); t=p.read_text(encoding='utf-8')
-    if target.endswith('SolidCadCanvasView.java') and 'Construction geometry is reference-only.' not in t:
-        repl='''        if(sel.isEmpty())return null;\n        // Construction geometry is reference-only and must never define a Solid profile.\n        for(Object e:sel)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        if(sel.size()==1){'''
-        if anchor not in t: raise SystemExit('Solid profile anchor not found')
-        t=t.replace(anchor,repl,1)
-    elif target.endswith('ParametricHistorySolidCadCanvasView.java') and 'Construction geometry cannot be a History profile source.' not in t:
-        repl='''        if(src==null||src.isEmpty())return null;\n        // Construction geometry cannot be a History profile source.\n        for(Object e:src)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        List<Object> current=entities();'''
-        if anchor not in t: raise SystemExit('History profile anchor not found')
-        t=t.replace(anchor,repl,1)
-    p.write_text(t,encoding='utf-8')
+p=Path(solid); t=p.read_text(encoding='utf-8')
+anchor='''        if(sel.isEmpty())return null;\n        if(sel.size()==1){'''
+repl='''        if(sel.isEmpty())return null;\n        // Construction geometry is reference-only and must never define a Solid profile.\n        for(Object e:sel)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        if(sel.size()==1){'''
+if 'Construction geometry is reference-only.' not in t:
+    if anchor not in t: raise SystemExit('Solid profile anchor not found')
+    t=t.replace(anchor,repl,1)
+p.write_text(t,encoding='utf-8')
+
+p=Path(history); t=p.read_text(encoding='utf-8')
+anchor='''        if(src==null||src.isEmpty())return null;\n        List<Object> current=entities();'''
+repl='''        if(src==null||src.isEmpty())return null;\n        // Construction geometry cannot be a History profile source.\n        for(Object e:src)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;\n        List<Object> current=entities();'''
+if 'Construction geometry cannot be a History profile source.' not in t:
+    if anchor not in t: raise SystemExit('History profile anchor not found')
+    t=t.replace(anchor,repl,1)
+p.write_text(t,encoding='utf-8')
 
 print('Manual 26.100 Construction patch applied')
