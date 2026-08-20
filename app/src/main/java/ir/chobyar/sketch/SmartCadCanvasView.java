@@ -213,7 +213,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             pruneGroups();
             return;
         }
-        saveUndo();
+        coreSaveUndo();
         List<Object> all = entities();
         all.removeAll(selectedObjects);
         selectedObjects.clear();
@@ -230,7 +230,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             syncFromBaseIfNeeded();
             return;
         }
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) translate(e, dx, dy);
         invalidate();
     }
@@ -243,7 +243,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             syncFromBaseIfNeeded();
             return;
         }
-        saveUndo();
+        coreSaveUndo();
         List<Object> copies = new ArrayList<>();
         for (Object e : selectedObjects) {
             Object c = entityCopy(e);
@@ -261,7 +261,7 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String offsetSelected(float distance) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.offsetSelected(distance);
-        saveUndo();
+        coreSaveUndo();
         List<Object> copies = new ArrayList<>();
         for (Object e : selectedObjects) {
             Object c = entityOffsetCopy(e, distance);
@@ -281,7 +281,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.rotateSelected(deg);
         PointF c = selectionCenter();
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) entityRotate(e, c.x, c.y, deg);
         invalidate();
         return "چرخش " + format(deg) + "° روی " + selectedObjects.size() + " شکل";
@@ -293,7 +293,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         if (selectedObjects.size() <= 1) return super.scaleSelected(factor);
         if (factor <= 0f) return "Scale باید بزرگ‌تر از صفر باشد";
         PointF c = selectionCenter();
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) entityScale(e, c.x, c.y, factor);
         invalidate();
         return "Scale × " + format(factor) + " روی انتخاب";
@@ -303,7 +303,7 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String mirrorSelected(boolean acrossXAxis, float axisValue) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.mirrorSelected(acrossXAxis, axisValue);
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) {
             if (acrossXAxis) entityMirrorHorizontal(e, axisValue);
             else entityMirrorVertical(e, axisValue);
@@ -317,7 +317,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.arraySelected(count, dx, dy);
         if (count < 2 || count > 200) return "تعداد Array باید بین 2 و 200 باشد";
-        saveUndo();
+        coreSaveUndo();
         List<Object> seed = new ArrayList<>(selectedObjects);
         List<Object> lastCopies = new ArrayList<>();
         for (int i = 1; i < count; i++) {
@@ -348,7 +348,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.assignSelectedLayer(name);
         if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) entitySetLayer(e, name.trim());
         invalidate();
         return selectedObjects.size() + " شکل به لایه " + name.trim() + " منتقل شد";
@@ -359,7 +359,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.setMaterial(material);
         int color = materialColorLocal(material);
-        saveUndo();
+        coreSaveUndo();
         for (Object e : selectedObjects) entitySetColor(e, color);
         invalidate();
         return "متریال روی " + selectedObjects.size() + " شکل اعمال شد";
@@ -583,7 +583,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         if (action == MotionEvent.ACTION_DOWN) {
             boxStartX = boxEndX = event.getX();
             boxStartY = boxEndY = event.getY();
-            Object hit = findHit(wx, wy);
+            Object hit = coreFindHit(wx, wy);
 
             List<Object> group = groupFor(hit);
             if (group != null && group.size() > 1) {
@@ -622,7 +622,7 @@ public class SmartCadCanvasView extends CadCanvasView {
                 float dx = wx - groupLastWorldX;
                 float dy = wy - groupLastWorldY;
                 if (!groupDragUndoSaved && distancePx(event.getX(), event.getY(), boxStartX, boxStartY) > 3f) {
-                    saveUndo();
+                    coreSaveUndo();
                     groupDragUndoSaved = true;
                 }
                 if (groupDragUndoSaved) {
@@ -694,7 +694,7 @@ public class SmartCadCanvasView extends CadCanvasView {
 
         if (anchorMoveState == 2 && anchorSource != null) {
             PointF target = snapExternal(wx, wy);
-            saveUndo();
+            coreSaveUndo();
             float dx = target.x - anchorSource.x;
             float dy = target.y - anchorSource.y;
             for (Object e : selectedObjects) translate(e, dx, dy);
@@ -908,7 +908,7 @@ public class SmartCadCanvasView extends CadCanvasView {
     }
 
     private boolean entityVisible(Object e) {
-        return e instanceof Entity && isVisible((Entity) e);
+        return e instanceof Entity && coreIsVisible((Entity) e);
     }
 
     private boolean entityConstruction(Object e) {
@@ -978,8 +978,8 @@ public class SmartCadCanvasView extends CadCanvasView {
     private float offsetX() { return super.offsetX; }
     private float offsetY() { return super.offsetY; }
 
-    private float screenToWorldXLocal(float sx) { return screenToWorldX(sx); }
-    private float screenToWorldYLocal(float sy) { return screenToWorldY(sy); }
+    private float screenToWorldXLocal(float sx) { return coreScreenToWorldX(sx); }
+    private float screenToWorldYLocal(float sy) { return coreScreenToWorldY(sy); }
 
     private PointF worldToScreen(float wx, float wy) {
         float s = PX_PER_MM * viewScale();

@@ -737,7 +737,7 @@ public class CadCanvasView extends View {
         return new float[]{x,y};
     }
 
-    protected Entity findHit(float x,float y){
+    private Entity findHit(float x,float y){
         float tol=HIT_RADIUS_PX/(PX_PER_MM*viewScale);
         Entity best=null;float bd=Float.MAX_VALUE;
         for(int i=entities.size()-1;i>=0;i--){
@@ -749,7 +749,7 @@ public class CadCanvasView extends View {
         return best;
     }
 
-    protected void saveUndo(){
+    private void saveUndo(){
         List<Entity> snapshot=new ArrayList<>();
         for(Entity e:entities)snapshot.add(e.copy());
         undoStack.addLast(snapshot);
@@ -758,9 +758,17 @@ public class CadCanvasView extends View {
 
     private void addPrepared(Entity e){e.setLayer(currentLayer);e.setColor(currentColor);entities.add(e);}
     private void copyMeta(Entity from,Entity to){to.setLayer(from.getLayer());to.setColor(from.getColor());to.setExtrusion(from.getExtrusion());}
-    protected boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
-    protected float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
-    protected float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
+    private boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
+    private float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
+    private float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
+
+    // Stable subclass-facing Sketch core contract. Unique names intentionally
+    // avoid collisions with legacy private helpers in intermediate subclasses.
+    protected final Entity coreFindHit(float x, float y) { return findHit(x, y); }
+    protected final void coreSaveUndo() { saveUndo(); }
+    protected final boolean coreIsVisible(Entity e) { return isVisible(e); }
+    protected final float coreScreenToWorldX(float sx) { return screenToWorldX(sx); }
+    protected final float coreScreenToWorldY(float sy) { return screenToWorldY(sy); }
 
     public String executeCommand(String raw){
         if(raw==null)return"";

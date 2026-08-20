@@ -250,8 +250,8 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         try {
             float sx = startX;
             float sy = startY;
-            float wx = screenToWorldX(source.getX());
-            float wy = screenToWorldY(source.getY());
+            float wx = coreScreenToWorldX(source.getX());
+            float wy = coreScreenToWorldY(source.getY());
             float dx = wx - sx;
             float dy = wy - sy;
             float len = (float) Math.hypot(dx, dy);
@@ -344,7 +344,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyHorizontalVerticalConstraint() {
         List<Object> lines = selectedLines();
         if (lines.isEmpty()) return "برای H/V یک یا چند خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         for (Object line : lines) {
             alignLineToNearestAxis(line);
             float dx = safeGet(line, "x2") - safeGet(line, "x1");
@@ -361,7 +361,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyPerpendicularConstraint() {
         List<Object> lines = selectedLines();
         if (lines.size() != 2) return "برای Perpendicular دقیقاً دو خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), false);
         addRelation(lines.get(0), lines.get(1), false);
         enforceConstraints();
@@ -373,7 +373,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     public String applyParallelConstraint() {
         List<Object> lines = selectedLines();
         if (lines.size() != 2) return "برای Parallel دقیقاً دو خط را انتخاب کن";
-        saveUndo();
+        coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), true);
         addRelation(lines.get(0), lines.get(1), true);
         enforceConstraints();
@@ -559,7 +559,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         if (gizmoMode == GIZMO_NONE) return false;
         if (action == MotionEvent.ACTION_MOVE) {
             if (!gizmoUndoSaved) {
-                saveUndo();
+                coreSaveUndo();
                 gizmoUndoSaved = true;
                 gizmoSessionUndoSteps++;
             }
@@ -597,8 +597,8 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         gizmoMode = mode;
         gizmoUndoSaved = false;
         gizmoDelta = 0f;
-        gizmoLastWorldX = screenToWorldX(event.getX());
-        gizmoLastWorldY = screenToWorldY(event.getY());
+        gizmoLastWorldX = coreScreenToWorldX(event.getX());
+        gizmoLastWorldY = coreScreenToWorldY(event.getY());
         gizmoLastAngle = angleScreen(gizmoCenterScreen.x, gizmoCenterScreen.y, event.getX(), event.getY());
     }
 
