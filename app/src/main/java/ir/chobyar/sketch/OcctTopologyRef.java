@@ -9,12 +9,12 @@ import java.util.Map;
 /**
  * Stable logical reference to an OCCT Face/Edge used by parametric direct edits.
  *
- * OCCT topology indices are intentionally not stored because Boolean/form edits can
- * renumber sub-shapes. Instead a reference stores a geometric signature and a
- * normalized position inside the body bounds. During History replay the current
- * OCCT triangulation is inspected and the closest logical topology is rematched.
- * This is a deterministic topological-naming bridge for the Android prototype;
- * the ID itself never changes during the feature lifetime.
+ * Exact analytic edge descriptors are the primary source for edge identity. The
+ * display triangulation is retained only as a controlled fallback on ABIs where
+ * the exact OCCT descriptor path is unavailable, and for face matching until the
+ * native face-descriptor contract lands. References store a geometric signature
+ * plus a normalized position so History rebuilds can rematch logical topology
+ * after OCCT renumbers sub-shapes.
  */
 final class OcctTopologyRef {
     static final int EDGE=1;
@@ -55,6 +55,7 @@ final class OcctTopologyRef {
             minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);minZ=Math.min(minZ,p.z);
             maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);maxZ=Math.max(maxZ,p.z);
         }
+        void add(double x,double y,double z){add(new Geometry3D.Vec3((float)x,(float)y,(float)z));}
         boolean valid(){return minX<=maxX&&minY<=maxY&&minZ<=maxZ;}
         double diag(){double x=maxX-minX,y=maxY-minY,z=maxZ-minZ;return Math.max(1e-6,Math.sqrt(x*x+y*y+z*z));}
         double fx(double x){return fraction(x,minX,maxX);}
@@ -62,6 +63,18 @@ final class OcctTopologyRef {
         double fz(double z){return fraction(z,minZ,maxZ);}
         Geometry3D.Vec3 fromFraction(double x,double y,double z){
             return new Geometry3D.Vec3((float)lerp(minX,maxX,x),(float)lerp(minY,maxY,y),(float)lerp(minZ,maxZ,z));
+        }
+    }
+
+    private static final class ExactEdgeCandidate {
+        final int type;
+        final Geometry3D.Vec3 p1,p2,center,anchor,vector;
+        final double radius,span,measure;
+        ExactEdgeCandidate(int type,Geometry3D.Vec3 p1,Geometry3D.Vec3 p2,
+                           Geometry3D.Vec3 center,Geometry3D.Vec3 anchor,
+                           Geometry3D.Vec3 vector,double radius,double span,double measure){
+            this.type=type;this.p1=p1;this.p2=p2;this.center=center;this.anchor=anchor;
+            this.vector=vector;this.radius=radius;this.span=span;this.measure=measure;
         }
     }
 
@@ -129,25 +142,25 @@ final class OcctTopologyRef {
 
     static Ref captureEdge(long handle,Geometry3D.Vec3 touchAnchor,
                            Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB,String stableId){
-        Mesh mesh=mesh(handle);if(mesh==null||touchAnchor==null)return null;
-        List<EdgeCandidate> edges=edgeCandidates(mesh);if(edges.isEmpty())return null;
-        Geometry3D.Vec3 selectedDir=null;
-        if(selectedA!=null&&selectedB!=null){Geometry3D.Vec3 d=selectedB.sub(selectedA);if(d.length()>1e-8f)selectedDir=d.normalized();}
-        EdgeCandidate best=null;double score=Double.POSITIVE_INFINITY;
-        double diag=mesh.bounds.diag();
-        for(EdgeCandidate e:edges){
-            double s=Math.sqrt(dist2(e.mid,touchAnchor))/diag*100.0;
-            if(selectedDir!=null)s+=(1.0-Math.abs(selectedDir.dot(e.dir)))*18.0;
-            if(s<score){score=s;best=e;}
+        if(touchAnchor==null)return null;
+        List<ExactEdgeCandidate> exact=exactEdgeCandidates(NativeBRepKernel.occtEdgeDescriptors(handle));
+        if(!exact.isEmpty()){
+            Ref ref=captureExactEdge(exact,touchAnchor,selectedA,selectedB,stableId);
+            if(ref!=null)return ref;
         }
-        if(best==null)return null;
-        Geometry3D.Vec3 c=best.mid;
-        return new Ref(EDGE,stableId,best.length,c,best.dir,
-                mesh.bounds.fx(c.x),mesh.bounds.fy(c.y),mesh.bounds.fz(c.z));
+        return captureMeshEdge(handle,touchAnchor,selectedA,selectedB,stableId);
     }
 
     static Resolution resolve(long handle,Ref ref){
-        if(ref==null)return null;Mesh mesh=mesh(handle);if(mesh==null)return null;
+        if(ref==null)return null;
+        if(ref.kind==EDGE){
+            List<ExactEdgeCandidate> exact=exactEdgeCandidates(NativeBRepKernel.occtEdgeDescriptors(handle));
+            if(!exact.isEmpty()){
+                Resolution resolution=resolveExactEdge(exact,ref);
+                if(resolution!=null)return resolution;
+            }
+        }
+        Mesh mesh=mesh(handle);if(mesh==null)return null;
         Geometry3D.Vec3 expected=mesh.bounds.fromFraction(ref.nx,ref.ny,ref.nz);
         double diag=mesh.bounds.diag();
         if(ref.kind==FACE){
@@ -173,9 +186,146 @@ final class OcctTopologyRef {
         return best==null?null:new Resolution(best.mid,score);
     }
 
+    /** Deterministic exact-descriptor seam for x86 emulator regression tests. */
+    static Ref captureEdgeDescriptorsForTest(double[] descriptors,Geometry3D.Vec3 touchAnchor,
+                                             Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB,
+                                             String stableId){
+        return captureExactEdge(exactEdgeCandidates(descriptors),touchAnchor,selectedA,selectedB,stableId);
+    }
+
+    /** Deterministic History-rematch seam that never needs a native library. */
+    static Resolution resolveEdgeDescriptorsForTest(double[] descriptors,Ref ref){
+        return resolveExactEdge(exactEdgeCandidates(descriptors),ref);
+    }
+
     static String debug(Ref ref){
         if(ref==null)return"بدون Topology ID";
         return ref.shortLabel()+" • "+String.format(Locale.US,"%.2f",ref.measure)+(ref.kind==FACE?" mm²":" mm");
+    }
+
+    private static Ref captureExactEdge(List<ExactEdgeCandidate> edges,Geometry3D.Vec3 touchAnchor,
+                                        Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB,String stableId){
+        if(edges==null||edges.isEmpty()||touchAnchor==null)return null;
+        Bounds bounds=exactBounds(edges);if(!bounds.valid())return null;
+        Geometry3D.Vec3 selectedDir=null;
+        if(selectedA!=null&&selectedB!=null){Geometry3D.Vec3 d=selectedB.sub(selectedA);if(d.length()>1e-8f)selectedDir=d.normalized();}
+        ExactEdgeCandidate best=null;double score=Double.POSITIVE_INFINITY;double diag=bounds.diag();
+        for(ExactEdgeCandidate e:edges){
+            double s=distanceToExactEdge(e,touchAnchor)/diag*100.0;
+            if(selectedDir!=null&&e.type==NativeBRepKernel.OCCT_EDGE_LINE)
+                s+=(1.0-Math.abs(selectedDir.dot(e.vector)))*18.0;
+            if(s<score){score=s;best=e;}
+        }
+        if(best==null)return null;
+        Geometry3D.Vec3 c=best.anchor;
+        return new Ref(EDGE,stableId,best.measure,c,best.vector,
+                bounds.fx(c.x),bounds.fy(c.y),bounds.fz(c.z));
+    }
+
+    private static Resolution resolveExactEdge(List<ExactEdgeCandidate> edges,Ref ref){
+        if(edges==null||edges.isEmpty()||ref==null||ref.kind!=EDGE)return null;
+        Bounds bounds=exactBounds(edges);if(!bounds.valid())return null;
+        Geometry3D.Vec3 expected=bounds.fromFraction(ref.nx,ref.ny,ref.nz);double diag=bounds.diag();
+        ExactEdgeCandidate best=null;double score=Double.POSITIVE_INFINITY;
+        for(ExactEdgeCandidate e:edges){
+            double pos=Math.sqrt(dist2(e.anchor,expected))/diag*70.0;
+            double measure=relative(ref.measure,e.measure)*14.0;
+            double orient=ref.vector==null?0.0:(1.0-Math.abs(ref.vector.dot(e.vector)))*16.0;
+            double s=pos+measure+orient;
+            if(s<score){score=s;best=e;}
+        }
+        return best==null?null:new Resolution(best.anchor,score);
+    }
+
+    private static List<ExactEdgeCandidate> exactEdgeCandidates(double[] d){
+        List<ExactEdgeCandidate> out=new ArrayList<>();
+        if(d==null)return out;final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
+        for(int i=0;i+n-1<d.length;i+=n){
+            int kind=(int)Math.round(d[i]);
+            Geometry3D.Vec3 p1=v(d,i+2),p2=v(d,i+5);
+            if(kind==NativeBRepKernel.OCCT_EDGE_LINE){
+                Geometry3D.Vec3 delta=p2.sub(p1);double len=delta.length();if(len<1e-7)continue;
+                Geometry3D.Vec3 anchor=p1.add(p2).mul(.5f),dir=delta.mul((float)(1.0/len));
+                out.add(new ExactEdgeCandidate(kind,p1,p2,null,anchor,dir,0.0,0.0,len));continue;
+            }
+            if(kind!=NativeBRepKernel.OCCT_EDGE_CIRCLE&&kind!=NativeBRepKernel.OCCT_EDGE_ARC)continue;
+            Geometry3D.Vec3 center=v(d,i+8),normal=v(d,i+11);double nl=normal.length();double radius=Math.abs(d[i+14]);
+            if(nl<1e-7||radius<1e-7)continue;normal=normal.mul((float)(1.0/nl));
+            double span=kind==NativeBRepKernel.OCCT_EDGE_CIRCLE?Math.PI*2.0:Math.abs(d[i+16]-d[i+15]);
+            if(!(span>1e-8))continue;span=Math.min(Math.PI*2.0,span);
+            Geometry3D.Vec3 anchor=kind==NativeBRepKernel.OCCT_EDGE_CIRCLE?center:arcMidpoint(center,p1,normal,(d[i+16]-d[i+15])*.5);
+            out.add(new ExactEdgeCandidate(kind,p1,p2,center,anchor,normal,radius,span,radius*span));
+        }
+        return out;
+    }
+
+    private static Bounds exactBounds(List<ExactEdgeCandidate> edges){
+        Bounds b=new Bounds();
+        for(ExactEdgeCandidate e:edges){
+            b.add(e.p1);b.add(e.p2);b.add(e.anchor);
+            if(e.center!=null&&e.radius>0.0){
+                Geometry3D.Vec3 n=e.vector;
+                double ex=e.radius*Math.sqrt(Math.max(0.0,1.0-n.x*n.x));
+                double ey=e.radius*Math.sqrt(Math.max(0.0,1.0-n.y*n.y));
+                double ez=e.radius*Math.sqrt(Math.max(0.0,1.0-n.z*n.z));
+                b.add(e.center.x-ex,e.center.y-ey,e.center.z-ez);
+                b.add(e.center.x+ex,e.center.y+ey,e.center.z+ez);
+            }
+        }
+        return b;
+    }
+
+    private static double distanceToExactEdge(ExactEdgeCandidate e,Geometry3D.Vec3 p){
+        if(e.type==NativeBRepKernel.OCCT_EDGE_LINE)return pointSegmentDistance(p,e.p1,e.p2);
+        Geometry3D.Vec3 radial=p.sub(e.center);double plane=radial.dot(e.vector);
+        Geometry3D.Vec3 projected=radial.sub(e.vector.mul((float)plane));
+        double radialError=Math.abs(projected.length()-e.radius);
+        double circleDistance=Math.hypot(Math.abs(plane),radialError);
+        if(e.type==NativeBRepKernel.OCCT_EDGE_CIRCLE)return circleDistance;
+        if(arcContains(e,projected))return circleDistance;
+        return Math.min(Math.sqrt(dist2(p,e.p1)),Math.sqrt(dist2(p,e.p2)));
+    }
+
+    private static boolean arcContains(ExactEdgeCandidate e,Geometry3D.Vec3 projected){
+        double len=projected.length();if(len<1e-9)return false;
+        Geometry3D.Vec3 u=e.p1.sub(e.center);double ul=u.length();if(ul<1e-9)return false;
+        u=u.mul((float)(1.0/ul));Geometry3D.Vec3 r=projected.mul((float)(1.0/len));
+        double a=Math.atan2(e.vector.dot(u.cross(r)),u.dot(r));if(a<0)a+=Math.PI*2.0;
+        return a<=e.span+1e-4;
+    }
+
+    private static Geometry3D.Vec3 arcMidpoint(Geometry3D.Vec3 center,Geometry3D.Vec3 p1,
+                                               Geometry3D.Vec3 normal,double halfParam){
+        Geometry3D.Vec3 u=p1.sub(center);double c=Math.cos(halfParam),s=Math.sin(halfParam);
+        Geometry3D.Vec3 term1=u.mul((float)c);
+        Geometry3D.Vec3 term2=normal.cross(u).mul((float)s);
+        Geometry3D.Vec3 term3=normal.mul((float)(normal.dot(u)*(1.0-c)));
+        return center.add(term1.add(term2).add(term3));
+    }
+
+    private static double pointSegmentDistance(Geometry3D.Vec3 p,Geometry3D.Vec3 a,Geometry3D.Vec3 b){
+        Geometry3D.Vec3 ab=b.sub(a);double den=ab.dot(ab);if(den<1e-12)return Math.sqrt(dist2(p,a));
+        double t=p.sub(a).dot(ab)/den;t=Math.max(0.0,Math.min(1.0,t));
+        Geometry3D.Vec3 q=a.add(ab.mul((float)t));return Math.sqrt(dist2(p,q));
+    }
+
+    private static Ref captureMeshEdge(long handle,Geometry3D.Vec3 touchAnchor,
+                                       Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB,String stableId){
+        Mesh mesh=mesh(handle);if(mesh==null||touchAnchor==null)return null;
+        List<EdgeCandidate> edges=edgeCandidates(mesh);if(edges.isEmpty())return null;
+        Geometry3D.Vec3 selectedDir=null;
+        if(selectedA!=null&&selectedB!=null){Geometry3D.Vec3 d=selectedB.sub(selectedA);if(d.length()>1e-8f)selectedDir=d.normalized();}
+        EdgeCandidate best=null;double score=Double.POSITIVE_INFINITY;
+        double diag=mesh.bounds.diag();
+        for(EdgeCandidate e:edges){
+            double s=Math.sqrt(dist2(e.mid,touchAnchor))/diag*100.0;
+            if(selectedDir!=null)s+=(1.0-Math.abs(selectedDir.dot(e.dir)))*18.0;
+            if(s<score){score=s;best=e;}
+        }
+        if(best==null)return null;
+        Geometry3D.Vec3 c=best.mid;
+        return new Ref(EDGE,stableId,best.length,c,best.dir,
+                mesh.bounds.fx(c.x),mesh.bounds.fy(c.y),mesh.bounds.fz(c.z));
     }
 
     private static Mesh mesh(long handle){
