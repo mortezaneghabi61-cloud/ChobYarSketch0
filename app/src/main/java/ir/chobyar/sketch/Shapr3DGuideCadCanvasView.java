@@ -37,7 +37,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private boolean snap3DGuidepoints=true;
     private boolean snapDistantEdges=true;
 
-    private Field viewScaleField,offsetXField,offsetYField,activePlaneField,nativeByBodyField;
+    private Field viewScaleField,offsetXField,offsetYField,activePlaneField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
@@ -71,7 +71,6 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             offsetXField=field(CadCanvasView.class,"offsetX");
             offsetYField=field(CadCanvasView.class,"offsetY");
             activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
-            nativeByBodyField=field(OcctModelCadCanvasView.class,"nativeByBody");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -120,15 +119,34 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         return super.executeCommand(raw);
     }
 
-    /** Manual 26.100 Project: exact OCCT Line/Circle/Arc edges -> Construction sketch geometry. */
+    /** Manual 26.100 Project: selected exact Body when present, otherwise all exact Bodies. */
     public String projectExactBodyEdges(){
+        List<Long> handles=projectSourceHandles();
+        if(handles.isEmpty())return hasSelectedSolidBody()
+                ?"Project 3D • Body انتخاب‌شده Shape دقیق OCCT ندارد"
+                :"Project 3D • Shape دقیق OCCT آماده نیست";
         List<double[]> batches=new ArrayList<>();
-        for(long handle:nativeHandles()){
-            double[] d=NativeBRepKernel.occtEdgeDescriptors(handle);
+        for(long handle:handles){
+            double[] d=exactProjectDescriptors(handle);
             if(d!=null&&d.length>=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)batches.add(d);
         }
-        if(batches.isEmpty())return "Project 3D • Shape دقیق OCCT آماده نیست";
+        if(batches.isEmpty())return "Project 3D • لبه دقیق قابل Project پیدا نشد";
         return projectDescriptorBatches(batches);
+    }
+
+    protected List<Long> projectSourceHandles(){
+        List<Long> out=new ArrayList<>();
+        if(hasSelectedSolidBody()){
+            long selected=selectedExactNativeHandle();
+            if(selected!=0L)out.add(selected);
+            return out;
+        }
+        out.addAll(exactNativeHandlesSnapshot());
+        return out;
+    }
+
+    protected double[] exactProjectDescriptors(long handle){
+        return NativeBRepKernel.occtEdgeDescriptors(handle);
     }
 
     /** Package-visible deterministic mapper used by x86 emulator tests. */
@@ -323,20 +341,9 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         pruneCache();OcctSnapTopology.Result r=topologyCache.get(handle);if(r==null){r=OcctSnapTopology.analyze(handle);topologyCache.put(handle,r);}return r;
     }
 
-    private void pruneCache(){Set<Long> live=new HashSet<>(nativeHandlesRaw());topologyCache.keySet().retainAll(live);}
+    private void pruneCache(){Set<Long> live=new HashSet<>(nativeHandles());topologyCache.keySet().retainAll(live);}
 
-    private List<Long> nativeHandles(){return nativeHandlesRaw();}
-    @SuppressWarnings("unchecked")
-    private List<Long> nativeHandlesRaw(){
-        List<Long> out=new ArrayList<>();
-        try{
-            Object v=nativeByBodyField==null?null:nativeByBodyField.get(this);if(!(v instanceof Map))return out;
-            for(Object rec:((Map<Object,Object>)v).values()){
-                if(rec==null)continue;Field h=findField(rec.getClass(),"handle");if(h!=null){long x=h.getLong(rec);if(x!=0L&&!out.contains(x))out.add(x);}
-            }
-        }catch(Exception ignored){}
-        return out;
-    }
+    private List<Long> nativeHandles(){return exactNativeHandlesSnapshot();}
 
     private Geometry3D.Plane3D activePlane(){try{Object p=activePlaneField==null?null:activePlaneField.get(this);return p instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)p:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}}
     private static PointF toLocal(Geometry3D.Plane3D p,Geometry3D.Vec3 world){Geometry3D.Vec3 d=world.sub(p.origin);return new PointF(d.dot(p.u),d.dot(p.v));}

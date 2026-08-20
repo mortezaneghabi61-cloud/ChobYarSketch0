@@ -298,6 +298,26 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         lastHistorySignature=signature;
     }
 
+    /** Exact-body source contract used by Project 3D and 3D guide layers. */
+    protected synchronized boolean hasSelectedSolidBody(){
+        return selectedBody()!=null;
+    }
+
+    protected synchronized long selectedExactNativeHandle(){
+        syncNativeHistory(false);
+        NativeRecord record=nativeByBody.get(selectedBody());
+        return record==null?0L:record.handle;
+    }
+
+    protected synchronized List<Long> exactNativeHandlesSnapshot(){
+        syncNativeHistory(false);
+        List<Long> out=new ArrayList<>();
+        for(NativeRecord record:nativeByBody.values()){
+            if(record!=null&&record.handle!=0L&&!out.contains(record.handle))out.add(record.handle);
+        }
+        return out;
+    }
+
     /** Snapshot of the exact OCCT display tessellation for the GPU renderer. */
     public synchronized double[] gpuMesh(){
         syncNativeHistory(false);
