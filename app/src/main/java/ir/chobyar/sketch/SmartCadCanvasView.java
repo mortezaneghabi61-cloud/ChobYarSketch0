@@ -8,8 +8,6 @@ import android.graphics.PointF;
 import android.graphics.RectF;
 import android.view.MotionEvent;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -26,9 +24,9 @@ import java.util.Locale;
  * - group transforms for Move/Copy/Rotate/Scale/Mirror/Array/Offset/Delete
  * - an on-canvas dimension edit chip
  *
- * CadCanvasView intentionally keeps its geometry entities private. This class
- * uses reflection only at the interaction boundary so the existing geometry
- * and DXF code can stay untouched while the UI evolves quickly.
+ * CadCanvasView exposes a protected sketch-core contract to subclasses. This
+ * layer uses that contract directly so selection and viewport behavior cannot
+ * silently fail because a private field or method was renamed.
  */
 public class SmartCadCanvasView extends CadCanvasView {
 
@@ -48,7 +46,7 @@ public class SmartCadCanvasView extends CadCanvasView {
     private StatusListener statusListener;
     private DimensionEditListener dimensionEditListener;
 
-    private final List<Object> selectedObjects = new ArrayList<>();
+    protected final List<Object> selectedObjects = new ArrayList<>();
     private final List<List<Object>> groups = new ArrayList<>();
 
     private boolean multiSelectMode = false;
@@ -75,20 +73,9 @@ public class SmartCadCanvasView extends CadCanvasView {
     private final Paint chipTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint anchorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private Field entitiesField;
-    private Field selectedField;
-    private Field viewScaleField;
-    private Field offsetXField;
-    private Field offsetYField;
-    private Method findHitMethod;
-    private Method saveUndoMethod;
-    private Method isVisibleMethod;
-    private boolean reflectionReady = false;
-
     public SmartCadCanvasView(Context context) {
         super(context);
         initPaints();
-        initReflection();
     }
 
     private void initPaints() {
@@ -113,37 +100,6 @@ public class SmartCadCanvasView extends CadCanvasView {
         anchorPaint.setColor(Color.rgb(245, 125, 10));
         anchorPaint.setStyle(Paint.Style.STROKE);
         anchorPaint.setStrokeWidth(4f);
-    }
-
-    private void initReflection() {
-        try {
-            entitiesField = CadCanvasView.class.getDeclaredField("entities");
-            selectedField = CadCanvasView.class.getDeclaredField("selected");
-            viewScaleField = CadCanvasView.class.getDeclaredField("viewScale");
-            offsetXField = CadCanvasView.class.getDeclaredField("offsetX");
-            offsetYField = CadCanvasView.class.getDeclaredField("offsetY");
-            entitiesField.setAccessible(true);
-            selectedField.setAccessible(true);
-            viewScaleField.setAccessible(true);
-            offsetXField.setAccessible(true);
-            offsetYField.setAccessible(true);
-
-            for (Method m : CadCanvasView.class.getDeclaredMethods()) {
-                if (m.getName().equals("findHit") && m.getParameterTypes().length == 2) {
-                    findHitMethod = m;
-                    findHitMethod.setAccessible(true);
-                } else if (m.getName().equals("saveUndo") && m.getParameterTypes().length == 0) {
-                    saveUndoMethod = m;
-                    saveUndoMethod.setAccessible(true);
-                } else if (m.getName().equals("isVisible") && m.getParameterTypes().length == 1) {
-                    isVisibleMethod = m;
-                    isVisibleMethod.setAccessible(true);
-                }
-            }
-            reflectionReady = findHitMethod != null && saveUndoMethod != null;
-        } catch (Exception ignored) {
-            reflectionReady = false;
-        }
     }
 
     public void setStatusListener(StatusListener listener) {
@@ -257,8 +213,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             pruneGroups();
             return;
         }
-        if (!reflectionReady) return;
-        saveUndoReflective();
+        saveUndo();
         List<Object> all = entities();
         all.removeAll(selectedObjects);
         selectedObjects.clear();
@@ -275,7 +230,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             syncFromBaseIfNeeded();
             return;
         }
-        saveUndoReflective();
+        saveUndo();
         for (Object e : selectedObjects) translate(e, dx, dy);
         invalidate();
     }
@@ -288,10 +243,10 @@ public class SmartCadCanvasView extends CadCanvasView {
             syncFromBaseIfNeeded();
             return;
         }
-        saveUndoReflective();
+        saveUndo();
         List<Object> copies = new ArrayList<>();
         for (Object e : selectedObjects) {
-            Object c = call(e, "copy");
+            Object c = entityCopy(e);
             if (c != null) {
                 translate(c, dx, dy);
                 entities().add(c);
@@ -306,10 +261,10 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String offsetSelected(float distance) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.offsetSelected(distance);
-        saveUndoReflective();
+        saveUndo();
         List<Object> copies = new ArrayList<>();
         for (Object e : selectedObjects) {
-            Object c = call(e, "offsetCopy", new Class<?>[]{float.class}, distance);
+            Object c = entityOffsetCopy(e, distance);
             if (c != null) {
                 entities().add(c);
                 copies.add(c);
@@ -326,9 +281,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.rotateSelected(deg);
         PointF c = selectionCenter();
-        saveUndoReflective();
-        for (Object e : selectedObjects) call(e, "rotate",
-                new Class<?>[]{float.class, float.class, float.class}, c.x, c.y, deg);
+        saveUndo();
+        for (Object e : selectedObjects) entityRotate(e, c.x, c.y, deg);
         invalidate();
         return "چرخش " + format(deg) + "° روی " + selectedObjects.size() + " شکل";
     }
@@ -339,9 +293,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         if (selectedObjects.size() <= 1) return super.scaleSelected(factor);
         if (factor <= 0f) return "Scale باید بزرگ‌تر از صفر باشد";
         PointF c = selectionCenter();
-        saveUndoReflective();
-        for (Object e : selectedObjects) call(e, "scale",
-                new Class<?>[]{float.class, float.class, float.class}, c.x, c.y, factor);
+        saveUndo();
+        for (Object e : selectedObjects) entityScale(e, c.x, c.y, factor);
         invalidate();
         return "Scale × " + format(factor) + " روی انتخاب";
     }
@@ -350,9 +303,11 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String mirrorSelected(boolean acrossXAxis, float axisValue) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.mirrorSelected(acrossXAxis, axisValue);
-        saveUndoReflective();
-        String method = acrossXAxis ? "mirrorHorizontal" : "mirrorVertical";
-        for (Object e : selectedObjects) call(e, method, new Class<?>[]{float.class}, axisValue);
+        saveUndo();
+        for (Object e : selectedObjects) {
+            if (acrossXAxis) entityMirrorHorizontal(e, axisValue);
+            else entityMirrorVertical(e, axisValue);
+        }
         invalidate();
         return acrossXAxis ? "قرینه گروه نسبت به محور X" : "قرینه گروه نسبت به محور Y";
     }
@@ -362,13 +317,13 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.arraySelected(count, dx, dy);
         if (count < 2 || count > 200) return "تعداد Array باید بین 2 و 200 باشد";
-        saveUndoReflective();
+        saveUndo();
         List<Object> seed = new ArrayList<>(selectedObjects);
         List<Object> lastCopies = new ArrayList<>();
         for (int i = 1; i < count; i++) {
             lastCopies.clear();
             for (Object e : seed) {
-                Object c = call(e, "copy");
+                Object c = entityCopy(e);
                 if (c != null) {
                     translate(c, dx * i, dy * i);
                     entities().add(c);
@@ -393,8 +348,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.assignSelectedLayer(name);
         if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
-        saveUndoReflective();
-        for (Object e : selectedObjects) call(e, "setLayer", new Class<?>[]{String.class}, name.trim());
+        saveUndo();
+        for (Object e : selectedObjects) entitySetLayer(e, name.trim());
         invalidate();
         return selectedObjects.size() + " شکل به لایه " + name.trim() + " منتقل شد";
     }
@@ -404,8 +359,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.setMaterial(material);
         int color = materialColorLocal(material);
-        saveUndoReflective();
-        for (Object e : selectedObjects) call(e, "setColor", new Class<?>[]{int.class}, color);
+        saveUndo();
+        for (Object e : selectedObjects) entitySetColor(e, color);
         invalidate();
         return "متریال روی " + selectedObjects.size() + " شکل اعمال شد";
     }
@@ -535,8 +490,6 @@ public class SmartCadCanvasView extends CadCanvasView {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!reflectionReady) return super.onTouchEvent(event);
-
         // Never interfere with two-finger pan/zoom.
         if (event.getPointerCount() >= 2) {
             cancelSmartGesture();
@@ -669,7 +622,7 @@ public class SmartCadCanvasView extends CadCanvasView {
                 float dx = wx - groupLastWorldX;
                 float dy = wy - groupLastWorldY;
                 if (!groupDragUndoSaved && distancePx(event.getX(), event.getY(), boxStartX, boxStartY) > 3f) {
-                    saveUndoReflective();
+                    saveUndo();
                     groupDragUndoSaved = true;
                 }
                 if (groupDragUndoSaved) {
@@ -741,7 +694,7 @@ public class SmartCadCanvasView extends CadCanvasView {
 
         if (anchorMoveState == 2 && anchorSource != null) {
             PointF target = snapExternal(wx, wy);
-            saveUndoReflective();
+            saveUndo();
             float dx = target.x - anchorSource.x;
             float dy = target.y - anchorSource.y;
             for (Object e : selectedObjects) translate(e, dx, dy);
@@ -833,7 +786,6 @@ public class SmartCadCanvasView extends CadCanvasView {
     }
 
     private void pruneSelection() {
-        if (!reflectionReady) return;
         List<Object> all = entities();
         Iterator<Object> it = selectedObjects.iterator();
         while (it.hasNext()) {
@@ -845,7 +797,6 @@ public class SmartCadCanvasView extends CadCanvasView {
     }
 
     private void pruneGroups() {
-        if (!reflectionReady) return;
         List<Object> all = entities();
         Iterator<List<Object>> git = groups.iterator();
         while (git.hasNext()) {
@@ -868,14 +819,9 @@ public class SmartCadCanvasView extends CadCanvasView {
         PointF best = null;
         float bestD = Float.MAX_VALUE;
         for (Object e : selectedObjects) {
-            Object snaps = call(e, "snapPoints");
-            if (snaps instanceof List) {
-                for (Object sp : (List<?>) snaps) {
-                    PointF p = pointFromObject(sp);
-                    if (p == null) continue;
-                    float d = distanceWorld(wx, wy, p.x, p.y);
-                    if (d < bestD) { bestD = d; best = p; }
-                }
+            for (PointF p : entitySnapPoints(e)) {
+                float d = distanceWorld(wx, wy, p.x, p.y);
+                if (d < bestD) { bestD = d; best = p; }
             }
             PointF c = entityCenter(e);
             if (c != null) {
@@ -893,21 +839,15 @@ public class SmartCadCanvasView extends CadCanvasView {
 
         for (Object e : entities()) {
             if (containsIdentity(selectedObjects, e) || !entityVisible(e) || entityConstruction(e)) continue;
-            Object snaps = call(e, "snapPoints");
-            if (snaps instanceof List) {
-                for (Object sp : (List<?>) snaps) {
-                    PointF p = pointFromObject(sp);
-                    if (p == null) continue;
-                    float d = distanceWorld(wx, wy, p.x, p.y);
-                    if (d <= radius && d < bestD) {
-                        best = p;
-                        bestD = d;
-                    }
+            for (PointF p : entitySnapPoints(e)) {
+                float d = distanceWorld(wx, wy, p.x, p.y);
+                if (d <= radius && d < bestD) {
+                    best = p;
+                    bestD = d;
                 }
             }
-            Object nearObj = call(e, "nearestPoint", new Class<?>[]{float.class, float.class}, wx, wy);
-            if (nearObj instanceof PointF) {
-                PointF p = (PointF) nearObj;
+            PointF p = entityNearestPoint(e, wx, wy);
+            if (p != null) {
                 float d = distanceWorld(wx, wy, p.x, p.y);
                 if (d <= radius * .70f && d < bestD) {
                     best = new PointF(p.x, p.y);
@@ -951,139 +891,95 @@ public class SmartCadCanvasView extends CadCanvasView {
         invalidate();
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private List<Object> entities() {
-        try {
-            return (List<Object>) entitiesField.get(this);
-        } catch (Exception e) {
-            return new ArrayList<>();
-        }
+        return (List<Object>) (List<?>) super.entities;
     }
 
-    private Object baseSelected() {
-        try {
-            return selectedField.get(this);
-        } catch (Exception e) {
-            return null;
-        }
+    /** Snapshot for higher interaction layers; the owning list stays private to Smart. */
+    protected final List<Object> smartSelectionSnapshot() {
+        return new ArrayList<>(selectedObjects);
     }
+
+    private Object baseSelected() { return selected; }
 
     private void setBaseSelected(Object value) {
-        try {
-            selectedField.set(this, value);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private Object findHit(float wx, float wy) {
-        try {
-            return findHitMethod.invoke(this, wx, wy);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private void saveUndoReflective() {
-        try {
-            saveUndoMethod.invoke(this);
-        } catch (Exception ignored) {
-        }
+        selected = value instanceof Entity ? (Entity) value : null;
     }
 
     private boolean entityVisible(Object e) {
-        try {
-            return isVisibleMethod == null || Boolean.TRUE.equals(isVisibleMethod.invoke(this, e));
-        } catch (Exception ex) {
-            return true;
-        }
+        return e instanceof Entity && isVisible((Entity) e);
     }
 
     private boolean entityConstruction(Object e) {
-        Object v = call(e, "isConstruction");
-        return v instanceof Boolean && (Boolean) v;
+        return e instanceof Entity && ((Entity) e).isConstruction();
     }
 
     private RectF entityBounds(Object e) {
-        Object value = call(e, "bounds");
-        return value instanceof RectF ? new RectF((RectF) value) : null;
+        return e instanceof Entity ? new RectF(((Entity) e).bounds()) : null;
     }
 
     private PointF entityCenter(Object e) {
-        Object value = call(e, "center");
-        return value instanceof PointF ? new PointF((PointF) value) : null;
+        if (!(e instanceof Entity)) return null;
+        PointF p = ((Entity) e).center();
+        return p == null ? null : new PointF(p.x, p.y);
     }
 
     private void translate(Object e, float dx, float dy) {
-        call(e, "translate", new Class<?>[]{float.class, float.class}, dx, dy);
+        if (e instanceof Entity) ((Entity) e).translate(dx, dy);
     }
 
-    private Object call(Object target, String name) {
-        return call(target, name, new Class<?>[0]);
+    private Object entityCopy(Object e) {
+        return e instanceof Entity ? ((Entity) e).copy() : null;
     }
 
-    private Object call(Object target, String name, Class<?>[] types, Object... args) {
-        if (target == null) return null;
-        try {
-            Class<?> c = target.getClass();
-            while (c != null) {
-                try {
-                    Method m = c.getDeclaredMethod(name, types);
-                    m.setAccessible(true);
-                    return m.invoke(target, args);
-                } catch (NoSuchMethodException ex) {
-                    c = c.getSuperclass();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
+    private Object entityOffsetCopy(Object e, float distance) {
+        return e instanceof Entity ? ((Entity) e).offsetCopy(distance) : null;
     }
 
-    private PointF pointFromObject(Object obj) {
-        if (obj == null) return null;
-        try {
-            Field x = findField(obj.getClass(), "x");
-            Field y = findField(obj.getClass(), "y");
-            if (x == null || y == null) return null;
-            x.setAccessible(true);
-            y.setAccessible(true);
-            return new PointF(((Number)x.get(obj)).floatValue(), ((Number)y.get(obj)).floatValue());
-        } catch (Exception e) {
-            return null;
-        }
+    private void entityRotate(Object e, float cx, float cy, float deg) {
+        if (e instanceof Entity) ((Entity) e).rotate(cx, cy, deg);
     }
 
-    private Field findField(Class<?> c, String name) {
-        Class<?> x = c;
-        while (x != null) {
-            try { return x.getDeclaredField(name); }
-            catch (NoSuchFieldException e) { x = x.getSuperclass(); }
-        }
-        return null;
+    private void entityScale(Object e, float cx, float cy, float factor) {
+        if (e instanceof Entity) ((Entity) e).scale(cx, cy, factor);
     }
 
-    private float viewScale() {
-        try { return viewScaleField.getFloat(this); }
-        catch (Exception e) { return 1f; }
+    private void entityMirrorHorizontal(Object e, float axis) {
+        if (e instanceof Entity) ((Entity) e).mirrorHorizontal(axis);
     }
 
-    private float offsetX() {
-        try { return offsetXField.getFloat(this); }
-        catch (Exception e) { return 0f; }
+    private void entityMirrorVertical(Object e, float axis) {
+        if (e instanceof Entity) ((Entity) e).mirrorVertical(axis);
     }
 
-    private float offsetY() {
-        try { return offsetYField.getFloat(this); }
-        catch (Exception e) { return 0f; }
+    private void entitySetLayer(Object e, String layer) {
+        if (e instanceof Entity) ((Entity) e).setLayer(layer);
     }
 
-    private float screenToWorldXLocal(float sx) {
-        return (sx - offsetX()) / (PX_PER_MM * viewScale());
+    private void entitySetColor(Object e, int color) {
+        if (e instanceof Entity) ((Entity) e).setColor(color);
     }
 
-    private float screenToWorldYLocal(float sy) {
-        return (sy - offsetY()) / (PX_PER_MM * viewScale());
+    private List<PointF> entitySnapPoints(Object e) {
+        List<PointF> out = new ArrayList<>();
+        if (!(e instanceof Entity)) return out;
+        for (SnapPoint sp : ((Entity) e).snapPoints()) out.add(new PointF(sp.x, sp.y));
+        return out;
     }
+
+    private PointF entityNearestPoint(Object e, float wx, float wy) {
+        if (!(e instanceof Entity)) return null;
+        PointF p = ((Entity) e).nearestPoint(wx, wy);
+        return p == null ? null : new PointF(p.x, p.y);
+    }
+
+    private float viewScale() { return super.viewScale; }
+    private float offsetX() { return super.offsetX; }
+    private float offsetY() { return super.offsetY; }
+
+    private float screenToWorldXLocal(float sx) { return screenToWorldX(sx); }
+    private float screenToWorldYLocal(float sy) { return screenToWorldY(sy); }
 
     private PointF worldToScreen(float wx, float wy) {
         float s = PX_PER_MM * viewScale();

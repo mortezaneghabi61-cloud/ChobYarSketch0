@@ -56,12 +56,12 @@ public class CadCanvasView extends View {
     private final Paint centerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint screenTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private final List<Entity> entities = new ArrayList<>();
+    protected final List<Entity> entities = new ArrayList<>();
     private final ArrayDeque<List<Entity>> undoStack = new ArrayDeque<>();
     private final Map<String, Boolean> layers = new LinkedHashMap<>();
     private final Map<String, Scene> scenes = new HashMap<>();
 
-    private Entity selected;
+    protected Entity selected;
     private int tool = TOOL_SELECT;
     private boolean showGrid = true;
     private boolean showAxes = true;
@@ -75,16 +75,16 @@ public class CadCanvasView extends View {
     private int polygonSides = 6;
 
     private final ScaleGestureDetector scaleDetector;
-    private float viewScale = 1f;
-    private float offsetX = 120f;
-    private float offsetY = 160f;
+    protected float viewScale = 1f;
+    protected float offsetX = 120f;
+    protected float offsetY = 160f;
     private boolean multiTouch = false;
     private float lastMultiX;
     private float lastMultiY;
 
-    private float startX, startY, endX, endY;
+    protected float startX, startY, endX, endY;
     private float downScreenX, downScreenY;
-    private boolean drawing = false;
+    protected boolean drawing = false;
     private boolean draggingSelection = false;
     private boolean dragUndoSaved = false;
     private int activeHandle = -1;
@@ -737,7 +737,7 @@ public class CadCanvasView extends View {
         return new float[]{x,y};
     }
 
-    private Entity findHit(float x,float y){
+    protected Entity findHit(float x,float y){
         float tol=HIT_RADIUS_PX/(PX_PER_MM*viewScale);
         Entity best=null;float bd=Float.MAX_VALUE;
         for(int i=entities.size()-1;i>=0;i--){
@@ -749,7 +749,7 @@ public class CadCanvasView extends View {
         return best;
     }
 
-    private void saveUndo(){
+    protected void saveUndo(){
         List<Entity> snapshot=new ArrayList<>();
         for(Entity e:entities)snapshot.add(e.copy());
         undoStack.addLast(snapshot);
@@ -758,9 +758,9 @@ public class CadCanvasView extends View {
 
     private void addPrepared(Entity e){e.setLayer(currentLayer);e.setColor(currentColor);entities.add(e);}
     private void copyMeta(Entity from,Entity to){to.setLayer(from.getLayer());to.setColor(from.getColor());to.setExtrusion(from.getExtrusion());}
-    private boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
-    private float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
-    private float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
+    protected boolean isVisible(Entity e){Boolean v=layers.get(e.getLayer());return v==null||v;}
+    protected float screenToWorldX(float sx){return(sx-offsetX)/(PX_PER_MM*viewScale);}
+    protected float screenToWorldY(float sy){return(sy-offsetY)/(PX_PER_MM*viewScale);}
 
     public String executeCommand(String raw){
         if(raw==null)return"";
@@ -827,7 +827,7 @@ public class CadCanvasView extends View {
         return d.toString();
     }
 
-    private interface Entity{
+    protected interface Entity{
         void draw(Canvas c,Paint p,Paint text,Paint measure,float px,boolean dims);
         float selectionDistance(float x,float y);
         List<SnapPoint> snapPoints();
@@ -894,7 +894,7 @@ public class CadCanvasView extends View {
         public void appendDxf(StringBuilder d){d.append("0\nPOINT\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n");}
     }
 
-    private static class LineEntity extends BaseEntity{
+    protected static class LineEntity extends BaseEntity{
         float x1,y1,x2,y2;
         LineEntity(float a,float b,float c,float d){x1=a;y1=b;x2=c;y2=d;}
         void setLength(float len){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f){x2=x1+len;y2=y1;}else{x2=x1+dx/l*len;y2=y1+dy/l*len;}}
@@ -1111,12 +1111,12 @@ public class CadCanvasView extends View {
         public void appendDxf(StringBuilder d){}
     }
 
-    private static class SnapPoint{
+    protected static class SnapPoint{
         float x,y;String label;
         SnapPoint(float x,float y,String label){this.x=x;this.y=y;this.label=label;}
     }
 
-    private static class ControlPoint{
+    protected static class ControlPoint{
         float x,y;
         ControlPoint(float x,float y){this.x=x;this.y=y;}
     }
