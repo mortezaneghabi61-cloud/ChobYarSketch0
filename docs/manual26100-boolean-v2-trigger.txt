@@ -1,0 +1,2 @@
+trigger=corrected_boolean_keep_v2
+reason=verify_build_and_emulator_after_java_newline_escape_fix
