@@ -260,6 +260,45 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                 .show();
     }
 
+    /** Deterministic non-modal 3D finishing entry for command/tests. */
+    public String applyAllFillet(float radiusMm) {
+        if (!(radiusMm > 0f)) return "شعاع Fillet باید بزرگ‌تر از صفر باشد";
+        Object body = selectedBody();
+        if (body == null) return "اول یک Body را انتخاب کن";
+        return recordAndApply(body, new DirectOp(EditKind.ALL_FILLET, radiusMm, 0, null));
+    }
+
+    /** Deterministic non-modal 3D finishing entry for command/tests. */
+    public String applyAllChamfer(float distanceMm) {
+        if (!(distanceMm > 0f)) return "فاصله Chamfer باید بزرگ‌تر از صفر باشد";
+        Object body = selectedBody();
+        if (body == null) return "اول یک Body را انتخاب کن";
+        return recordAndApply(body, new DirectOp(EditKind.ALL_CHAMFER, distanceMm, 0, null));
+    }
+
+    @Override
+    public String executeCommand(String raw) {
+        if (raw != null) {
+            String s = normalizeDigits(raw).trim().replace(',', ' ');
+            if (!s.isEmpty()) {
+                String[] a = s.split("\\s+");
+                String op = a[0].toUpperCase(Locale.US);
+                boolean fillet = "FILLET3D".equals(op) || "FILLETALL".equals(op);
+                boolean chamfer = "CHAMFER3D".equals(op) || "CHAMFERALL".equals(op);
+                if (fillet || chamfer) {
+                    if (a.length != 2) return op + " — یک اندازه بر حسب mm لازم است؛ مثال: " + op + " 5";
+                    try {
+                        float mm = parseLengthMm(a[1]);
+                        return fillet ? applyAllFillet(mm) : applyAllChamfer(mm);
+                    } catch (Exception e) {
+                        return "اندازه Fillet/Chamfer درست نیست";
+                    }
+                }
+            }
+        }
+        return super.executeCommand(raw);
+    }
+
     // ------------------------------------------------------------------
     // Direct feature history
     // ------------------------------------------------------------------
