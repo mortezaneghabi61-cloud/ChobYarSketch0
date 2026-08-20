@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 45 production CAD contracts on API 35
+    name: 48 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -58,7 +58,9 @@ jobs:
           grep -q 'projectSelectedBodyReference' "$GUIDE"
           grep -q 'refreshAssociativeProjectReferences' "$GUIDE"
           grep -q 'OCCT_EDGE_RECORD_SIZE' "$NATIVE"
+          grep -q 'OCCT_FACE_RECORD_SIZE' "$NATIVE"
           grep -q 'occtEdgeDescriptors' "$TOPOLOGY"
+          grep -q 'occtFaceDescriptors' "$TOPOLOGY"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
           test -f .github/scripts/run-production-cad-regression.sh
           for t in \
@@ -79,7 +81,8 @@ jobs:
             Project3DExactInstrumentationTest \
             Project3DSelectedBodyInstrumentationTest \
             AssociativeProjectProvenanceInstrumentationTest \
-            ExactEdgeTopologyInstrumentationTest; do
+            ExactEdgeTopologyInstrumentationTest \
+            ExactFaceTopologyInstrumentationTest; do
               test -f "app/src/androidTest/java/ir/chobyar/sketch/${t}.java"
           done
 
