@@ -26,12 +26,10 @@ jobs:
           ref: refactor/sketch-core-type-safe-20260820
           fetch-depth: 0
 
-      - name: Apply Boolean Keep Originals semantics
+      - name: Verify or apply Boolean Keep Originals semantics
         id: patch
         continue-on-error: true
-        run: |
-          python3 .github/scripts/apply-manual26100-boolean-keep.py
-          python3 .github/scripts/repair-manual26100-boolean-generated.py
+        run: python3 .github/scripts/apply-manual26100-boolean-keep-fixed.py
 
       - uses: actions/setup-java@v5
         if: steps.patch.outcome == 'success'
