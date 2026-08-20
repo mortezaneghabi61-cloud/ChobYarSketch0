@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Keep this patch idempotent so CI can safely re-apply the production contract.
 path = Path('app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java')
 src = path.read_text(encoding='utf-8')
 old = '''                default:\n                    String result = super.executeCommand(normalized);\n                    syncFromBaseIfNeeded();\n                    return result;\n'''
