@@ -36,7 +36,7 @@ public class Project3DSelectedBodyInstrumentationTest {
     }
 
     @Test
-    public void noSelectionKeepsAllBodiesBehavior(){
+    public void noSelectionProjectsNothingAndRequestsBodySelection(){
         ProbeCanvas c=create();
         c.selectedBodyPresent=false;
         c.allHandles.addAll(Arrays.asList(11L,22L));
@@ -44,9 +44,9 @@ public class Project3DSelectedBodyInstrumentationTest {
         c.descriptors.put(22L,line(100,0,115,0));
 
         String result=runProject(c);
-        assertEquals(Arrays.asList(11L,22L),c.requested);
-        assertTrue(result,result.contains("Line 2"));
-        android.util.Log.i("Manual26100Project3D","PROJECT3D_ALL_RESULT requested=2 lines=2 fallback=true");
+        assertTrue(c.requested.isEmpty());
+        assertTrue(result,result.contains("انتخاب"));
+        android.util.Log.i("Manual26100Project3D","PROJECT3D_NO_SELECTION_RESULT requested=0 guarded=true");
     }
 
     @Test

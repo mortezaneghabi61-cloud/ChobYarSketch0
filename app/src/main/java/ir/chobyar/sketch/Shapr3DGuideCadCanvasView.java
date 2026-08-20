@@ -121,12 +121,12 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         return super.executeCommand(raw);
     }
 
-    /** Manual 26.100 Project: selected exact Body when present, otherwise all exact Bodies. */
+    /** Manual 26.100 Project: only the explicitly selected exact Body is projected. */
     public String projectExactBodyEdges(){
         List<Long> handles=projectSourceHandles();
         if(handles.isEmpty())return hasSelectedSolidBody()
                 ?"Project 3D • Body انتخاب‌شده Shape دقیق OCCT ندارد"
-                :"Project 3D • Shape دقیق OCCT آماده نیست";
+                :"Project 3D • اول یک Body را انتخاب کن";
         List<double[]> batches=new ArrayList<>();
         for(long handle:handles){
             double[] d=exactProjectDescriptors(handle);
@@ -138,12 +138,9 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     protected List<Long> projectSourceHandles(){
         List<Long> out=new ArrayList<>();
-        if(hasSelectedSolidBody()){
-            long selected=selectedExactNativeHandle();
-            if(selected!=0L)out.add(selected);
-            return out;
-        }
-        out.addAll(exactNativeHandlesSnapshot());
+        if(!hasSelectedSolidBody())return out;
+        long selected=selectedExactNativeHandle();
+        if(selected!=0L)out.add(selected);
         return out;
     }
 
