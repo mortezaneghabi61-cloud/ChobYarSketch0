@@ -803,6 +803,17 @@ public class CadCanvasView extends View {
         scaleDetector.onTouchEvent(event);
     }
 
+    /** Adds exact projected/reference sketch geometry without exposing private entity classes. */
+    protected final Entity coreAddConstructionLine(float x1,float y1,float x2,float y2) {
+        Entity e=new LineEntity(x1,y1,x2,y2);e.setConstruction(true);addPrepared(e);return e;
+    }
+    protected final Entity coreAddConstructionCircle(float cx,float cy,float radius) {
+        Entity e=new CircleEntity(cx,cy,Math.abs(radius));e.setConstruction(true);addPrepared(e);return e;
+    }
+    protected final Entity coreAddConstructionArc(float cx,float cy,float radius,float startDeg,float sweepDeg) {
+        Entity e=new ArcEntity(cx,cy,Math.abs(radius),startDeg,sweepDeg);e.setConstruction(true);addPrepared(e);return e;
+    }
+
     public String executeCommand(String raw){
         if(raw==null)return"";
         String s=raw.trim();if(s.isEmpty())return"";
