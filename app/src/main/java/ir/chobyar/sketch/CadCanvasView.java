@@ -814,6 +814,26 @@ public class CadCanvasView extends View {
         Entity e=new ArcEntity(cx,cy,Math.abs(radius),startDeg,sweepDeg);e.setConstruction(true);addPrepared(e);return e;
     }
 
+    /** Stable metadata for associative external/reference geometry. */
+    protected final void coreSetReferenceTag(Entity e,String tag){if(e!=null)e.setReferenceTag(tag);}
+    protected final boolean coreHasReferenceTag(String tag){
+        if(tag==null||tag.isEmpty())return false;
+        for(Entity e:entities)if(tag.equals(e.getReferenceTag()))return true;
+        return false;
+    }
+    protected final int coreCountReferenceTag(String tag){
+        if(tag==null||tag.isEmpty())return 0;int n=0;
+        for(Entity e:entities)if(tag.equals(e.getReferenceTag()))n++;
+        return n;
+    }
+    protected final int coreRemoveReferenceTag(String tag){
+        if(tag==null||tag.isEmpty())return 0;int n=0;
+        for(int i=entities.size()-1;i>=0;i--){
+            Entity e=entities.get(i);if(tag.equals(e.getReferenceTag())){if(selected==e)selected=null;entities.remove(i);n++;}
+        }
+        return n;
+    }
+
     public String executeCommand(String raw){
         if(raw==null)return"";
         String s=raw.trim();if(s.isEmpty())return"";
@@ -909,6 +929,8 @@ public class CadCanvasView extends View {
         boolean canExtrude();
         void setExtrusion(float h);
         float getExtrusion();
+        String getReferenceTag();
+        void setReferenceTag(String tag);
     }
 
     private abstract static class BaseEntity implements Entity{
@@ -916,6 +938,7 @@ public class CadCanvasView extends View {
         int color=Color.rgb(25,25,25);
         float extrusion=0f;
         boolean construction=false;
+        String referenceTag="";
         public String getLayer(){return layer;}
         public void setLayer(String l){layer=l==null?"0":l;}
         public int getColor(){return color;}
@@ -925,7 +948,9 @@ public class CadCanvasView extends View {
         public boolean canExtrude(){return false;}
         public void setExtrusion(float h){extrusion=h;}
         public float getExtrusion(){return extrusion;}
-        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;}
+        public String getReferenceTag(){return referenceTag;}
+        public void setReferenceTag(String tag){referenceTag=tag==null?"":tag;}
+        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;e.referenceTag=referenceTag;}
     }
 
     private static class PointEntity extends BaseEntity{
