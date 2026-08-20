@@ -41,7 +41,7 @@ jobs:
           fi
 
       - name: Validate Sketch core refactor
-        if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
+        if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820' || github.head_ref == 'refactor/sketch-core-type-safe-20260820'
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -107,8 +107,8 @@ jobs:
       - name: Restore development signing key
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
-      - name: Build emulator-compatible debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Build emulator-compatible app and instrumentation APKs
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
       - name: Upload installable test APK
         uses: actions/upload-artifact@v4
@@ -124,7 +124,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run ChobYar UI smoke test
+      - name: Run ChobYar UI and real pinch smoke tests
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -141,6 +141,10 @@ jobs:
             adb shell am force-stop com.google.android.apps.nexuslauncher || true
             adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
             python3 .github/scripts/emulator_smoke.py
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w \
+              -e class ir.chobyar.sketch.PinchZoomInstrumentationTest \
+              ir.chobyar.sketch.test/android.test.InstrumentationTestRunner
 
       - name: Upload smoke-test evidence
         if: always()
