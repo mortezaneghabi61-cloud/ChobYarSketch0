@@ -1,0 +1,36 @@
+name: Apply Smart Selection Contract
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/sketch-core-type-safe-20260820
+    paths:
+      - '.github/scripts/fix_smart_command_selection.py'
+      - '.github/workflows/apply-smart-selection-fix.yml'
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/sketch-core-type-safe-20260820
+          fetch-depth: 0
+
+      - name: Apply command selection fix
+        run: python3 .github/scripts/fix_smart_command_selection.py
+
+      - name: Commit production fix when needed
+        run: |
+          git config user.name "chobyar-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java
+          if ! git diff --cached --quiet; then
+            git commit -m "Keep command-created entity selected [skip ci]"
+            git push origin HEAD:refactor/sketch-core-type-safe-20260820
+          fi
