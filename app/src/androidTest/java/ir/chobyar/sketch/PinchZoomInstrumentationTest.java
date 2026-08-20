@@ -1,63 +1,71 @@
 package ir.chobyar.sketch;
 
 import android.os.SystemClock;
-import android.test.ActivityInstrumentationTestCase2;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.test.core.app.ActivityScenario;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 /**
  * Regression coverage for the production two-finger ScaleGestureDetector path.
  * This is test-only code and does not add or change any user-facing UI.
  */
-@SuppressWarnings("deprecation")
-public final class PinchZoomInstrumentationTest
-        extends ActivityInstrumentationTestCase2<ChobYarActivity> {
+@RunWith(AndroidJUnit4.class)
+public final class PinchZoomInstrumentationTest {
 
-    public PinchZoomInstrumentationTest() {
-        super(ChobYarActivity.class);
-    }
+    @Test
+    public void realTwoFingerPinchChangesViewportScale() {
+        try (ActivityScenario<ChobYarActivity> scenario = ActivityScenario.launch(ChobYarActivity.class)) {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 
-    public void testRealTwoFingerPinchChangesViewportScale() throws Throwable {
-        final ChobYarActivity activity = getActivity();
-        getInstrumentation().waitForIdleSync();
+            final float[] scales = new float[2];
+            scenario.onActivity(activity -> {
+                final CadCanvasView canvas = findCanvas(activity.getWindow().getDecorView());
+                assertNotNull("Production CAD canvas was not found", canvas);
+                assertTrue("CAD canvas was not laid out",
+                        canvas.getWidth() > 200 && canvas.getHeight() > 200);
 
-        final CadCanvasView canvas = findCanvas(activity.getWindow().getDecorView());
-        assertNotNull("Production CAD canvas was not found", canvas);
-        assertTrue("CAD canvas was not laid out", canvas.getWidth() > 200 && canvas.getHeight() > 200);
+                scales[0] = canvas.viewScale;
 
-        final float[] scales = new float[2];
-        runTestOnUiThread(() -> {
-            scales[0] = canvas.viewScale;
+                final float cx = canvas.getWidth() * 0.55f;
+                final float cy = canvas.getHeight() * 0.50f;
+                final long down = SystemClock.uptimeMillis();
 
-            final float cx = canvas.getWidth() * 0.55f;
-            final float cy = canvas.getHeight() * 0.50f;
-            final long down = SystemClock.uptimeMillis();
+                dispatch(canvas, one(down, down, MotionEvent.ACTION_DOWN, cx - 60f, cy));
+                dispatch(canvas, two(down, down + 16,
+                        MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                        cx - 60f, cy, cx + 60f, cy));
+                dispatch(canvas, two(down, down + 32, MotionEvent.ACTION_MOVE,
+                        cx - 75f, cy, cx + 75f, cy));
+                dispatch(canvas, two(down, down + 48, MotionEvent.ACTION_MOVE,
+                        cx - 105f, cy, cx + 105f, cy));
+                dispatch(canvas, two(down, down + 64, MotionEvent.ACTION_MOVE,
+                        cx - 135f, cy, cx + 135f, cy));
+                dispatch(canvas, two(down, down + 80,
+                        MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                        cx - 135f, cy, cx + 135f, cy));
+                dispatch(canvas, one(down, down + 96, MotionEvent.ACTION_UP, cx - 135f, cy));
 
-            dispatch(canvas, one(down, down, MotionEvent.ACTION_DOWN, cx - 60f, cy));
-            dispatch(canvas, two(down, down + 16,
-                    MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                    cx - 60f, cy, cx + 60f, cy));
-            dispatch(canvas, two(down, down + 32, MotionEvent.ACTION_MOVE,
-                    cx - 75f, cy, cx + 75f, cy));
-            dispatch(canvas, two(down, down + 48, MotionEvent.ACTION_MOVE,
-                    cx - 105f, cy, cx + 105f, cy));
-            dispatch(canvas, two(down, down + 64, MotionEvent.ACTION_MOVE,
-                    cx - 135f, cy, cx + 135f, cy));
-            dispatch(canvas, two(down, down + 80,
-                    MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                    cx - 135f, cy, cx + 135f, cy));
-            dispatch(canvas, one(down, down + 96, MotionEvent.ACTION_UP, cx - 135f, cy));
+                scales[1] = canvas.viewScale;
+            });
 
-            scales[1] = canvas.viewScale;
-        });
-        getInstrumentation().waitForIdleSync();
-
-        assertTrue(
-                "Real pinch gesture did not zoom viewport: before=" + scales[0] + " after=" + scales[1],
-                scales[1] > scales[0] * 1.05f
-        );
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            assertTrue(
+                    "Real pinch gesture did not zoom viewport: before=" + scales[0]
+                            + " after=" + scales[1],
+                    scales[1] > scales[0] * 1.05f
+            );
+        }
     }
 
     private static CadCanvasView findCanvas(View view) {
