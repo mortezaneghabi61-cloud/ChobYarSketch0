@@ -34,7 +34,7 @@ jobs:
           python3 .github/scripts/refactor_sketch_core.py
           git config user.name "chobyar-ci"
           git config user.email "actions@users.noreply.github.com"
-          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java
+          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ShaprStyleCadCanvasView.java
           if ! git diff --cached --quiet; then
             git commit -m "Use collision-safe Sketch core API [skip ci]"
             git push origin HEAD:refactor/sketch-core-type-safe-20260820
@@ -49,6 +49,7 @@ jobs:
           cad = (root/'CadCanvasView.java').read_text(encoding='utf-8')
           smart = (root/'SmartCadCanvasView.java').read_text(encoding='utf-8')
           chob = (root/'ChobYarShaprCanvasView.java').read_text(encoding='utf-8')
+          shapr = (root/'ShaprStyleCadCanvasView.java').read_text(encoding='utf-8')
           required = [
               'protected final List<Entity> entities',
               'protected Entity selected',
@@ -60,6 +61,7 @@ jobs:
               'protected final boolean coreIsVisible',
               'protected final float coreScreenToWorldX',
               'protected final float coreScreenToWorldY',
+              'protected final void coreObserveScaleGesture',
           ]
           for token in required:
               if token not in cad:
@@ -84,6 +86,8 @@ jobs:
               raise SystemExit('ChobYarShaprCanvasView is not using Smart selection contract')
           if 'coreSaveUndo();' not in smart or 'coreSaveUndo();' not in chob:
               raise SystemExit('Undo is not routed through the Sketch core contract')
+          if shapr.count('coreObserveScaleGesture(event);') < 2:
+              raise SystemExit('Dimension label does not seed/maintain the production scale detector')
           print('Collision-safe Sketch core source contract validated')
           PY
 
