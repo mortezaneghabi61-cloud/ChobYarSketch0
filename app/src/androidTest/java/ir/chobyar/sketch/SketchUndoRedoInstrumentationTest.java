@@ -70,6 +70,7 @@ public final class SketchUndoRedoInstrumentationTest {
                 assertEquals("Redo must restore exactly one rectangle", 1, counts[2]);
                 assertNull("Snapshot restore must keep selection state safe", canvas.selected);
                 assertTrue("Undo must remain available after Redo", canvas.canUndoSketch());
+                assertFalse("Redo stack must be empty after Redo", canvas.canRedoSketch());
 
                 // Start a drawing tool before navigation so two-finger Pan must
                 // cancel any in-flight drawing without mutating the restored model.
