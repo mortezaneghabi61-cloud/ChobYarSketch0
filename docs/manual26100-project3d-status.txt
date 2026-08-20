@@ -1,8 +1,8 @@
-source_sha=b7c54469580bc97c17e495d442c6e7358ea36f2d
-workflow_run=32392897903
+source_sha=0fda5f21e82bb3726f30f040710d7b2670755ffc
+workflow_run=32394605481
 patch=success
 occt=success
-build=failure
+build=skipped
 native_symbol=skipped
 emulator_contracts=skipped
 verified=false
