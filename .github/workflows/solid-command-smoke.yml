@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   solid-commands:
-    name: Extrude Revolve Boolean History on API 35
+    name: Extrude Revolve Boolean Fillet Chamfer History on API 35
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       CHOBYAR_VERSION_CODE: 31${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.3.solid.${{ github.run_number }}
@@ -44,6 +44,9 @@ jobs:
           payload = '\n'.join(line[len(prefix):] if line.startswith(prefix) else line for line in payload.splitlines())
           exec(compile(payload, 'boolean-command-payload', 'exec'))
           PY
+
+      - name: Prepare direct Fillet Chamfer commands and exact contracts
+        run: python3 .github/scripts/apply-direct-finish-contract.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -74,7 +77,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run production 3D and Boolean command contracts
+      - name: Run production 3D command contracts
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -107,20 +110,30 @@ jobs:
             grep -q '^BOOLEAN_SUBTRACT_RESULT bodyCount=1 extents=20x50x100 history=true faces=' test-artifacts/boolean-command-result.txt
             grep -q '^BOOLEAN_INTERSECT_RESULT bodyCount=1 extents=20x50x100 history=true faces=' test-artifacts/boolean-command-result.txt
 
-      - name: Commit verified Boolean implementation to feature branch
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.DirectFinishInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/direct-finish-instrumentation.txt
+            grep -q 'OK (2 tests)' test-artifacts/direct-finish-instrumentation.txt
+            adb logcat -d -v brief | grep 'DirectFinishContract.*3D_RESULT' | sed -E 's/^.*(FILLET3D_RESULT|CHAMFER3D_RESULT)/\1/' | tee test-artifacts/direct-finish-result.txt
+            test $(grep -c '3D_RESULT' test-artifacts/direct-finish-result.txt) -eq 2
+            grep -q '^FILLET3D_RESULT bodyCount=1 extents=20x80x100 radius=10 volume=' test-artifacts/direct-finish-result.txt
+            grep -q '^CHAMFER3D_RESULT bodyCount=1 extents=20x80x100 distance=10 volume=' test-artifacts/direct-finish-result.txt
+
+      - name: Commit verified 3D command implementations to feature branch
         if: github.event_name == 'push'
         shell: bash
         run: |
-          PROD=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
-          TEST=app/src/androidTest/java/ir/chobyar/sketch/BooleanCommandInstrumentationTest.java
-          if git diff --quiet -- "$PROD" "$TEST"; then
-            echo "Verified Boolean implementation already committed."
+          BOOL_PROD=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
+          BOOL_TEST=app/src/androidTest/java/ir/chobyar/sketch/BooleanCommandInstrumentationTest.java
+          FINISH_PROD=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
+          FINISH_TEST=app/src/androidTest/java/ir/chobyar/sketch/DirectFinishInstrumentationTest.java
+          if git diff --quiet -- "$BOOL_PROD" "$BOOL_TEST" "$FINISH_PROD" "$FINISH_TEST"; then
+            echo "Verified 3D command implementations already committed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "$PROD" "$TEST"
-          git commit -m "Add direct history-aware Boolean commands"
+          git add -- "$BOOL_PROD" "$BOOL_TEST" "$FINISH_PROD" "$FINISH_TEST"
+          git commit -m "Add verified direct 3D Fillet and Chamfer commands [skip ci]"
           git fetch origin refactor/sketch-core-type-safe-20260820
           git rebase origin/refactor/sketch-core-type-safe-20260820
           git push origin HEAD:refactor/sketch-core-type-safe-20260820
