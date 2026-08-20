@@ -7,6 +7,11 @@ on:
       - refactor/sketch-core-type-safe-20260820
     paths:
       - .github/workflows/manual26100-consolidated-regression.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/manual26100-consolidated-regression.yml
 
 permissions:
   contents: read
