@@ -437,6 +437,13 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         coincidenceLinks.add(new CoincidentLink(new EndpointRef(a, ai), new EndpointRef(b, bi)));
     }
 
+    /** Register a persistent endpoint coincidence for manual and automatic sketch tools. */
+    protected final void registerPersistentCoincident(Object a, int ai, Object b, int bi) {
+        if (!isLine(a) || !isLine(b)) return;
+        addCoincident(a, ai, b, bi);
+        enforceConstraints();
+    }
+
     private void enforceConstraints() {
         pruneConstraintState();
         for (AxisLock lock : axisLocks.values()) lock.enforce();
