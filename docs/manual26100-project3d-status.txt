@@ -1,9 +1,9 @@
-source_sha=2053c59fe0bb5fa8b0339b8e4847e172e33ed60d
-workflow_run=32394654374
+source_sha=926819e0f792683a3093ee7695e5e73bafa6996e
+workflow_run=32395039996
 patch=success
 occt=success
-build=failure
-native_symbol=skipped
-emulator_contracts=skipped
+build=success
+native_symbol=success
+emulator_contracts=cancelled
 verified=false
 runtime_note=arm64_OCCT_compiled_and_symbol_checked; descriptor_mapper_executed_on_x86_64; full_OCCT_runtime_requires_arm64_device_or_runner
