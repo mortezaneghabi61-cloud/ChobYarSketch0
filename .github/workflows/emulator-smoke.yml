@@ -28,17 +28,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply and persist Sketch core refactor
+      - name: Validate Sketch core refactor
         if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
         run: |
-          python3 .github/scripts/refactor_sketch_core.py
-          if ! git diff --quiet -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java; then
-            git config user.name "chobyar-ci"
-            git config user.email "actions@users.noreply.github.com"
-            git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java
-            git commit -m "Refactor Sketch core access [skip ci]"
-            git push origin HEAD:refactor/sketch-core-type-safe-20260820
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('app/src/main/java/ir/chobyar/sketch')
+          cad = (root/'CadCanvasView.java').read_text(encoding='utf-8')
+          smart = (root/'SmartCadCanvasView.java').read_text(encoding='utf-8')
+          chob = (root/'ChobYarShaprCanvasView.java').read_text(encoding='utf-8')
+          required = [
+              'protected final List<Entity> entities',
+              'protected Entity selected',
+              'protected float viewScale',
+              'protected float offsetX',
+              'protected float offsetY',
+              'protected void saveUndo()',
+              'protected Entity findHit',
+          ]
+          for token in required:
+              if token not in cad:
+                  raise SystemExit(f'Missing Sketch core contract: {token}')
+          for name, src in [('SmartCadCanvasView', smart), ('ChobYarShaprCanvasView', chob)]:
+              for token in ('java.lang.reflect.Field', 'java.lang.reflect.Method', 'getDeclaredField', 'getDeclaredMethod'):
+                  if token in src:
+                      raise SystemExit(f'{name} still uses reflection token: {token}')
+          if 'smartSelectionSnapshot()' not in chob:
+              raise SystemExit('ChobYarShaprCanvasView is not using Smart selection contract')
+          print('Sketch core source contract validated')
+          PY
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
