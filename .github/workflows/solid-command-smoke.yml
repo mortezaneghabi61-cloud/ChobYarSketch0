@@ -118,7 +118,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p test-artifacts
             : > test-artifacts/production-cad-summary.txt
             adb shell am force-stop com.google.android.apps.nexuslauncher || true
