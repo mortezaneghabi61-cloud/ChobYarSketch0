@@ -32,6 +32,9 @@ jobs:
       - name: Prepare Loft command and exact contract
         run: python3 .github/scripts/apply-loft-contract.py
 
+      - name: Preserve Loft profile vertices and align correspondence
+        run: python3 .github/scripts/fix-loft-profile-correspondence.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -80,7 +83,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.LoftCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/loft-instrumentation.txt
             grep -q 'OK (1 test)' test-artifacts/loft-instrumentation.txt
             adb logcat -d -v brief | grep 'LoftCommandContract.*LOFT3D_RESULT' | sed -E 's/^.*LOFT3D_RESULT /LOFT3D_RESULT /' | tee test-artifacts/loft-result.txt
-            grep -q '^LOFT3D_RESULT bodyCount=1 lower=20x10 upper=40x20 spacing=60 extents=20x40x60 volume=28000.00 expected=28000.00 persistent=true faces=66' test-artifacts/loft-result.txt
+            grep -q '^LOFT3D_RESULT bodyCount=1 lower=20x10 upper=40x20 spacing=60 extents=20x40x60 volume=28000.00 expected=28000.00 persistent=true faces=6' test-artifacts/loft-result.txt
 
       - name: Commit verified Loft implementation to feature branch
         if: github.event_name == 'push'
@@ -88,15 +91,16 @@ jobs:
         run: |
           SPATIAL=app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           ADVANCED=app/src/main/java/ir/chobyar/sketch/AdvancedParametricSolidCadCanvasView.java
+          SOLID=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
           TEST=app/src/androidTest/java/ir/chobyar/sketch/LoftCommandInstrumentationTest.java
-          if git diff --quiet -- "$SPATIAL" "$ADVANCED" "$TEST"; then
+          if git diff --quiet -- "$SPATIAL" "$ADVANCED" "$SOLID" "$TEST"; then
             echo "Verified Loft implementation already committed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "$SPATIAL" "$ADVANCED" "$TEST"
-          git commit -m "Add verified direct Loft command [skip ci]"
+          git add -- "$SPATIAL" "$ADVANCED" "$SOLID" "$TEST"
+          git commit -m "Add verified vertex-preserving Loft command [skip ci]"
           git fetch origin refactor/sketch-core-type-safe-20260820
           git rebase origin/refactor/sketch-core-type-safe-20260820
           git push origin HEAD:refactor/sketch-core-type-safe-20260820
