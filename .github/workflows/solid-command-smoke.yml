@@ -1,7 +1,7 @@
-name: Production 3D Command Test
+name: Production 3D Regression
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   workflow_dispatch:
@@ -11,17 +11,17 @@ on:
       - refactor/sketch-core-type-safe-20260820
 
 concurrency:
-  group: chobyar-solid-commands-${{ github.ref }}
+  group: chobyar-production-3d-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  solid-commands:
-    name: Extrude Revolve Boolean Fillet Chamfer Shell PushPull History on API 35
+  production-3d:
+    name: 11 production 3D contracts on API 35
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 55
     env:
-      CHOBYAR_VERSION_CODE: 31${{ github.run_number }}
-      CHOBYAR_VERSION_NAME: 0.3.solid.${{ github.run_number }}
+      CHOBYAR_VERSION_CODE: 35${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.3.3dreg.${{ github.run_number }}
 
     steps:
       - name: Checkout
@@ -29,30 +29,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare direct Boolean implementation and exact contract
+      - name: Validate production commands are persisted
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          workflow = Path('.github/workflows/boolean-command-smoke.yml').read_text(encoding='utf-8')
-          start = "          python3 - <<'PY'\n"
-          end = "\n          PY\n"
-          if start not in workflow:
-              raise SystemExit('Boolean patch payload not found')
-          payload = workflow.split(start, 1)[1].split(end, 1)[0]
-          prefix = '          '
-          payload = '\n'.join(line[len(prefix):] if line.startswith(prefix) else line for line in payload.splitlines())
-          exec(compile(payload, 'boolean-command-payload', 'exec'))
-          PY
-
-      - name: Prepare direct Fillet Chamfer commands and exact contracts
-        run: python3 .github/scripts/apply-direct-finish-contract.py
-
-      - name: Prepare Shell PushPull commands and exact contracts
-        run: python3 .github/scripts/apply-shell-pushpull-contract.py
+          set -euo pipefail
+          BOOL=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
+          DIRECT=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
+          ADVANCED=app/src/main/java/ir/chobyar/sketch/AdvancedParametricSolidCadCanvasView.java
+          SPATIAL=app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
+          KERNEL=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
+          grep -q 'applyHistoryBooleanByIndex' "$BOOL"
+          grep -q 'FILLET3D' "$DIRECT"
+          grep -q 'CHAMFER3D' "$DIRECT"
+          grep -q 'SHELL3D' "$DIRECT"
+          grep -q 'PUSHPULL3D' "$DIRECT"
+          grep -q 'SWEEP3D' "$ADVANCED"
+          grep -q 'LOFT3D' "$ADVANCED"
+          grep -q 'createOffsetSketchSpace' "$SPATIAL"
+          grep -q 'resampleClosedPreservingVertices' "$KERNEL"
+          test -f app/src/androidTest/java/ir/chobyar/sketch/SolidCommandInstrumentationTest.java
+          test -f app/src/androidTest/java/ir/chobyar/sketch/BooleanCommandInstrumentationTest.java
+          test -f app/src/androidTest/java/ir/chobyar/sketch/DirectFinishInstrumentationTest.java
+          test -f app/src/androidTest/java/ir/chobyar/sketch/ShellPushPullInstrumentationTest.java
+          test -f app/src/androidTest/java/ir/chobyar/sketch/SweepCommandInstrumentationTest.java
+          test -f app/src/androidTest/java/ir/chobyar/sketch/LoftCommandInstrumentationTest.java
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -80,7 +83,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run production 3D command contracts
+      - name: Run all production 3D contracts
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -90,6 +93,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
+            set -euo pipefail
             mkdir -p test-artifacts
             adb shell am force-stop com.google.android.apps.nexuslauncher || true
             adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
@@ -100,61 +104,54 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.SolidCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/solid-command-instrumentation.txt
             grep -q 'OK (2 tests)' test-artifacts/solid-command-instrumentation.txt
             adb logcat -d -v brief | grep 'SolidCommandContract.*_RESULT' | sed -E 's/^.*(EXTRUDE_RESULT|REVOLVE_RESULT)/\1/' | tee test-artifacts/solid-command-result.txt
-            test $(grep -c '_RESULT' test-artifacts/solid-command-result.txt) -eq 2
-            grep -q '^EXTRUDE_RESULT bodyCount=1 extents=30x80x120 history=true undo=true redo=true faces=' test-artifacts/solid-command-result.txt
-            grep -q '^REVOLVE_RESULT bodyCount=1 angle=360 persistent=true faces=' test-artifacts/solid-command-result.txt
+            test "$(grep -c '_RESULT' test-artifacts/solid-command-result.txt)" -eq 2
+            grep -q '^EXTRUDE_RESULT bodyCount=1 extents=30x80x120 history=true undo=true redo=true faces=6$' test-artifacts/solid-command-result.txt
+            grep -q '^REVOLVE_RESULT bodyCount=1 angle=360 persistent=true faces=288 extents=150.00x70.00x150.00$' test-artifacts/solid-command-result.txt
 
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.BooleanCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/boolean-command-instrumentation.txt
             grep -q 'OK (3 tests)' test-artifacts/boolean-command-instrumentation.txt
             adb logcat -d -v brief | grep 'BooleanCommandContract.*_RESULT' | sed -E 's/^.*(BOOLEAN_UNION_RESULT|BOOLEAN_SUBTRACT_RESULT|BOOLEAN_INTERSECT_RESULT)/\1/' | tee test-artifacts/boolean-command-result.txt
-            test $(grep -c '_RESULT' test-artifacts/boolean-command-result.txt) -eq 3
-            grep -q '^BOOLEAN_UNION_RESULT bodyCount=1 extents=20x100x150 history=true undo=true redo=true faces=' test-artifacts/boolean-command-result.txt
-            grep -q '^BOOLEAN_SUBTRACT_RESULT bodyCount=1 extents=20x50x100 history=true faces=' test-artifacts/boolean-command-result.txt
-            grep -q '^BOOLEAN_INTERSECT_RESULT bodyCount=1 extents=20x50x100 history=true faces=' test-artifacts/boolean-command-result.txt
+            test "$(grep -c '_RESULT' test-artifacts/boolean-command-result.txt)" -eq 3
+            grep -q '^BOOLEAN_UNION_RESULT bodyCount=1 extents=20x100x150 history=true undo=true redo=true faces=10$' test-artifacts/boolean-command-result.txt
+            grep -q '^BOOLEAN_SUBTRACT_RESULT bodyCount=1 extents=20x50x100 history=true faces=6$' test-artifacts/boolean-command-result.txt
+            grep -q '^BOOLEAN_INTERSECT_RESULT bodyCount=1 extents=20x50x100 history=true faces=6$' test-artifacts/boolean-command-result.txt
 
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.DirectFinishInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/direct-finish-instrumentation.txt
             grep -q 'OK (2 tests)' test-artifacts/direct-finish-instrumentation.txt
             adb logcat -d -v brief | grep 'DirectFinishContract.*3D_RESULT' | sed -E 's/^.*(FILLET3D_RESULT|CHAMFER3D_RESULT)/\1/' | tee test-artifacts/direct-finish-result.txt
-            test $(grep -c '3D_RESULT' test-artifacts/direct-finish-result.txt) -eq 2
-            grep -q '^FILLET3D_RESULT bodyCount=1 extents=20x80x100 radius=10 volume=' test-artifacts/direct-finish-result.txt
-            grep -q '^CHAMFER3D_RESULT bodyCount=1 extents=20x80x100 distance=10 volume=' test-artifacts/direct-finish-result.txt
+            test "$(grep -c '3D_RESULT' test-artifacts/direct-finish-result.txt)" -eq 2
+            grep -q '^FILLET3D_RESULT bodyCount=1 extents=20x80x100 radius=10 volume=158265.26 expected=158283.19 persistent=true faces=54$' test-artifacts/direct-finish-result.txt
+            grep -q '^CHAMFER3D_RESULT bodyCount=1 extents=20x80x100 distance=10 volume=156000.00 expected=156000.00 persistent=true faces=10$' test-artifacts/direct-finish-result.txt
 
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.ShellPushPullInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/shell-pushpull-instrumentation.txt
             grep -q 'OK (2 tests)' test-artifacts/shell-pushpull-instrumentation.txt
             adb logcat -d -v brief | grep 'ShellPushPullContract.*3D_RESULT' | sed -E 's/^.*(SHELL3D_RESULT|PUSHPULL3D_RESULT)/\1/' | tee test-artifacts/shell-pushpull-result.txt
-            test $(grep -c '3D_RESULT' test-artifacts/shell-pushpull-result.txt) -eq 2
-            grep -q '^SHELL3D_RESULT bodyCount=1 extents=20x80x100 wall=5 volume=' test-artifacts/shell-pushpull-result.txt
-            grep -q '^PUSHPULL3D_RESULT bodyCount=1 face=TOP distance=10 extents=30x80x100 volume=' test-artifacts/shell-pushpull-result.txt
+            test "$(grep -c '3D_RESULT' test-artifacts/shell-pushpull-result.txt)" -eq 2
+            grep -q '^SHELL3D_RESULT bodyCount=1 extents=20x80x100 wall=5 volume=65500.00 expected=65500.00 persistent=true faces=22$' test-artifacts/shell-pushpull-result.txt
+            grep -q '^PUSHPULL3D_RESULT bodyCount=1 face=TOP distance=10 extents=30x80x100 volume=240000.00 expected=240000.00 persistent=true faces=6$' test-artifacts/shell-pushpull-result.txt
 
-      - name: Commit verified 3D command implementations to feature branch
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          BOOL_PROD=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
-          BOOL_TEST=app/src/androidTest/java/ir/chobyar/sketch/BooleanCommandInstrumentationTest.java
-          DIRECT_PROD=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
-          FINISH_TEST=app/src/androidTest/java/ir/chobyar/sketch/DirectFinishInstrumentationTest.java
-          SHELL_TEST=app/src/androidTest/java/ir/chobyar/sketch/ShellPushPullInstrumentationTest.java
-          if git diff --quiet -- "$BOOL_PROD" "$BOOL_TEST" "$DIRECT_PROD" "$FINISH_TEST" "$SHELL_TEST"; then
-            echo "Verified 3D command implementations already committed."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "$BOOL_PROD" "$BOOL_TEST" "$DIRECT_PROD" "$FINISH_TEST" "$SHELL_TEST"
-          git commit -m "Add verified Shell and Push Pull commands [skip ci]"
-          git fetch origin refactor/sketch-core-type-safe-20260820
-          git rebase origin/refactor/sketch-core-type-safe-20260820
-          git push origin HEAD:refactor/sketch-core-type-safe-20260820
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.SweepCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sweep-instrumentation.txt
+            grep -q 'OK (1 test)' test-artifacts/sweep-instrumentation.txt
+            adb logcat -d -v brief | grep 'SweepCommandContract.*SWEEP3D_RESULT' | sed -E 's/^.*SWEEP3D_RESULT /SWEEP3D_RESULT /' | tee test-artifacts/sweep-result.txt
+            grep -q '^SWEEP3D_RESULT bodyCount=1 profile=20x10 path=100 extents=10x20x100 volume=20000.00 expected=20000.00 persistent=true faces=6$' test-artifacts/sweep-result.txt
 
-      - name: Upload 3D command evidence
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.LoftCommandInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/loft-instrumentation.txt
+            grep -q 'OK (1 test)' test-artifacts/loft-instrumentation.txt
+            adb logcat -d -v brief | grep 'LoftCommandContract.*LOFT3D_RESULT' | sed -E 's/^.*LOFT3D_RESULT /LOFT3D_RESULT /' | tee test-artifacts/loft-result.txt
+            grep -q '^LOFT3D_RESULT bodyCount=1 lower=20x10 upper=40x20 spacing=60 extents=20x40x60 volume=28000.00 expected=28000.00 persistent=true faces=6$' test-artifacts/loft-result.txt
+
+            printf '%s\n' 'PRODUCTION_3D_REGRESSION OK tests=11' | tee test-artifacts/production-3d-summary.txt
+
+      - name: Upload production 3D evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ChobYar-3D-command-evidence
+          name: ChobYar-production-3D-evidence
           path: test-artifacts/**
           if-no-files-found: warn
           retention-days: 7
