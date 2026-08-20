@@ -29,7 +29,9 @@ jobs:
       - name: Apply Boolean Keep Originals semantics
         id: patch
         continue-on-error: true
-        run: python3 .github/scripts/apply-manual26100-boolean-keep.py
+        run: |
+          python3 .github/scripts/apply-manual26100-boolean-keep.py
+          python3 .github/scripts/repair-manual26100-boolean-generated.py
 
       - uses: actions/setup-java@v5
         if: steps.patch.outcome == 'success'
