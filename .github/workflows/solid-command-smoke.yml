@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   solid-commands:
-    name: Extrude Revolve Boolean Fillet Chamfer History on API 35
+    name: Extrude Revolve Boolean Fillet Chamfer Shell PushPull History on API 35
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       CHOBYAR_VERSION_CODE: 31${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.3.solid.${{ github.run_number }}
@@ -47,6 +47,9 @@ jobs:
 
       - name: Prepare direct Fillet Chamfer commands and exact contracts
         run: python3 .github/scripts/apply-direct-finish-contract.py
+
+      - name: Prepare Shell PushPull commands and exact contracts
+        run: python3 .github/scripts/apply-shell-pushpull-contract.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -118,22 +121,31 @@ jobs:
             grep -q '^FILLET3D_RESULT bodyCount=1 extents=20x80x100 radius=10 volume=' test-artifacts/direct-finish-result.txt
             grep -q '^CHAMFER3D_RESULT bodyCount=1 extents=20x80x100 distance=10 volume=' test-artifacts/direct-finish-result.txt
 
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.ShellPushPullInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/shell-pushpull-instrumentation.txt
+            grep -q 'OK (2 tests)' test-artifacts/shell-pushpull-instrumentation.txt
+            adb logcat -d -v brief | grep 'ShellPushPullContract.*3D_RESULT' | sed -E 's/^.*(SHELL3D_RESULT|PUSHPULL3D_RESULT)/\1/' | tee test-artifacts/shell-pushpull-result.txt
+            test $(grep -c '3D_RESULT' test-artifacts/shell-pushpull-result.txt) -eq 2
+            grep -q '^SHELL3D_RESULT bodyCount=1 extents=20x80x100 wall=5 volume=' test-artifacts/shell-pushpull-result.txt
+            grep -q '^PUSHPULL3D_RESULT bodyCount=1 face=TOP distance=10 extents=30x80x100 volume=' test-artifacts/shell-pushpull-result.txt
+
       - name: Commit verified 3D command implementations to feature branch
         if: github.event_name == 'push'
         shell: bash
         run: |
           BOOL_PROD=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
           BOOL_TEST=app/src/androidTest/java/ir/chobyar/sketch/BooleanCommandInstrumentationTest.java
-          FINISH_PROD=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
+          DIRECT_PROD=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
           FINISH_TEST=app/src/androidTest/java/ir/chobyar/sketch/DirectFinishInstrumentationTest.java
-          if git diff --quiet -- "$BOOL_PROD" "$BOOL_TEST" "$FINISH_PROD" "$FINISH_TEST"; then
+          SHELL_TEST=app/src/androidTest/java/ir/chobyar/sketch/ShellPushPullInstrumentationTest.java
+          if git diff --quiet -- "$BOOL_PROD" "$BOOL_TEST" "$DIRECT_PROD" "$FINISH_TEST" "$SHELL_TEST"; then
             echo "Verified 3D command implementations already committed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "$BOOL_PROD" "$BOOL_TEST" "$FINISH_PROD" "$FINISH_TEST"
-          git commit -m "Add verified direct 3D Fillet and Chamfer commands [skip ci]"
+          git add -- "$BOOL_PROD" "$BOOL_TEST" "$DIRECT_PROD" "$FINISH_TEST" "$SHELL_TEST"
+          git commit -m "Add verified Shell and Push Pull commands [skip ci]"
           git fetch origin refactor/sketch-core-type-safe-20260820
           git rebase origin/refactor/sketch-core-type-safe-20260820
           git push origin HEAD:refactor/sketch-core-type-safe-20260820
