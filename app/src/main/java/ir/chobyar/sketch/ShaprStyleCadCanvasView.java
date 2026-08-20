@@ -225,6 +225,16 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
+        // Navigation always wins once a second finger joins the gesture. A
+        // dimension-label press must never trap pinch/pan in this presentation
+        // layer; cancel the label gesture and hand multi-touch to the CAD core.
+        if (event.getPointerCount() >= 2) {
+            exactFieldPressed = false;
+            exactFieldDragging = false;
+            fieldGestureEntity = null;
+            return super.onTouchEvent(event);
+        }
+
         if (action == MotionEvent.ACTION_DOWN
                 && !exactFieldRect.isEmpty()
                 && exactFieldRect.contains(event.getX(), event.getY())) {
