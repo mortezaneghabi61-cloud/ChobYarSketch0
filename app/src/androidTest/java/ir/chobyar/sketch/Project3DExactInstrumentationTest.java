@@ -121,8 +121,12 @@ public final class Project3DExactInstrumentationTest {
         catch(Exception e){throw new AssertionError("Cannot inspect Sketch entities",e);}
     }
     private static boolean isConstruction(Object e){
-        try{Method m=e.getClass().getMethod("isConstruction");return Boolean.TRUE.equals(m.invoke(e));}
-        catch(Exception ex){try{Method m=e.getClass().getDeclaredMethod("isConstruction");m.setAccessible(true);return Boolean.TRUE.equals(m.invoke(e));}catch(Exception x){throw new AssertionError(x);}}
+        for(Class<?> k=e.getClass();k!=null;k=k.getSuperclass()){
+            try{Method m=k.getDeclaredMethod("isConstruction");m.setAccessible(true);return Boolean.TRUE.equals(m.invoke(e));}
+            catch(NoSuchMethodException ignored){}
+            catch(Exception x){throw new AssertionError("Cannot inspect Construction state",x);}
+        }
+        throw new AssertionError("isConstruction method not found");
     }
     private static float f(Object o,String name){try{Field f=o.getClass().getDeclaredField(name);f.setAccessible(true);return f.getFloat(o);}catch(Exception e){throw new AssertionError(e);}}
     private static float length(Object line){float x1=f(line,"x1"),y1=f(line,"y1"),x2=f(line,"x2"),y2=f(line,"y2");return(float)Math.hypot(x2-x1,y2-y1);}
