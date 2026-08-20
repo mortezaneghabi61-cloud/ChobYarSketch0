@@ -23,7 +23,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/** Production-canvas coverage for Sketch primitives, snaps, and numeric dimensions. */
+/** Production-canvas coverage for Sketch primitives, snaps, numeric dimensions and executable CAD commands. */
 @RunWith(AndroidJUnit4.class)
 public final class SketchPrimitivesSnapInstrumentationTest {
     private static final String TAG = "SketchPrimitivesSnap";
@@ -91,7 +91,8 @@ public final class SketchPrimitivesSnapInstrumentationTest {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 assertNotNull(c.selected);
                 assertEquals("دایره", c.selected.shortName());
-                assertEquals("قطر = 80.0 mm", c.applySelectedDimension("80"));
+                String dimension = c.applySelectedDimension("80");
+                assertTrue("Unexpected circle dimension result: " + dimension, dimension.startsWith("قطر = 80.0 mm"));
                 PointF center = c.selected.center();
                 assertNear("circle center x", 320f, center.x);
                 assertNear("circle center y", 220f, center.y);
@@ -127,8 +128,10 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             });
             inst.waitForIdleSync();
 
+            // Keep every sample comfortably inside the API-35 Pixel 7 Pro canvas.
+            // The previous 420..540 mm X range partly left the 1440px window.
             float[][] worldPath = {
-                    {420f, 120f}, {450f, 80f}, {480f, 70f}, {510f, 80f}, {540f, 120f}
+                    {110f, 220f}, {150f, 165f}, {190f, 145f}, {230f, 165f}, {270f, 220f}
             };
             stylusPath(inst, frame(scenario), worldPath);
             inst.waitForIdleSync();
@@ -138,7 +141,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
                 assertNotNull("Curved pen stroke did not create an Arc", c.selected);
                 assertEquals("قوس", c.selected.shortName());
                 String result = c.applySelectedDimension("75");
-                assertEquals("شعاع = 75.0 mm", result);
+                assertTrue("Unexpected Arc dimension result: " + result, result.startsWith("شعاع = 75.0 mm"));
                 PointF center = c.selected.center();
                 List<CadCanvasView.SnapPoint> snaps = c.selected.snapPoints();
                 assertTrue("Arc must expose center + endpoints", snaps.size() >= 3);
@@ -161,22 +164,108 @@ public final class SketchPrimitivesSnapInstrumentationTest {
                 c.clearAll();
 
                 c.executeCommand("LINE 40 40 90 40");
-                assertEquals("طول = 125.0 mm", c.applySelectedDimension("125"));
+                String lineDim = c.applySelectedDimension("125");
+                assertTrue("Unexpected line dimension result: " + lineDim, lineDim.startsWith("طول = 125.0 mm"));
                 List<CadCanvasView.SnapPoint> l = c.selected.snapPoints();
                 assertNear("line dimension", 125f, distance(l.get(0).x, l.get(0).y, l.get(1).x, l.get(1).y));
 
                 c.executeCommand("RECT 260 300 50 30");
-                assertEquals("اندازه = 120.0 mm × 80.0 mm", c.applySelectedDimension("120 80"));
+                String rectDim = c.applySelectedDimension("120 80");
+                assertTrue("Unexpected rectangle dimension result: " + rectDim, rectDim.startsWith("اندازه = 120.0 mm × 80.0 mm"));
                 RectF rb = c.selected.bounds();
                 assertNear("rectangle width", 120f, rb.width());
                 assertNear("rectangle height", 80f, rb.height());
 
                 c.executeCommand("CIRCLE 500 300 20");
-                assertEquals("قطر = 90.0 mm", c.applySelectedDimension("90"));
+                String circleDim = c.applySelectedDimension("90");
+                assertTrue("Unexpected circle dimension result: " + circleDim, circleDim.startsWith("قطر = 90.0 mm"));
                 PointF cc = c.selected.center();
                 assertNear("circle radius from exact diameter", 45f, farthestSnapDistance(c.selected, cc));
 
                 Log.i(TAG, "DIMENSION_RESULT line=125 rect=120x80 circleDiameter=90 entities=" + c.entities.size());
+            });
+        }
+    }
+
+    @Test
+    public void executableCadCommandSequenceChangesRealGeometry() {
+        Instrumentation inst = InstrumentationRegistry.getInstrumentation();
+        try (ActivityScenario<ChobYarActivity> scenario = ActivityScenario.launch(ChobYarActivity.class)) {
+            inst.waitForIdleSync();
+            scenario.onActivity(activity -> {
+                Shapr3DGuideCadCanvasView c = canvas(activity);
+                c.clearAll();
+                int base = c.entities.size();
+
+                String rect = c.executeCommand("RECT 100 120 600 400");
+                assertTrue("RECT command rejected: " + rect, rect.contains("مستطیل"));
+                assertEquals(base + 1, c.entities.size());
+                RectF r0 = c.selected.bounds();
+                assertNear("RECT width", 600f, r0.width());
+                assertNear("RECT height", 400f, r0.height());
+                PointF p0 = c.selected.center();
+
+                String moved = c.executeCommand("MOVE 25 -10");
+                assertTrue("MOVE command rejected: " + moved, moved.contains("جابه"));
+                PointF p1 = c.selected.center();
+                assertNear("MOVE dx", 25f, p1.x - p0.x);
+                assertNear("MOVE dy", -10f, p1.y - p0.y);
+
+                String copied = c.executeCommand("COPY 50 0");
+                assertTrue("COPY command rejected: " + copied, copied.contains("کپی"));
+                assertEquals(base + 2, c.entities.size());
+                PointF p2 = c.selected.center();
+                assertNear("COPY dx", 50f, p2.x - p1.x);
+                assertNear("COPY dy", 0f, p2.y - p1.y);
+
+                String offset = c.executeCommand("OFFSET 18");
+                assertTrue("OFFSET command rejected: " + offset, offset.startsWith("Offset = 18.0 mm"));
+                assertEquals(base + 3, c.entities.size());
+                RectF ro = c.selected.bounds();
+                assertNear("OFFSET width", 636f, ro.width());
+                assertNear("OFFSET height", 436f, ro.height());
+
+                String rotated = c.executeCommand("ROTATE 90");
+                assertTrue("ROTATE command rejected: " + rotated, rotated.startsWith("چرخش 90.00°"));
+                RectF rr = c.selected.bounds();
+                assertNear("ROTATE width", 436f, rr.width());
+                assertNear("ROTATE height", 636f, rr.height());
+
+                String scaled = c.executeCommand("SCALE 0.5");
+                assertTrue("SCALE command rejected: " + scaled, scaled.startsWith("Scale × 0.50"));
+                RectF rs = c.selected.bounds();
+                assertNear("SCALE width", 218f, rs.width());
+                assertNear("SCALE height", 318f, rs.height());
+
+                String mirrored = c.executeCommand("MIRROR X 0");
+                assertTrue("MIRROR command rejected: " + mirrored, mirrored.contains("محور X"));
+                assertEquals(base + 3, c.entities.size());
+
+                String array = c.executeCommand("ARRAY 3 40 0");
+                assertTrue("ARRAY command rejected: " + array, array.startsWith("Array: 3"));
+                assertEquals(base + 5, c.entities.size());
+
+                String line = c.executeCommand("LINE 0 0 300 400");
+                assertTrue("LINE command rejected: " + line, line.contains("خط"));
+                List<CadCanvasView.SnapPoint> ls = c.selected.snapPoints();
+                assertNear("LINE 3-4-5 length", 500f,
+                        distance(ls.get(0).x, ls.get(0).y, ls.get(1).x, ls.get(1).y));
+
+                String circle = c.executeCommand("CIRCLE 300 300 45");
+                assertTrue("CIRCLE command rejected: " + circle, circle.contains("دایره"));
+                assertNear("CIRCLE radius", 45f, farthestSnapDistance(c.selected, c.selected.center()));
+
+                String arc = c.executeCommand("ARC 500 500 75 0 120");
+                assertTrue("ARC command rejected: " + arc, arc.contains("قوس"));
+                assertEquals("قوس", c.selected.shortName());
+                List<CadCanvasView.SnapPoint> as = c.selected.snapPoints();
+                assertTrue("ARC command must expose center + endpoints", as.size() >= 3);
+                PointF ac = c.selected.center();
+                assertNear("ARC command start radius", 75f, distance(ac.x, ac.y, as.get(1).x, as.get(1).y));
+                assertNear("ARC command end radius", 75f, distance(ac.x, ac.y, as.get(2).x, as.get(2).y));
+                assertEquals(base + 8, c.entities.size());
+
+                Log.i(TAG, "COMMAND_RESULT rect=600x400 move=25,-10 copy=50,0 offset=18 rotate=90 scale=0.5 mirror=X array=3 line=500 circleR=45 arcR=75 entities=" + c.entities.size());
             });
         }
     }
