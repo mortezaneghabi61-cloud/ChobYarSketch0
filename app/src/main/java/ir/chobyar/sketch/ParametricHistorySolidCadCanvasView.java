@@ -251,6 +251,48 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         }catch(Exception e){return "Boolean انجام نشد";}
     }
 
+    /**
+     * Non-modal Boolean entry for the command bar and instrumentation.
+     * Body numbers are 1-based and refer to the current Items/Bodies order.
+     * The operation still goes through the parametric History path so Undo,
+     * Redo and rebuild keep the exact same dependency graph as the UI tool.
+     */
+    public String applyHistoryBooleanByIndex(String operation,int leftNumber,int rightNumber) {
+        String op=operation==null?"":operation.trim().toUpperCase(Locale.US);
+        if(!"UNION".equals(op)&&!"SUBTRACT".equals(op)&&!"INTERSECT".equals(op))
+  return "عملیات Boolean نامعتبر است";
+        List<Object> current=bodies();
+        if(current.size()<2)return "برای Boolean حداقل دو Body لازم است";
+        if(leftNumber<1||rightNumber<1||leftNumber>current.size()||rightNumber>current.size())
+  return "شماره Body باید بین 1 تا "+current.size()+" باشد";
+        if(leftNumber==rightNumber)return "دو Body متفاوت لازم است";
+        return applyHistoryBoolean(op,current.get(leftNumber-1),current.get(rightNumber-1));
+    }
+
+    @Override
+    public String executeCommand(String raw) {
+        if(raw!=null){
+  String s=normalizeDigits(raw).trim().replace(',',' ');
+  if(!s.isEmpty()){
+      String[] a=s.split("\\s+");
+      String op=a[0].toUpperCase(Locale.US);
+      boolean booleanOp="UNION".equals(op)||"SUBTRACT".equals(op)||"INTERSECT".equals(op);
+      // Preserve the existing selection/dialog workflow for a bare
+      // UNION/SUBTRACT/INTERSECT command.  Supplying body numbers
+      // makes the command deterministic and non-modal.
+      if(booleanOp&&a.length>1){
+          if(a.length!=3)return op+" — دو شماره Body لازم است؛ مثال: "+op+" 1 2";
+          try{
+              return applyHistoryBooleanByIndex(op,Integer.parseInt(a[1]),Integer.parseInt(a[2]));
+          }catch(NumberFormatException e){
+              return "شماره Body باید عدد صحیح باشد";
+          }
+      }
+  }
+        }
+        return super.executeCommand(raw);
+    }
+
     // ------------------------------------------------------------------
     // Parametric rebuild
     // ------------------------------------------------------------------
