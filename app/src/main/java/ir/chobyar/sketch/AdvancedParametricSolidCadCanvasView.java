@@ -508,6 +508,31 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
 
     private static float clamp(float value,float min,float max){return Math.max(min,Math.min(max,value));}
 
+    /** Deterministic non-modal Sweep entry using 1-based sketch entity numbers. */
+    public String createSweepByEntityIndex(int profileNumber,int pathNumber){
+        List<Object> all=entities();
+        if(profileNumber<1||pathNumber<1||profileNumber>all.size()||pathNumber>all.size())
+            return "شماره Entity باید بین 1 تا "+all.size()+" باشد";
+        if(profileNumber==pathNumber)return "پروفایل و مسیر Sweep باید متفاوت باشند";
+        return createSweep(all.get(profileNumber-1),all.get(pathNumber-1));
+    }
+
+    @Override
+    public String executeCommand(String raw){
+        if(raw!=null){
+            String s=normalizeDigits(raw).trim().replace(',',' ');
+            if(!s.isEmpty()){
+                String[] a=s.split("\\s+");
+                if("SWEEP3D".equalsIgnoreCase(a[0])){
+                    if(a.length!=3)return "SWEEP3D — شماره پروفایل و مسیر لازم است؛ مثال: SWEEP3D 1 2";
+                    try{return createSweepByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
+                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                }
+            }
+        }
+        return super.executeCommand(raw);
+    }
+
     private void startSweep(){
         List<Object>s=selection();Object profile=null,path=null;
         for(Object e:s){if(isClosedProfile(e)&&profile==null)profile=e;else if(isPath(e)&&path==null)path=e;}
