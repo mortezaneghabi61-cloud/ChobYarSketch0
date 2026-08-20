@@ -6,12 +6,14 @@ SRC = ROOT / "app/src/main/java/ir/chobyar/sketch"
 CAD = SRC / "CadCanvasView.java"
 SMART = SRC / "SmartCadCanvasView.java"
 CHOB = SRC / "ChobYarShaprCanvasView.java"
+SHAPR = SRC / "ShaprStyleCadCanvasView.java"
 
 
 def patch_remaining_calls():
     cad = CAD.read_text(encoding="utf-8")
     smart = SMART.read_text(encoding="utf-8")
     chob = CHOB.read_text(encoding="utf-8")
+    shapr = SHAPR.read_text(encoding="utf-8")
 
     smart = smart.replace(
         "pendingTapHit = findHit(wx, wy);",
@@ -37,15 +39,50 @@ def patch_remaining_calls():
             raise RuntimeError("could not locate Sketch core contract anchor")
         cad = cad.replace(anchor, anchor + scale_hook, 1)
 
+    # When a single finger starts on the exact-dimension label, let the label
+    # keep owning tap/drag behavior but feed that pointer stream to the scale
+    # detector. If a second finger joins, ShaprStyle already cancels its label
+    # gesture and forwards the real POINTER_DOWN/MOVE sequence to super.
+    down_anchor = (
+        "        if (action == MotionEvent.ACTION_DOWN\n"
+        "                && !exactFieldRect.isEmpty()\n"
+        "                && exactFieldRect.contains(event.getX(), event.getY())) {\n"
+        "            exactFieldPressed = true;\n"
+    )
+    down_replacement = (
+        "        if (action == MotionEvent.ACTION_DOWN\n"
+        "                && !exactFieldRect.isEmpty()\n"
+        "                && exactFieldRect.contains(event.getX(), event.getY())) {\n"
+        "            coreObserveScaleGesture(event);\n"
+        "            exactFieldPressed = true;\n"
+    )
+    if "coreObserveScaleGesture(event);\n            exactFieldPressed = true;" not in shapr:
+        if down_anchor not in shapr:
+            raise RuntimeError("could not locate dimension-label ACTION_DOWN")
+        shapr = shapr.replace(down_anchor, down_replacement, 1)
+
+    pressed_anchor = "        if (exactFieldPressed) {\n            if (action == MotionEvent.ACTION_MOVE) {\n"
+    pressed_replacement = (
+        "        if (exactFieldPressed) {\n"
+        "            coreObserveScaleGesture(event);\n"
+        "            if (action == MotionEvent.ACTION_MOVE) {\n"
+    )
+    if "if (exactFieldPressed) {\n            coreObserveScaleGesture(event);" not in shapr:
+        if pressed_anchor not in shapr:
+            raise RuntimeError("could not locate active dimension-label gesture")
+        shapr = shapr.replace(pressed_anchor, pressed_replacement, 1)
+
     CAD.write_text(cad, encoding="utf-8")
     SMART.write_text(smart, encoding="utf-8")
     CHOB.write_text(chob, encoding="utf-8")
+    SHAPR.write_text(shapr, encoding="utf-8")
 
 
 def validate():
     cad = CAD.read_text(encoding="utf-8")
     smart = SMART.read_text(encoding="utf-8")
     chob = CHOB.read_text(encoding="utf-8")
+    shapr = SHAPR.read_text(encoding="utf-8")
 
     required = [
         "protected final Entity coreFindHit",
@@ -84,6 +121,10 @@ def validate():
         raise RuntimeError("pending selection hit-test is not routed through coreFindHit")
     if "coreScreenToWorldX(x)" not in chob or "coreScreenToWorldY(y)" not in chob:
         raise RuntimeError("gizmo viewport conversion is not routed through core API")
+    if shapr.count("coreObserveScaleGesture(event);") < 2:
+        raise RuntimeError("dimension-label gesture does not seed and maintain the scale detector")
+    if "event.getPointerCount() >= 2" not in shapr or "return super.onTouchEvent(event);" not in shapr:
+        raise RuntimeError("multi-touch is not handed back to the CAD core")
 
     print("Remaining Sketch core call sites patched and validated")
 
