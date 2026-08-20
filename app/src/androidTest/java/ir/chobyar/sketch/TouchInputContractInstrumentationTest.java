@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.app.Instrumentation;
 import android.graphics.RectF;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,6 +34,8 @@ import static org.junit.Assert.assertTrue;
  */
 @RunWith(AndroidJUnit4.class)
 public final class TouchInputContractInstrumentationTest {
+
+    private static final String TAG = "TouchInputContract";
 
     @Test
     public void stylusDrawsRectangleAndReselectsIt() {
@@ -82,6 +85,7 @@ public final class TouchInputContractInstrumentationTest {
                 assertNotNull(canvas);
                 assertNotNull("Stylus tap on the rectangle edge must select it", canvas.selected);
                 assertEquals(1, canvas.selectedObjects.size());
+                Log.i(TAG, "STYLUS_RESULT viewScale=" + canvas.viewScale);
             });
         }
     }
@@ -120,6 +124,8 @@ public final class TouchInputContractInstrumentationTest {
                 assertTrue("Pure pan unexpectedly changed zoom too much: before=" + before[2]
                                 + " after=" + canvas.viewScale,
                         Math.abs(canvas.viewScale - before[2]) < 0.08f);
+                Log.i(TAG, "PAN_RESULT before=" + before[2] + " after=" + canvas.viewScale
+                        + " moved=" + moved);
             });
         }
     }
@@ -166,14 +172,25 @@ public final class TouchInputContractInstrumentationTest {
                 start[2] = canvas.viewScale;
             });
 
-            float secondX = Math.min(state.left + state.width - 90f, start[0] + 360f);
-            if (secondX - start[0] < 180f) secondX = Math.max(state.left + 90f, start[0] - 360f);
+            // API 35's ScaleGestureDetector uses a density-dependent minimum span.
+            // Start with a clearly separated second finger and provide multiple MOVE
+            // events after the gesture crosses that threshold, matching a real large
+            // two-finger pinch rather than ending on the first scale-begin frame.
+            float secondX = Math.min(state.left + state.width - 90f, start[0] + 500f);
+            if (secondX - start[0] < 360f) {
+                secondX = Math.max(state.left + 90f, start[0] - 500f);
+            }
+            assertTrue("Dimension-label pinch could not obtain enough initial span",
+                    Math.abs(secondX - start[0]) >= 360f);
+
             pinchFromFirstFinger(instrumentation, start[0], start[1], secondX, start[1]);
             instrumentation.waitForIdleSync();
 
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView canvas = findProductionCanvas(activity.getWindow().getDecorView());
                 assertNotNull(canvas);
+                Log.i(TAG, "DIMENSION_LABEL_PINCH_RESULT before=" + start[2]
+                        + " after=" + canvas.viewScale);
                 assertTrue("Two-finger pinch was blocked by exact dimension label: before="
                                 + start[2] + " after=" + canvas.viewScale,
                         canvas.viewScale > start[2] * 1.05f);
@@ -273,23 +290,28 @@ public final class TouchInputContractInstrumentationTest {
         long down = SystemClock.uptimeMillis();
         send(instrumentation, one(down, now(), MotionEvent.ACTION_DOWN, x0, y0,
                 MotionEvent.TOOL_TYPE_FINGER, InputDevice.SOURCE_TOUCHSCREEN));
-        SystemClock.sleep(40L);
+        SystemClock.sleep(45L);
         send(instrumentation, two(down, now(), pointerDownAction(), x0, y0, x1, y1));
-        SystemClock.sleep(50L);
+        SystemClock.sleep(55L);
+
         float direction = x1 >= x0 ? 1f : -1f;
-        for (int i = 1; i <= 3; i++) {
-            float t = i / 3f;
+        final float firstTravel = 500f;
+        final float secondTravel = 30f;
+        for (int i = 1; i <= 7; i++) {
+            float t = i / 7f;
             send(instrumentation, two(down, now(), MotionEvent.ACTION_MOVE,
-                    x0 - direction * 120f * t, y0,
-                    x1 + direction * 220f * t, y1));
+                    x0 - direction * firstTravel * t, y0,
+                    x1 + direction * secondTravel * t, y1));
             SystemClock.sleep(55L);
         }
+
         send(instrumentation, two(down, now(), pointerUpAction(),
-                x0 - direction * 120f, y0, x1 + direction * 220f, y1));
+                x0 - direction * firstTravel, y0,
+                x1 + direction * secondTravel, y1));
         SystemClock.sleep(30L);
         send(instrumentation, one(down, now(), MotionEvent.ACTION_UP,
-                x0 - direction * 120f, y0, MotionEvent.TOOL_TYPE_FINGER,
-                InputDevice.SOURCE_TOUCHSCREEN));
+                x0 - direction * firstTravel, y0,
+                MotionEvent.TOOL_TYPE_FINGER, InputDevice.SOURCE_TOUCHSCREEN));
     }
 
     private static int pointerDownAction() {
