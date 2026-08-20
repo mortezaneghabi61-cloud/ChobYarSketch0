@@ -814,6 +814,25 @@ public class CadCanvasView extends View {
         Entity e=new ArcEntity(cx,cy,Math.abs(radius),startDeg,sweepDeg);e.setConstruction(true);addPrepared(e);return e;
     }
 
+    /** Typed associative-reference metadata lives inside Sketch snapshots. */
+    protected final void coreSetReferenceSource(Entity e,int bodyId,int edgeIndex,int edgeKind){
+        if(e!=null)e.setReferenceSource(bodyId,edgeIndex,edgeKind);
+    }
+    protected final boolean coreIsAssociativeReference(Entity e){return e!=null&&e.getReferenceBodyId()>=0&&e.getReferenceEdgeIndex()>=0;}
+    protected final List<Entity> coreAssociativeReferenceSnapshot(){
+        List<Entity> out=new ArrayList<>();for(Entity e:entities)if(coreIsAssociativeReference(e))out.add(e);return out;
+    }
+    protected final int coreAssociativeReferenceCount(){int n=0;for(Entity e:entities)if(coreIsAssociativeReference(e))n++;return n;}
+    protected final boolean coreUpdateReferenceLine(Entity e,float x1,float y1,float x2,float y2){
+        if(!(e instanceof LineEntity))return false;LineEntity v=(LineEntity)e;v.x1=x1;v.y1=y1;v.x2=x2;v.y2=y2;return true;
+    }
+    protected final boolean coreUpdateReferenceCircle(Entity e,float cx,float cy,float radius){
+        if(!(e instanceof CircleEntity)||radius<=0f)return false;CircleEntity v=(CircleEntity)e;v.x=cx;v.y=cy;v.r=radius;return true;
+    }
+    protected final boolean coreUpdateReferenceArc(Entity e,float cx,float cy,float radius,float startDeg,float sweepDeg){
+        if(!(e instanceof ArcEntity)||radius<=0f)return false;ArcEntity v=(ArcEntity)e;v.x=cx;v.y=cy;v.r=radius;v.start=startDeg;v.sweep=sweepDeg;return true;
+    }
+
     public String executeCommand(String raw){
         if(raw==null)return"";
         String s=raw.trim();if(s.isEmpty())return"";
@@ -909,6 +928,10 @@ public class CadCanvasView extends View {
         boolean canExtrude();
         void setExtrusion(float h);
         float getExtrusion();
+        int getReferenceBodyId();
+        int getReferenceEdgeIndex();
+        int getReferenceEdgeKind();
+        void setReferenceSource(int bodyId,int edgeIndex,int edgeKind);
     }
 
     private abstract static class BaseEntity implements Entity{
@@ -916,6 +939,9 @@ public class CadCanvasView extends View {
         int color=Color.rgb(25,25,25);
         float extrusion=0f;
         boolean construction=false;
+        int referenceBodyId=-1;
+        int referenceEdgeIndex=-1;
+        int referenceEdgeKind=0;
         public String getLayer(){return layer;}
         public void setLayer(String l){layer=l==null?"0":l;}
         public int getColor(){return color;}
@@ -925,7 +951,11 @@ public class CadCanvasView extends View {
         public boolean canExtrude(){return false;}
         public void setExtrusion(float h){extrusion=h;}
         public float getExtrusion(){return extrusion;}
-        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;}
+        public int getReferenceBodyId(){return referenceBodyId;}
+        public int getReferenceEdgeIndex(){return referenceEdgeIndex;}
+        public int getReferenceEdgeKind(){return referenceEdgeKind;}
+        public void setReferenceSource(int bodyId,int edgeIndex,int edgeKind){referenceBodyId=bodyId;referenceEdgeIndex=edgeIndex;referenceEdgeKind=edgeKind;}
+        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;e.referenceBodyId=referenceBodyId;e.referenceEdgeIndex=referenceEdgeIndex;e.referenceEdgeKind=referenceEdgeKind;}
     }
 
     private static class PointEntity extends BaseEntity{

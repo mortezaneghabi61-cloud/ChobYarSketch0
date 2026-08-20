@@ -309,6 +309,23 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         return record==null?0L:record.handle;
     }
 
+    protected synchronized int selectedExactBodyId(){
+        return stableBodyId(selectedBody());
+    }
+
+    protected synchronized long exactNativeHandleForBodyId(int bodyId){
+        if(bodyId<0)return 0L;syncNativeHistory(false);
+        for(Map.Entry<Object,NativeRecord> entry:nativeByBody.entrySet()){
+            NativeRecord record=entry.getValue();
+            if(record!=null&&record.handle!=0L&&stableBodyId(entry.getKey())==bodyId)return record.handle;
+        }
+        return 0L;
+    }
+
+    private static int stableBodyId(Object body){
+        Object id=value(body,"id");return id instanceof Number?((Number)id).intValue():-1;
+    }
+
     protected synchronized List<Long> exactNativeHandlesSnapshot(){
         syncNativeHistory(false);
         List<Long> out=new ArrayList<>();

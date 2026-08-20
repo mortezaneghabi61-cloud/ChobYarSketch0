@@ -140,6 +140,12 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         return activePlane == null ? "XY" : activePlane.label;
     }
 
+    /** Stable subclass-facing plane lookup for associative Sketch references. */
+    protected final Geometry3D.Plane3D spatialPlaneForLayer(String layer){
+        Geometry3D.Plane3D p=planeByLayer.get(layer);
+        return p==null?(activePlane==null?Geometry3D.xy():activePlane):p;
+    }
+
     public boolean is3DOverview() { return overview3D; }
 
     /**
