@@ -783,6 +783,8 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private ProfileData profileFromSelection() {
         List<Object> sel=selectionObjects();
         if(sel.isEmpty())return null;
+        // Construction geometry is reference-only and must never define a Solid profile.
+        for(Object e:sel)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;
         if(sel.size()==1){
             Object e=sel.get(0);String type=e.getClass().getSimpleName();String layer=entityLayer(e);
             if("RectEntity".equals(type)){

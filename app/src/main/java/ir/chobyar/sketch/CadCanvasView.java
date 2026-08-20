@@ -394,7 +394,7 @@ public class CadCanvasView extends View {
     public void fitAll() {
         RectF all = null;
         for (Entity e : entities) {
-            if (!isVisible(e) || e.isConstruction()) continue;
+            if (!isVisible(e)) continue;
             RectF b = e.bounds();
             if (all == null) all = new RectF(b);
             else all.union(b);
@@ -699,7 +699,7 @@ public class CadCanvasView extends View {
         SnapCandidate best=null;
 
         for(Entity e:entities){
-            if(e==exclude||!isVisible(e)||e.isConstruction())continue;
+            if(e==exclude||!isVisible(e))continue;
             for(SnapPoint q:e.snapPoints()){
                 float d=dist(x,y,q.x,q.y);
                 if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(q.x,q.y,d,q.label);
@@ -751,7 +751,7 @@ public class CadCanvasView extends View {
         Entity best=null;float bd=Float.MAX_VALUE;
         for(int i=entities.size()-1;i>=0;i--){
             Entity e=entities.get(i);
-            if(!isVisible(e)||e.isConstruction())continue;
+            if(!isVisible(e))continue;
             float d=e.selectionDistance(x,y);
             if(d<=tol&&d<bd){best=e;bd=d;}
         }
@@ -837,7 +837,9 @@ public class CadCanvasView extends View {
                 case"LAYERSHOW":require(a,2);return setLayerVisible(a[1],true);
                 case"MATERIAL":require(a,2);return setMaterial(a[1]);
                 case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=clamp(sc.scale,MIN_VIEW_SCALE,MAX_VIEW_SCALE);offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
-                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(selected.isConstruction())return"Construction قابل Extrude نیست";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"CONSTRUCTION":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(true);invalidate();return"Construction روشن شد";
+                case"NORMAL":case"REGULAR":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(false);invalidate();return"Construction خاموش شد";
                 case"ERASE":case"DELETE":if(selected==null)return"اول شکل را انتخاب کن";deleteSelected();return"حذف شد";
                 case"U":case"UNDO":undo();return"Undo";
                 case"ZOOMIN":case"ZIN":zoomBy(1.8f);return"Zoom In";
@@ -892,6 +894,7 @@ public class CadCanvasView extends View {
         int getColor();
         void setColor(int color);
         boolean isConstruction();
+        void setConstruction(boolean construction);
         boolean canExtrude();
         void setExtrusion(float h);
         float getExtrusion();
@@ -901,15 +904,17 @@ public class CadCanvasView extends View {
         String layer="0";
         int color=Color.rgb(25,25,25);
         float extrusion=0f;
+        boolean construction=false;
         public String getLayer(){return layer;}
         public void setLayer(String l){layer=l==null?"0":l;}
         public int getColor(){return color;}
         public void setColor(int c){color=c;}
-        public boolean isConstruction(){return false;}
+        public boolean isConstruction(){return construction;}
+        public void setConstruction(boolean value){construction=value;}
         public boolean canExtrude(){return false;}
         public void setExtrusion(float h){extrusion=h;}
         public float getExtrusion(){return extrusion;}
-        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;}
+        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;}
     }
 
     private static class PointEntity extends BaseEntity{

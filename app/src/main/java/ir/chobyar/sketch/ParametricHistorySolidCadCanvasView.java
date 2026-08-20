@@ -465,6 +465,8 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
 
     private Profile profileFromSources(List<Object> src) {
         if(src==null||src.isEmpty())return null;
+        // Construction geometry cannot be a History profile source.
+        for(Object e:src)if(Boolean.TRUE.equals(call(e,"isConstruction")))return null;
         List<Object> current=entities();
         for(Object e:src)if(!current.contains(e))return null;
         if(src.size()==1){
