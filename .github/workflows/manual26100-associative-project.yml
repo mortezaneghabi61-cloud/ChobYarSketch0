@@ -1,0 +1,154 @@
+name: Manual 26.100 Associative Project
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/manual26100-associative-project-20260820
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual26100-associative-project-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  associative-project:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CHOBYAR_VERSION_CODE: 41${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.3.manual26100.project.assoc.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/manual26100-associative-project-20260820
+          fetch-depth: 0
+
+      - name: Apply associative Project production patch
+        id: patch
+        continue-on-error: true
+        run: python3 .github/scripts/apply-manual26100-associative-project.py
+
+      - uses: actions/setup-java@v5
+        if: steps.patch.outcome == 'success'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        if: steps.patch.outcome == 'success'
+
+      - name: Install Android toolchain
+        if: steps.patch.outcome == 'success'
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.patch.outcome == 'success'
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore development signing key
+        if: steps.patch.outcome == 'success'
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Build production and instrumentation APKs
+        id: build
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p test-artifacts
+          gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/assoc-project-build.log
+
+      - name: Enable KVM
+        if: steps.build.outcome == 'success'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run exact baseline and associative Project contracts
+        id: contracts
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -eu
+            mkdir -p test-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.Project3DExactInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project3d-baseline.txt
+            grep -q 'OK (3 tests)' test-artifacts/project3d-baseline.txt
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.AssociativeProjectInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/assoc-project.txt
+            grep -q 'OK (2 tests)' test-artifacts/assoc-project.txt
+            adb logcat -d -v brief | grep 'Manual26100AssocProject.*ASSOC_PROJECT_.*_RESULT' | sed -E 's/^.*(ASSOC_PROJECT_[A-Z_]+_RESULT)/\1/' | tee test-artifacts/assoc-project-results.txt
+            grep -q '^ASSOC_PROJECT_REBUILD_RESULT before=100 after=140 references=1 construction=true automatic=true$' test-artifacts/assoc-project-results.txt
+            grep -q '^ASSOC_PROJECT_UNDO_REDO_RESULT create=1 undo=0 rebuild=0 redo=1 resurrect=false tagStable=true$' test-artifacts/assoc-project-results.txt
+
+      - name: Persist verified production source
+        if: steps.contracts.outcome == 'success'
+        shell: bash
+        run: |
+          set -eu
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java
+          if ! git diff --cached --quiet; then
+            git commit -m 'Implement associative Project references [skip ci]'
+          fi
+          git fetch origin feature/manual26100-associative-project-20260820
+          git rebase origin/feature/manual26100-associative-project-20260820
+          git push origin HEAD:feature/manual26100-associative-project-20260820
+
+      - name: Record status
+        if: always()
+        shell: bash
+        run: |
+          if [ '${{ steps.contracts.outcome }}' != 'success' ]; then
+            git restore -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java || true
+          fi
+          mkdir -p docs
+          cat > docs/manual26100-associative-project-status.txt <<EOF
+          source_sha=${{ github.sha }}
+          workflow_run=${{ github.run_id }}
+          patch=${{ steps.patch.outcome }}
+          build=${{ steps.build.outcome }}
+          contracts=${{ steps.contracts.outcome }}
+          EOF
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/manual26100-associative-project-status.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record associative Project status [skip ci]'
+            git fetch origin feature/manual26100-associative-project-20260820
+            git rebase origin/feature/manual26100-associative-project-20260820
+            git push origin HEAD:feature/manual26100-associative-project-20260820
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar-manual26100-associative-project-evidence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce outcome
+        if: always()
+        run: |
+          test '${{ steps.patch.outcome }}' = 'success'
+          test '${{ steps.build.outcome }}' = 'success'
+          test '${{ steps.contracts.outcome }}' = 'success'
