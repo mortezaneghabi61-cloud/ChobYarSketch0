@@ -1,19 +1,46 @@
 from pathlib import Path
 import runpy
 
-# Apply the existing idempotent Manual 26.100 Boolean patch first.
-runpy.run_path('.github/scripts/apply-manual26100-boolean-keep.py', run_name='__main__')
+TARGET = Path('app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java')
+text = TARGET.read_text(encoding='utf-8')
 
-# The original helper used a Python triple-quoted replacement containing \n,
-# which Python decoded into a physical newline inside a Java string literal.
-# Normalize that generated source to the intended Java escape sequence.
-target = Path('app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java')
-text = target.read_text(encoding='utf-8')
+# The Keep implementation may already be persisted by a previous verified/self-
+# committing CI attempt. Treat that as success instead of applying old anchors
+# again. This keeps the diagnostic workflow idempotent.
+already_applied = all(token in text for token in (
+    'final boolean keepLeft;',
+    'final boolean keepRight;',
+    'showBooleanKeepOptions(',
+    'KEEP_ORIGINALS',
+    'KEEP_TARGET',
+    'KEEP_TOOL',
+))
+
+if not already_applied:
+    runpy.run_path('.github/scripts/apply-manual26100-boolean-keep.py', run_name='__main__')
+    text = TARGET.read_text(encoding='utf-8')
+
+# A Java source newline between the two pieces is invalid; the source must carry
+# a literal backslash+n escape sequence inside the string.
 bad = '.setMessage("Target: "+bodyName(target)+"\nTool: "+bodyName(tool))'
 good = r'.setMessage("Target: "+bodyName(target)+"\nTool: "+bodyName(tool))'
 if bad in text:
     text = text.replace(bad, good, 1)
-elif good not in text:
-    raise SystemExit('Boolean Keep UI newline anchor not found after patch')
-target.write_text(text, encoding='utf-8')
-print('Boolean Keep Java newline escaping verified')
+
+required = (
+    'final boolean keepLeft;',
+    'final boolean keepRight;',
+    'showBooleanKeepOptions(',
+    'KEEP_ORIGINALS',
+    'KEEP_TARGET',
+    'KEEP_TOOL',
+    good,
+)
+missing = [token for token in required if token not in text]
+if missing:
+    raise SystemExit('Boolean Keep production contract incomplete: ' + repr(missing))
+if bad in text:
+    raise SystemExit('Boolean Keep generated Java still contains a raw newline in setMessage')
+
+TARGET.write_text(text, encoding='utf-8')
+print('Boolean Keep production contract verified; patch is idempotent')
