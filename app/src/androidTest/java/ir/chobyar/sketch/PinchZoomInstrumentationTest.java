@@ -2,6 +2,7 @@ package ir.chobyar.sketch;
 
 import android.app.Instrumentation;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
@@ -25,6 +26,8 @@ import static org.junit.Assert.assertTrue;
  */
 @RunWith(AndroidJUnit4.class)
 public final class PinchZoomInstrumentationTest {
+
+    private static final String LOG_TAG = "PinchZoomTest";
 
     @Test
     public void realTwoFingerPinchChangesViewportScale() {
@@ -103,8 +106,10 @@ public final class PinchZoomInstrumentationTest {
                 scales[1] = canvas.viewScale;
             });
 
-            System.out.println("PINCH_ZOOM_RESULT before=" + scales[0]
-                    + " after=" + scales[1]);
+            final String result = "PINCH_ZOOM_RESULT before=" + scales[0]
+                    + " after=" + scales[1];
+            System.out.println(result);
+            Log.i(LOG_TAG, result);
             assertTrue(
                     "Real pinch gesture did not zoom viewport: before=" + scales[0]
                             + " after=" + scales[1],
