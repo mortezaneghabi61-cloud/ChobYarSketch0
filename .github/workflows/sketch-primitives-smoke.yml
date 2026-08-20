@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   sketch-primitives:
-    name: Line Circle Arc Snap Dimension on API 35
+    name: Line Circle Arc Snap Dimension Commands on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -56,7 +56,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run production-canvas primitive and snap contract
+      - name: Run production-canvas primitive, snap and command contract
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -73,13 +73,14 @@ jobs:
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb logcat -c
             adb shell am instrument -w -e class ir.chobyar.sketch.SketchPrimitivesSnapInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sketch-primitives-instrumentation.txt
-            grep -q 'OK (4 tests)' test-artifacts/sketch-primitives-instrumentation.txt
-            adb logcat -d -v brief | grep 'SketchPrimitivesSnap.*_RESULT' | sed -E 's/^.*(LINE_SNAP_RESULT|CIRCLE_RESULT|ARC_RESULT|DIMENSION_RESULT)/\1/' | tee test-artifacts/sketch-primitives-result.txt
-            test $(grep -c '_RESULT' test-artifacts/sketch-primitives-result.txt) -eq 4
+            grep -q 'OK (5 tests)' test-artifacts/sketch-primitives-instrumentation.txt
+            adb logcat -d -v brief | grep 'SketchPrimitivesSnap.*_RESULT' | sed -E 's/^.*(LINE_SNAP_RESULT|CIRCLE_RESULT|ARC_RESULT|DIMENSION_RESULT|COMMAND_RESULT)/\1/' | tee test-artifacts/sketch-primitives-result.txt
+            test $(grep -c '_RESULT' test-artifacts/sketch-primitives-result.txt) -eq 5
             grep -q '^LINE_SNAP_RESULT endpoint=100,100 midpoint=160,100 intersection=200,100' test-artifacts/sketch-primitives-result.txt
             grep -q '^CIRCLE_RESULT center=320,220 diameter=80 centerSnap=320,220 quadrantSnap=360,220' test-artifacts/sketch-primitives-result.txt
             grep -q '^ARC_RESULT type=Arc radius=' test-artifacts/sketch-primitives-result.txt
             grep -q '^DIMENSION_RESULT line=125 rect=120x80 circleDiameter=90' test-artifacts/sketch-primitives-result.txt
+            grep -q '^COMMAND_RESULT rect=600x400 move=25,-10 copy=50,0 offset=18 rotate=90 scale=0.5 mirror=X array=3 line=500 circleR=45 arcR=75 entities=8$' test-artifacts/sketch-primitives-result.txt
 
       - name: Upload Sketch primitive evidence
         if: always()
