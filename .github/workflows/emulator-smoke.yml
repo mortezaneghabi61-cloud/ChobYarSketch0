@@ -32,11 +32,12 @@ jobs:
         if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
         run: |
           python3 .github/scripts/refactor_sketch_core.py
+          python3 .github/scripts/add_sketch_redo.py
           git config user.name "chobyar-ci"
           git config user.email "actions@users.noreply.github.com"
-          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ShaprStyleCadCanvasView.java
+          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ShaprStyleCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
           if ! git diff --cached --quiet; then
-            git commit -m "Use collision-safe Sketch core API [skip ci]"
+            git commit -m "Apply Sketch core refactor and redo contract [skip ci]"
             git push origin HEAD:refactor/sketch-core-type-safe-20260820
           fi
 
@@ -50,6 +51,7 @@ jobs:
           smart = (root/'SmartCadCanvasView.java').read_text(encoding='utf-8')
           chob = (root/'ChobYarShaprCanvasView.java').read_text(encoding='utf-8')
           shapr = (root/'ShaprStyleCadCanvasView.java').read_text(encoding='utf-8')
+          activity = (root/'ChobYarActivity.java').read_text(encoding='utf-8')
           required = [
               'protected final List<Entity> entities',
               'protected Entity selected',
@@ -62,6 +64,10 @@ jobs:
               'protected final float coreScreenToWorldX',
               'protected final float coreScreenToWorldY',
               'protected final void coreObserveScaleGesture',
+              'redoStack = new ArrayDeque<>()',
+              'public boolean canUndoSketch()',
+              'public boolean canRedoSketch()',
+              'public boolean redoSketch()',
           ]
           for token in required:
               if token not in cad:
@@ -88,7 +94,10 @@ jobs:
               raise SystemExit('Undo is not routed through the Sketch core contract')
           if shapr.count('coreObserveScaleGesture(event);') < 2:
               raise SystemExit('Dimension label does not seed/maintain the production scale detector')
-          print('Collision-safe Sketch core source contract validated')
+          for token in ('this::undoAction', 'this::redoAction', 'cad.redoSketch()', 'cad.redoLastFeature()'):
+              if token not in activity:
+                  raise SystemExit(f'2D/3D history routing is missing: {token}')
+          print('Collision-safe Sketch core and isolated undo/redo source contract validated')
           PY
 
       - name: Set up JDK 17
@@ -128,7 +137,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run ChobYar UI, pinch, stylus and touch navigation smoke tests
+      - name: Run ChobYar UI, pinch, stylus, history and touch navigation smoke tests
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -160,6 +169,11 @@ jobs:
             grep -q '^STYLUS_RESULT viewScale=' test-artifacts/touch-viewscale.txt
             grep -q '^PAN_RESULT before=' test-artifacts/touch-viewscale.txt
             grep -q '^DIMENSION_LABEL_PINCH_RESULT before=' test-artifacts/touch-viewscale.txt
+            adb logcat -c
+            adb shell am instrument -w -e class ir.chobyar.sketch.SketchUndoRedoInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sketch-undo-redo.txt
+            grep -q 'OK (1 test)' test-artifacts/sketch-undo-redo.txt
+            adb logcat -d -v brief | grep 'SketchUndoRedo.*UNDO_REDO_RESULT' | tail -n 1 | sed -E 's/^.*UNDO_REDO_RESULT /UNDO_REDO_RESULT /' | tee test-artifacts/sketch-undo-redo-result.txt
+            grep -q '^UNDO_REDO_RESULT afterCreate=1 afterUndo=0 afterRedo=1 afterPan=1$' test-artifacts/sketch-undo-redo-result.txt
 
       - name: Upload smoke-test evidence
         if: always()
