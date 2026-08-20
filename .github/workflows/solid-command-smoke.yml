@@ -34,14 +34,15 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import textwrap
           workflow = Path('.github/workflows/boolean-command-smoke.yml').read_text(encoding='utf-8')
           start = "          python3 - <<'PY'\n"
           end = "\n          PY\n"
           if start not in workflow:
               raise SystemExit('Boolean patch payload not found')
           payload = workflow.split(start, 1)[1].split(end, 1)[0]
-          exec(compile(textwrap.dedent(payload), 'boolean-command-payload', 'exec'))
+          prefix = '          '
+          payload = '\n'.join(line[len(prefix):] if line.startswith(prefix) else line for line in payload.splitlines())
+          exec(compile(payload, 'boolean-command-payload', 'exec'))
           PY
 
       - name: Set up JDK 17
