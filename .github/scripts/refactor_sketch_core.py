@@ -9,6 +9,7 @@ CHOB = SRC / "ChobYarShaprCanvasView.java"
 
 
 def patch_remaining_calls():
+    cad = CAD.read_text(encoding="utf-8")
     smart = SMART.read_text(encoding="utf-8")
     chob = CHOB.read_text(encoding="utf-8")
 
@@ -21,6 +22,22 @@ def patch_remaining_calls():
         "float wx = coreScreenToWorldX(x), wy = coreScreenToWorldY(y);"
     )
 
+    # ShaprStyleCadCanvasView owns an interactive dimension label. It needs to
+    # prime the production ScaleGestureDetector with the first finger without
+    # invoking selection/drawing in CadCanvasView. Keep the detector private and
+    # expose only this narrow type-safe observation hook to presentation layers.
+    scale_hook = (
+        "    protected final void coreObserveScaleGesture(MotionEvent event) {\n"
+        "        scaleDetector.onTouchEvent(event);\n"
+        "    }\n"
+    )
+    anchor = "    protected final float coreScreenToWorldY(float sy) { return screenToWorldY(sy); }\n"
+    if "protected final void coreObserveScaleGesture" not in cad:
+        if anchor not in cad:
+            raise RuntimeError("could not locate Sketch core contract anchor")
+        cad = cad.replace(anchor, anchor + scale_hook, 1)
+
+    CAD.write_text(cad, encoding="utf-8")
     SMART.write_text(smart, encoding="utf-8")
     CHOB.write_text(chob, encoding="utf-8")
 
@@ -36,6 +53,7 @@ def validate():
         "protected final boolean coreIsVisible",
         "protected final float coreScreenToWorldX",
         "protected final float coreScreenToWorldY",
+        "protected final void coreObserveScaleGesture",
     ]
     for token in required:
         if token not in cad:
