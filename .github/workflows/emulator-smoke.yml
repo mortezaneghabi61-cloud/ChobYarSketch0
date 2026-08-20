@@ -133,7 +133,14 @@ jobs:
           profile: pixel_7_pro
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: python3 .github/scripts/emulator_smoke.py
+          script: |
+            # The stock Pixel Launcher occasionally ANRs on a cold headless boot
+            # and its system dialog obscures ChobYar from UIAutomator. The launcher
+            # is irrelevant to this direct-activity smoke test, so disable it only
+            # inside the disposable CI emulator before launching the app.
+            adb shell am force-stop com.google.android.apps.nexuslauncher || true
+            adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
+            python3 .github/scripts/emulator_smoke.py
 
       - name: Upload smoke-test evidence
         if: always()
