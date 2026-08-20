@@ -124,7 +124,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run ChobYar UI and real pinch smoke tests
+      - name: Run ChobYar UI, pinch, stylus and touch navigation smoke tests
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -148,6 +148,8 @@ jobs:
             adb logcat -d -v brief | grep 'PinchZoomTest.*PINCH_ZOOM_RESULT' | tail -n 1 | sed -E 's/^.*PINCH_ZOOM_RESULT /PINCH_ZOOM_RESULT /' | tee test-artifacts/pinch-viewscale.txt
             test -s test-artifacts/pinch-viewscale.txt
             grep -Eq '^PINCH_ZOOM_RESULT before=[0-9.]+ after=[0-9.]+' test-artifacts/pinch-viewscale.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.TouchInputContractInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/touch-input-contract.txt
+            grep -q 'OK (3 tests)' test-artifacts/touch-input-contract.txt
 
       - name: Upload smoke-test evidence
         if: always()
