@@ -4,16 +4,27 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - refactor/sketch-core-type-safe-20260820
+      - main
+      - 'feature/**'
+      - 'fix/**'
+      - 'refactor/**'
     paths:
       - .github/workflows/manual26100-consolidated-regression.yml
       - .github/scripts/run-production-cad-regression.sh
+      - app/src/main/**
+      - app/src/androidTest/**
+      - app/build.gradle*
+      - gradle.properties
   pull_request:
     branches:
       - main
     paths:
       - .github/workflows/manual26100-consolidated-regression.yml
       - .github/scripts/run-production-cad-regression.sh
+      - app/src/main/**
+      - app/src/androidTest/**
+      - app/build.gradle*
+      - gradle.properties
 
 permissions:
   contents: read
@@ -33,7 +44,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refactor/sketch-core-type-safe-20260820
           fetch-depth: 0
 
       - uses: actions/setup-java@v5
@@ -65,7 +75,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run 42 core Sketch + 3D + Project contracts on API 35
+      - name: Run 48 core Sketch + 3D + Project + Topology contracts on API 35
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -80,7 +90,7 @@ jobs:
         if: success()
         run: |
           cp test-artifacts/production-cad-summary.txt test-artifacts/consolidated-summary.txt
-          echo 'CONSOLIDATED_RESULT classes=17 tests=42 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
+          echo 'CONSOLIDATED_RESULT classes=19 tests=48 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
 
       - name: Upload consolidated regression evidence
         if: always()

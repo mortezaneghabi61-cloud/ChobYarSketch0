@@ -44,7 +44,7 @@ run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 te
 run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5 tests)'
 run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
 
-# Solid / History / Boolean / Direct modeling: 16 tests
+# Solid / History / Boolean / Direct modeling: 14 tests
 run_contract SolidCommandInstrumentationTest solid 'OK (2 tests)'
 run_contract BooleanCommandInstrumentationTest boolean 'OK (3 tests)'
 run_contract BooleanKeepOriginalsInstrumentationTest boolean-keep 'OK (3 tests)'
@@ -53,16 +53,18 @@ run_contract ShellPushPullInstrumentationTest shell-pushpull 'OK (2 tests)'
 run_contract SweepCommandInstrumentationTest sweep 'OK (1 test)'
 run_contract LoftCommandInstrumentationTest loft 'OK (1 test)'
 
-# Construction / exact Project / selected Body / associative reference: 10 tests
+# Construction / exact Project / associative references / exact topology: 18 tests
 run_contract ConstructionProjectInstrumentationTest construction-project 'OK (2 tests)'
 run_contract Project3DExactInstrumentationTest project-exact 'OK (3 tests)'
 run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 tests)'
 run_contract AssociativeProjectProvenanceInstrumentationTest project-associative 'OK (4 tests)'
+run_contract ExactEdgeTopologyInstrumentationTest exact-edge-topology 'OK (3 tests)'
+run_contract ExactFaceTopologyInstrumentationTest exact-face-topology 'OK (3 tests)'
 
 passed_classes=$(grep -c ' | OK (' test-artifacts/production-cad-summary.txt || true)
-if [[ "$passed_classes" -ne 17 ]]; then
-  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=17" | tee -a test-artifacts/production-cad-summary.txt
+if [[ "$passed_classes" -ne 19 ]]; then
+  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=19" | tee -a test-artifacts/production-cad-summary.txt
   exit 1
 fi
 
-echo 'PRODUCTION_CAD_REGRESSION OK classes=17 tests=42' | tee -a test-artifacts/production-cad-summary.txt
+echo 'PRODUCTION_CAD_REGRESSION OK classes=19 tests=48' | tee -a test-artifacts/production-cad-summary.txt
