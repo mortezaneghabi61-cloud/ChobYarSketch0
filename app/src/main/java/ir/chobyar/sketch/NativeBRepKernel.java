@@ -23,6 +23,13 @@ final class NativeBRepKernel {
     static final int OCCT_EDGE_ARC = 3;
     static final int OCCT_EDGE_RECORD_SIZE = 18;
 
+    // Exact OCCT face descriptor contract. Every record has 14 doubles:
+    // kind,index,center.xyz,origin.xyz,axis.xyz,area,radius,orientation.
+    static final int OCCT_FACE_UNSUPPORTED = 0;
+    static final int OCCT_FACE_PLANE = 1;
+    static final int OCCT_FACE_CYLINDER = 2;
+    static final int OCCT_FACE_RECORD_SIZE = 14;
+
     private static final boolean AVAILABLE;
     private static final String LOAD_ERROR;
 
@@ -233,6 +240,12 @@ final class NativeBRepKernel {
         try{return nativeOcctEdgeDescriptors(handle);}catch(Throwable t){return new double[0];}
     }
 
+    /** Exact analytic planar/cylindrical B-Rep faces from OCCT topology. */
+    static double[] occtFaceDescriptors(long handle){
+        if(!occtAvailable()||handle==0L)return new double[0];
+        try{return nativeOcctFaceDescriptors(handle);}catch(Throwable t){return new double[0];}
+    }
+
     static String occtShapeSummary(long handle){
         if(!occtAvailable()||handle==0L)return "OCCT Shape unavailable";
         try{return nativeOcctShapeSummary(handle);}catch(Throwable t){return "OCCT Shape summary failed";}
@@ -302,6 +315,7 @@ final class NativeBRepKernel {
     private static native double[] nativeOcctShapeStats(long handle);
     private static native double[] nativeOcctTriangulate(long handle,double deflection);
     private static native double[] nativeOcctEdgeDescriptors(long handle);
+    private static native double[] nativeOcctFaceDescriptors(long handle);
     private static native boolean nativeOcctExport(long[] handles,String path,int format);
     private static native String nativeOcctShapeSummary(long handle);
     private static native void nativeOcctRelease(long handle);
