@@ -76,17 +76,24 @@ jobs:
       - name: Restore development signing key
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
-      - name: Compile APK with CHOBYAR_WITH_OCCT arm64 path enabled
+      - name: Compile APK with OCCT arm64 path enabled
         run: |
           set -o pipefail
           mkdir -p test-artifacts
           gradle :app:assembleDebug --stacktrace 2>&1 | tee test-artifacts/occt-native-build.txt
-          grep -Fq 'ChobYar: OCCT exact B-Rep enabled for arm64-v8a' test-artifacts/occt-native-build.txt
 
-      - name: Verify arm64 native library is packaged
+      - name: Verify arm64 library is OCCT-linked and packaged
         run: |
+          set -euo pipefail
           unzip -l app/build/outputs/apk/debug/app-debug.apk | tee test-artifacts/occt-apk-contents.txt
           grep -Fq 'lib/arm64-v8a/libchobyar_brep.so' test-artifacts/occt-apk-contents.txt
+          rm -rf test-artifacts/arm64-native
+          mkdir -p test-artifacts/arm64-native
+          unzip -j app/build/outputs/apk/debug/app-debug.apk \
+            'lib/arm64-v8a/libchobyar_brep.so' -d test-artifacts/arm64-native
+          readelf -d test-artifacts/arm64-native/libchobyar_brep.so \
+            | tee test-artifacts/occt-arm64-needed.txt
+          grep -Eq 'libTKBRep\.so|libTKernel\.so' test-artifacts/occt-arm64-needed.txt
 
       - name: Upload native compile evidence
         if: always()
