@@ -769,6 +769,9 @@ public class CadCanvasView extends View {
     protected final boolean coreIsVisible(Entity e) { return isVisible(e); }
     protected final float coreScreenToWorldX(float sx) { return screenToWorldX(sx); }
     protected final float coreScreenToWorldY(float sy) { return screenToWorldY(sy); }
+    protected final void coreObserveScaleGesture(MotionEvent event) {
+        scaleDetector.onTouchEvent(event);
+    }
 
     public String executeCommand(String raw){
         if(raw==null)return"";
