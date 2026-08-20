@@ -564,7 +564,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
                 gizmoSessionUndoSteps++;
             }
             if (gizmoMode == GIZMO_X || gizmoMode == GIZMO_Y) {
-                float wx = screenToWorldX(x), wy = screenToWorldY(y);
+                float wx = coreScreenToWorldX(x), wy = coreScreenToWorldY(y);
                 float dx = gizmoMode == GIZMO_X ? wx - gizmoLastWorldX : 0f;
                 float dy = gizmoMode == GIZMO_Y ? wy - gizmoLastWorldY : 0f;
                 for (Object e : selectionObjects()) translate(e, dx, dy);

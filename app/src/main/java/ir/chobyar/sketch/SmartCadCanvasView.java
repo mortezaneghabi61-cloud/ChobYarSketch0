@@ -541,7 +541,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         if (action == MotionEvent.ACTION_DOWN) {
             boxStartX = boxEndX = event.getX();
             boxStartY = boxEndY = event.getY();
-            pendingTapHit = findHit(wx, wy);
+            pendingTapHit = coreFindHit(wx, wy);
             selectionBoxCandidate = pendingTapHit == null;
             selectionBoxActive = false;
             return true;
