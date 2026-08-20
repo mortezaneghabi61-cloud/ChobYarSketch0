@@ -144,7 +144,7 @@ jobs:
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w \
               -e class ir.chobyar.sketch.PinchZoomInstrumentationTest \
-              ir.chobyar.sketch.test/android.test.InstrumentationTestRunner
+              ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner
 
       - name: Upload smoke-test evidence
         if: always()
