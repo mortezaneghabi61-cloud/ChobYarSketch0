@@ -75,7 +75,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run 49 core Sketch + 3D + Project + Topology contracts on API 35
+      - name: Run 51 core Sketch + 3D + Project + Topology contracts on API 35
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -90,7 +90,7 @@ jobs:
         if: success()
         run: |
           cp test-artifacts/production-cad-summary.txt test-artifacts/consolidated-summary.txt
-          echo 'CONSOLIDATED_RESULT classes=19 tests=49 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
+          echo 'CONSOLIDATED_RESULT classes=19 tests=51 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
 
       - name: Upload consolidated regression evidence
         if: always()

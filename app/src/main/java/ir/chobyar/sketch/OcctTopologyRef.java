@@ -273,11 +273,13 @@ final class OcctTopologyRef {
         if(d==null)return out;final int n=NativeBRepKernel.OCCT_FACE_RECORD_SIZE;
         for(int i=0;i+n-1<d.length;i+=n){
             int kind=(int)Math.round(d[i]),index=(int)Math.round(d[i+1]);
-            if(kind!=NativeBRepKernel.OCCT_FACE_PLANE&&kind!=NativeBRepKernel.OCCT_FACE_CYLINDER&&kind!=NativeBRepKernel.OCCT_FACE_SPHERE)continue;
+            if(kind!=NativeBRepKernel.OCCT_FACE_PLANE&&kind!=NativeBRepKernel.OCCT_FACE_CYLINDER&&
+                    kind!=NativeBRepKernel.OCCT_FACE_SPHERE&&kind!=NativeBRepKernel.OCCT_FACE_CONE&&
+                    kind!=NativeBRepKernel.OCCT_FACE_TORUS)continue;
             Geometry3D.Vec3 center=v(d,i+2),origin=v(d,i+5),axis=v(d,i+8);double len=axis.length();
             double area=Math.abs(d[i+11]),radius=Math.abs(d[i+12]);
             if(len<1e-7||area<1e-9)continue;axis=axis.mul((float)(1.0/len));
-            if((kind==NativeBRepKernel.OCCT_FACE_CYLINDER||kind==NativeBRepKernel.OCCT_FACE_SPHERE)&&radius<1e-7)continue;
+            if(kind!=NativeBRepKernel.OCCT_FACE_PLANE&&radius<1e-7)continue;
             out.add(new ExactFaceCandidate(kind,index,center,origin,axis,area,radius));
         }
         return out;
@@ -293,6 +295,8 @@ final class OcctTopologyRef {
         Geometry3D.Vec3 q=p.sub(f.origin);
         if(f.type==NativeBRepKernel.OCCT_FACE_PLANE)return Math.abs(q.dot(f.axis));
         if(f.type==NativeBRepKernel.OCCT_FACE_SPHERE)return Math.abs(q.length()-f.radius);
+        if(f.type==NativeBRepKernel.OCCT_FACE_CONE||f.type==NativeBRepKernel.OCCT_FACE_TORUS)
+            return Math.sqrt(dist2(f.center,p));
         double axial=q.dot(f.axis);Geometry3D.Vec3 radial=q.sub(f.axis.mul((float)axial));
         return Math.abs(radial.length()-f.radius);
     }

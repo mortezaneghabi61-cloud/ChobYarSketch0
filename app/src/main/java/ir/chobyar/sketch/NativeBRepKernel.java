@@ -24,11 +24,14 @@ final class NativeBRepKernel {
     static final int OCCT_EDGE_RECORD_SIZE = 18;
 
     // Exact OCCT face descriptor contract. Every record has 14 doubles:
-    // kind,index,center.xyz,origin.xyz,axis.xyz,area,radius,orientation.
+    // kind,index,center.xyz,origin.xyz,axis.xyz,area,shapeParam,orientation.
+    // shapeParam = radius (cylinder/sphere), semi-angle rad (cone), major radius (torus).
     static final int OCCT_FACE_UNSUPPORTED = 0;
     static final int OCCT_FACE_PLANE = 1;
     static final int OCCT_FACE_CYLINDER = 2;
     static final int OCCT_FACE_SPHERE = 3;
+    static final int OCCT_FACE_CONE = 4;
+    static final int OCCT_FACE_TORUS = 5;
     static final int OCCT_FACE_RECORD_SIZE = 14;
 
     private static final boolean AVAILABLE;
@@ -241,7 +244,7 @@ final class NativeBRepKernel {
         try{return nativeOcctEdgeDescriptors(handle);}catch(Throwable t){return new double[0];}
     }
 
-    /** Exact analytic planar/cylindrical B-Rep faces from OCCT topology. */
+    /** Exact analytic plane/cylinder/sphere/cone/torus B-Rep faces from OCCT topology. */
     static double[] occtFaceDescriptors(long handle){
         if(!occtAvailable()||handle==0L)return new double[0];
         try{return nativeOcctFaceDescriptors(handle);}catch(Throwable t){return new double[0];}
