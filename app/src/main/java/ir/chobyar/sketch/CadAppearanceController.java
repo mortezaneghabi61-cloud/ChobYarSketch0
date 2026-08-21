@@ -3,6 +3,9 @@ package ir.chobyar.sketch;
 /**
  * Owns visualization state separately from model/history state.
  * UI code supplies FilamentCadSurface::setAppearance as the Sink.
+ *
+ * Production workspace edits may change preset, color and roughness here, but
+ * this controller never owns an OCCT handle, topology reference or History node.
  */
 final class CadAppearanceController {
     interface Sink {
