@@ -462,11 +462,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void saveProject(){
-        // Schema v1 is deliberately non-lossy. Exact 3D History and reference
-        // images are added in the next schema rather than silently flattened.
-        if(cad.itemRows().length>0||cad.hasReferenceImage()){
-            toast("ذخیره پروژه 3D هنوز کامل نشده؛ برای جلوگیری از حذف History فایل ناقص ذخیره نمی‌شود");return;
-        }
+        // Persist the complete non-lossy workspace: Sketch, exact 3D History
+        // and optional calibrated Reference Image.
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/json");intent.putExtra(Intent.EXTRA_TITLE,"ChobYar-Project.chobyar");
         startActivityForResult(intent,REQUEST_SAVE_PROJECT);
@@ -587,7 +584,7 @@ public final class ChobYarActivity extends Activity {
         if(requestCode==REQUEST_SAVE_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                if(out==null)throw new IllegalStateException();String json=CadProjectDocument.encodeSketch(cad.exportSketchProjectState());
+                if(out==null)throw new IllegalStateException();String json=CadProjectPersistenceController.encode(cad);
                 out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("پروژه ذخیره شد");
             }catch(Exception e){toast("ذخیره پروژه انجام نشد");}return;
         }
@@ -595,9 +592,9 @@ public final class ChobYarActivity extends Activity {
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(InputStream in=getContentResolver().openInputStream(data.getData());java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream()){
                 if(in==null)throw new IllegalStateException();byte[] bytes=new byte[65536];int n;while((n=in.read(bytes))>0)buffer.write(bytes,0,n);
-                CadProjectDocument.Decoded decoded=CadProjectDocument.decode(new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8));
-                if(!cad.canImportSketchProjectState(decoded.sketchState)){toast("فایل پروژه معتبر نیست");return;}
-                cad.clearAll();String result=cad.importSketchProjectState(decoded.sketchState);syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
+                String raw=new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+                String result=CadProjectPersistenceController.restore(cad,raw);
+                syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
             }catch(Exception e){toast("بازکردن پروژه انجام نشد");}return;
         }
         if(requestCode==REQUEST_REFERENCE_IMAGE){
