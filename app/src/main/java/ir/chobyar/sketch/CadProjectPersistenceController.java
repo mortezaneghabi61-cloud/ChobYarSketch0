@@ -2,6 +2,9 @@ package ir.chobyar.sketch;
 
 import android.content.Context;
 
+import java.lang.reflect.Field;
+import java.util.List;
+
 /**
  * Transaction boundary used by Save/Open UI.
  *
@@ -15,13 +18,31 @@ final class CadProjectPersistenceController {
     static String encode(Shapr3DGuideCadCanvasView cad){
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         String sketch=cad.exportSketchProjectState();
-        if(cad.hasAnySolidBody()){
+        if(hasAnySolidBody(cad)){
             String model=ExactModelProjectAdapter.exportModel(cad);
             ExactModelProjectAdapter.validateAgainstSketch(model,sketch);
             return CadProjectDocument.encodeModel(sketch,model);
         }
         if(cad.hasReferenceImage())throw new IllegalStateException("Reference Image project persistence is not implemented yet");
         return CadProjectDocument.encodeSketch(sketch);
+    }
+
+    /**
+     * SolidCadCanvasView intentionally keeps its body collection private.  The
+     * Save/Open boundary only needs a loss-prevention predicate here: if any Body
+     * exists, model-v2 must be used instead of silently writing sketch-v1.  Keep
+     * this reflective compatibility shim inside persistence code rather than
+     * exposing prototype internals to production UI.
+     */
+    private static boolean hasAnySolidBody(Shapr3DGuideCadCanvasView cad){
+        try{
+            Field field=SolidCadCanvasView.class.getDeclaredField("bodies");
+            field.setAccessible(true);
+            Object value=field.get(cad);
+            return value instanceof List && !((List<?>)value).isEmpty();
+        }catch(ReflectiveOperationException e){
+            throw new IllegalStateException("Solid model presence could not be inspected",e);
+        }
     }
 
     static CadProjectDocument.Decoded validate(Shapr3DGuideCadCanvasView cad,String raw){
