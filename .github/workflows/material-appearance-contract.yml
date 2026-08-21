@@ -40,6 +40,12 @@ jobs:
           grep -q 'void setAppearance(int color,float roughness,float metallic)' app/src/main/java/ir/chobyar/sketch/FilamentCadSurface.java
           grep -q 'material.roughness' app/src/main/java/ir/chobyar/sketch/FilamentCadSurface.java
           grep -q 'material.metallic' app/src/main/java/ir/chobyar/sketch/FilamentCadSurface.java
+          grep -q 'CadAppearanceController appearance=new CadAppearanceController()' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'CadMaterialPreset.Preset.values()' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'appearance.applyPreset' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'appearance.setColor' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'appearance.setRoughness' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q '"◉","Material",this::showMaterialPalette' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
