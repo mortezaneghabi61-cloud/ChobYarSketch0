@@ -225,15 +225,19 @@ final class FigmaWorkspaceStyler {
             String text=descendantText(root.getChildAt(i));
             if (text.contains("Sketch •")) { title=text; break; }
         }
+        String desired;
         if (title.contains("Sketch •")) {
-            String plane="Sketch";
             int start=title.indexOf("Sketch •");
             int end=title.indexOf('\n',start);
-            plane=(end>start?title.substring(start,end):title.substring(start)).trim();
-            status.setText(plane);
+            desired=(end>start?title.substring(start,end):title.substring(start)).trim();
         } else {
-            status.setText("Modeling • ISO • mm");
+            desired="Modeling • ISO • mm";
         }
+        // setText() requests layout even if the visible value did not change.
+        // Because this method is called from an OnLayoutChangeListener, writing
+        // the same text continuously creates a relayout loop. Only mutate on a
+        // real status transition (Modeling <-> Sketch / plane change).
+        if (!desired.contentEquals(status.getText())) status.setText(desired);
     }
 
     private static String descendantText(View view) {
