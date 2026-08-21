@@ -99,7 +99,7 @@ jobs:
             adb logcat -c
             adb shell am force-stop ir.chobyar.sketch
             adb shell am start -W -S -n ir.chobyar.sketch/.ChobYarActivity | tee test-artifacts/cold-launch.txt
-            awk -F': ' '/TotalTime:/{v=$2} END{gsub(/\r/,"",v); if(v=="") exit 1; print "cold_start_total_ms=" v; if ((v+0) >= 30000) exit 2}' test-artifacts/cold-launch.txt > test-artifacts/performance-baseline.txt
+            awk -F': ' '/TotalTime:/{v=$2} /WaitTime:/{if(v=="") v=$2} END{gsub(/\r/,"",v); if(v=="") exit 1; print "cold_start_observed_ms=" v; if ((v+0) >= 30000) exit 2}' test-artifacts/cold-launch.txt > test-artifacts/performance-baseline.txt
             cat test-artifacts/performance-baseline.txt
             sleep 3
             adb shell pidof ir.chobyar.sketch | tr -d '\r' > test-artifacts/pid.txt
