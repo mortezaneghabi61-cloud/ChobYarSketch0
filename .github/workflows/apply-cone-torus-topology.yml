@@ -1,0 +1,42 @@
+name: Apply Exact Cone Torus Face Topology
+
+on:
+  push:
+    branches:
+      - feature/exact-cone-torus-topology-20260821
+    paths:
+      - .github/scripts/apply-cone-torus-topology.py
+      - .github/workflows/apply-cone-torus-topology.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/exact-cone-torus-topology-20260821
+          fetch-depth: 0
+      - name: Apply exact cone and torus face topology extension
+        run: python3 .github/scripts/apply-cone-torus-topology.py
+      - name: Commit production code and regression gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet && [[ -z "$(git status --porcelain)" ]]; then
+            echo "Patch already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java \
+            app/src/main/cpp/occt_brep_jni.cpp \
+            app/src/main/java/ir/chobyar/sketch/OcctTopologyRef.java \
+            app/src/androidTest/java/ir/chobyar/sketch/ExactFaceTopologyInstrumentationTest.java \
+            .github/scripts/run-production-cad-regression.sh
+          git commit -m "Add exact cone and torus face topology"
+          git push origin HEAD:feature/exact-cone-torus-topology-20260821
