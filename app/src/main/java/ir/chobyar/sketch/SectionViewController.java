@@ -37,6 +37,19 @@ final class SectionViewController {
 
     void flip() { flipped = !flipped; }
 
+    /**
+     * Atomically restores a validated persisted Section View.  This changes only
+     * renderer clipping state and never mutates the exact OCCT model or History.
+     */
+    void restore(boolean nextEnabled, Axis nextAxis, double nextOffsetMm, boolean nextFlipped) {
+        if (nextAxis == null) throw new IllegalArgumentException("Section View axis is missing");
+        if (!Double.isFinite(nextOffsetMm)) throw new IllegalArgumentException("Section View offset is invalid");
+        axis = nextAxis;
+        offsetMm = nextOffsetMm;
+        flipped = nextFlipped;
+        enabled = nextEnabled;
+    }
+
     int selectedIndex() {
         if (!enabled) return 0;
         if (axis == Axis.Z) return 1;

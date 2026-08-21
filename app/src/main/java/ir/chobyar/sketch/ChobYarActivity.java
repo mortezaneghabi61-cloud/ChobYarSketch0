@@ -584,7 +584,7 @@ public final class ChobYarActivity extends Activity {
         if(requestCode==REQUEST_SAVE_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                if(out==null)throw new IllegalStateException();String json=CadProjectPersistenceController.encode(cad);
+                if(out==null)throw new IllegalStateException();String json=CadProjectPersistenceController.encode(cad,appearance,sectionView);
                 out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("پروژه ذخیره شد");
             }catch(Exception e){toast("ذخیره پروژه انجام نشد");}return;
         }
@@ -593,7 +593,7 @@ public final class ChobYarActivity extends Activity {
             try(InputStream in=getContentResolver().openInputStream(data.getData());java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream()){
                 if(in==null)throw new IllegalStateException();byte[] bytes=new byte[65536];int n;while((n=in.read(bytes))>0)buffer.write(bytes,0,n);
                 String raw=new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
-                String result=CadProjectPersistenceController.restore(cad,raw);
+                String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw);
                 syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
             }catch(Exception e){toast("بازکردن پروژه انجام نشد");}return;
         }

@@ -11,11 +11,16 @@ on:
       - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'
       - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'
       - 'app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java'
+      - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java'
+      - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectAdapter.java'
+      - 'app/src/main/java/ir/chobyar/sketch/CadAppearanceController.java'
+      - 'app/src/main/java/ir/chobyar/sketch/SectionViewController.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ProjectPersistenceInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectStateInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectAdapterInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java'
       - '.github/workflows/project-persistence-contract.yml'
 
 permissions:
@@ -49,8 +54,10 @@ jobs:
           grep -q 'public boolean canImportSketchProjectState' app/src/main/java/ir/chobyar/sketch/CadCanvasView.java
           grep -q 'REQUEST_SAVE_PROJECT=1703' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
           grep -q 'REQUEST_OPEN_PROJECT=1704' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
-          grep -q 'CadProjectPersistenceController.encode(cad)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
-          grep -q 'CadProjectPersistenceController.restore(cad,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'CadProjectPersistenceController.encode(cad,appearance,sectionView)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'workspaceVisual' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'WorkspaceVisualProjectAdapter.exportState' app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java
           ! grep -q 'ذخیره پروژه 3D هنوز کامل نشده' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
           ! grep -q 'getDeclaredField' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
       - uses: actions/setup-java@v5
@@ -95,6 +102,8 @@ jobs:
             grep -q 'OK (2 tests)' test-artifacts/project-persistence-restore.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.ReferenceImageProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-reference-image.txt
             grep -q 'OK (5 tests)' test-artifacts/project-persistence-reference-image.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.WorkspaceVisualProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-visual.txt
+            grep -q 'OK (11 tests)' test-artifacts/project-persistence-visual.txt
       - name: Upload project persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
