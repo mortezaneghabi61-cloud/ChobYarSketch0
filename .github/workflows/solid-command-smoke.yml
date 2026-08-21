@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 49 production CAD contracts on API 35
+    name: 51 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -60,6 +60,8 @@ jobs:
           grep -q 'OCCT_EDGE_RECORD_SIZE' "$NATIVE"
           grep -q 'OCCT_FACE_RECORD_SIZE' "$NATIVE"
           grep -q 'OCCT_FACE_SPHERE' "$NATIVE"
+          grep -q 'OCCT_FACE_CONE' "$NATIVE"
+          grep -q 'OCCT_FACE_TORUS' "$NATIVE"
           grep -q 'occtEdgeDescriptors' "$TOPOLOGY"
           grep -q 'occtFaceDescriptors' "$TOPOLOGY"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
