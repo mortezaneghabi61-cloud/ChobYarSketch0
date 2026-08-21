@@ -60,6 +60,23 @@ public final class ExactFaceTopologyInstrumentationTest {
         android.util.Log.i("ExactFaceTopology","EXACT_FACE_CYLINDER_REMATCH radius=12 axisZ=true exact=true");
     }
 
+    @Test public void sphericalFaceRematchesByCenterRadiusAndArea(){
+        double[] before=concat(
+                sphere(4,10,20,30,10,20,30,0,0,1,15,2827.433388),
+                plane(5,10,20,45,10,20,45,0,0,1,706.858347));
+        OcctTopologyRef.Ref ref=OcctTopologyRef.captureFaceDescriptorsForTest(
+                before,new Geometry3D.Vec3(25,20,30),"F-sphere");
+        assertNotNull(ref);assertEquals(NativeBRepKernel.OCCT_FACE_SPHERE,ref.signatureKind);
+        assertEquals(15.0,ref.secondaryMeasure,1e-4);
+        double[] rebuilt=concat(
+                sphere(12,12,18,34,12,18,34,0,1,0,18,4071.504079),
+                plane(2,12,18,52,12,18,52,0,0,1,1017.876020));
+        OcctTopologyRef.Resolution r=OcctTopologyRef.resolveFaceDescriptorsForTest(rebuilt,ref);
+        assertNotNull(r);assertTrue(r.confident());
+        near(12,r.anchor.x,.001);near(18,r.anchor.y,.001);near(34,r.anchor.z,.001);
+        android.util.Log.i("ExactFaceTopology","EXACT_FACE_SPHERE_REMATCH radius=18 exact=true");
+    }
+
     private static double[] plane(int index,double cx,double cy,double cz,
                                   double ox,double oy,double oz,
                                   double ax,double ay,double az,double area){
@@ -73,6 +90,15 @@ public final class ExactFaceTopologyInstrumentationTest {
                                      double ax,double ay,double az,
                                      double radius,double area){
         double[] r=new double[N];r[0]=NativeBRepKernel.OCCT_FACE_CYLINDER;r[1]=index;
+        r[2]=cx;r[3]=cy;r[4]=cz;r[5]=ox;r[6]=oy;r[7]=oz;
+        r[8]=ax;r[9]=ay;r[10]=az;r[11]=area;r[12]=radius;r[13]=1;return r;
+    }
+
+    private static double[] sphere(int index,double cx,double cy,double cz,
+                                   double ox,double oy,double oz,
+                                   double ax,double ay,double az,
+                                   double radius,double area){
+        double[] r=new double[N];r[0]=NativeBRepKernel.OCCT_FACE_SPHERE;r[1]=index;
         r[2]=cx;r[3]=cy;r[4]=cz;r[5]=ox;r[6]=oy;r[7]=oz;
         r[8]=ax;r[9]=ay;r[10]=az;r[11]=area;r[12]=radius;r[13]=1;return r;
     }
