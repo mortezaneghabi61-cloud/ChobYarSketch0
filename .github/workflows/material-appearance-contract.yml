@@ -9,6 +9,7 @@ on:
       - 'app/src/main/java/ir/chobyar/sketch/FilamentCadSurface.java'
       - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/CadMaterialPresetInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/CadAppearanceControllerInstrumentationTest.java'
       - '.github/workflows/material-appearance-contract.yml'
 
 permissions:
@@ -58,7 +59,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run material preset contracts on API 35
+      - name: Run material appearance contracts on API 35
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -71,8 +72,8 @@ jobs:
             mkdir -p test-artifacts
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w -e class ir.chobyar.sketch.CadMaterialPresetInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/material-appearance.txt
-            grep -q 'OK (4 tests)' test-artifacts/material-appearance.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.CadMaterialPresetInstrumentationTest,ir.chobyar.sketch.CadAppearanceControllerInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/material-appearance.txt
+            grep -q 'OK (6 tests)' test-artifacts/material-appearance.txt
       - name: Upload material evidence
         if: always()
         uses: actions/upload-artifact@v4
