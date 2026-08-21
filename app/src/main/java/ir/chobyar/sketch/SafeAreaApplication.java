@@ -62,15 +62,23 @@ public class SafeAreaApplication extends Application implements Application.Acti
         content.requestApplyInsets();
     }
 
+    private void applyWorkspaceChrome(Activity activity) {
+        View content = activity.findViewById(android.R.id.content);
+        if (content == null) return;
+        content.post(() -> FigmaWorkspaceStyler.apply(activity));
+    }
+
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
         applySafeArea(activity);
+        applyWorkspaceChrome(activity);
     }
 
     @Override
     public void onActivityResumed(Activity activity) {
         // Immersive flags can change insets after focus returns, so refresh them.
         applySafeArea(activity);
+        applyWorkspaceChrome(activity);
     }
 
     @Override public void onActivityStarted(Activity activity) {}
