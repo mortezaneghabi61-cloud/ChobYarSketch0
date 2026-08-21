@@ -593,17 +593,25 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private long applyKernel(long handle,StableEdit edit){
         if(handle==0L||edit==null)return 0L;
-        Geometry3D.Vec3 anchor=null;
+        Geometry3D.Vec3 anchor=null;int subshapeIndex=-1;
         if(edit.target!=null){
             OcctTopologyRef.Resolution r=OcctTopologyRef.resolve(handle,edit.target);
             if(r==null||r.score>180.0){edit.broken=true;edit.warning="Topology دوباره پیدا نشد";return 0L;}
-            anchor=r.anchor;
+            anchor=r.anchor;subshapeIndex=r.subshapeIndex;
         }
         switch(edit.kind){
-            case FILLET:return NativeBRepKernel.occtFillet(handle,anchor,edit.value,false);
-            case CHAMFER:return NativeBRepKernel.occtChamfer(handle,anchor,edit.value,false);
-            case PUSH_PULL:return NativeBRepKernel.occtPushPullFace(handle,anchor,edit.value);
-            case SHELL:return NativeBRepKernel.occtShell(handle,anchor,edit.value);
+            case FILLET:return subshapeIndex>=0
+                    ?NativeIndexedDirectKernel.filletByIndex(handle,subshapeIndex,edit.value)
+                    :NativeBRepKernel.occtFillet(handle,anchor,edit.value,false);
+            case CHAMFER:return subshapeIndex>=0
+                    ?NativeIndexedDirectKernel.chamferByIndex(handle,subshapeIndex,edit.value)
+                    :NativeBRepKernel.occtChamfer(handle,anchor,edit.value,false);
+            case PUSH_PULL:return subshapeIndex>=0
+                    ?NativeIndexedDirectKernel.pushPullFaceByIndex(handle,subshapeIndex,edit.value)
+                    :NativeBRepKernel.occtPushPullFace(handle,anchor,edit.value);
+            case SHELL:return subshapeIndex>=0
+                    ?NativeIndexedDirectKernel.shellByIndex(handle,subshapeIndex,edit.value)
+                    :NativeBRepKernel.occtShell(handle,anchor,edit.value);
             case MOVE:return NativeBRepKernel.occtTranslate(handle,edit.vector);
             case ROTATE:return NativeBRepKernel.occtRotate(handle,edit.vector,edit.value);
             case SCALE:return NativeBRepKernel.occtScale(handle,edit.value);

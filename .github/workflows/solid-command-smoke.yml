@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 51 production CAD contracts on API 35
+    name: 53 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -42,7 +42,9 @@ jobs:
           SPATIAL=app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           GUIDE=app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java
           NATIVE=app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java
+          INDEXED=app/src/main/java/ir/chobyar/sketch/NativeIndexedDirectKernel.java
           TOPOLOGY=app/src/main/java/ir/chobyar/sketch/OcctTopologyRef.java
+          STABLE=app/src/main/java/ir/chobyar/sketch/OcctStableCadCanvasView.java
           KERNEL=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
           grep -q 'applyHistoryBooleanByIndex' "$BOOL"
           grep -q 'keepLeft' "$BOOL"
@@ -64,7 +66,17 @@ jobs:
           grep -q 'OCCT_FACE_TORUS' "$NATIVE"
           grep -q 'occtEdgeDescriptors' "$TOPOLOGY"
           grep -q 'occtFaceDescriptors' "$TOPOLOGY"
+          grep -q 'subshapeIndex' "$TOPOLOGY"
+          test -f "$INDEXED"
+          grep -q 'filletByIndex' "$INDEXED"
+          grep -q 'chamferByIndex' "$INDEXED"
+          grep -q 'pushPullFaceByIndex' "$INDEXED"
+          grep -q 'shellByIndex' "$INDEXED"
+          grep -q 'NativeIndexedDirectKernel.filletByIndex' "$STABLE"
+          grep -q 'NativeIndexedDirectKernel.pushPullFaceByIndex' "$STABLE"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
+          test -f app/src/main/cpp/occt_brep_with_indexed_direct.cpp
+          test -f app/src/main/cpp/occt_indexed_direct_extension.inc
           test -f .github/scripts/run-production-cad-regression.sh
           for t in \
             TouchInputContractInstrumentationTest \
@@ -85,7 +97,8 @@ jobs:
             Project3DSelectedBodyInstrumentationTest \
             AssociativeProjectProvenanceInstrumentationTest \
             ExactEdgeTopologyInstrumentationTest \
-            ExactFaceTopologyInstrumentationTest; do
+            ExactFaceTopologyInstrumentationTest \
+            ExactTopologyIndexInstrumentationTest; do
               test -f "app/src/androidTest/java/ir/chobyar/sketch/${t}.java"
           done
 
