@@ -1,0 +1,58 @@
+name: Reference Image persistence integration patch
+
+on:
+  push:
+    branches:
+      - feature/reference-image-persistence-20260821
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/reference-image-persistence-20260821
+          fetch-depth: 0
+
+      - name: Integrate Reference Image persistence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          exact = Path('app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java')
+          s = exact.read_text()
+          old = '            if(hasReferenceImage(cad))throw new IllegalStateException("Reference Image persistence is not implemented in model-v2 yet");\n'
+          if old not in s:
+              raise SystemExit('expected Reference Image model-v2 rejection not found')
+          s = s.replace(old, '', 1)
+          exact.write_text(s)
+
+          spatial = Path('app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java')
+          s = spatial.read_text()
+          anchor = '    public boolean hasReferenceImage(){return referenceImage!=null;}\n'
+          replacement = '''    public boolean hasReferenceImage(){return referenceImage!=null;}\n\n    /** Clear project-owned auxiliary image state together with Sketch/model state. */\n    @Override public void clearAll(){\n        referenceImage=null;\n        super.clearAll();\n    }\n'''
+          if anchor not in s:
+              raise SystemExit('expected hasReferenceImage anchor not found')
+          s = s.replace(anchor, replacement, 1)
+          spatial.write_text(s)
+          PY
+          git diff --check
+          ! grep -q 'Reference Image persistence is not implemented in model-v2 yet' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
+          grep -q 'referenceImage=null' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
+
+      - name: Commit integration patch and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/reference-image-persistence-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
+          git commit -m 'Integrate Reference Image into project persistence'
+          git push origin HEAD:feature/reference-image-persistence-20260821
