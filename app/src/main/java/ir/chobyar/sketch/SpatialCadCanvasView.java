@@ -309,6 +309,12 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     public boolean hasReferenceImage(){return referenceImage!=null;}
 
+    /** Clear project-owned auxiliary image state together with Sketch/model state. */
+    @Override public void clearAll(){
+        referenceImage=null;
+        super.clearAll();
+    }
+
     public void showReferenceImageSettings(){
         if(referenceImage==null){toast("ابتدا از Add > Image یک تصویر وارد کن");return;}ReferenceImage image=referenceImage;
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);int pad=(int)(16f*getResources().getDisplayMetrics().density);box.setPadding(pad,0,pad,0);
