@@ -36,6 +36,19 @@ final class CadAppearanceController {
         return state;
     }
 
+    /**
+     * Restores a previously validated project appearance without re-applying
+     * preset defaults.  Custom color/roughness/metallic values therefore survive
+     * Save/Open exactly while remaining a renderer-only concern.
+     */
+    CadMaterialPreset.State restore(CadMaterialPreset.State restored, Sink sink) {
+        if (restored == null) throw new IllegalArgumentException("Appearance state is missing");
+        state = new CadMaterialPreset.State(
+                restored.preset, restored.argb, restored.roughness, restored.metallic);
+        publish(sink);
+        return state;
+    }
+
     void publish(Sink sink) {
         if (sink != null) sink.setAppearance(state.argb, state.roughness, state.metallic);
     }
