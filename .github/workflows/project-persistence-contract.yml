@@ -12,6 +12,7 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/ProjectPersistenceInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectStateInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectAdapterInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'
       - '.github/workflows/project-persistence-contract.yml'
 
 permissions:
@@ -39,6 +40,7 @@ jobs:
           grep -q 'static String encodeModel' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
           grep -q 'Transient OCCT/display state cannot be persisted' app/src/main/java/ir/chobyar/sketch/ExactModelProjectState.java
           grep -q 'static String exportModel' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
+          grep -q 'static String restoreModel' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
           grep -q 'validateAgainstSketch' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
           grep -q 'public String exportSketchProjectState()' app/src/main/java/ir/chobyar/sketch/CadCanvasView.java
           grep -q 'public boolean canImportSketchProjectState' app/src/main/java/ir/chobyar/sketch/CadCanvasView.java
@@ -84,6 +86,8 @@ jobs:
             grep -q 'OK (7 tests)' test-artifacts/project-persistence-v2.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelProjectAdapterInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-adapter.txt
             grep -q 'OK (3 tests)' test-artifacts/project-persistence-adapter.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelRestoreInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-restore.txt
+            grep -q 'OK (2 tests)' test-artifacts/project-persistence-restore.txt
       - name: Upload project persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
