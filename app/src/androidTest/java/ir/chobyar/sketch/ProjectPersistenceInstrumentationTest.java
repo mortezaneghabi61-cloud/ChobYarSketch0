@@ -9,11 +9,15 @@ import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public class ProjectPersistenceInstrumentationTest {
@@ -35,6 +39,23 @@ public class ProjectPersistenceInstrumentationTest {
         return new JSONObject().put("schemaVersion", 1).put("unit", "mm")
                 .put("currentLayer", "Furniture").put("currentColor", 0xff223344).put("polygonSides", 6)
                 .put("view", view).put("layers", layers).put("entities", new JSONArray().put(line).put(circle)).toString();
+    }
+
+    private static <T> T onMain(Callable<T> callable) throws Exception {
+        AtomicReference<T> result = new AtomicReference<>();
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            try {
+                result.set(callable.call());
+            } catch (Throwable t) {
+                error.set(t);
+            }
+        });
+        Throwable failure = error.get();
+        if (failure instanceof Exception) throw (Exception) failure;
+        if (failure instanceof Error) throw (Error) failure;
+        if (failure != null) throw new RuntimeException(failure);
+        return result.get();
     }
 
     @Test public void envelopeRoundTripPreservesSketchAndMillimeters() throws Exception {
@@ -83,11 +104,13 @@ public class ProjectPersistenceInstrumentationTest {
     }
 
     @Test public void canvasSnapshotRoundTripPreservesEntitiesMetadataAndView() throws Exception {
-        Context context = ApplicationProvider.getApplicationContext();
-        CadCanvasView canvas = new CadCanvasView(context);
-        assertTrue(canvas.canImportSketchProjectState(sketchFixture()));
-        assertTrue(canvas.importSketchProjectState(sketchFixture()).contains("2"));
-        JSONObject out = new JSONObject(canvas.exportSketchProjectState());
+        JSONObject out = onMain(() -> {
+            Context context = ApplicationProvider.getApplicationContext();
+            CadCanvasView canvas = new CadCanvasView(context);
+            assertTrue(canvas.canImportSketchProjectState(sketchFixture()));
+            assertTrue(canvas.importSketchProjectState(sketchFixture()).contains("2"));
+            return new JSONObject(canvas.exportSketchProjectState());
+        });
         assertEquals("mm", out.getString("unit"));
         assertEquals("Furniture", out.getString("currentLayer"));
         assertEquals(2, out.getJSONArray("entities").length());
@@ -98,15 +121,20 @@ public class ProjectPersistenceInstrumentationTest {
     }
 
     @Test public void invalidSketchRestoreDoesNotMutateCurrentCanvas() throws Exception {
-        Context context = ApplicationProvider.getApplicationContext();
-        CadCanvasView canvas = new CadCanvasView(context);
-        canvas.importSketchProjectState(sketchFixture());
-        JSONObject before = new JSONObject(canvas.exportSketchProjectState());
-        JSONObject bad = new JSONObject(sketchFixture());
-        bad.getJSONArray("entities").getJSONObject(0).put("type", "UNKNOWN");
-        assertFalse(canvas.canImportSketchProjectState(bad.toString()));
-        assertTrue(canvas.importSketchProjectState(bad.toString()).contains("نامعتبر"));
-        JSONObject after = new JSONObject(canvas.exportSketchProjectState());
+        JSONObject[] snapshots = onMain(() -> {
+            Context context = ApplicationProvider.getApplicationContext();
+            CadCanvasView canvas = new CadCanvasView(context);
+            canvas.importSketchProjectState(sketchFixture());
+            JSONObject before = new JSONObject(canvas.exportSketchProjectState());
+            JSONObject bad = new JSONObject(sketchFixture());
+            bad.getJSONArray("entities").getJSONObject(0).put("type", "UNKNOWN");
+            assertFalse(canvas.canImportSketchProjectState(bad.toString()));
+            assertTrue(canvas.importSketchProjectState(bad.toString()).contains("نامعتبر"));
+            JSONObject after = new JSONObject(canvas.exportSketchProjectState());
+            return new JSONObject[]{before, after};
+        });
+        JSONObject before = snapshots[0];
+        JSONObject after = snapshots[1];
         assertEquals(before.getJSONArray("entities").length(), after.getJSONArray("entities").length());
         assertEquals(before.getJSONArray("entities").getJSONObject(0).getString("type"), after.getJSONArray("entities").getJSONObject(0).getString("type"));
         assertEquals(before.getJSONArray("entities").getJSONObject(0).getDouble("x2"), after.getJSONArray("entities").getJSONObject(0).getDouble("x2"), 0.0001);
