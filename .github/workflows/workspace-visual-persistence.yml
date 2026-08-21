@@ -81,7 +81,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class ir.chobyar.sketch.WorkspaceVisualProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/workspace-visual-persistence.txt
-            grep -q 'OK (9 tests)' test-artifacts/workspace-visual-persistence.txt
+            grep -q 'OK (11 tests)' test-artifacts/workspace-visual-persistence.txt
       - name: Upload visual persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
