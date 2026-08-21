@@ -7,8 +7,9 @@ import org.json.JSONObject;
  *
  * Schema v1 stores only the sketch/document shell. Schema v2 adds an exact-model
  * section containing logical plane/feature/topology references. Schema v3 adds
- * workspace-owned auxiliary state such as Reference Image without contaminating
- * the exact OCCT feature graph. Older v1/v2 files remain readable.
+ * workspace-owned auxiliary state such as Reference Image and renderer-only
+ * Materials / Section View state without contaminating exact OCCT History.
+ * Older v1/v2 and earlier v3 files remain readable.
  */
 final class CadProjectDocument {
     static final String FORMAT = "chobyar-project";
@@ -26,22 +27,30 @@ final class CadProjectDocument {
         final String sketchState;
         final String modelState;
         final String referenceImageState;
+        final String workspaceVisualState;
 
         Decoded(int schemaVersion, String scope, String unit, String sketchState, String modelState) {
-            this(schemaVersion, scope, unit, sketchState, modelState, null);
+            this(schemaVersion, scope, unit, sketchState, modelState, null, null);
         }
 
         Decoded(int schemaVersion, String scope, String unit, String sketchState, String modelState, String referenceImageState) {
+            this(schemaVersion, scope, unit, sketchState, modelState, referenceImageState, null);
+        }
+
+        Decoded(int schemaVersion, String scope, String unit, String sketchState, String modelState,
+                String referenceImageState, String workspaceVisualState) {
             this.schemaVersion = schemaVersion;
             this.scope = scope;
             this.unit = unit;
             this.sketchState = sketchState;
             this.modelState = modelState;
             this.referenceImageState = referenceImageState;
+            this.workspaceVisualState = workspaceVisualState;
         }
 
         boolean hasExactModel(){return modelState!=null;}
         boolean hasReferenceImage(){return referenceImageState!=null;}
+        boolean hasWorkspaceVisual(){return workspaceVisualState!=null;}
     }
 
     private CadProjectDocument() {}
@@ -77,9 +86,14 @@ final class CadProjectDocument {
     }
 
     static String encodeWorkspace(String sketchState,String modelState,String referenceImageState) {
+        return encodeWorkspace(sketchState,modelState,referenceImageState,null);
+    }
+
+    static String encodeWorkspace(String sketchState,String modelState,String referenceImageState,String workspaceVisualState) {
         JSONObject sketch=parseObject(sketchState,"Sketch state is empty","Invalid sketch project state");
         JSONObject model=modelState==null?null:parseObject(modelState,"Model state is empty","Invalid model project state");
         JSONObject reference=referenceImageState==null?null:parseObject(referenceImageState,"Reference Image state is empty","Invalid Reference Image project state");
+        JSONObject visual=workspaceVisualState==null?null:parseObject(workspaceVisualState,"Visual workspace state is empty","Invalid visual workspace project state");
         try{
             JSONObject root=new JSONObject();
             root.put("format",FORMAT);
@@ -89,48 +103,43 @@ final class CadProjectDocument {
             root.put("sketch",sketch);
             if(model!=null)root.put("model",model);
             if(reference!=null)root.put("referenceImage",reference);
+            if(visual!=null)root.put("workspaceVisual",visual);
             return root.toString();
         }catch(Exception e){throw new IllegalArgumentException("Invalid workspace project state",e);}
     }
 
     static Decoded decode(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
-            throw new IllegalArgumentException("Project file is empty");
-        }
+        if (raw == null || raw.trim().isEmpty()) throw new IllegalArgumentException("Project file is empty");
         try {
             JSONObject root = new JSONObject(raw);
-            if (!FORMAT.equals(root.optString("format", ""))) {
-                throw new IllegalArgumentException("Unsupported project format");
-            }
+            if (!FORMAT.equals(root.optString("format", ""))) throw new IllegalArgumentException("Unsupported project format");
             int version = root.optInt("schemaVersion", -1);
             if (version < 1) throw new IllegalArgumentException("Missing project schema");
-            if (version > SCHEMA_VERSION) {
-                throw new IllegalArgumentException("Project was created by a newer ChobYar version");
-            }
+            if (version > SCHEMA_VERSION) throw new IllegalArgumentException("Project was created by a newer ChobYar version");
             String unit = root.optString("unit", "");
             if (!"mm".equals(unit)) throw new IllegalArgumentException("Project unit must be mm");
             JSONObject sketch = root.optJSONObject("sketch");
             if (sketch == null) throw new IllegalArgumentException("Project sketch section is missing");
             String scope = root.optString("scope", "");
-            if(version==SKETCH_SCHEMA_VERSION&&SCOPE_SKETCH_V1.equals(scope)){
-                return new Decoded(version,scope,unit,sketch.toString(),null,null);
-            }
+            if(version==SKETCH_SCHEMA_VERSION&&SCOPE_SKETCH_V1.equals(scope))
+                return new Decoded(version,scope,unit,sketch.toString(),null,null,null);
             if(version==MODEL_SCHEMA_VERSION&&SCOPE_MODEL_V2.equals(scope)){
                 JSONObject model=root.optJSONObject("model");
                 if(model==null)throw new IllegalArgumentException("Project model section is missing");
-                return new Decoded(version,scope,unit,sketch.toString(),model.toString(),null);
+                return new Decoded(version,scope,unit,sketch.toString(),model.toString(),null,null);
             }
             if(version==SCHEMA_VERSION&&SCOPE_WORKSPACE_V3.equals(scope)){
                 JSONObject model=root.optJSONObject("model");
                 JSONObject reference=root.optJSONObject("referenceImage");
-                return new Decoded(version,scope,unit,sketch.toString(),model==null?null:model.toString(),reference==null?null:reference.toString());
+                JSONObject visual=root.optJSONObject("workspaceVisual");
+                return new Decoded(version,scope,unit,sketch.toString(),
+                        model==null?null:model.toString(),
+                        reference==null?null:reference.toString(),
+                        visual==null?null:visual.toString());
             }
             throw new IllegalArgumentException("Unsupported project scope");
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Malformed ChobYar project file", e);
-        }
+        } catch (IllegalArgumentException e) { throw e; }
+        catch (Exception e) { throw new IllegalArgumentException("Malformed ChobYar project file", e); }
     }
 
     private static JSONObject parseObject(String raw,String emptyMessage,String invalidMessage){

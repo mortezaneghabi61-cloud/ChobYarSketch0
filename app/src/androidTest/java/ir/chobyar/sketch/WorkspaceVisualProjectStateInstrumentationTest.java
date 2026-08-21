@@ -168,6 +168,32 @@ public class WorkspaceVisualProjectStateInstrumentationTest {
         assertTrue(restoredSection.isFlipped());
     }
 
+    @Test
+    public void workspaceEnvelopeCarriesVisualStateWithoutExactModel() {
+        CadAppearanceController appearance = new CadAppearanceController();
+        appearance.restore(new CadMaterialPreset.State(CadMaterialPreset.Preset.PAINT, 0xFF2468AC, 0.41f, 0.07f), null);
+        SectionViewController section = new SectionViewController();
+        section.enable(SectionViewController.Axis.Y); section.setOffsetMm(12.75); section.flip();
+        String visual = WorkspaceVisualProjectAdapter.exportState(appearance, section);
+        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(CadProjectDocument.encodeWorkspace("{}", null, null, visual));
+        assertTrue(decoded.hasWorkspaceVisual());
+        assertFalse(decoded.hasExactModel());
+        WorkspaceVisualProjectState.Decoded restored = WorkspaceVisualProjectAdapter.validate(decoded.workspaceVisualState);
+        assertEquals(CadMaterialPreset.Preset.PAINT, restored.appearance.preset);
+        assertEquals(0xFF2468AC, restored.appearance.argb);
+        assertEquals(0.41f, restored.appearance.roughness, 0.0001f);
+        assertEquals(SectionViewController.Axis.Y, restored.sectionAxis);
+        assertEquals(12.75, restored.sectionOffsetMm, 0.000001);
+        assertTrue(restored.sectionFlipped);
+    }
+
+    @Test
+    public void earlierWorkspaceV3WithoutVisualStateRemainsReadable() {
+        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(CadProjectDocument.encodeWorkspace("{}", null, null));
+        assertEquals(CadProjectDocument.SCOPE_WORKSPACE_V3, decoded.scope);
+        assertFalse(decoded.hasWorkspaceVisual());
+    }
+
     private static void assertRejected(String raw) {
         try {
             WorkspaceVisualProjectState.decode(raw);
