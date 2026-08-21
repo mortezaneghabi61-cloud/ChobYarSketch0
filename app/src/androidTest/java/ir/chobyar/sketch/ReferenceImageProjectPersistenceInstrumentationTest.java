@@ -64,7 +64,7 @@ public class ReferenceImageProjectPersistenceInstrumentationTest {
         assertEquals(0.42f,floatField(image,"opacity"),0.0001f);assertFalse(booleanField(image,"visible"));
         Geometry3D.Plane3D plane=(Geometry3D.Plane3D)objectField(image,"plane");assertTrue(plane.label.contains("12.5"));
         Bitmap bitmap=(Bitmap)objectField(image,"bitmap");assertEquals(4,bitmap.getWidth());assertEquals(2,bitmap.getHeight());
-        assertEquals(Color.RED,bitmap.getPixel(0,0));assertEquals(Color.CYAN,bitmap.getPixel(1,1));assertEquals(Color.MAGENTA,bitmap.getPixel(3,1));
+        assertEquals(Color.RED,bitmap.getPixel(0,0));assertEquals(Color.CYAN,bitmap.getPixel(2,1));assertEquals(Color.MAGENTA,bitmap.getPixel(3,1));
         SpatialCadCanvasView.GpuCameraState camera=restored.gpuCameraState();assertEquals(90f,camera.yaw,0.0001f);assertEquals(90f,camera.pitch,0.0001f);
     }
 
