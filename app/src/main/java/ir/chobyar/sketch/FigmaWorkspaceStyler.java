@@ -13,6 +13,7 @@ import android.widget.TextView;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Production-only visual synchronizer for the canonical ChobYar 3D Figma master.
@@ -23,7 +24,7 @@ import java.util.Map;
  */
 final class FigmaWorkspaceStyler {
     private static final int TAG_STATUS = 0x43485931;
-    private static final int TAG_STYLED = 0x43485932;
+    private static final WeakHashMap<FrameLayout,Boolean> INSTALLED = new WeakHashMap<>();
 
     private static final Map<String,String> LABELS = new HashMap<>();
     static {
@@ -176,8 +177,10 @@ final class FigmaWorkspaceStyler {
     }
 
     private static void installDynamicStyling(FrameLayout root) {
-        if (Boolean.TRUE.equals(root.getTag(TAG_STYLED))) return;
-        root.setTag(TAG_STYLED, Boolean.TRUE);
+        synchronized (INSTALLED) {
+            if (INSTALLED.containsKey(root)) return;
+            INSTALLED.put(root, Boolean.TRUE);
+        }
         for (int i=0;i<root.getChildCount();i++) {
             View child=root.getChildAt(i);
             if (child instanceof LinearLayout) installOnContainer((LinearLayout)child);
