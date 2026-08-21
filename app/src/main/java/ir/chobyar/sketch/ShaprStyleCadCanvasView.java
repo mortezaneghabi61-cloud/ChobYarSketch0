@@ -30,6 +30,8 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     private static final float PX_PER_MM = 3f;
     private static final float LABEL_DRAG_SLOP_PX = 7f;
+    private static final float MIN_VIEW_SCALE = 0.02f;
+    private static final float MAX_VIEW_SCALE = 64f;
 
     private final Paint fieldFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fieldStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -56,6 +58,8 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
     private boolean exactFieldPressed = false;
     private boolean exactFieldDragging = false;
+    private boolean exactFieldNavigation = false;
+    private float exactNavLastSpan = 0f;
     private float fieldDownX;
     private float fieldDownY;
     private float fieldStartOffsetX;
@@ -225,15 +229,50 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
-        // Navigation always wins once a second finger joins the gesture. The
-        // first DOWN on the exact-dimension label already primed the scale
-        // detector below; POINTER_DOWN must now reach the normal CAD pipeline
-        // as well so its multi-touch state is established before MOVE events.
+        if (action == MotionEvent.ACTION_CANCEL) {
+            exactFieldNavigation = false;
+            exactNavLastSpan = 0f;
+        }
+
+        // Navigation always wins once a second finger joins the gesture. When
+        // the first finger started on the exact-dimension label, keep a tiny
+        // local fallback for API 35: some ScaleGestureDetector sequences do not
+        // begin scaling after that intercepted DOWN. The normal CAD pipeline is
+        // still called first; fallback scaling runs only if core scale stayed
+        // unchanged for the MOVE, so ordinary pinch behavior is never doubled.
         if (event.getPointerCount() >= 2) {
+            boolean fromExactField = exactFieldPressed || exactFieldNavigation;
+            if (fromExactField && !exactFieldNavigation) {
+                exactFieldNavigation = true;
+                exactNavLastSpan = pointerSpan(event);
+            }
+
             exactFieldPressed = false;
             exactFieldDragging = false;
             fieldGestureEntity = null;
-            return super.onTouchEvent(event);
+
+            float scaleBefore = viewScale();
+            boolean handled = super.onTouchEvent(event);
+
+            if (fromExactField && exactFieldNavigation && action == MotionEvent.ACTION_MOVE) {
+                float span = pointerSpan(event);
+                float scaleAfter = viewScale();
+                if (exactNavLastSpan > 1f && span > 1f
+                        && Math.abs(scaleAfter - scaleBefore) < 1.0e-5f) {
+                    float focusX = (event.getX(0) + event.getX(1)) * 0.5f;
+                    float focusY = (event.getY(0) + event.getY(1)) * 0.5f;
+                    applyExactNavigationFallback(span / exactNavLastSpan, focusX, focusY);
+                }
+                exactNavLastSpan = span;
+            } else if (fromExactField && exactFieldNavigation) {
+                exactNavLastSpan = pointerSpan(event);
+            }
+
+            if (action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_CANCEL) {
+                exactFieldNavigation = false;
+                exactNavLastSpan = 0f;
+            }
+            return handled;
         }
 
         if (action == MotionEvent.ACTION_DOWN
@@ -242,6 +281,8 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
             coreObserveScaleGesture(event);
             exactFieldPressed = true;
             exactFieldDragging = false;
+            exactFieldNavigation = false;
+            exactNavLastSpan = 0f;
             fieldDownX = event.getX();
             fieldDownY = event.getY();
             fieldGestureEntity = selectedObject();
@@ -302,6 +343,41 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                     Toast.LENGTH_LONG).show();
         }
         return handled;
+    }
+
+    /**
+     * API-35 safety net for the one gesture that starts outside the core touch
+     * state machine: first finger down on the exact-dimension label. The core
+     * receives every two-finger event; this method only supplies scale when the
+     * detector demonstrably left viewScale untouched for that MOVE.
+     */
+    private void applyExactNavigationFallback(float spanRatio, float focusX, float focusY) {
+        try {
+            if (viewScaleField == null || offsetXField == null || offsetYField == null) return;
+            if (!Float.isFinite(spanRatio) || spanRatio <= 0f) return;
+
+            float oldScale = viewScaleField.getFloat(this);
+            if (oldScale <= 0f) return;
+
+            float boundedRatio = clamp(spanRatio, 0.5f, 2f);
+            float accelerated = (float) Math.pow(boundedRatio, 1.65d);
+            float newScale = clamp(oldScale * accelerated, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+            if (Math.abs(newScale - oldScale) < 1.0e-6f) return;
+
+            float ratio = newScale / oldScale;
+            float oldOffsetX = offsetXField.getFloat(this);
+            float oldOffsetY = offsetYField.getFloat(this);
+            viewScaleField.setFloat(this, newScale);
+            offsetXField.setFloat(this, focusX - (focusX - oldOffsetX) * ratio);
+            offsetYField.setFloat(this, focusY - (focusY - oldOffsetY) * ratio);
+            invalidate();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static float pointerSpan(MotionEvent event) {
+        if (event == null || event.getPointerCount() < 2) return 0f;
+        return distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
     }
 
     private void showInlineDimensionEditor() {
