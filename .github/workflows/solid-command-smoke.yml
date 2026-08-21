@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 58 production CAD contracts on API 35
+    name: 62 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -39,6 +39,7 @@ jobs:
           BOOL=app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
           DIRECT=app/src/main/java/ir/chobyar/sketch/DirectModelCadCanvasView.java
           ADVANCED=app/src/main/java/ir/chobyar/sketch/AdvancedParametricSolidCadCanvasView.java
+          MODEL=app/src/main/java/ir/chobyar/sketch/OcctModelCadCanvasView.java
           SPATIAL=app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           GUIDE=app/src/main/java/ir/chobyar/sketch/Shapr3DGuideCadCanvasView.java
           NATIVE=app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java
@@ -56,6 +57,10 @@ jobs:
           grep -q 'PUSHPULL3D' "$DIRECT"
           grep -q 'SWEEP3D' "$ADVANCED"
           grep -q 'LOFT3D' "$ADVANCED"
+          grep -q 'interactiveRevolveHeightMm' "$ADVANCED"
+          grep -q 'pitchMm' "$ADVANCED"
+          grep -q 'occtCreateHelicalRevolve' "$NATIVE"
+          grep -q 'occtCreateHelicalRevolve' "$MODEL"
           grep -q 'createOffsetSketchSpace' "$SPATIAL"
           grep -q 'projectExactBodyEdges' "$GUIDE"
           grep -q 'projectSelectedBodyReference' "$GUIDE"
@@ -81,6 +86,7 @@ jobs:
           grep -q 'commitAlignSession' "$STABLE"
           grep -q 'MOVE_ROTATE' "$WORKSPACE"
           grep -q 'ALIGN' "$WORKSPACE"
+          grep -q 'REVOLVE' "$WORKSPACE"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
           test -f app/src/main/cpp/occt_brep_with_indexed_direct.cpp
           test -f app/src/main/cpp/occt_indexed_direct_extension.inc
@@ -100,6 +106,7 @@ jobs:
             SweepCommandInstrumentationTest \
             LoftCommandInstrumentationTest \
             WorkspaceSessionInstrumentationTest \
+            RevolveThreadContractInstrumentationTest \
             ConstructionProjectInstrumentationTest \
             Project3DExactInstrumentationTest \
             Project3DSelectedBodyInstrumentationTest \
