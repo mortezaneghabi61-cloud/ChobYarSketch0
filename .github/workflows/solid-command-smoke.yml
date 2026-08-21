@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 53 production CAD contracts on API 35
+    name: 58 production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -45,6 +45,7 @@ jobs:
           INDEXED=app/src/main/java/ir/chobyar/sketch/NativeIndexedDirectKernel.java
           TOPOLOGY=app/src/main/java/ir/chobyar/sketch/OcctTopologyRef.java
           STABLE=app/src/main/java/ir/chobyar/sketch/OcctStableCadCanvasView.java
+          WORKSPACE=app/src/main/java/ir/chobyar/sketch/WorkspaceController.java
           KERNEL=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
           grep -q 'applyHistoryBooleanByIndex' "$BOOL"
           grep -q 'keepLeft' "$BOOL"
@@ -74,6 +75,12 @@ jobs:
           grep -q 'shellByIndex' "$INDEXED"
           grep -q 'NativeIndexedDirectKernel.filletByIndex' "$STABLE"
           grep -q 'NativeIndexedDirectKernel.pushPullFaceByIndex' "$STABLE"
+          grep -q 'beginBodyTransformSession' "$STABLE"
+          grep -q 'handleBodyGizmoTouch' "$STABLE"
+          grep -q 'beginAlignSession' "$STABLE"
+          grep -q 'commitAlignSession' "$STABLE"
+          grep -q 'MOVE_ROTATE' "$WORKSPACE"
+          grep -q 'ALIGN' "$WORKSPACE"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
           test -f app/src/main/cpp/occt_brep_with_indexed_direct.cpp
           test -f app/src/main/cpp/occt_indexed_direct_extension.inc
@@ -92,6 +99,7 @@ jobs:
             ShellPushPullInstrumentationTest \
             SweepCommandInstrumentationTest \
             LoftCommandInstrumentationTest \
+            WorkspaceSessionInstrumentationTest \
             ConstructionProjectInstrumentationTest \
             Project3DExactInstrumentationTest \
             Project3DSelectedBodyInstrumentationTest \
