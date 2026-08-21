@@ -31,6 +31,8 @@ import java.io.OutputStream;
 public final class ChobYarActivity extends Activity {
     private static final int REQUEST_EXPORT_CAD=1701;
     private static final int REQUEST_REFERENCE_IMAGE=1702;
+    private static final int REQUEST_SAVE_PROJECT=1703;
+    private static final int REQUEST_OPEN_PROJECT=1704;
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
     private final CadAppearanceController appearance=new CadAppearanceController();
@@ -91,7 +93,7 @@ public final class ChobYarActivity extends Activity {
         LinearLayout b=plain(false);
         b.setPadding(dp(6),dp(3),dp(6),dp(3));
         b.setBackground(round(Color.argb(248,255,255,255),Color.rgb(214,220,228),22));
-        b.addView(topAction("⌂",this::showItems),new LinearLayout.LayoutParams(dp(42),dp(48)));
+        b.addView(topAction("⌂",this::showProjectMenu),new LinearLayout.LayoutParams(dp(42),dp(48)));
         workspaceTitle=label("چوب‌یار 3D",13,true);workspaceTitle.setGravity(Gravity.CENTER);
         b.addView(workspaceTitle,new LinearLayout.LayoutParams(0,dp(48),1f));
         modeButton=topAction("تمام",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
@@ -452,6 +454,29 @@ public final class ChobYarActivity extends Activity {
         }).setNegativeButton("بستن",null).show();
     }
 
+    private void showProjectMenu(){
+        String[] rows={"Items / Layers","Save Project","Open Project","Export STEP / STL"};
+        new AlertDialog.Builder(this).setTitle("Project").setItems(rows,(d,w)->{
+            if(w==0)showItems();else if(w==1)saveProject();else if(w==2)openProject();else showCadExport();
+        }).setNegativeButton("بستن",null).show();
+    }
+
+    private void saveProject(){
+        // Schema v1 is deliberately non-lossy. Exact 3D History and reference
+        // images are added in the next schema rather than silently flattened.
+        if(cad.itemRows().length>0||cad.hasReferenceImage()){
+            toast("ذخیره پروژه 3D هنوز کامل نشده؛ برای جلوگیری از حذف History فایل ناقص ذخیره نمی‌شود");return;
+        }
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");intent.putExtra(Intent.EXTRA_TITLE,"ChobYar-Project.chobyar");
+        startActivityForResult(intent,REQUEST_SAVE_PROJECT);
+    }
+
+    private void openProject(){
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("application/json");
+        startActivityForResult(intent,REQUEST_OPEN_PROJECT);
+    }
+
     private void more(){
         String[] x={"Items / Layers","Export STEP / STL","Reference Image","Materials / Appearance","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
@@ -559,6 +584,22 @@ public final class ChobYarActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQUEST_SAVE_PROJECT){
+            if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+            try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
+                if(out==null)throw new IllegalStateException();String json=CadProjectDocument.encodeSketch(cad.exportSketchProjectState());
+                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("پروژه ذخیره شد");
+            }catch(Exception e){toast("ذخیره پروژه انجام نشد");}return;
+        }
+        if(requestCode==REQUEST_OPEN_PROJECT){
+            if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+            try(InputStream in=getContentResolver().openInputStream(data.getData());java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream()){
+                if(in==null)throw new IllegalStateException();byte[] bytes=new byte[65536];int n;while((n=in.read(bytes))>0)buffer.write(bytes,0,n);
+                CadProjectDocument.Decoded decoded=CadProjectDocument.decode(new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8));
+                if(!cad.canImportSketchProjectState(decoded.sketchState)){toast("فایل پروژه معتبر نیست");return;}
+                cad.clearAll();String result=cad.importSketchProjectState(decoded.sketchState);syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
+            }catch(Exception e){toast("بازکردن پروژه انجام نشد");}return;
+        }
         if(requestCode==REQUEST_REFERENCE_IMAGE){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try{Bitmap bitmap=decodeReferenceBitmap(data);status(cad.setReferenceImage(bitmap,"Reference Image"));cad.showReferenceImageSettings();}
