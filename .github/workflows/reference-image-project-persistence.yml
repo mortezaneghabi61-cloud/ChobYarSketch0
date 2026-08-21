@@ -1,0 +1,84 @@
+name: Reference Image Project Persistence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java'
+      - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java'
+      - 'app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java'
+      - '.github/workflows/reference-image-project-persistence.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-image-project-persistence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-image-project-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CHOBYAR_VERSION_CODE: 40${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.3.reference-project.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workspace-v3 persistence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SCOPE_WORKSPACE_V3 = "workspace-v3"' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'static String encodeWorkspace' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'ReferenceImageProjectAdapter.exportState' app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java
+          grep -q 'ReferenceImageProjectAdapter.restore' app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java
+          grep -q 'png-base64' app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java
+          grep -q 'MAX_PIXELS' app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java
+          grep -q 'referenceImage=null' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
+          ! grep -q 'Reference Image persistence is not implemented in model-v2 yet' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+      - name: Restore development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+      - name: Build production and instrumentation APKs
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Reference Image Save/Open round-trip contracts on API 35
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            mkdir -p test-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w -e class ir.chobyar.sketch.ReferenceImageProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/reference-image-project-persistence.txt
+            grep -q 'OK (5 tests)' test-artifacts/reference-image-project-persistence.txt
+      - name: Upload Reference Image project persistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar-reference-image-project-persistence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7

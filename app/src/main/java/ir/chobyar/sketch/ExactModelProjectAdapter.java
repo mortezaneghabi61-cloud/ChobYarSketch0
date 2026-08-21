@@ -28,7 +28,6 @@ final class ExactModelProjectAdapter {
     static String exportModel(Shapr3DGuideCadCanvasView cad){
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         try{
-            if(hasReferenceImage(cad))throw new IllegalStateException("Reference Image persistence is not implemented in model-v2 yet");
             if(hasManualCopies(cad))throw new IllegalStateException("Exact transform Copy persistence is not implemented in model-v2 yet");
 
             List<Object> entities=list(field(CadCanvasView.class,"entities").get(cad));
