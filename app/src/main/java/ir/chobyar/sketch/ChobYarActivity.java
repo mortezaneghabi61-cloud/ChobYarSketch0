@@ -33,6 +33,7 @@ public final class ChobYarActivity extends Activity {
     private static final int REQUEST_REFERENCE_IMAGE=1702;
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
+    private final CadAppearanceController appearance=new CadAppearanceController();
     private LinearLayout primaryRail;
     private LinearLayout adaptive;
     private LinearLayout constraintRail;
@@ -305,6 +306,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
+            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
             adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
         }else if("VERTEX".equals(k)){
@@ -419,12 +421,12 @@ public final class ChobYarActivity extends Activity {
     private void runAndClose(Runnable action){closeManualPalette();action.run();}
 
     private void search(){
-        String[] x={"Sketch","Extrude","Move / Rotate","Measure","Constraints","History","Plane","Snaps"};
+        String[] x={"Sketch","Extrude","Move / Rotate","Measure","Constraints","Material","History","Plane","Snaps"};
         new AlertDialog.Builder(this).setTitle("جستجوی فرمان").setItems(x,(d,w)->{
             if(w==0)cad.showShaprSketchMenu();else if(w==1)cad.showShaprModelingToolsMenu();
             else if(w==2)beginMoveRotate();else if(w==3)cad.showSketchMeasureInspector();
-            else if(w==4)cad.showSmartConstraintMenu();else if(w==5)cad.showHistoryManager();
-            else if(w==6)cad.showPlaneManager();else cad.showShaprSnappingOptions();
+            else if(w==4)cad.showSmartConstraintMenu();else if(w==5)showMaterialPalette();
+            else if(w==6)cad.showHistoryManager();else if(w==7)cad.showPlaneManager();else cad.showShaprSnappingOptions();
         }).show();
     }
 
@@ -448,11 +450,11 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","Export STEP / STL","Reference Image","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
+        String[] x={"Items / Layers","Export STEP / STL","Reference Image","Materials / Appearance","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}else if(w==3)setView("TOP");
-            else if(w==4)setView("FRONT");else if(w==5)setView("RIGHT");
-            else if(w==6)setView("ISO");else if(w==7)cad.showShaprSnappingOptions();else status(cad.dualUnitSummary());
+            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}
+            else if(w==3)showMaterialPalette();else if(w==4)setView("TOP");else if(w==5)setView("FRONT");else if(w==6)setView("RIGHT");
+            else if(w==7)setView("ISO");else if(w==8)cad.showShaprSnappingOptions();else status(cad.dualUnitSummary());
         }).show();
     }
 
@@ -468,18 +470,52 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showMaterialPalette(){
-        String[] names={"Wood • چوب طبیعی","Fabric • پارچه","Plastic • مات","Metal • فلز","Paint • رنگ سفید"};
-        int[] colors={Color.rgb(156,102,55),Color.rgb(116,71,160),Color.rgb(77,132,190),Color.rgb(126,135,145),Color.rgb(226,229,232)};
-        float[] rough={.58f,.88f,.48f,.24f,.42f},metal={0f,0f,0f,.92f,0f};
-        new AlertDialog.Builder(this).setTitle("Material Properties").setItems(names,(d,w)->showAppearanceEditor(names[w],colors[w],rough[w],metal[w])).setNegativeButton("بستن",null).show();
+        CadMaterialPreset.Preset[] presets=CadMaterialPreset.Preset.values();
+        CadMaterialPreset.State current=appearance.state();
+        String[] names=new String[presets.length];
+        for(int i=0;i<presets.length;i++){
+            CadMaterialPreset.Preset p=presets[i];
+            names[i]=(p==current.preset?"✓ ":"")+p.key.toUpperCase(java.util.Locale.US)+" • "+p.label;
+        }
+        new AlertDialog.Builder(this).setTitle("Materials / Appearance")
+                .setMessage("فقط ظاهر رندر تغییر می‌کند؛ هندسه، ابعاد، History و خروجی CAD ثابت می‌مانند.")
+                .setItems(names,(d,w)->{
+                    CadMaterialPreset.State state=appearance.applyPreset(presets[w],gpuSurface::setAppearance);
+                    showAppearanceEditor(state);
+                }).setNegativeButton("بستن",null).show();
     }
 
-    private void showAppearanceEditor(String name,int color,float initialRoughness,float metallic){
-        LinearLayout box=plain(true);box.setPadding(dp(18),dp(6),dp(18),0);TextView value=label("Roughness • "+Math.round(initialRoughness*100f)+"%",12,true);box.addView(value);
-        SeekBar roughness=new SeekBar(this);roughness.setMax(100);roughness.setProgress(Math.round(initialRoughness*100f));box.addView(roughness,new LinearLayout.LayoutParams(dp(280),dp(48)));
-        roughness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int progress,boolean fromUser){value.setText("Roughness • "+progress+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){gpuSurface.setAppearance(color,Math.max(.04f,s.getProgress()/100f),metallic);}});
-        new AlertDialog.Builder(this).setTitle(name).setMessage("متریال فقط ظاهر رندر را تغییر می‌دهد؛ هندسه و اندازه‌ها ثابت می‌مانند.").setView(box)
-                .setPositiveButton("اعمال",(d,w)->gpuSurface.setAppearance(color,Math.max(.04f,roughness.getProgress()/100f),metallic)).setNegativeButton("لغو",null).show();
+    private void showAppearanceEditor(CadMaterialPreset.State initial){
+        LinearLayout box=plain(true);box.setPadding(dp(18),dp(6),dp(18),0);
+        TextView summary=label(initial.summary(),11,true);box.addView(summary);
+        TextView colorLabel=label("Base color • #"+String.format(java.util.Locale.US,"%06X",initial.argb&0x00FFFFFF),11,true);box.addView(colorLabel);
+        EditText colorInput=new EditText(this);colorInput.setSingleLine(true);colorInput.setHint("#RRGGBB");colorInput.setText(String.format(java.util.Locale.US,"#%06X",initial.argb&0x00FFFFFF));colorInput.setSelectAllOnFocus(true);box.addView(colorInput,new LinearLayout.LayoutParams(dp(280),dp(48)));
+        TextView value=label("Roughness • "+Math.round(initial.roughness*100f)+"%",11,true);box.addView(value);
+        SeekBar roughness=new SeekBar(this);roughness.setMax(100);roughness.setProgress(Math.round(initial.roughness*100f));box.addView(roughness,new LinearLayout.LayoutParams(dp(280),dp(48)));
+        TextView metallic=label("Metallic • "+Math.round(initial.metallic*100f)+"%",11,false);box.addView(metallic);
+        roughness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int progress,boolean fromUser){value.setText("Roughness • "+progress+"%");}
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){}
+        });
+        new AlertDialog.Builder(this).setTitle(initial.preset.label+" • Appearance").setView(box)
+                .setPositiveButton("اعمال",(d,w)->{
+                    try{
+                        int color=parseAppearanceColor(colorInput.getText().toString());
+                        appearance.setColor(color,null);
+                        CadMaterialPreset.State state=appearance.setRoughness(Math.max(.04f,roughness.getProgress()/100f),gpuSurface::setAppearance);
+                        status("Material • "+state.summary());
+                    }catch(Exception e){toast("کد رنگ باید مثل #B98758 باشد");}
+                })
+                .setNeutralButton("بازنشانی",(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(initial.preset,gpuSurface::setAppearance);status("Material • "+state.summary());})
+                .setNegativeButton("لغو",null).show();
+    }
+
+    private static int parseAppearanceColor(String raw){
+        String s=raw==null?"":raw.trim();if(s.startsWith("#"))s=s.substring(1);
+        if(s.length()!=6&&s.length()!=8)throw new IllegalArgumentException("hex color");
+        long value=Long.parseLong(s,16);
+        return s.length()==6?(int)(0xFF000000L|value):(int)value;
     }
 
     private void showCadExport(){
