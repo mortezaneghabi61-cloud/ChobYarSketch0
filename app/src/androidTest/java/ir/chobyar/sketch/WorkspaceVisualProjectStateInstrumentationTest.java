@@ -122,6 +122,52 @@ public class WorkspaceVisualProjectStateInstrumentationTest {
         assertTrue(restored.isFlipped());
     }
 
+    @Test
+    public void visualAdapterExportsLiveControllerStateWithoutPresetReset() {
+        CadAppearanceController appearance = new CadAppearanceController();
+        appearance.restore(new CadMaterialPreset.State(
+                CadMaterialPreset.Preset.PAINT, 0xFFAA7733, 0.69f, 0.23f), null);
+        SectionViewController section = new SectionViewController();
+        section.restore(true, SectionViewController.Axis.Y, 14.375, true);
+
+        WorkspaceVisualProjectState.Decoded decoded = WorkspaceVisualProjectAdapter.validate(
+                WorkspaceVisualProjectAdapter.exportState(appearance, section));
+
+        assertEquals(CadMaterialPreset.Preset.PAINT, decoded.appearance.preset);
+        assertEquals(0xFFAA7733, decoded.appearance.argb);
+        assertEquals(0.69f, decoded.appearance.roughness, 0.0001f);
+        assertEquals(0.23f, decoded.appearance.metallic, 0.0001f);
+        assertTrue(decoded.sectionEnabled);
+        assertEquals(SectionViewController.Axis.Y, decoded.sectionAxis);
+        assertEquals(14.375, decoded.sectionOffsetMm, 0.000001);
+        assertTrue(decoded.sectionFlipped);
+    }
+
+    @Test
+    public void visualAdapterRestoresBothControllersFromOneValidatedState() {
+        CadAppearanceController sourceAppearance = new CadAppearanceController();
+        sourceAppearance.restore(new CadMaterialPreset.State(
+                CadMaterialPreset.Preset.METAL, 0xFF62717E, 0.41f, 0.91f), null);
+        SectionViewController sourceSection = new SectionViewController();
+        sourceSection.restore(false, SectionViewController.Axis.X, -9.5, true);
+        String raw = WorkspaceVisualProjectAdapter.exportState(sourceAppearance, sourceSection);
+
+        CadAppearanceController restoredAppearance = new CadAppearanceController();
+        SectionViewController restoredSection = new SectionViewController();
+        final int[] publishedColor = new int[1];
+        WorkspaceVisualProjectAdapter.restore(restoredAppearance, restoredSection, raw,
+                (argb, roughness, metallic) -> publishedColor[0] = argb);
+
+        assertEquals(CadMaterialPreset.Preset.METAL, restoredAppearance.state().preset);
+        assertEquals(0xFF62717E, publishedColor[0]);
+        assertEquals(0.41f, restoredAppearance.state().roughness, 0.0001f);
+        assertEquals(0.91f, restoredAppearance.state().metallic, 0.0001f);
+        assertFalse(restoredSection.isEnabled());
+        assertEquals(SectionViewController.Axis.X, restoredSection.axis());
+        assertEquals(-9.5, restoredSection.offsetMm(), 0.000001);
+        assertTrue(restoredSection.isFlipped());
+    }
+
     private static void assertRejected(String raw) {
         try {
             WorkspaceVisualProjectState.decode(raw);
