@@ -202,10 +202,16 @@ final class ExactModelProjectAdapter {
     }
 
     private static JSONObject exportCamera(Shapr3DGuideCadCanvasView cad)throws Exception{
-        boolean visible=bool(field(SpatialCadCanvasView.class,"overview3D").get(cad));float yaw=f(field(SpatialCadCanvasView.class,"viewYaw").get(cad));float pitch=f(field(SpatialCadCanvasView.class,"viewPitch").get(cad));
-        float scale=f(field(SpatialCadCanvasView.class,"spatialScale").get(cad));Geometry3D.Vec3 target=(Geometry3D.Vec3)field(SpatialCadCanvasView.class,"viewTarget").get(cad);
-        float panX=f(field(SpatialCadCanvasView.class,"viewPanX").get(cad)),panY=f(field(SpatialCadCanvasView.class,"viewPanY").get(cad));if(target==null)target=new Geometry3D.Vec3(0,0,0);
-        return ExactModelProjectState.camera(visible,yaw,pitch,scale,target.x,target.y,target.z,panX,panY);
+        boolean visible=bool(field(SpatialCadCanvasView.class,"overview3D").get(cad));
+        float yaw=f(field(SpatialCadCanvasView.class,"cameraYaw").get(cad));
+        float pitch=f(field(SpatialCadCanvasView.class,"cameraPitch").get(cad));
+        float scale=f(field(SpatialCadCanvasView.class,"spatialScale").get(cad));
+        float targetX=f(field(SpatialCadCanvasView.class,"cameraTargetX").get(cad));
+        float targetY=f(field(SpatialCadCanvasView.class,"cameraTargetY").get(cad));
+        float targetZ=f(field(SpatialCadCanvasView.class,"cameraTargetZ").get(cad));
+        float panX=f(field(SpatialCadCanvasView.class,"cameraPanX").get(cad));
+        float panY=f(field(SpatialCadCanvasView.class,"cameraPanY").get(cad));
+        return ExactModelProjectState.camera(visible,yaw,pitch,scale,targetX,targetY,targetZ,panX,panY);
     }
 
     @SuppressWarnings("unchecked") private static void restorePlanes(Shapr3DGuideCadCanvasView cad,JSONArray rows)throws Exception{
@@ -217,10 +223,19 @@ final class ExactModelProjectAdapter {
 
     private static void restoreCamera(Shapr3DGuideCadCanvasView cad,JSONObject camera)throws Exception{
         if(camera==null||camera.length()==0)return;JSONArray target=camera.optJSONArray("target"),pan=camera.optJSONArray("pan");
-        field(SpatialCadCanvasView.class,"overview3D").setBoolean(cad,camera.optBoolean("visible",true));field(SpatialCadCanvasView.class,"viewYaw").setFloat(cad,(float)camera.optDouble("yaw",38));
-        field(SpatialCadCanvasView.class,"viewPitch").setFloat(cad,(float)camera.optDouble("pitch",24));field(SpatialCadCanvasView.class,"spatialScale").setFloat(cad,(float)camera.optDouble("scale",1));
-        if(target!=null)field(SpatialCadCanvasView.class,"viewTarget").set(cad,new Geometry3D.Vec3((float)target.getDouble(0),(float)target.getDouble(1),(float)target.getDouble(2)));
-        if(pan!=null){field(SpatialCadCanvasView.class,"viewPanX").setFloat(cad,(float)pan.getDouble(0));field(SpatialCadCanvasView.class,"viewPanY").setFloat(cad,(float)pan.getDouble(1));}
+        field(SpatialCadCanvasView.class,"overview3D").setBoolean(cad,camera.optBoolean("visible",true));
+        field(SpatialCadCanvasView.class,"cameraYaw").setFloat(cad,(float)camera.optDouble("yaw",38));
+        field(SpatialCadCanvasView.class,"cameraPitch").setFloat(cad,(float)camera.optDouble("pitch",24));
+        field(SpatialCadCanvasView.class,"spatialScale").setFloat(cad,(float)camera.optDouble("scale",1));
+        if(target!=null){
+            field(SpatialCadCanvasView.class,"cameraTargetX").setFloat(cad,(float)target.getDouble(0));
+            field(SpatialCadCanvasView.class,"cameraTargetY").setFloat(cad,(float)target.getDouble(1));
+            field(SpatialCadCanvasView.class,"cameraTargetZ").setFloat(cad,(float)target.getDouble(2));
+        }
+        if(pan!=null){
+            field(SpatialCadCanvasView.class,"cameraPanX").setFloat(cad,(float)pan.getDouble(0));
+            field(SpatialCadCanvasView.class,"cameraPanY").setFloat(cad,(float)pan.getDouble(1));
+        }
     }
 
     private static void restoreDirectEdits(Shapr3DGuideCadCanvasView cad,JSONArray rows,Map<String,Object> bodiesByKey)throws Exception{
