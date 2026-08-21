@@ -5,9 +5,14 @@ on:
   pull_request:
     paths:
       - 'app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ExactModelProjectState.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java'
       - 'app/src/main/java/ir/chobyar/sketch/CadCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ProjectPersistenceInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectStateInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectAdapterInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'
       - '.github/workflows/project-persistence-contract.yml'
 
 permissions:
@@ -26,11 +31,17 @@ jobs:
       CHOBYAR_VERSION_NAME: 0.3.project.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate explicit non-reflective Save/Open wiring
+      - name: Validate explicit Save/Open project boundary
         run: |
           set -euo pipefail
           grep -q 'FORMAT = "chobyar-project"' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
           grep -q 'SCOPE_SKETCH_V1 = "sketch-v1"' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'SCOPE_MODEL_V2 = "model-v2"' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'static String encodeModel' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java
+          grep -q 'Transient OCCT/display state cannot be persisted' app/src/main/java/ir/chobyar/sketch/ExactModelProjectState.java
+          grep -q 'static String exportModel' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
+          grep -q 'static String restoreModel' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
+          grep -q 'validateAgainstSketch' app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java
           grep -q 'public String exportSketchProjectState()' app/src/main/java/ir/chobyar/sketch/CadCanvasView.java
           grep -q 'public boolean canImportSketchProjectState' app/src/main/java/ir/chobyar/sketch/CadCanvasView.java
           grep -q 'REQUEST_SAVE_PROJECT=1703' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
@@ -69,8 +80,14 @@ jobs:
             mkdir -p test-artifacts
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w -e class ir.chobyar.sketch.ProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence.txt
-            grep -q 'OK (6 tests)' test-artifacts/project-persistence.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.ProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-v1.txt
+            grep -q 'OK (6 tests)' test-artifacts/project-persistence-v1.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-v2.txt
+            grep -q 'OK (7 tests)' test-artifacts/project-persistence-v2.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelProjectAdapterInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-adapter.txt
+            grep -q 'OK (3 tests)' test-artifacts/project-persistence-adapter.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelRestoreInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-restore.txt
+            grep -q 'OK (2 tests)' test-artifacts/project-persistence-restore.txt
       - name: Upload project persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
