@@ -162,7 +162,11 @@ final class FigmaWorkspaceStyler {
     private static void styleText(TextView tv) {
         String current = String.valueOf(tv.getText());
         String mapped = LABELS.get(current);
-        if (mapped != null) tv.setText(mapped);
+        if (mapped != null) {
+            String semantic = semanticLabel(current);
+            if (!semantic.isEmpty()) tv.setContentDescription(semantic);
+            tv.setText(mapped);
+        }
         String text = String.valueOf(tv.getText());
         if (text.indexOf('\n') >= 0) {
             tv.setTextSize(8.2f);
@@ -174,6 +178,12 @@ final class FigmaWorkspaceStyler {
         } else {
             tv.setTextColor(Color.rgb(38,45,56));
         }
+    }
+
+    private static String semanticLabel(String original) {
+        if (original == null) return "";
+        int split = original.lastIndexOf('\n');
+        return (split >= 0 ? original.substring(split + 1) : original).trim();
     }
 
     private static void installDynamicStyling(FrameLayout root) {
