@@ -110,3 +110,4 @@ replace_once(
 )
 
 print("SPHERE_FACE_TOPOLOGY_PATCH_OK")
+# trigger after workflow registration
