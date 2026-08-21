@@ -34,6 +34,7 @@ public final class ChobYarActivity extends Activity {
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
     private final CadAppearanceController appearance=new CadAppearanceController();
+    private final SectionViewController sectionView=new SectionViewController();
     private LinearLayout primaryRail;
     private LinearLayout adaptive;
     private LinearLayout constraintRail;
@@ -288,7 +289,7 @@ public final class ChobYarActivity extends Activity {
 
     private void syncGpuMesh(){
         if(gpuSurface==null||cad==null)return;
-        double[] mesh=cad.gpuMesh();gpuSurface.setMesh(mesh);cad.setGpuBodyRendering(mesh.length>=9);syncGpuCamera();
+        double[] mesh=cad.gpuMesh();gpuSurface.setMesh(sectionView.apply(mesh));cad.setGpuBodyRendering(mesh.length>=9);syncGpuCamera();
     }
 
     private void syncGpuCamera(){if(gpuSurface!=null&&cad!=null)gpuSurface.setCameraState(cad.gpuCameraState());}
@@ -307,6 +308,7 @@ public final class ChobYarActivity extends Activity {
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
             adaptive.addView(tool("◉","Material",this::showMaterialPalette));
+            adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
             adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
         }else if("VERTEX".equals(k)){
@@ -377,6 +379,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
         adaptive.addView(tool("▣","Shell",cad::showSelectedShell));
         adaptive.addView(tool("◉","Material",this::showMaterialPalette));
+        adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
         adaptive.addView(tool("⌖","Measure",cad::showSketchMeasureInspector));
         adaptive.addView(tool("⌁","Snaps",cad::showShaprSnappingOptions));
         adaptive.addView(tool("▱","History",cad::showHistoryManager));
@@ -467,6 +470,29 @@ public final class ChobYarActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("راهنمای Workspace")
                 .setMessage("قلم: طراحی و انتخاب دقیق\nانگشت: چرخش، جابه‌جایی و زوم\n\nیک سطح، لبه یا بدنه را لمس کن تا فقط ابزارهای مربوط به همان انتخاب ظاهر شوند. همه اندازه‌ها میلی‌متر هستند.")
                 .setPositiveButton("باشه",null).show();
+    }
+
+    private void showSectionViewPanel(){
+        String[] choices={"خاموش","XY • محور Z","YZ • محور X","XZ • محور Y","Flip side"};
+        LinearLayout box=plain(true);box.setPadding(dp(18),dp(4),dp(18),0);
+        TextView offsetLabel=label("Offset • "+String.format(java.util.Locale.US,"%.1f mm",sectionView.offsetMm()),11,true);box.addView(offsetLabel);
+        EditText offsetInput=new EditText(this);offsetInput.setSingleLine(true);offsetInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+        offsetInput.setText(String.format(java.util.Locale.US,"%.1f",sectionView.offsetMm()));box.addView(offsetInput,new LinearLayout.LayoutParams(dp(280),dp(48)));
+        new AlertDialog.Builder(this).setTitle("Section View")
+                .setMessage("این برش فقط نمای رندر را کلیپ می‌کند؛ هندسه OCCT، History، ابعاد و Export تغییر نمی‌کنند.")
+                .setView(box).setSingleChoiceItems(choices,sectionView.selectedIndex(),(d,w)->{
+                    if(w==0)sectionView.disable();
+                    else if(w==1)sectionView.enable(SectionViewController.Axis.Z);
+                    else if(w==2)sectionView.enable(SectionViewController.Axis.X);
+                    else if(w==3)sectionView.enable(SectionViewController.Axis.Y);
+                    else sectionView.flip();
+                    syncGpuMesh();status(sectionView.summary());
+                }).setPositiveButton("اعمال فاصله",(d,w)->{
+                    try{sectionView.setOffsetMm(Double.parseDouble(offsetInput.getText().toString().trim()));}
+                    catch(Exception ignored){status("Offset نامعتبر بود");return;}
+                    if(!sectionView.isEnabled())sectionView.enable(SectionViewController.Axis.Z);
+                    syncGpuMesh();status(sectionView.summary());
+                }).setNegativeButton("بستن",null).show();
     }
 
     private void showMaterialPalette(){
