@@ -28,6 +28,7 @@ final class NativeBRepKernel {
     static final int OCCT_FACE_UNSUPPORTED = 0;
     static final int OCCT_FACE_PLANE = 1;
     static final int OCCT_FACE_CYLINDER = 2;
+    static final int OCCT_FACE_SPHERE = 3;
     static final int OCCT_FACE_RECORD_SIZE = 14;
 
     private static final boolean AVAILABLE;

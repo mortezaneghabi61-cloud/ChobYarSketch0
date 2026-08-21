@@ -58,6 +58,7 @@
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Cylinder.hxx>
+#include <gp_Sphere.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -813,6 +814,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctFaceDescriptors(JNIEnv* env, j
     try {
         constexpr int FACE_PLANE = 1;
         constexpr int FACE_CYLINDER = 2;
+        constexpr int FACE_SPHERE = 3;
         constexpr int RECORD = 14;
         std::vector<double> data;
         const int faceCount = countSubShapes(shape, TopAbs_FACE);
@@ -839,6 +841,12 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctFaceDescriptors(JNIEnv* env, j
                 origin = cylinder.Location();
                 axis = cylinder.Axis().Direction();
                 radius = cylinder.Radius();
+            } else if (surface.GetType() == GeomAbs_Sphere) {
+                kind = FACE_SPHERE;
+                const gp_Sphere sphere = surface.Sphere();
+                origin = sphere.Location();
+                axis = sphere.Position().Direction();
+                radius = sphere.Radius();
             } else {
                 continue;
             }
