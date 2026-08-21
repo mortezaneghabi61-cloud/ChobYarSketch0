@@ -18,12 +18,20 @@ final class CadProjectPersistenceController {
     static String encode(Shapr3DGuideCadCanvasView cad){
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         String sketch=cad.exportSketchProjectState();
-        if(hasAnySolidBody(cad)){
-            String model=ExactModelProjectAdapter.exportModel(cad);
+        boolean hasBodies=hasAnySolidBody(cad),hasReference=cad.hasReferenceImage();
+        String model=null;
+        if(hasBodies||hasReference){
+            // Reference-only projects still carry exact plane/camera state so the
+            // calibrated image comes back in the same spatial workspace.
+            model=ExactModelProjectAdapter.exportModel(cad);
             ExactModelProjectAdapter.validateAgainstSketch(model,sketch);
-            return CadProjectDocument.encodeModel(sketch,model);
         }
-        if(cad.hasReferenceImage())throw new IllegalStateException("Reference Image project persistence is not implemented yet");
+        if(hasReference){
+            String reference=ReferenceImageProjectAdapter.exportState(cad);
+            ReferenceImageProjectAdapter.validate(reference);
+            return CadProjectDocument.encodeWorkspace(sketch,model,reference);
+        }
+        if(hasBodies)return CadProjectDocument.encodeModel(sketch,model);
         return CadProjectDocument.encodeSketch(sketch);
     }
 
@@ -50,6 +58,7 @@ final class CadProjectPersistenceController {
         CadProjectDocument.Decoded decoded=CadProjectDocument.decode(raw);
         if(!cad.canImportSketchProjectState(decoded.sketchState))throw new IllegalArgumentException("Project Sketch is invalid");
         if(decoded.hasExactModel())ExactModelProjectAdapter.validateAgainstSketch(decoded.modelState,decoded.sketchState);
+        if(decoded.hasReferenceImage())ReferenceImageProjectAdapter.validate(decoded.referenceImageState);
         return decoded;
     }
 
@@ -73,10 +82,12 @@ final class CadProjectPersistenceController {
     private static String restoreValidated(Shapr3DGuideCadCanvasView cad,CadProjectDocument.Decoded decoded){
         cad.clearAll();
         String sketchStatus=cad.importSketchProjectState(decoded.sketchState);
-        if(decoded.hasExactModel()){
-            String modelStatus=ExactModelProjectAdapter.restoreModel(cad,decoded.modelState,decoded.sketchState);
-            return sketchStatus+" • "+modelStatus;
-        }
-        return sketchStatus;
+        String modelStatus=null;
+        if(decoded.hasExactModel())modelStatus=ExactModelProjectAdapter.restoreModel(cad,decoded.modelState,decoded.sketchState);
+        if(decoded.hasReferenceImage())ReferenceImageProjectAdapter.restore(cad,decoded.referenceImageState);
+        String status=sketchStatus;
+        if(modelStatus!=null)status+=" • "+modelStatus;
+        if(decoded.hasReferenceImage())status+=" • Reference Image restored";
+        return status;
     }
 }
