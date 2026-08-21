@@ -77,6 +77,40 @@ public final class ExactFaceTopologyInstrumentationTest {
         android.util.Log.i("ExactFaceTopology","EXACT_FACE_SPHERE_REMATCH radius=18 exact=true");
     }
 
+    @Test public void conicalFaceRematchesByAxisSemiAngleAndArea(){
+        double[] before=concat(
+                cone(6,0,0,20,0,0,0,0,0,1,0.35,1800),
+                plane(7,0,0,0,0,0,0,0,0,-1,500));
+        OcctTopologyRef.Ref ref=OcctTopologyRef.captureFaceDescriptorsForTest(
+                before,new Geometry3D.Vec3(0,0,20),"F-cone");
+        assertNotNull(ref);assertEquals(NativeBRepKernel.OCCT_FACE_CONE,ref.signatureKind);
+        assertEquals(0.35,ref.secondaryMeasure,1e-5);
+        double[] rebuilt=concat(
+                cone(14,3,2,26,3,2,0,0,0,1,0.40,2450),
+                plane(2,3,2,0,3,2,0,0,0,-1,650));
+        OcctTopologyRef.Resolution r=OcctTopologyRef.resolveFaceDescriptorsForTest(rebuilt,ref);
+        assertNotNull(r);assertTrue(r.confident());
+        near(3,r.anchor.x,.001);near(2,r.anchor.y,.001);near(26,r.anchor.z,.001);
+        android.util.Log.i("ExactFaceTopology","EXACT_FACE_CONE_REMATCH semiAngle=0.40 exact=true");
+    }
+
+    @Test public void toroidalFaceRematchesByAxisMajorRadiusAndArea(){
+        double[] before=concat(
+                torus(8,10,10,10,10,10,10,0,0,1,30,6200),
+                plane(9,10,10,0,10,10,0,0,0,-1,900));
+        OcctTopologyRef.Ref ref=OcctTopologyRef.captureFaceDescriptorsForTest(
+                before,new Geometry3D.Vec3(10,10,10),"F-torus");
+        assertNotNull(ref);assertEquals(NativeBRepKernel.OCCT_FACE_TORUS,ref.signatureKind);
+        assertEquals(30.0,ref.secondaryMeasure,1e-4);
+        double[] rebuilt=concat(
+                torus(3,14,8,12,14,8,12,0,1,0,34,7600),
+                plane(4,14,8,0,14,8,0,0,0,-1,1050));
+        OcctTopologyRef.Resolution r=OcctTopologyRef.resolveFaceDescriptorsForTest(rebuilt,ref);
+        assertNotNull(r);assertTrue(r.confident());
+        near(14,r.anchor.x,.001);near(8,r.anchor.y,.001);near(12,r.anchor.z,.001);
+        android.util.Log.i("ExactFaceTopology","EXACT_FACE_TORUS_REMATCH majorRadius=34 exact=true");
+    }
+
     private static double[] plane(int index,double cx,double cy,double cz,
                                   double ox,double oy,double oz,
                                   double ax,double ay,double az,double area){
@@ -101,6 +135,24 @@ public final class ExactFaceTopologyInstrumentationTest {
         double[] r=new double[N];r[0]=NativeBRepKernel.OCCT_FACE_SPHERE;r[1]=index;
         r[2]=cx;r[3]=cy;r[4]=cz;r[5]=ox;r[6]=oy;r[7]=oz;
         r[8]=ax;r[9]=ay;r[10]=az;r[11]=area;r[12]=radius;r[13]=1;return r;
+    }
+
+    private static double[] cone(int index,double cx,double cy,double cz,
+                                 double ox,double oy,double oz,
+                                 double ax,double ay,double az,
+                                 double semiAngle,double area){
+        double[] r=new double[N];r[0]=NativeBRepKernel.OCCT_FACE_CONE;r[1]=index;
+        r[2]=cx;r[3]=cy;r[4]=cz;r[5]=ox;r[6]=oy;r[7]=oz;
+        r[8]=ax;r[9]=ay;r[10]=az;r[11]=area;r[12]=semiAngle;r[13]=1;return r;
+    }
+
+    private static double[] torus(int index,double cx,double cy,double cz,
+                                  double ox,double oy,double oz,
+                                  double ax,double ay,double az,
+                                  double majorRadius,double area){
+        double[] r=new double[N];r[0]=NativeBRepKernel.OCCT_FACE_TORUS;r[1]=index;
+        r[2]=cx;r[3]=cy;r[4]=cz;r[5]=ox;r[6]=oy;r[7]=oz;
+        r[8]=ax;r[9]=ay;r[10]=az;r[11]=area;r[12]=majorRadius;r[13]=1;return r;
     }
 
     private static double[] concat(double[]... records){

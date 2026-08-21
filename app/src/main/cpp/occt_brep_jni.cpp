@@ -59,6 +59,8 @@
 #include <gp_Circ.hxx>
 #include <gp_Cylinder.hxx>
 #include <gp_Sphere.hxx>
+#include <gp_Cone.hxx>
+#include <gp_Torus.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -815,6 +817,8 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctFaceDescriptors(JNIEnv* env, j
         constexpr int FACE_PLANE = 1;
         constexpr int FACE_CYLINDER = 2;
         constexpr int FACE_SPHERE = 3;
+        constexpr int FACE_CONE = 4;
+        constexpr int FACE_TORUS = 5;
         constexpr int RECORD = 14;
         std::vector<double> data;
         const int faceCount = countSubShapes(shape, TopAbs_FACE);
@@ -847,6 +851,18 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctFaceDescriptors(JNIEnv* env, j
                 origin = sphere.Location();
                 axis = sphere.Position().Direction();
                 radius = sphere.Radius();
+            } else if (surface.GetType() == GeomAbs_Cone) {
+                kind = FACE_CONE;
+                const gp_Cone cone = surface.Cone();
+                origin = cone.Location();
+                axis = cone.Axis().Direction();
+                radius = std::abs(cone.SemiAngle());
+            } else if (surface.GetType() == GeomAbs_Torus) {
+                kind = FACE_TORUS;
+                const gp_Torus torus = surface.Torus();
+                origin = torus.Location();
+                axis = torus.Axis().Direction();
+                radius = torus.MajorRadius();
             } else {
                 continue;
             }
