@@ -1,1 +1,1 @@
-Trigger hardened pull_request_target Save/Open patch for PR #22.
+Trigger indentation-safe pull_request_target Save/Open patch for PR #22.
