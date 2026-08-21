@@ -1,0 +1,122 @@
+name: Release Candidate Performance Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/release-candidate-performance.yml'
+      - 'docs/PERFORMANCE_REAL_DEVICE_ACCEPTANCE.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-candidate-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CHOBYAR_VERSION_CODE: 51${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.4.rc.${{ github.run_number }}
+      CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
+      APK: app/build/outputs/apk/release/app-release.apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android 35 + native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Cache OCCT 8 Android arm64
+        uses: actions/cache@v4
+        with:
+          path: .occt/install-arm64
+          key: occt-v8.0.0-d3056ef80c9668f395da40f5fd7be186cae4501f-android26-arm64-ndk27-step-stl1
+
+      - name: Build OCCT 8 exact B-Rep backend
+        run: bash .github/scripts/build_occt_android.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore persistent signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Build signed release-candidate APK
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Verify package, signature, ABI and size budget
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee test-artifacts/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee test-artifacts/apk-badging.txt
+          grep -q "package: name='ir.chobyar.sketch'" test-artifacts/apk-badging.txt
+          unzip -l "$APK" | tee test-artifacts/apk-files.txt
+          grep -q 'lib/arm64-v8a/' test-artifacts/apk-files.txt
+          APK_BYTES=$(stat -c%s "$APK")
+          echo "apk_bytes=$APK_BYTES" | tee test-artifacts/apk-size.txt
+          test "$APK_BYTES" -lt $((350 * 1024 * 1024))
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install, cold-launch and capture runtime baseline on API 35
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            mkdir -p test-artifacts
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am force-stop ir.chobyar.sketch
+            adb shell am start -W -S -n ir.chobyar.sketch/.ChobYarActivity | tee test-artifacts/cold-launch.txt
+            awk -F': ' '/TotalTime:/{v=$2} /WaitTime:/{if(v=="") v=$2} END{gsub(/\r/,"",v); if(v=="") exit 1; print "cold_start_observed_ms=" v; if ((v+0) >= 30000) exit 2}' test-artifacts/cold-launch.txt > test-artifacts/performance-baseline.txt
+            cat test-artifacts/performance-baseline.txt
+            sleep 3
+            adb shell pidof ir.chobyar.sketch | tr -d '\r' > test-artifacts/pid.txt
+            test -s test-artifacts/pid.txt
+            cat test-artifacts/pid.txt
+            adb shell dumpsys meminfo ir.chobyar.sketch > test-artifacts/meminfo.txt
+            adb shell dumpsys gfxinfo ir.chobyar.sketch > test-artifacts/gfxinfo.txt
+            adb logcat -d > test-artifacts/logcat.txt
+            ! grep -E 'FATAL EXCEPTION|ANR in ir\.chobyar\.sketch' test-artifacts/logcat.txt
+
+      - name: Upload release candidate and performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar3D-release-candidate-performance
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
