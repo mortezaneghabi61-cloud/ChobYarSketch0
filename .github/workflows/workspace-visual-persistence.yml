@@ -36,6 +36,8 @@ jobs:
           grep -q 'material.put("metallic", appearance.metallic)' app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java
           grep -q 'cut.put("offsetMm", section.offsetMm())' app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java
           grep -q 'cut.put("flipped", section.isFlipped())' app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java
+          grep -q 'CadMaterialPreset.State restore' app/src/main/java/ir/chobyar/sketch/CadAppearanceController.java
+          grep -q 'void restore(boolean nextEnabled' app/src/main/java/ir/chobyar/sketch/SectionViewController.java
           ! grep -q 'NativeBRepKernel\|OcctTopologyRef\|FeatureGraph' app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java
       - uses: actions/setup-java@v5
         with:
@@ -70,7 +72,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class ir.chobyar.sketch.WorkspaceVisualProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/workspace-visual-persistence.txt
-            grep -q 'OK (5 tests)' test-artifacts/workspace-visual-persistence.txt
+            grep -q 'OK (7 tests)' test-artifacts/workspace-visual-persistence.txt
       - name: Upload visual persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
