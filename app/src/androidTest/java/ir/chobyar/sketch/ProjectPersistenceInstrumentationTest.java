@@ -14,7 +14,7 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class ProjectPersistenceInstrumentationTest {
 
-    private static String sketchFixture() {
+    private static String sketchFixture() throws Exception {
         JSONObject sketch = new JSONObject();
         sketch.put("schemaVersion", 1);
         sketch.put("currentLayer", "Furniture");
@@ -24,7 +24,7 @@ public class ProjectPersistenceInstrumentationTest {
         return sketch.toString();
     }
 
-    @Test public void envelopeRoundTripPreservesSketchAndMillimeters() {
+    @Test public void envelopeRoundTripPreservesSketchAndMillimeters() throws Exception {
         String encoded = CadProjectDocument.encodeSketch(sketchFixture());
         CadProjectDocument.Decoded decoded = CadProjectDocument.decode(encoded);
         assertEquals(1, decoded.schemaVersion);
@@ -35,7 +35,7 @@ public class ProjectPersistenceInstrumentationTest {
         assertEquals(2, restored.getJSONArray("entities").length());
     }
 
-    @Test public void futureSchemaFailsClosed() {
+    @Test public void futureSchemaFailsClosed() throws Exception {
         JSONObject root = new JSONObject(CadProjectDocument.encodeSketch(sketchFixture()));
         root.put("schemaVersion", CadProjectDocument.SCHEMA_VERSION + 1);
         try {
@@ -46,7 +46,7 @@ public class ProjectPersistenceInstrumentationTest {
         }
     }
 
-    @Test public void malformedOrWrongFormatFailsClosed() {
+    @Test public void malformedOrWrongFormatFailsClosed() throws Exception {
         try {
             CadProjectDocument.decode("{broken");
             fail("malformed json must fail");
@@ -61,7 +61,7 @@ public class ProjectPersistenceInstrumentationTest {
         }
     }
 
-    @Test public void envelopeDeclaresNonLossySketchScope() {
+    @Test public void envelopeDeclaresNonLossySketchScope() throws Exception {
         JSONObject root = new JSONObject(CadProjectDocument.encodeSketch(sketchFixture()));
         assertEquals("chobyar-project", root.getString("format"));
         assertEquals("sketch-v1", root.getString("scope"));
