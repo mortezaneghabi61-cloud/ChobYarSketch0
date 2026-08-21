@@ -50,7 +50,7 @@ jobs:
       - name: Apply indexed direct-topology source patch
         if: github.head_ref == 'feature/stable-direct-topology-20260821' || github.ref_name == 'feature/stable-direct-topology-20260821'
         run: |
-          python .github/scripts/apply-indexed-direct-topology.py
+          python .github/scripts/apply-indexed-direct-topology-v2.py
           if ! git diff --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
