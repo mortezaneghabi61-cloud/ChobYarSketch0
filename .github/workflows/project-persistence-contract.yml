@@ -103,7 +103,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.ReferenceImageProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-reference-image.txt
             grep -q 'OK (5 tests)' test-artifacts/project-persistence-reference-image.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.WorkspaceVisualProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-visual.txt
-            grep -q 'OK (9 tests)' test-artifacts/project-persistence-visual.txt
+            grep -q 'OK (11 tests)' test-artifacts/project-persistence-visual.txt
       - name: Upload project persistence evidence
         if: always()
         uses: actions/upload-artifact@v4
