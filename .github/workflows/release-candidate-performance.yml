@@ -94,19 +94,21 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p test-artifacts
             adb install -r "$APK"
             adb logcat -c
             adb shell am force-stop ir.chobyar.sketch
-            adb shell am start -W -S -n ir.chobyar.sketch/.ChobYarActivity | tee test-artifacts/cold-launch.txt
-            TOTAL_TIME=$(awk -F': ' '/TotalTime:/{print $2}' test-artifacts/cold-launch.txt | tail -1 | tr -d '\r')
+            COLD_OUTPUT=$(adb shell am start -W -S -n ir.chobyar.sketch/.ChobYarActivity)
+            printf '%s\n' "$COLD_OUTPUT" | tee test-artifacts/cold-launch.txt
+            TOTAL_TIME=$(printf '%s\n' "$COLD_OUTPUT" | awk -F': ' '/TotalTime:/{print $2}' | tail -1 | tr -d '\r')
             test -n "$TOTAL_TIME"
             echo "cold_start_total_ms=$TOTAL_TIME" | tee test-artifacts/performance-baseline.txt
             test "$TOTAL_TIME" -lt 30000
             sleep 3
-            adb shell pidof ir.chobyar.sketch | tee test-artifacts/pid.txt
-            test -s test-artifacts/pid.txt
+            PID=$(adb shell pidof ir.chobyar.sketch | tr -d '\r')
+            printf '%s\n' "$PID" | tee test-artifacts/pid.txt
+            test -n "$PID"
             adb shell dumpsys meminfo ir.chobyar.sketch > test-artifacts/meminfo.txt
             adb shell dumpsys gfxinfo ir.chobyar.sketch > test-artifacts/gfxinfo.txt
             adb logcat -d > test-artifacts/logcat.txt
