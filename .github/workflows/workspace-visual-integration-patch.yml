@@ -17,13 +17,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-      - name: Merge current main
+      - name: Prepare current production Activity without merging workflow history
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main
-          git merge --no-edit origin/main
+          git show origin/main:app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java > app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
       - name: Wire workspace visual state into project envelope and production UI
         run: |
           set -euo pipefail
@@ -139,27 +139,20 @@ jobs:
               }
 
               static Decoded decode(String raw) {
-                  if (raw == null || raw.trim().isEmpty()) {
-                      throw new IllegalArgumentException("Project file is empty");
-                  }
+                  if (raw == null || raw.trim().isEmpty()) throw new IllegalArgumentException("Project file is empty");
                   try {
                       JSONObject root = new JSONObject(raw);
-                      if (!FORMAT.equals(root.optString("format", ""))) {
-                          throw new IllegalArgumentException("Unsupported project format");
-                      }
+                      if (!FORMAT.equals(root.optString("format", ""))) throw new IllegalArgumentException("Unsupported project format");
                       int version = root.optInt("schemaVersion", -1);
                       if (version < 1) throw new IllegalArgumentException("Missing project schema");
-                      if (version > SCHEMA_VERSION) {
-                          throw new IllegalArgumentException("Project was created by a newer ChobYar version");
-                      }
+                      if (version > SCHEMA_VERSION) throw new IllegalArgumentException("Project was created by a newer ChobYar version");
                       String unit = root.optString("unit", "");
                       if (!"mm".equals(unit)) throw new IllegalArgumentException("Project unit must be mm");
                       JSONObject sketch = root.optJSONObject("sketch");
                       if (sketch == null) throw new IllegalArgumentException("Project sketch section is missing");
                       String scope = root.optString("scope", "");
-                      if(version==SKETCH_SCHEMA_VERSION&&SCOPE_SKETCH_V1.equals(scope)){
+                      if(version==SKETCH_SCHEMA_VERSION&&SCOPE_SKETCH_V1.equals(scope))
                           return new Decoded(version,scope,unit,sketch.toString(),null,null,null);
-                      }
                       if(version==MODEL_SCHEMA_VERSION&&SCOPE_MODEL_V2.equals(scope)){
                           JSONObject model=root.optJSONObject("model");
                           if(model==null)throw new IllegalArgumentException("Project model section is missing");
@@ -175,11 +168,8 @@ jobs:
                                   visual==null?null:visual.toString());
                       }
                       throw new IllegalArgumentException("Unsupported project scope");
-                  } catch (IllegalArgumentException e) {
-                      throw e;
-                  } catch (Exception e) {
-                      throw new IllegalArgumentException("Malformed ChobYar project file", e);
-                  }
+                  } catch (IllegalArgumentException e) { throw e; }
+                  catch (Exception e) { throw new IllegalArgumentException("Malformed ChobYar project file", e); }
               }
 
               private static JSONObject parseObject(String raw,String emptyMessage,String invalidMessage){
@@ -193,35 +183,22 @@ jobs:
           package ir.chobyar.sketch;
 
           import android.content.Context;
-
           import java.lang.reflect.Field;
           import java.util.List;
 
-          /**
-           * Transaction boundary used by Save/Open UI.
-           *
-           * A new file is fully parsed and rebuilt in a scratch CAD workspace before the
-           * live document is touched. Exact OCCT state and renderer/workspace visual state
-           * are persisted through separate adapters and committed atomically at Open.
-           */
+          /** Transactional Save/Open boundary for exact model plus renderer-only workspace state. */
           final class CadProjectPersistenceController {
               private CadProjectPersistenceController(){}
 
-              static String encode(Shapr3DGuideCadCanvasView cad){
-                  return encode(cad,null,null);
-              }
+              static String encode(Shapr3DGuideCadCanvasView cad){return encode(cad,null,null);}
 
-              static String encode(Shapr3DGuideCadCanvasView cad,
-                                   CadAppearanceController appearance,
-                                   SectionViewController section){
+              static String encode(Shapr3DGuideCadCanvasView cad,CadAppearanceController appearance,SectionViewController section){
                   if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
                   if((appearance==null)!=(section==null))throw new IllegalArgumentException("Visual workspace controllers are incomplete");
                   String sketch=cad.exportSketchProjectState();
                   boolean hasBodies=hasAnySolidBody(cad),hasReference=cad.hasReferenceImage();
                   String model=null;
                   if(hasBodies||hasReference){
-                      // Reference-only projects still carry exact plane/camera state so the
-                      // calibrated image comes back in the same spatial workspace.
                       model=ExactModelProjectAdapter.exportModel(cad);
                       ExactModelProjectAdapter.validateAgainstSketch(model,sketch);
                   }
@@ -240,22 +217,13 @@ jobs:
                   return CadProjectDocument.encodeSketch(sketch);
               }
 
-              /**
-               * SolidCadCanvasView intentionally keeps its body collection private.  The
-               * Save/Open boundary only needs a loss-prevention predicate here: if any Body
-               * exists, model-v2 must be used instead of silently writing sketch-v1.  Keep
-               * this reflective compatibility shim inside persistence code rather than
-               * exposing prototype internals to production UI.
-               */
               private static boolean hasAnySolidBody(Shapr3DGuideCadCanvasView cad){
                   try{
                       Field field=SolidCadCanvasView.class.getDeclaredField("bodies");
                       field.setAccessible(true);
                       Object value=field.get(cad);
                       return value instanceof List && !((List<?>)value).isEmpty();
-                  }catch(ReflectiveOperationException e){
-                      throw new IllegalStateException("Solid model presence could not be inspected",e);
-                  }
+                  }catch(ReflectiveOperationException e){throw new IllegalStateException("Solid model presence could not be inspected",e);}
               }
 
               static CadProjectDocument.Decoded validate(Shapr3DGuideCadCanvasView cad,String raw){
@@ -268,18 +236,13 @@ jobs:
                   return decoded;
               }
 
-              static String restore(Shapr3DGuideCadCanvasView cad,String raw){
-                  return restore(cad,null,null,null,raw);
-              }
+              static String restore(Shapr3DGuideCadCanvasView cad,String raw){return restore(cad,null,null,null,raw);}
 
-              static String restore(Shapr3DGuideCadCanvasView cad,
-                                    CadAppearanceController appearance,
-                                    SectionViewController section,
-                                    CadAppearanceController.Sink sink,
-                                    String raw){
+              static String restore(Shapr3DGuideCadCanvasView cad,CadAppearanceController appearance,
+                                    SectionViewController section,CadAppearanceController.Sink sink,String raw){
                   if((appearance==null)!=(section==null))throw new IllegalArgumentException("Visual workspace controllers are incomplete");
                   CadProjectDocument.Decoded decoded=validate(cad,raw);
-                  String previous=encode(cad,appearance,section); // refuse destructive Open when current state cannot be persisted safely
+                  String previous=encode(cad,appearance,section);
                   preflight(cad.getContext(),decoded);
                   try{return restoreValidated(cad,appearance,section,sink,decoded);}
                   catch(RuntimeException failure){
@@ -296,10 +259,8 @@ jobs:
                   finally{scratch.clearAll();}
               }
 
-              private static String restoreValidated(Shapr3DGuideCadCanvasView cad,
-                                                     CadAppearanceController appearance,
-                                                     SectionViewController section,
-                                                     CadAppearanceController.Sink sink,
+              private static String restoreValidated(Shapr3DGuideCadCanvasView cad,CadAppearanceController appearance,
+                                                     SectionViewController section,CadAppearanceController.Sink sink,
                                                      CadProjectDocument.Decoded decoded){
                   cad.clearAll();
                   String sketchStatus=cad.importSketchProjectState(decoded.sketchState);
@@ -324,69 +285,23 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-
           activity=Path('app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java')
           s=activity.read_text()
-          old='String json=CadProjectPersistenceController.encode(cad);'
-          new='String json=CadProjectPersistenceController.encode(cad,appearance,sectionView);'
-          if old in s: s=s.replace(old,new,1)
-          elif new not in s: raise SystemExit('Save wiring anchor missing')
-          old='String result=CadProjectPersistenceController.restore(cad,raw);'
-          new='String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw);'
-          if old in s: s=s.replace(old,new,1)
-          elif new not in s: raise SystemExit('Open wiring anchor missing')
+          s=s.replace('String json=CadProjectPersistenceController.encode(cad);',
+                      'String json=CadProjectPersistenceController.encode(cad,appearance,sectionView);',1)
+          s=s.replace('String result=CadProjectPersistenceController.restore(cad,raw);',
+                      'String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw);',1)
+          if 'CadProjectPersistenceController.encode(cad,appearance,sectionView)' not in s: raise SystemExit('Save wiring failed')
+          if 'CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw)' not in s: raise SystemExit('Open wiring failed')
           activity.write_text(s)
 
           test=Path('app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java')
           s=test.read_text()
           if 'workspaceEnvelopeCarriesVisualStateWithoutExactModel' not in s:
               marker='    private static void assertRejected(String raw) {'
-              block='''    @Test\n    public void workspaceEnvelopeCarriesVisualStateWithoutExactModel() {\n        CadAppearanceController appearance = new CadAppearanceController();\n        appearance.restore(new CadMaterialPreset.State(\n                CadMaterialPreset.Preset.PAINT, 0xFF2468AC, 0.41f, 0.07f), null);\n        SectionViewController section = new SectionViewController();\n        section.enable(SectionViewController.Axis.Y);\n        section.setOffsetMm(12.75);\n        section.flip();\n\n        String visual = WorkspaceVisualProjectAdapter.exportState(appearance, section);\n        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(\n                CadProjectDocument.encodeWorkspace("{}", null, null, visual));\n\n        assertTrue(decoded.hasWorkspaceVisual());\n        assertFalse(decoded.hasExactModel());\n        WorkspaceVisualProjectState.Decoded restored = WorkspaceVisualProjectAdapter.validate(decoded.workspaceVisualState);\n        assertEquals(CadMaterialPreset.Preset.PAINT, restored.appearance.preset);\n        assertEquals(0xFF2468AC, restored.appearance.argb);\n        assertEquals(0.41f, restored.appearance.roughness, 0.0001f);\n        assertEquals(SectionViewController.Axis.Y, restored.sectionAxis);\n        assertEquals(12.75, restored.sectionOffsetMm, 0.000001);\n        assertTrue(restored.sectionFlipped);\n    }\n\n    @Test\n    public void earlierWorkspaceV3WithoutVisualStateRemainsReadable() {\n        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(\n                CadProjectDocument.encodeWorkspace("{}", null, null));\n        assertEquals(CadProjectDocument.SCOPE_WORKSPACE_V3, decoded.scope);\n        assertFalse(decoded.hasWorkspaceVisual());\n    }\n\n'''
-              if marker not in s: raise SystemExit('visual test insertion anchor missing')
-              s=s.replace(marker,block+marker,1)
-              test.write_text(s)
-
-          visual=Path('.github/workflows/workspace-visual-persistence.yml')
-          s=visual.read_text()
-          for path in [
-              "      - 'app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java'\n",
-              "      - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'\n",
-              "      - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'\n",
-          ]:
-              if path not in s:
-                  anchor="      - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java'\n"
-                  s=s.replace(anchor,anchor+path,1)
-          checks='''          grep -q 'workspaceVisual' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java\n          grep -q 'WorkspaceVisualProjectAdapter.exportState' app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java\n          grep -q 'CadProjectPersistenceController.encode(cad,appearance,sectionView)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java\n          grep -q 'CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java\n'''
-          anchor="          grep -q 'void restore(boolean nextEnabled' app/src/main/java/ir/chobyar/sketch/SectionViewController.java\n"
-          if 'WorkspaceVisualProjectAdapter.exportState' not in s:
-              s=s.replace(anchor,anchor+checks,1)
-          s=s.replace("grep -q 'OK (7 tests)' test-artifacts/workspace-visual-persistence.txt","grep -q 'OK (9 tests)' test-artifacts/workspace-visual-persistence.txt")
-          visual.write_text(s)
-
-          project=Path('.github/workflows/project-persistence-contract.yml')
-          s=project.read_text()
-          extra_paths=[
-              "      - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java'\n",
-              "      - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectAdapter.java'\n",
-              "      - 'app/src/main/java/ir/chobyar/sketch/CadAppearanceController.java'\n",
-              "      - 'app/src/main/java/ir/chobyar/sketch/SectionViewController.java'\n",
-              "      - 'app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java'\n",
-          ]
-          anchor="      - 'app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java'\n"
-          for p in extra_paths:
-              if p not in s: s=s.replace(anchor,anchor+p,1)
-          s=s.replace("grep -q 'CadProjectPersistenceController.encode(cad)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java",
-                      "grep -q 'CadProjectPersistenceController.encode(cad,appearance,sectionView)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java")
-          s=s.replace("grep -q 'CadProjectPersistenceController.restore(cad,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java",
-                      "grep -q 'CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java")
-          if "WorkspaceVisualProjectAdapter.exportState" not in s:
-              anchor="          ! grep -q 'getDeclaredField' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java\n"
-              s=s.replace(anchor,"          grep -q 'workspaceVisual' app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java\n          grep -q 'WorkspaceVisualProjectAdapter.exportState' app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java\n"+anchor,1)
-          if 'project-persistence-visual.txt' not in s:
-              anchor="            grep -q 'OK (5 tests)' test-artifacts/project-persistence-reference-image.txt\n"
-              extra="            adb shell am instrument -w -e class ir.chobyar.sketch.WorkspaceVisualProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-visual.txt\n            grep -q 'OK (9 tests)' test-artifacts/project-persistence-visual.txt\n"
-              s=s.replace(anchor,anchor+extra,1)
-          project.write_text(s)
+              block='''    @Test\n    public void workspaceEnvelopeCarriesVisualStateWithoutExactModel() {\n        CadAppearanceController appearance = new CadAppearanceController();\n        appearance.restore(new CadMaterialPreset.State(CadMaterialPreset.Preset.PAINT, 0xFF2468AC, 0.41f, 0.07f), null);\n        SectionViewController section = new SectionViewController();\n        section.enable(SectionViewController.Axis.Y); section.setOffsetMm(12.75); section.flip();\n        String visual = WorkspaceVisualProjectAdapter.exportState(appearance, section);\n        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(CadProjectDocument.encodeWorkspace("{}", null, null, visual));\n        assertTrue(decoded.hasWorkspaceVisual());\n        assertFalse(decoded.hasExactModel());\n        WorkspaceVisualProjectState.Decoded restored = WorkspaceVisualProjectAdapter.validate(decoded.workspaceVisualState);\n        assertEquals(CadMaterialPreset.Preset.PAINT, restored.appearance.preset);\n        assertEquals(0xFF2468AC, restored.appearance.argb);\n        assertEquals(0.41f, restored.appearance.roughness, 0.0001f);\n        assertEquals(SectionViewController.Axis.Y, restored.sectionAxis);\n        assertEquals(12.75, restored.sectionOffsetMm, 0.000001);\n        assertTrue(restored.sectionFlipped);\n    }\n\n    @Test\n    public void earlierWorkspaceV3WithoutVisualStateRemainsReadable() {\n        CadProjectDocument.Decoded decoded = CadProjectDocument.decode(CadProjectDocument.encodeWorkspace("{}", null, null));\n        assertEquals(CadProjectDocument.SCOPE_WORKSPACE_V3, decoded.scope);\n        assertFalse(decoded.hasWorkspaceVisual());\n    }\n\n'''
+              if marker not in s: raise SystemExit('test insertion anchor missing')
+              test.write_text(s.replace(marker,block+marker,1))
           PY
       - name: Commit production integration
         run: |
@@ -394,12 +309,7 @@ jobs:
           git add app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java \
                   app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java \
                   app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java \
-                  app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java \
-                  .github/workflows/workspace-visual-persistence.yml \
-                  .github/workflows/project-persistence-contract.yml
-          if git diff --cached --quiet; then
-            echo 'Production integration already present.'
-            exit 0
-          fi
+                  app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java
+          if git diff --cached --quiet; then echo 'Production integration already present.'; exit 0; fi
           git commit -m 'Persist appearance and section state through production Save/Open'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
