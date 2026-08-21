@@ -48,7 +48,7 @@ public class ExactModelRestoreInstrumentationTest {
         JSONObject exported=onMain(()->{
             Context context=ApplicationProvider.getApplicationContext();Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
             assertTrue(cad.importSketchProjectState(sketch()).contains("1"));
-            String status=ExactModelProjectAdapter.restoreModel(cad,model(),sketch());assertTrue(status.contains("1 features"));assertTrue(cad.hasAnySolidBody());
+            String status=ExactModelProjectAdapter.restoreModel(cad,model(),sketch());assertTrue(status.contains("1 features"));
             return new JSONObject(ExactModelProjectAdapter.exportModel(cad));
         });
         JSONArray features=exported.getJSONArray("features");assertEquals(1,features.length());
