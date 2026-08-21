@@ -1,4 +1,5 @@
 
+#ifdef CHOBYAR_WITH_OCCT
 namespace {
 
 bool edgeByTraversalIndex(const TopoDS_Shape& shape,int wanted,TopoDS_Edge& out){
@@ -18,6 +19,7 @@ bool faceByTraversalIndex(const TopoDS_Shape& shape,int wanted,TopoDS_Face& out)
 }
 
 }
+#endif
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_ir_chobyar_sketch_NativeIndexedDirectKernel_nativeOcctFilletByIndex(
