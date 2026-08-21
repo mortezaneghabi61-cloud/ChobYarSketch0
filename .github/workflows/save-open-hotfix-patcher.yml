@@ -1,0 +1,112 @@
+name: One-shot Save Open hotfix patcher
+
+on:
+  push:
+    branches:
+      - fix/enable-production-project-save-20260821
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/enable-production-project-save-20260821
+          fetch-depth: 0
+
+      - name: Patch production Save Open wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java')
+          s=p.read_text()
+
+          start=s.index('    private void saveProject(){')
+          end=s.index('    private void openProject(){', start)
+          s=s[:start]+'''    private void saveProject(){
+              // Persist the complete non-lossy workspace: Sketch, exact 3D History
+              // and optional calibrated Reference Image.
+              Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);
+              intent.setType("application/json");intent.putExtra(Intent.EXTRA_TITLE,"ChobYar-Project.chobyar");
+              startActivityForResult(intent,REQUEST_SAVE_PROJECT);
+          }
+
+          '''+s[end:]
+
+          old='String json=CadProjectDocument.encodeSketch(cad.exportSketchProjectState());'
+          if old not in s:
+              raise SystemExit('legacy Save encoder anchor missing')
+          s=s.replace(old,'String json=CadProjectPersistenceController.encode(cad);',1)
+
+          old_open='''                CadProjectDocument.Decoded decoded=CadProjectDocument.decode(new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8));
+                  if(!cad.canImportSketchProjectState(decoded.sketchState)){toast("فایل پروژه معتبر نیست");return;}
+                  cad.clearAll();String result=cad.importSketchProjectState(decoded.sketchState);syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
+          '''
+          new_open='''                String raw=new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+                  String result=CadProjectPersistenceController.restore(cad,raw);
+                  syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(result);
+          '''
+          if old_open not in s:
+              raise SystemExit('legacy Open restore anchor missing')
+          s=s.replace(old_open,new_open,1)
+          p.write_text(s)
+
+          w=Path('.github/workflows/project-persistence-contract.yml')
+          q=w.read_text()
+
+          if "      - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'\n" not in q:
+              q=q.replace("      - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'\n",
+                          "      - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'\n      - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'\n      - 'app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java'\n",1)
+
+          if "      - 'app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java'\n" not in q:
+              q=q.replace("      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'\n",
+                          "      - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'\n      - 'app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java'\n",1)
+
+          obsolete="          grep -q 'ذخیره پروژه 3D هنوز کامل نشده' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java\n"
+          checks="""          grep -q 'CadProjectPersistenceController.encode(cad)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'CadProjectPersistenceController.restore(cad,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          ! grep -q 'ذخیره پروژه 3D هنوز کامل نشده' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+"""
+          if obsolete in q:
+              q=q.replace(obsolete,checks,1)
+          elif "CadProjectPersistenceController.encode(cad)" not in q:
+              anchor="          grep -q 'REQUEST_OPEN_PROJECT=1704' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java\n"
+              if anchor not in q:
+                  raise SystemExit('persistence source gate anchor missing')
+              q=q.replace(anchor,anchor+checks,1)
+
+          if 'ReferenceImageProjectPersistenceInstrumentationTest' not in q[q.find('script:'):]:
+              anchor="""            adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelRestoreInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-restore.txt
+            grep -q 'OK (2 tests)' test-artifacts/project-persistence-restore.txt
+"""
+              if anchor not in q:
+                  raise SystemExit('persistence instrumentation anchor missing')
+              q=q.replace(anchor,anchor+"""            adb shell am instrument -w -e class ir.chobyar.sketch.ReferenceImageProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-reference-image.txt
+            grep -q 'OK (5 tests)' test-artifacts/project-persistence-reference-image.txt
+""",1)
+
+          w.write_text(q)
+          PY
+
+          git diff --check
+          grep -q 'CadProjectPersistenceController.encode(cad)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          grep -q 'CadProjectPersistenceController.restore(cad,raw)' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+          ! grep -q 'ذخیره پروژه 3D هنوز کامل نشده' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
+
+      - name: Commit production patch and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/save-open-hotfix-patcher.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java .github/workflows/project-persistence-contract.yml
+          git commit -m 'Enable non-lossy 3D project Save Open in production UI'
+          git push origin HEAD:fix/enable-production-project-save-20260821
