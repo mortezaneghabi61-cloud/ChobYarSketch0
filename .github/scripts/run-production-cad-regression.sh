@@ -13,25 +13,50 @@ run_contract() {
   local class="$1"
   local slug="$2"
   local expected="$3"
+  local attempt=1
+  local instrument_status=0
 
-  adb logcat -c
-  set +e
-  adb shell am instrument -w -e class "ir.chobyar.sketch.${class}" \
-    ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner \
-    | tee "test-artifacts/${slug}-instrumentation.txt"
-  local instrument_status=${PIPESTATUS[0]}
-  set -e
+  while true; do
+    adb logcat -c
+    set +e
+    adb shell am instrument -w -e class "ir.chobyar.sketch.${class}" \
+      ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner \
+      | tee "test-artifacts/${slug}-instrumentation.txt"
+    instrument_status=${PIPESTATUS[0]}
+    set -e
 
-  adb logcat -d -v brief > "test-artifacts/${slug}-logcat.txt" || true
+    adb logcat -d -v brief > "test-artifacts/${slug}-logcat.txt" || true
 
-  if [[ ${instrument_status} -ne 0 ]]; then
-    echo "CONTRACT_FAIL class=${class} reason=instrumentation_exit_${instrument_status}" | tee -a test-artifacts/production-cad-summary.txt
-    return ${instrument_status}
-  fi
-  if ! grep -Fq "$expected" "test-artifacts/${slug}-instrumentation.txt"; then
+    if [[ ${instrument_status} -eq 0 ]] && grep -Fq "$expected" "test-artifacts/${slug}-instrumentation.txt"; then
+      break
+    fi
+
+    # API 35 can briefly give the system/launcher window focus immediately after
+    # emulator boot. In that narrow case Instrumentation.sendPointerSync rejects
+    # an otherwise valid stylus event before it reaches the app. Preserve the
+    # failed evidence and retry the whole isolated contract exactly once. Do not
+    # retry assertion failures or any other application/test failure.
+    if [[ ${attempt} -eq 1 ]] && \
+       grep -Fq 'Targeted input event injection' "test-artifacts/${slug}-instrumentation.txt"; then
+      cp "test-artifacts/${slug}-instrumentation.txt" "test-artifacts/${slug}-instrumentation-attempt1.txt"
+      cp "test-artifacts/${slug}-logcat.txt" "test-artifacts/${slug}-logcat-attempt1.txt" || true
+      echo "CONTRACT_INFRA_RETRY class=${class} reason=api35_target_window_focus" \
+        | tee -a test-artifacts/production-cad-summary.txt
+      attempt=2
+      instrumentation_package='ir.chobyar.sketch.test'
+      adb shell am force-stop "$instrumentation_package" || true
+      adb shell input keyevent KEYCODE_WAKEUP || true
+      sleep 2
+      continue
+    fi
+
+    if [[ ${instrument_status} -ne 0 ]]; then
+      echo "CONTRACT_FAIL class=${class} reason=instrumentation_exit_${instrument_status}" | tee -a test-artifacts/production-cad-summary.txt
+      return ${instrument_status}
+    fi
     echo "CONTRACT_FAIL class=${class} reason=missing_expected expected=${expected}" | tee -a test-artifacts/production-cad-summary.txt
     return 1
-  fi
+  done
 
   printf '%s | %s\n' "$class" "$expected" | tee -a test-artifacts/production-cad-summary.txt
 }
