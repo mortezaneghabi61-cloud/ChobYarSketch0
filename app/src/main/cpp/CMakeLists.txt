@@ -6,7 +6,7 @@ add_library(
         chobyar_brep
         SHARED
         native_brep_jni.cpp
-        occt_brep_jni.cpp
+        occt_brep_with_indexed_direct.cpp
 )
 
 target_compile_features(chobyar_brep PRIVATE cxx_std_17)

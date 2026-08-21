@@ -60,11 +60,12 @@ run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 te
 run_contract AssociativeProjectProvenanceInstrumentationTest project-associative 'OK (4 tests)'
 run_contract ExactEdgeTopologyInstrumentationTest exact-edge-topology 'OK (3 tests)'
 run_contract ExactFaceTopologyInstrumentationTest exact-face-topology 'OK (6 tests)'
+run_contract ExactTopologyIndexInstrumentationTest exact-topology-index 'OK (2 tests)'
 
 passed_classes=$(grep -c ' | OK (' test-artifacts/production-cad-summary.txt || true)
-if [[ "$passed_classes" -ne 19 ]]; then
-  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=19" | tee -a test-artifacts/production-cad-summary.txt
+if [[ "$passed_classes" -ne 20 ]]; then
+  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=20" | tee -a test-artifacts/production-cad-summary.txt
   exit 1
 fi
 
-echo 'PRODUCTION_CAD_REGRESSION OK classes=19 tests=51' | tee -a test-artifacts/production-cad-summary.txt
+echo 'PRODUCTION_CAD_REGRESSION OK classes=20 tests=53' | tee -a test-artifacts/production-cad-summary.txt

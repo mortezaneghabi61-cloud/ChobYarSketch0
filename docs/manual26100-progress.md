@@ -1,26 +1,24 @@
 # Manual 26.100 parity progress
 
-This project is being audited against the Shapr3D 26.100 manual while keeping ChobYar's Android workspace and interaction model independent.
+This branch is audited against the Shapr3D 26.100 workflow contract while keeping ChobYar-owned UI and implementation.
 
-Verified production areas now include Sketch input/selection, Undo/Redo, constraints, Construction geometry, Extrude, Revolve, Boolean operations including Keep Originals / Keep Target / Keep Tool, Fillet, Chamfer, Shell, Push/Pull, Sweep, Loft, exact OCCT Project-to-Sketch, selected-body projection, associative Project references, exact analytic edge topology, and exact analytic face topology.
+Verified durable areas now include Sketch input/selection, Undo/Redo, dimensions and constraints, Construction geometry, Extrude, Revolve, Boolean Keep Originals / Keep Target / Keep Tool, Fillet, Chamfer, Shell, Push/Pull, Sweep, Loft, exact OCCT edge projection, associative Project references, and stable exact topology rematching.
 
-Exact face families currently carried by the OCCT descriptor/rematch path:
-- Plane
-- Cylinder
-- Sphere
-- Cone
-- Torus
+## Current exact-topology gate
 
-The topology references are geometric signatures rather than persisted OCCT traversal indices, so History rebuilds can rematch logical faces/edges after sub-shape renumbering. Display triangulation remains a controlled fallback only for unsupported topology/surface families.
+- Exact Edge descriptors are the primary source for Line/Circle/Arc identity.
+- Exact Face descriptors cover Plane, Cylinder, Sphere, Cone and Torus.
+- Stable History rematching returns the current OCCT subshape traversal index.
+- Fillet / Chamfer / Push-Pull / Shell consume that exact current index when available.
+- Nearest-anchor native selection remains fallback-only when no exact descriptor index exists.
+- Display triangulation remains a rendering/fallback representation and is not the authoritative exact geometry.
 
-Current regression gate:
-- 19 instrumentation classes
-- 51 Sketch + 3D + Project + Topology contracts on Android API 35
-- arm64 OCCT exact-native compile gate
+## Regression gate
 
-Next gates:
-- Extend exact topology coverage to additional analytic/freeform surface families where practical.
-- Make direct-edit selection/commit paths use stable topology targets wherever an operation can otherwise depend on nearest-anchor heuristics.
-- Continue on-canvas Move/Rotate and Align workflow parity and real-device interaction validation.
+The consolidated Android API 35 production suite is 20 instrumentation classes / 53 tests. The arm64 native gate separately compiles and packages the real OCCT-linked `libchobyar_brep.so`.
 
-This file records the transition from ad-hoc patch workflows to persisted production code and durable regression coverage.
+## Next gates
+
+- Extend exact edge descriptors beyond Line/Circle/Arc to additional analytic/parametric curve families where OCCT exposes durable signatures.
+- Continue reducing compatibility reflection in production UI wiring.
+- Validate installable APK interaction on a physical Android pen device before calling the workflow feature-complete.

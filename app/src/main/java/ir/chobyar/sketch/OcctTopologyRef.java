@@ -52,8 +52,13 @@ final class OcctTopologyRef {
     static final class Resolution {
         final Geometry3D.Vec3 anchor;
         final double score;
-        Resolution(Geometry3D.Vec3 anchor,double score){this.anchor=anchor;this.score=score;}
+        final int subshapeIndex;
+        Resolution(Geometry3D.Vec3 anchor,double score){this(anchor,score,-1);}
+        Resolution(Geometry3D.Vec3 anchor,double score,int subshapeIndex){
+            this.anchor=anchor;this.score=score;this.subshapeIndex=subshapeIndex;
+        }
         boolean confident(){return score<95.0;}
+        boolean hasExactIndex(){return subshapeIndex>=0;}
     }
 
     private static final class Bounds {
@@ -75,13 +80,13 @@ final class OcctTopologyRef {
     }
 
     private static final class ExactEdgeCandidate {
-        final int type;
+        final int type,index;
         final Geometry3D.Vec3 p1,p2,center,anchor,vector;
         final double radius,span,measure;
-        ExactEdgeCandidate(int type,Geometry3D.Vec3 p1,Geometry3D.Vec3 p2,
+        ExactEdgeCandidate(int type,int index,Geometry3D.Vec3 p1,Geometry3D.Vec3 p2,
                            Geometry3D.Vec3 center,Geometry3D.Vec3 anchor,
                            Geometry3D.Vec3 vector,double radius,double span,double measure){
-            this.type=type;this.p1=p1;this.p2=p2;this.center=center;this.anchor=anchor;
+            this.type=type;this.index=index;this.p1=p1;this.p2=p2;this.center=center;this.anchor=anchor;
             this.vector=vector;this.radius=radius;this.span=span;this.measure=measure;
         }
     }
@@ -265,7 +270,7 @@ final class OcctTopologyRef {
             double s=pos+area+axis+radius;
             if(s<score){score=s;best=f;}
         }
-        return best==null?null:new Resolution(best.center,score);
+        return best==null?null:new Resolution(best.center,score,best.index);
     }
 
     private static List<ExactFaceCandidate> exactFaceCandidates(double[] d){
@@ -332,19 +337,19 @@ final class OcctTopologyRef {
             double s=pos+measure+orient;
             if(s<score){score=s;best=e;}
         }
-        return best==null?null:new Resolution(best.anchor,score);
+        return best==null?null:new Resolution(best.anchor,score,best.index);
     }
 
     private static List<ExactEdgeCandidate> exactEdgeCandidates(double[] d){
         List<ExactEdgeCandidate> out=new ArrayList<>();
         if(d==null)return out;final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
         for(int i=0;i+n-1<d.length;i+=n){
-            int kind=(int)Math.round(d[i]);
+            int kind=(int)Math.round(d[i]),index=(int)Math.round(d[i+1]);
             Geometry3D.Vec3 p1=v(d,i+2),p2=v(d,i+5);
             if(kind==NativeBRepKernel.OCCT_EDGE_LINE){
                 Geometry3D.Vec3 delta=p2.sub(p1);double len=delta.length();if(len<1e-7)continue;
                 Geometry3D.Vec3 anchor=p1.add(p2).mul(.5f),dir=delta.mul((float)(1.0/len));
-                out.add(new ExactEdgeCandidate(kind,p1,p2,null,anchor,dir,0.0,0.0,len));continue;
+                out.add(new ExactEdgeCandidate(kind,index,p1,p2,null,anchor,dir,0.0,0.0,len));continue;
             }
             if(kind!=NativeBRepKernel.OCCT_EDGE_CIRCLE&&kind!=NativeBRepKernel.OCCT_EDGE_ARC)continue;
             Geometry3D.Vec3 center=v(d,i+8),normal=v(d,i+11);double nl=normal.length();double radius=Math.abs(d[i+14]);
@@ -352,7 +357,7 @@ final class OcctTopologyRef {
             double span=kind==NativeBRepKernel.OCCT_EDGE_CIRCLE?Math.PI*2.0:Math.abs(d[i+16]-d[i+15]);
             if(!(span>1e-8))continue;span=Math.min(Math.PI*2.0,span);
             Geometry3D.Vec3 anchor=kind==NativeBRepKernel.OCCT_EDGE_CIRCLE?center:arcMidpoint(center,p1,normal,(d[i+16]-d[i+15])*.5);
-            out.add(new ExactEdgeCandidate(kind,p1,p2,center,anchor,normal,radius,span,radius*span));
+            out.add(new ExactEdgeCandidate(kind,index,p1,p2,center,anchor,normal,radius,span,radius*span));
         }
         return out;
     }
