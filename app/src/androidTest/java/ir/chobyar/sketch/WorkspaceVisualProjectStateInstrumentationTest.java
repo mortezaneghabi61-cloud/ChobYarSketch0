@@ -80,6 +80,48 @@ public class WorkspaceVisualProjectStateInstrumentationTest {
         assertRejected("{\"version\":1,\"appearance\":{\"preset\":\"wood\",\"argb\":-1,\"roughness\":0.5,\"metallic\":0},\"section\":{\"enabled\":true,\"axis\":\"Q\",\"offsetMm\":0,\"flipped\":false}}");
     }
 
+    @Test
+    public void appearanceControllerRestoresExactDecodedStateAndPublishesIt() {
+        CadMaterialPreset.State saved = new CadMaterialPreset.State(
+                CadMaterialPreset.Preset.FABRIC, 0xFF183E57, 0.57f, 0.14f);
+        WorkspaceVisualProjectState.Decoded decoded = WorkspaceVisualProjectState.decode(
+                WorkspaceVisualProjectState.encode(saved, new SectionViewController()));
+
+        CadAppearanceController controller = new CadAppearanceController();
+        final int[] color = new int[1];
+        final float[] values = new float[2];
+        CadMaterialPreset.State restored = controller.restore(decoded.appearance,
+                (argb, roughness, metallic) -> {
+                    color[0] = argb;
+                    values[0] = roughness;
+                    values[1] = metallic;
+                });
+
+        assertEquals(CadMaterialPreset.Preset.FABRIC, restored.preset);
+        assertEquals(0xFF183E57, color[0]);
+        assertEquals(0.57f, values[0], 0.0001f);
+        assertEquals(0.14f, values[1], 0.0001f);
+    }
+
+    @Test
+    public void sectionControllerRestoresDecodedStateAtomically() {
+        SectionViewController saved = new SectionViewController();
+        saved.enable(SectionViewController.Axis.X);
+        saved.setOffsetMm(-42.625);
+        saved.flip();
+        WorkspaceVisualProjectState.Decoded decoded = WorkspaceVisualProjectState.decode(
+                WorkspaceVisualProjectState.encode(CadMaterialPreset.of(CadMaterialPreset.Preset.PLASTIC), saved));
+
+        SectionViewController restored = new SectionViewController();
+        restored.restore(decoded.sectionEnabled, decoded.sectionAxis,
+                decoded.sectionOffsetMm, decoded.sectionFlipped);
+
+        assertTrue(restored.isEnabled());
+        assertEquals(SectionViewController.Axis.X, restored.axis());
+        assertEquals(-42.625, restored.offsetMm(), 0.000001);
+        assertTrue(restored.isFlipped());
+    }
+
     private static void assertRejected(String raw) {
         try {
             WorkspaceVisualProjectState.decode(raw);
