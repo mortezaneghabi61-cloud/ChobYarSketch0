@@ -1,4 +1,5 @@
 name: Material Appearance Contract
+# Runs on the post-reference-image baseline so the current PR merge ref is exercised.
 
 on:
   workflow_dispatch:
