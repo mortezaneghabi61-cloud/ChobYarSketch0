@@ -27,7 +27,7 @@ on:
       - gradle.properties
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: manual26100-consolidated-${{ github.ref }}
@@ -45,6 +45,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Apply indexed direct-topology source patch
+        if: github.ref == 'refs/heads/feature/stable-direct-topology-20260821'
+        run: |
+          python .github/scripts/apply-indexed-direct-topology.py
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add app/src/main app/src/androidTest .github/scripts/run-production-cad-regression.sh .github/workflows docs/manual26100-progress.md
+            git commit -m 'Use stable topology indexes for exact direct edits'
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
 
       - uses: actions/setup-java@v5
         with:
