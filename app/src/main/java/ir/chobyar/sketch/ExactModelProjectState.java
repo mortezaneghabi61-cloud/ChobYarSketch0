@@ -174,7 +174,11 @@ final class ExactModelProjectState {
     }
 
     private static JSONArray requireArray(JSONObject root,String key){JSONArray a=root.optJSONArray(key);if(a==null)throw new IllegalArgumentException("Model "+key+" is missing");return a;}
-    private static JSONArray vec(Geometry3D.Vec3 v){if(v==null)throw new IllegalArgumentException("Vector is missing");return new JSONArray().put(v.x).put(v.y).put(v.z);}
+    private static JSONArray vec(Geometry3D.Vec3 v){
+        if(v==null)throw new IllegalArgumentException("Vector is missing");
+        try{return new JSONArray().put(v.x).put(v.y).put(v.z);}
+        catch(Exception e){throw new IllegalArgumentException("Vector is invalid",e);}
+    }
     private static Geometry3D.Vec3 vec(JSONArray a){if(a==null||a.length()!=3)throw new IllegalArgumentException("Vector is invalid");return new Geometry3D.Vec3((float)finite(a.optDouble(0,Double.NaN)),(float)finite(a.optDouble(1,Double.NaN)),(float)finite(a.optDouble(2,Double.NaN)));}
     private static double finite(double v){if(!Double.isFinite(v)||Math.abs(v)>1.0e12)throw new IllegalArgumentException("Non-finite model value");return v;}
     private static String upper(String v){return v==null?"":v.trim().toUpperCase(java.util.Locale.US);}
