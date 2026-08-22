@@ -205,6 +205,12 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(activePlane().origin,diameterMm*0.5f));
     }
 
+    /** Deterministic primitive bridge for bundled editable projects and model restore. */
+    final String createProjectSphere(Geometry3D.Vec3 center,float diameterMm){
+        if(center==null||diameterMm<=0f)return"Sphere پروژه معتبر نیست";
+        return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(center,diameterMm*.5f));
+    }
+
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
         if(bodyConstructor==null||bodiesField==null||bodySerialField==null)return"ساخت Body تحلیلی آماده نیست";
         SolidCSG mesh=exact.tessellate(PREVIEW_SEGMENTS);if(mesh==null||mesh.isEmpty())return"هندسه تحلیلی Body نساخت";
