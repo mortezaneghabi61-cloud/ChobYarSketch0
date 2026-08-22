@@ -17,20 +17,16 @@ final class FurnitureSampleProjectFactory {
     static String createBoulderTable(Context context){
         Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
         try{
-            cad.applyProjectSketchPlane(Geometry3D.xz());
             cad.applyProjectSketchPlane("Top",new Geometry3D.Plane3D(new Geometry3D.Vec3(0f,0f,585f),
                     new Geometry3D.Vec3(1f,0f,0f),new Geometry3D.Vec3(0f,1f,0f),"XY • صفحه"));
             List<ProfileRow> rows=new ArrayList<>();
-            rows.add(polyline(spheroidHalfProfile(205f,0f,175f,175f,28)));rows.add(axis(0f,0f,350f));
-            rows.add(polyline(spheroidHalfProfile(135f,145f,385f,135f,28)));rows.add(axis(145f,250f,520f));
-            rows.add(polyline(spheroidHalfProfile(165f,-35f,500f,125f,28)));rows.add(axis(-35f,375f,625f));
             rows.add(circle("Top",0f,0f,380f));
             importRows(cad,rows);
 
-            revolve(cad,0,1,"گوی پایین • Ø410 × H350");
-            revolve(cad,2,3,"گوی میانی • Ø270 × H270 • X+145");
-            revolve(cad,4,5,"گوی زیر صفحه • Ø330 × H250 • X-35");
-            extrude(cad,6,45f,"صفحه گرد • Ø760 × 45",0f,0f,0f);
+            sphere(cad,new Geometry3D.Vec3(0f,0f,205f),410f,"گوی پایین • Ø410");
+            sphere(cad,new Geometry3D.Vec3(145f,0f,385f),270f,"گوی میانی • Ø270 • X+145");
+            sphere(cad,new Geometry3D.Vec3(-35f,0f,500f),260f,"گوی زیر صفحه • Ø260 • X-35");
+            extrude(cad,0,45f,"صفحه گرد • Ø760 × 45",0f,0f,0f);
             cad.setStandardView("ISO");cad.fitAll();cad.clearWorkspaceSelection();
             return CadProjectPersistenceController.encode(cad);
         }finally{cad.clearAll();}
@@ -52,10 +48,9 @@ final class FurnitureSampleProjectFactory {
         }finally{cad.clearAll();}
     }
 
-    private static void revolve(Shapr3DGuideCadCanvasView cad,int entityIndex,int axisIndex,String name){
-        CadCanvasView.Entity source=cad.entities.get(entityIndex);
-        String result=cad.createRevolve(source,cad.entities.get(axisIndex),false,360f);
-        if(!result.contains("ساخته شد"))throw new IllegalStateException(result);
+    private static void sphere(Shapr3DGuideCadCanvasView cad,Geometry3D.Vec3 center,float diameterMm,String name){
+        String result=cad.createProjectSphere(center,diameterMm);
+        if(!result.contains("Sphere"))throw new IllegalStateException(result);
         int bodyIndex=cad.bodyCount()-1;
         cad.renameItem(bodyIndex,name);
         cad.selectItem(bodyIndex);
@@ -89,14 +84,6 @@ final class FurnitureSampleProjectFactory {
         }catch(Exception e){throw new IllegalStateException("Sample Sketch could not be built",e);}
     }
 
-    private static List<PointF> spheroidHalfProfile(float radius,float centerX,float centerY,float radiusY,int segments){
-        List<PointF> p=new ArrayList<>();
-        // A microscopic axis clearance keeps the closed wire valid for both the preview CSG
-        // and OCCT's full-angle revolve (a zero-radius closing edge is rejected by OCCT).
-        for(int i=0;i<=segments;i++){double a=Math.toRadians(-90d+180d*i/segments);float x=centerX+Math.max(.75f,radius*(float)Math.cos(a));p.add(new PointF(x,centerY+radiusY*(float)Math.sin(a)));}
-        return p;
-    }
-
     private static List<PointF> hourglassProfile(float width,float height,float waist,int segments){
         List<PointF> p=new ArrayList<>();float half=width/2f,neck=waist/2f;
         for(int i=0;i<=segments;i++){float y=height*i/segments,t=Math.abs(2f*y/height-1f);float x=neck+(half-neck)*(float)Math.pow(t,2.25);p.add(new PointF(-x,y));}
@@ -110,11 +97,6 @@ final class FurnitureSampleProjectFactory {
 
     private static ProfileRow polyline(List<PointF> points){
         try{JSONArray a=new JSONArray();for(PointF p:points)a.put(new JSONArray().put(p.x).put(p.y));return base(new JSONObject().put("type","POLYLINE").put("closed",true).put("points",a));}
-        catch(Exception e){throw new IllegalStateException(e);}
-    }
-
-    private static ProfileRow axis(float x,float y1,float y2){
-        try{return base(new JSONObject().put("type","LINE").put("x1",x).put("y1",y1).put("x2",x).put("y2",y2),true);}
         catch(Exception e){throw new IllegalStateException(e);}
     }
 
