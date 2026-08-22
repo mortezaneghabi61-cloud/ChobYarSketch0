@@ -71,8 +71,11 @@ public final class FurnitureReferenceInstrumentationTest {
             try {
                 Field yaw = privateField(SpatialCadCanvasView.class, "cameraYaw");
                 Field pitch = privateField(SpatialCadCanvasView.class, "cameraPitch");
-                yaw.setFloat(this, -38f);
-                pitch.setFloat(this, 24f);
+                // The cabinet front lies at negative Y. Production ISO uses a
+                // positive pitch (looking from the back), so flip the pitch for
+                // the same front-three-quarter view as the supplied reference.
+                yaw.setFloat(this, 38f);
+                pitch.setFloat(this, -24f);
             } catch (Exception e) {
                 throw new AssertionError(e);
             }
