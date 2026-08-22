@@ -153,7 +153,6 @@ final class ExactModelProjectAdapter {
     }
 
     private static JSONArray exportFeatures(Shapr3DGuideCadCanvasView cad,IdentityHashMap<Object,Integer> entityIndex)throws Exception{
-        cad.refreshAnalyticBodiesForPersistence();
         List<JSONObject> rows=new ArrayList<>();
         for(Object f:list(field(ParametricHistorySolidCadCanvasView.class,"history").get(cad))){JSONObject row=legacyFeature(f,entityIndex);if(row!=null)rows.add(row);}
         for(Object f:list(field(AdvancedParametricSolidCadCanvasView.class,"formHistory").get(cad))){JSONObject row=formFeature(f,entityIndex);if(row!=null)rows.add(row);}
