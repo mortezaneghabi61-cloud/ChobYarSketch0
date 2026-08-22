@@ -246,7 +246,7 @@ public final class FurnitureReferenceInstrumentationTest {
 
     private static void drawTechnicalSheet(File file) {
         int width = 1800;
-        int height = 1250;
+        int height = 1500;
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bitmap);
         c.drawColor(Color.WHITE);
@@ -281,16 +281,16 @@ public final class FurnitureReferenceInstrumentationTest {
         c.drawText("RIGHT", sx + DEPTH * s / 2f, sy + 78f, label);
         dimensionH(c, sx, sx + DEPTH * s, sy + 132f, "420", dim, label);
 
-        float tx = 95f, ty = 870f;
+        float tx = 95f, ty = 950f;
         RectF top = new RectF(tx, ty, tx + WIDTH * s, ty + DEPTH * s);
         c.drawRoundRect(top, OUTER_RADIUS * s, OUTER_RADIUS * s, ink);
         c.drawText("TOP", tx + WIDTH * s / 2f, ty + DEPTH * s + 58f, label);
         dimensionH(c, tx, tx + WIDTH * s, ty - 45f, "500", dim, label);
         dimensionV(c, tx - 55f, ty, ty + DEPTH * s, "420", dim, label);
 
-        float bx = 850f, by = 870f;
+        float bx = 850f, by = 950f;
         Paint box = paint(Color.rgb(225, 231, 236), 1f, Paint.Style.FILL);
-        c.drawRoundRect(new RectF(bx, by, 1700f, 1195f), 24f, 24f, box);
+        c.drawRoundRect(new RectF(bx, by, 1700f, 1440f), 24f, 24f, box);
         c.drawText("MODEL SPECIFICATION", bx + 30f, by + 50f, note);
         c.drawText("Overall: 500 W × 420 D × 480 H", bx + 30f, by + 95f, note);
         c.drawText("Carcass / drawer panels: 18 mm", bx + 30f, by + 140f, note);
