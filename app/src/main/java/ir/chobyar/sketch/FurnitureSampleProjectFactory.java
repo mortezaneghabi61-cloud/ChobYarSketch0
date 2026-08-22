@@ -86,7 +86,9 @@ final class FurnitureSampleProjectFactory {
 
     private static List<PointF> spheroidHalfProfile(float radius,float centerY,float radiusY,int segments){
         List<PointF> p=new ArrayList<>();
-        for(int i=0;i<=segments;i++){double a=Math.toRadians(-90d+180d*i/segments);p.add(new PointF(radius*(float)Math.cos(a),centerY+radiusY*(float)Math.sin(a)));}
+        // A microscopic axis clearance keeps the closed wire valid for both the preview CSG
+        // and OCCT's full-angle revolve (a zero-radius closing edge is rejected by OCCT).
+        for(int i=0;i<=segments;i++){double a=Math.toRadians(-90d+180d*i/segments);float x=Math.max(.75f,radius*(float)Math.cos(a));p.add(new PointF(x,centerY+radiusY*(float)Math.sin(a)));}
         return p;
     }
 
