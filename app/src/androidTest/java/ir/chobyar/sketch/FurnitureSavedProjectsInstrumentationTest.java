@@ -37,12 +37,12 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 capture(boulder,new File(output(context),"01-boulder-table-iso.png"),"ISO");
                 capture(boulder,new File(output(context),"03-boulder-table-front.png"),"FRONT");
                 assertTrue(boulder.selectItem(0).contains("انتخاب"));
-                assertTrue(boulder.applyProjectBodyTransform(25f,0f,0f,0f,0f,0f));
+                assertTrue(boulder.updateSelectedProjectSphere(new Geometry3D.Vec3(25f,0f,205f),410f).contains("به‌روز"));
                 boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("بازسازی"));
                 String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","ویرایش میز سنگی",edited);
-                assertEquals(0.0,sphereCenterX(edited),0.01);assertEquals(25.0,firstMoveX(edited),0.01);
+                assertEquals(25.0,sphereCenterX(edited),0.01);
                 Shapr3DGuideCadCanvasView editedCanvas=new Shapr3DGuideCadCanvasView(context);CadProjectPersistenceController.restore(editedCanvas,repo.load("user-boulder-edit-test"));assertEquals(4,editedCanvas.bodyCount());
-                String reopened=CadProjectPersistenceController.encode(editedCanvas);assertEquals(0.0,sphereCenterX(reopened),0.01);assertEquals(25.0,firstMoveX(reopened),0.01);
+                String reopened=CadProjectPersistenceController.encode(editedCanvas);assertEquals(25.0,sphereCenterX(reopened),0.01);
 
                 Shapr3DGuideCadCanvasView hourglass=new Shapr3DGuideCadCanvasView(context);
                 CadProjectPersistenceController.restore(hourglass,repo.load(InternalProjectRepository.HOURGLASS_TABLE_ID));
@@ -59,11 +59,6 @@ public final class FurnitureSavedProjectsInstrumentationTest {
         String model=CadProjectDocument.decode(raw).modelState;JSONArray features=new JSONObject(model).getJSONArray("features");
         for(int i=0;i<features.length();i++){JSONObject f=features.getJSONObject(i);if("SPHERE".equals(f.getString("kind")))return f.getJSONObject("params").getJSONArray("center").getDouble(0);}
         throw new AssertionError("Sphere feature missing");
-    }
-    private static double firstMoveX(String raw)throws Exception{
-        String model=CadProjectDocument.decode(raw).modelState;JSONArray edits=new JSONObject(model).getJSONArray("directEdits");
-        for(int i=0;i<edits.length();i++){JSONObject e=edits.getJSONObject(i);if("MOVE".equals(e.getString("kind")))return e.getJSONArray("vector").getDouble(0);}
-        throw new AssertionError("Move edit missing");
     }
     private static String join(String[] rows){StringBuilder s=new StringBuilder();for(String row:rows)s.append(row).append('\n');return s.toString();}
     private static File output(Context context){File f=new File(context.getExternalFilesDir(null),"saved-furniture-validation");assertTrue(f.exists()||f.mkdirs());return f;}
