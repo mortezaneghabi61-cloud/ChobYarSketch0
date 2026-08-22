@@ -51,7 +51,9 @@ final class FurnitureSampleProjectFactory {
         CadCanvasView.Entity source=cad.entities.get(entityIndex);
         String result=cad.createRevolve(source,null,false,360f);
         if(!result.contains("ساخته شد"))throw new IllegalStateException(result);
-        cad.renameItem(cad.bodyCount()-1,name);
+        int bodyIndex=cad.bodyCount()-1;
+        cad.renameItem(bodyIndex,name);
+        cad.selectItem(bodyIndex);
         if(!cad.applyProjectBodyTransform(moveX,0f,0f,90f,0f,0f))throw new IllegalStateException("Revolve transform failed");
     }
 
@@ -59,7 +61,9 @@ final class FurnitureSampleProjectFactory {
         select(cad,cad.entities.get(entityIndex));
         String result=cad.extrudeSelectedBody(heightMm/10f);
         if(!result.contains("Body")&&!result.contains("Extrude"))throw new IllegalStateException(result);
-        cad.renameItem(cad.bodyCount()-1,name);
+        int bodyIndex=cad.bodyCount()-1;
+        cad.renameItem(bodyIndex,name);
+        cad.selectItem(bodyIndex);
         if((Math.abs(x)+Math.abs(y)+Math.abs(z))>1e-5f&&!cad.applyProjectBodyTransform(x,y,z,0f,0f,0f))
             throw new IllegalStateException("Extrude transform failed");
     }
