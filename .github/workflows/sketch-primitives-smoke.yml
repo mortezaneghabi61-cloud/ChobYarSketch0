@@ -75,7 +75,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.SketchPrimitivesSnapInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/sketch-primitives-instrumentation.txt
             grep -q 'OK (5 tests)' test-artifacts/sketch-primitives-instrumentation.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.ProductionNavigationExportInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/navigation-export-instrumentation.txt
-            grep -q 'OK (2 tests)' test-artifacts/navigation-export-instrumentation.txt
+            grep -q 'OK (3 tests)' test-artifacts/navigation-export-instrumentation.txt
             adb logcat -d -v brief | grep 'SketchPrimitivesSnap.*_RESULT' | sed -E 's/^.*(LINE_SNAP_RESULT|CIRCLE_RESULT|ARC_RESULT|DIMENSION_RESULT|COMMAND_RESULT)/\1/' | tee test-artifacts/sketch-primitives-result.txt
             test $(grep -c '_RESULT' test-artifacts/sketch-primitives-result.txt) -eq 5
             grep -q '^LINE_SNAP_RESULT endpoint=100,100 midpoint=160,100 intersection=200,100' test-artifacts/sketch-primitives-result.txt
