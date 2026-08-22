@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -358,6 +359,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⬡","Polygon",()->activateSketchTool(CadCanvasView.TOOL_POLYGON,"Polygon")));
         adaptive.addView(tool("⌁","Constraints",cad::showSmartConstraintMenu));
         adaptive.addView(tool("…","More",cad::showShaprSketchMenu));
+        finishManualPaletteLayout();
     }
 
     private void showAddPalette(){
@@ -371,6 +373,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
         adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
+        finishManualPaletteLayout();
     }
 
     private void showTransformPalette(){
@@ -382,6 +385,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⇲","Scale",()->runAndClose(cad::showScaleTool)));
         adaptive.addView(tool("⇋","Mirror",()->runAndClose(cad::showMirrorTool)));
         adaptive.addView(tool("⠿","Pattern",()->runAndClose(cad::showLinearPatternTool)));
+        finishManualPaletteLayout();
     }
 
     private void showToolsPalette(){
@@ -397,6 +401,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⌁","Snaps",cad::showShaprSnappingOptions));
         adaptive.addView(tool("▱","History",cad::showHistoryManager));
         adaptive.addView(tool("…","More",this::tools));
+        finishManualPaletteLayout();
     }
 
     private void openManualPalette(){
@@ -411,6 +416,23 @@ public final class ChobYarActivity extends Activity {
         else adaptive.setVisibility(View.GONE);
         if(primaryRail!=null)primaryRail.setVisibility(selected?View.GONE:View.VISIBLE);
         updateConstraintRail(cad==null?CadCanvasView.TOOL_SELECT:cad.getTool(),false);
+    }
+
+    /**
+     * A seven-command palette is taller than the usable canvas on high-density
+     * landscape devices.  Centering it allowed its first command to sit behind
+     * the floating top bar, so a tap on Close could activate Project instead.
+     * Keep the portrait rhythm, but compact and top-anchor manual palettes in
+     * landscape so every command remains visible and touchable.
+     */
+    private void finishManualPaletteLayout(){
+        if(adaptive==null)return;
+        boolean landscape=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;
+        if(landscape){
+            for(int i=0;i<adaptive.getChildCount();i++)adaptive.getChildAt(i).setMinimumHeight(dp(38));
+            adaptiveParams=wrap(Gravity.START|Gravity.TOP,8,72,0,0);
+        }else adaptiveParams=wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0);
+        adaptive.setLayoutParams(adaptiveParams);
     }
 
     private void activateSketchTool(int tool,String name){
