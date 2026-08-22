@@ -80,7 +80,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p test-artifacts
-          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee test-artifacts/occt-native-build.txt
+          gradle :app:assembleDebug --stacktrace 2>&1 | tee test-artifacts/occt-native-build.txt
 
       - name: Verify arm64 library is OCCT-linked and packaged
         run: |
