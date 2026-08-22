@@ -47,6 +47,19 @@ public final class ProductionNavigationExportInstrumentationTest {
     }
 
     @Test
+    public void extrudePreviewStaysCommittableAfterTransientSelectionClear() {
+        WorkspaceController controller=new WorkspaceController();
+        controller.onCanvasState(false,"REGION");
+        WorkspaceController.State started=controller.begin(WorkspaceController.Tool.EXTRUDE);
+        assertTrue("Selected region must start an Extrude preview",started.canCommit());
+        controller.previewReady();
+
+        WorkspaceController.State afterDrag=controller.onCanvasState(true,"NONE");
+        assertEquals("Extrude tool must remain active",WorkspaceController.Tool.EXTRUDE,afterDrag.tool);
+        assertTrue("Changing Extrude height must not disable Done",afterDrag.canCommit());
+    }
+
+    @Test
     public void productionSketchExportsMillimeterDxf() {
         try(ActivityScenario<ChobYarActivity> scenario=ActivityScenario.launch(ChobYarActivity.class)){
             scenario.onActivity(activity->{
