@@ -37,13 +37,14 @@ final class FurnitureSampleProjectFactory {
     static String createHourglassTable(Context context){
         Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
         try{
-            cad.applyProjectSketchPlane(Geometry3D.xz());
+            cad.applyProjectSketchPlane("0",depthPlane(250f,"XZ • پایه"));
+            cad.applyProjectSketchPlane("Top",depthPlane(450f,"XZ • صفحه"));
             List<ProfileRow> rows=new ArrayList<>();
             rows.add(polyline(hourglassProfile(1120f,725f,320f,24)));
-            rows.add(rect(-1000f,725f,1000f,765f));
+            rows.add(rect("Top",-1000f,725f,1000f,765f));
             importRows(cad,rows);
-            extrude(cad,0,500f,"پایه ساعت‌شنی • 1120×500×725",0f,250f,0f);
-            extrude(cad,1,900f,"صفحه • 2000×900×40",0f,450f,0f);
+            extrude(cad,0,500f,"پایه ساعت‌شنی • 1120×500×725",0f,0f,0f);
+            extrude(cad,1,900f,"صفحه • 2000×900×40",0f,0f,0f);
             cad.setStandardView("ISO");cad.fitAll();cad.clearWorkspaceSelection();
             return CadProjectPersistenceController.encode(cad);
         }finally{cad.clearAll();}
@@ -79,7 +80,8 @@ final class FurnitureSampleProjectFactory {
                     .put("currentColor",Color.rgb(25,25,25)).put("polygonSides",6);
             root.put("view",new JSONObject().put("scale",1).put("offsetX",120).put("offsetY",160)
                     .put("grid",true).put("axes",true).put("guides",true).put("dimensions",true).put("snap",true).put("ortho",false));
-            root.put("layers",new JSONArray().put(new JSONObject().put("name","0").put("visible",true)));
+            root.put("layers",new JSONArray().put(new JSONObject().put("name","0").put("visible",true))
+                    .put(new JSONObject().put("name","Top").put("visible",true)));
             JSONArray entities=new JSONArray();for(ProfileRow row:rows)entities.put(row.json);root.put("entities",entities);
             String status=cad.importSketchProjectState(root.toString());if(!status.contains("باز شد"))throw new IllegalStateException(status);
         }catch(Exception e){throw new IllegalStateException("Sample Sketch could not be built",e);}
@@ -100,6 +102,10 @@ final class FurnitureSampleProjectFactory {
         return p;
     }
 
+    private static Geometry3D.Plane3D depthPlane(float originY,String label){
+        return new Geometry3D.Plane3D(new Geometry3D.Vec3(0f,originY,0f),new Geometry3D.Vec3(1f,0f,0f),new Geometry3D.Vec3(0f,0f,1f),label);
+    }
+
     private static ProfileRow polyline(List<PointF> points){
         try{JSONArray a=new JSONArray();for(PointF p:points)a.put(new JSONArray().put(p.x).put(p.y));return base(new JSONObject().put("type","POLYLINE").put("closed",true).put("points",a));}
         catch(Exception e){throw new IllegalStateException(e);}
@@ -118,9 +124,13 @@ final class FurnitureSampleProjectFactory {
     }
 
     private static ProfileRow rect(float x1,float y1,float x2,float y2){
+        return rect("0",x1,y1,x2,y2);
+    }
+
+    private static ProfileRow rect(String layer,float x1,float y1,float x2,float y2){
         try{JSONArray p=new JSONArray().put(new JSONArray().put(x1).put(y1)).put(new JSONArray().put(x2).put(y1))
                 .put(new JSONArray().put(x2).put(y2)).put(new JSONArray().put(x1).put(y2));
-            return base(new JSONObject().put("type","RECT").put("points",p));}
+            return base(new JSONObject().put("type","RECT").put("points",p),false,layer);}
         catch(Exception e){throw new IllegalStateException(e);}
     }
 
@@ -129,7 +139,11 @@ final class FurnitureSampleProjectFactory {
     }
 
     private static ProfileRow base(JSONObject json,boolean construction){
-        try{json.put("layer","0").put("color",Color.rgb(25,25,25)).put("extrusion",0).put("construction",construction)
+        return base(json,construction,"0");
+    }
+
+    private static ProfileRow base(JSONObject json,boolean construction,String layer){
+        try{json.put("layer",layer).put("color",Color.rgb(25,25,25)).put("extrusion",0).put("construction",construction)
                 .put("referenceBodyId",-1).put("referenceEdgeIndex",-1).put("referenceEdgeKind",0);return new ProfileRow(json);}
         catch(Exception e){throw new IllegalStateException(e);}
     }
