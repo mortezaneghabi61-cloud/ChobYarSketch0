@@ -128,8 +128,6 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             });
             inst.waitForIdleSync();
 
-            // Keep every sample comfortably inside the API-35 Pixel 7 Pro canvas.
-            // The previous 420..540 mm X range partly left the 1440px window.
             float[][] worldPath = {
                     {110f, 220f}, {150f, 165f}, {190f, 145f}, {230f, 165f}, {270f, 220f}
             };
@@ -343,8 +341,12 @@ public final class SketchPrimitivesSnapInstrumentationTest {
     }
 
     private static void send(Instrumentation inst, MotionEvent e) {
-        try { inst.sendPointerSync(e); }
-        finally { e.recycle(); }
+        try {
+            boolean injected = inst.getUiAutomation().injectInputEvent(e, true);
+            assertTrue("Stylus input injection was rejected", injected);
+        } finally {
+            e.recycle();
+        }
     }
 
     private static long now() { return SystemClock.uptimeMillis(); }
