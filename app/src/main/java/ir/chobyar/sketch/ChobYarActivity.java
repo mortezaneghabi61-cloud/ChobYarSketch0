@@ -54,6 +54,9 @@ public final class ChobYarActivity extends Activity {
     private TextView snapButton;
     private FrameLayout.LayoutParams adaptiveParams;
     private File pendingCadExport;
+    private InternalProjectRepository internalProjects;
+    private String currentInternalProjectId;
+    private String currentInternalProjectName;
     private long feedbackRevision;
     private boolean manualPalette;
     private boolean sketchPalette;
@@ -63,6 +66,7 @@ public final class ChobYarActivity extends Activity {
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(248,249,251));
         gpuSurface=new FilamentCadSurface(this);root.addView(gpuSurface,new FrameLayout.LayoutParams(-1,-1));
         cad=new Shapr3DGuideCadCanvasView(this);
+        internalProjects=new InternalProjectRepository(this);
         // The GPU SurfaceView sits behind the interaction canvas. Keeping this
         // layer transparent is what lets exact Filament bodies remain visible.
         cad.setBackgroundColor(Color.TRANSPARENT);
@@ -488,10 +492,40 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showProjectMenu(){
-        String[] rows={"Items / Layers","Save Project","Open Project","Export DXF","Export STEP / STL"};
+        String[] rows={"پروژه‌های داخل اپ","ذخیره در داخل اپ","Items / Layers","Save Project as File","Open Project File","Export DXF","Export STEP / STL"};
         new AlertDialog.Builder(this).setTitle("Project").setItems(rows,(d,w)->{
-            if(w==0)showItems();else if(w==1)saveProject();else if(w==2)openProject();else if(w==3)exportDxf();else showCadExport();
+            if(w==0)showInternalProjects();else if(w==1)saveInsideApp();else if(w==2)showItems();else if(w==3)saveProject();else if(w==4)openProject();else if(w==5)exportDxf();else showCadExport();
         }).setNegativeButton("بستن",null).show();
+    }
+
+    private void showInternalProjects(){
+        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast("ساخت پروژه‌های نمونه انجام نشد");return;}
+        java.util.List<InternalProjectRepository.Entry> entries=internalProjects.entries();
+        String[] rows=new String[entries.size()];for(int i=0;i<rows.length;i++){InternalProjectRepository.Entry p=entries.get(i);rows[i]=(p.builtIn?"◆ ":"● ")+p.name;}
+        new AlertDialog.Builder(this).setTitle("پروژه‌های داخل اپ")
+                .setMessage("هر پروژه با Sketch و History باز می‌شود و Bodyها قابل تغییرند.")
+                .setItems(rows,(d,w)->openInternalProject(entries.get(w))).setNegativeButton("بستن",null).show();
+    }
+
+    private void openInternalProject(InternalProjectRepository.Entry entry){
+        try{
+            String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,internalProjects.load(entry.id));
+            currentInternalProjectId=entry.id;currentInternalProjectName=entry.name;syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);
+            if(workspaceTitle!=null)workspaceTitle.setText(entry.name);status(entry.name+" باز شد • "+result);
+        }catch(Exception e){toast("بازکردن پروژه داخل اپ انجام نشد");}
+    }
+
+    private void saveInsideApp(){
+        EditText input=new EditText(this);input.setSingleLine();input.setText(currentInternalProjectName==null?"پروژه جدید چوب‌یار":currentInternalProjectName);input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this).setTitle("ذخیره در داخل اپ").setMessage("Sketch، Bodyها، History، نما و اندازه‌ها ذخیره می‌شوند.").setView(input)
+                .setPositiveButton("ذخیره",(d,w)->{
+                    try{
+                        String name=input.getText().toString().trim();if(name.isEmpty())throw new IllegalArgumentException();
+                        String id=currentInternalProjectId==null?internalProjects.createId(name):currentInternalProjectId;
+                        internalProjects.save(id,name,CadProjectPersistenceController.encode(cad,appearance,sectionView));
+                        currentInternalProjectId=id;currentInternalProjectName=name;if(workspaceTitle!=null)workspaceTitle.setText(name);toast("پروژه داخل اپ ذخیره شد");
+                    }catch(Exception e){toast("ذخیره داخل اپ انجام نشد");}
+                }).setNegativeButton("لغو",null).show();
     }
 
     private void saveProject(){
