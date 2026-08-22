@@ -70,7 +70,7 @@ jobs:
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
       - name: Build signed release-candidate APK
-        run: gradle :app:assembleRelease --stacktrace
+        run: ./gradlew :app:assembleRelease --stacktrace
 
       - name: Verify package, signature, ABI and size budget
         run: |

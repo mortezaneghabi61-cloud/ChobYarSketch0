@@ -176,6 +176,7 @@ public class CadCanvasView extends View {
     public boolean isSnapEnabled() { return snapEnabled; }
     public boolean isOrthoEnabled() { return orthoEnabled; }
     public String getCurrentLayer() { return currentLayer; }
+    public int viewportZoomPercent() { return Math.max(1, Math.round(viewScale * 100f)); }
 
     public void toggleAxes() { showAxes = !showAxes; invalidate(); }
     public void toggleGrid() { showGrid = !showGrid; invalidate(); }

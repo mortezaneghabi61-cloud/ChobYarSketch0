@@ -45,7 +45,7 @@ jobs:
       - name: Restore development signing key
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
       - name: Build production and instrumentation APKs
-        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

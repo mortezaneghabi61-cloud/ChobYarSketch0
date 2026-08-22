@@ -67,7 +67,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p test-artifacts
-          gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/consolidated-build.txt
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/consolidated-build.txt
 
       - name: Enable KVM
         run: |

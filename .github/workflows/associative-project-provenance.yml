@@ -66,7 +66,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p test-artifacts
-          gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/assoc-build.log
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee test-artifacts/assoc-build.log
 
       - name: Enable KVM
         if: steps.build.outcome == 'success'

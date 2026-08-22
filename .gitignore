@@ -1,0 +1,11 @@
+.gradle/
+.idea/
+**/build/
+local.properties
+chobyar-dev.jks
+.occt/
+app/src/main/jniLibs/
+*.iml
+*.log
+__pycache__/
+*.pyc
