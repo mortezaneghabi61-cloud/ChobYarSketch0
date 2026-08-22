@@ -32,7 +32,8 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 CadProjectDocument.Decoded boulderDoc=CadProjectDocument.decode(repo.load(InternalProjectRepository.BOULDER_TABLE_ID));
                 assertTrue(boulderDoc.hasExactModel());CadProjectPersistenceController.restore(boulder,boulderDocToRaw(repo,InternalProjectRepository.BOULDER_TABLE_ID));
                 assertEquals(4,boulder.bodyCount());assertTrue(join(boulder.itemRows()).contains("گوی پایین"));assertTrue(join(boulder.itemRows()).contains("صفحه گرد"));
-                capture(boulder,new File(output(context),"01-boulder-table-iso.png"));
+                capture(boulder,new File(output(context),"01-boulder-table-iso.png"),"ISO");
+                capture(boulder,new File(output(context),"03-boulder-table-front.png"),"FRONT");
                 boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("بازسازی"));
                 String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","ویرایش میز سنگی",edited);
                 Shapr3DGuideCadCanvasView editedCanvas=new Shapr3DGuideCadCanvasView(context);CadProjectPersistenceController.restore(editedCanvas,repo.load("user-boulder-edit-test"));assertEquals(4,editedCanvas.bodyCount());
@@ -40,7 +41,8 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 Shapr3DGuideCadCanvasView hourglass=new Shapr3DGuideCadCanvasView(context);
                 CadProjectPersistenceController.restore(hourglass,repo.load(InternalProjectRepository.HOURGLASS_TABLE_ID));
                 assertEquals(2,hourglass.bodyCount());String names=join(hourglass.itemRows());assertTrue(names.contains("1120×500×725"));assertTrue(names.contains("2000×900×40"));
-                capture(hourglass,new File(output(context),"02-hourglass-table-iso.png"));
+                capture(hourglass,new File(output(context),"02-hourglass-table-iso.png"),"ISO");
+                capture(hourglass,new File(output(context),"04-hourglass-table-front.png"),"FRONT");
             }catch(Throwable t){error[0]=t;}
         });
         if(error[0]!=null)throw new AssertionError(error[0]);
@@ -49,9 +51,9 @@ public final class FurnitureSavedProjectsInstrumentationTest {
     private static String boulderDocToRaw(InternalProjectRepository repo,String id){return repo.load(id);}
     private static String join(String[] rows){StringBuilder s=new StringBuilder();for(String row:rows)s.append(row).append('\n');return s.toString();}
     private static File output(Context context){File f=new File(context.getExternalFilesDir(null),"saved-furniture-validation");assertTrue(f.exists()||f.mkdirs());return f;}
-    private static void capture(Shapr3DGuideCadCanvasView view,File file)throws Exception{
+    private static void capture(Shapr3DGuideCadCanvasView view,File file,String standardView)throws Exception{
         view.measure(android.view.View.MeasureSpec.makeMeasureSpec(1200,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(1000,android.view.View.MeasureSpec.EXACTLY));
-        view.layout(0,0,1200,1000);view.setBodyAppearance(Color.rgb(224,217,201),true);view.setStandardView("ISO");view.fitAll();view.clearWorkspaceSelection();
+        view.layout(0,0,1200,1000);view.setBodyAppearance(Color.rgb(224,217,201),true);view.setStandardView(standardView);view.fitAll();view.clearWorkspaceSelection();
         Bitmap bitmap=Bitmap.createBitmap(1200,1000,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(bitmap);canvas.drawColor(Color.rgb(247,246,242));view.draw(canvas);
         try(FileOutputStream out=new FileOutputStream(file)){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));}assertTrue(file.length()>1000L);
     }
