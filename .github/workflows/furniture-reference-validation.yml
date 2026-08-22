@@ -5,6 +5,11 @@ on:
   pull_request:
     paths:
       - 'app/src/androidTest/java/ir/chobyar/sketch/FurnitureReferenceInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/FurnitureSavedProjectsInstrumentationTest.java'
+      - 'app/src/main/java/ir/chobyar/sketch/FurnitureSampleProjectFactory.java'
+      - 'app/src/main/java/ir/chobyar/sketch/InternalProjectRepository.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'
+      - 'app/src/main/java/ir/chobyar/sketch/OcctStableCadCanvasView.java'
       - '.github/workflows/furniture-reference-validation.yml'
 
 permissions:
@@ -57,11 +62,16 @@ jobs:
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class ir.chobyar.sketch.FurnitureReferenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/furniture-reference.txt
             grep -q 'OK (1 test)' test-artifacts/furniture-reference.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.FurnitureSavedProjectsInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/furniture-saved-projects.txt
+            grep -q 'OK (1 test)' test-artifacts/furniture-saved-projects.txt
             adb pull /sdcard/Android/data/ir.chobyar.sketch/files/furniture-validation test-artifacts/
+            adb pull /sdcard/Android/data/ir.chobyar.sketch/files/saved-furniture-validation test-artifacts/
             test -s test-artifacts/furniture-validation/01-nightstand-front-closed.png
             test -s test-artifacts/furniture-validation/02-nightstand-iso-closed.png
             test -s test-artifacts/furniture-validation/03-nightstand-iso-open.png
             test -s test-artifacts/furniture-validation/04-nightstand-dimensioned-plan.png
+            test -s test-artifacts/saved-furniture-validation/01-boulder-table-iso.png
+            test -s test-artifacts/saved-furniture-validation/02-hourglass-table-iso.png
       - name: Upload model evidence
         if: always()
         uses: actions/upload-artifact@v4
