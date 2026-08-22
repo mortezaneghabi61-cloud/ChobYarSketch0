@@ -325,6 +325,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
+            adaptive.addView(tool("⌨","ابعاد دقیق",cad::showSelectedAnalyticEditor));
             adaptive.addView(tool("◉","Material",this::showMaterialPalette));
             adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
@@ -377,6 +378,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
         adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
+        adaptive.addView(tool("●","Solid دقیق",cad::showSolidManager));
         finishManualPaletteLayout();
     }
 
