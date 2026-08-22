@@ -23,9 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      CHOBYAR_VERSION_NAME: 0.4.rc.${{ github.run_number }}
+      CHOBYAR_VERSION_NAME: 0.5.rc.${{ github.run_number }}
       CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
       APK: app/build/outputs/apk/release/app-release.apk
+      EXPECTED_DEV_CERT_SHA256: 6d68da0481eb76eae200fe188386d36ae96ac5a9338bd63b921229d5f18a8735
 
     steps:
       - name: Checkout
@@ -66,7 +67,7 @@ jobs:
         with:
           gradle-version: '9.1.0'
 
-      - name: Restore persistent signing key
+      - name: Restore reproducible development signing key
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
       - name: Build signed release-candidate APK
@@ -78,9 +79,11 @@ jobs:
           mkdir -p test-artifacts
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee test-artifacts/apk-signature.txt
+          grep -qi "Signer #1 certificate SHA-256 digest: $EXPECTED_DEV_CERT_SHA256" test-artifacts/apk-signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee test-artifacts/apk-badging.txt
           grep -q "package: name='ir.chobyar.sketch'" test-artifacts/apk-badging.txt
           grep -q "versionCode='$CHOBYAR_VERSION_CODE'" test-artifacts/apk-badging.txt
+          grep -q "targetSdkVersion:'35'" test-artifacts/apk-badging.txt
           unzip -l "$APK" | tee test-artifacts/apk-files.txt
           grep -q 'lib/arm64-v8a/' test-artifacts/apk-files.txt
           APK_BYTES=$(stat -c%s "$APK")
@@ -103,18 +106,22 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
+            set -euo pipefail
             mkdir -p test-artifacts
             adb install -r "$APK"
             adb logcat -c
             adb shell am force-stop ir.chobyar.sketch
             adb shell am start -W -S -n ir.chobyar.sketch/.ChobYarActivity | tee test-artifacts/cold-launch.txt
-            awk -F': ' '/TotalTime:/{v=$2} /WaitTime:/{if(v=="") v=$2} END{gsub(/\r/,"",v); if(v=="") exit 1; print "cold_start_observed_ms=" v; if ((v+0) >= 30000) exit 2}' test-artifacts/cold-launch.txt > test-artifacts/performance-baseline.txt
+            awk -F': ' '/TotalTime:/{v=$2} /WaitTime:/{if(v=="") v=$2} END{gsub(/\r/,"",v); if(v=="") exit 1; print "cold_start_observed_ms=" v; if ((v+0) >= 20000) exit 2}' test-artifacts/cold-launch.txt > test-artifacts/performance-baseline.txt
             cat test-artifacts/performance-baseline.txt
             sleep 3
             adb shell pidof ir.chobyar.sketch | tr -d '\r' > test-artifacts/pid.txt
             test -s test-artifacts/pid.txt
-            cat test-artifacts/pid.txt
             adb shell dumpsys meminfo ir.chobyar.sketch > test-artifacts/meminfo.txt
+            PSS_KB=$(awk '/TOTAL PSS:/{print $3; exit}' test-artifacts/meminfo.txt)
+            test -n "$PSS_KB"
+            echo "total_pss_kb=$PSS_KB" | tee -a test-artifacts/performance-baseline.txt
+            test "$PSS_KB" -lt 400000
             adb shell dumpsys gfxinfo ir.chobyar.sketch > test-artifacts/gfxinfo.txt
             adb logcat -d > test-artifacts/logcat.txt
             ! grep -E 'FATAL EXCEPTION|ANR in ir\.chobyar\.sketch' test-artifacts/logcat.txt
@@ -128,4 +135,4 @@ jobs:
             app/build/outputs/apk/release/app-release.apk
             test-artifacts/**
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
