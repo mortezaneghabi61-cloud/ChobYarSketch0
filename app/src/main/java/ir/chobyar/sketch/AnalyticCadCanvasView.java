@@ -248,9 +248,6 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
                 }).setNegativeButton("لغو",null).show();
     }
 
-    /** Reconcile exact metadata with the displayed solid before persistence. */
-    final void refreshAnalyticBodiesForPersistence(){refreshRecognizedBodies();}
-
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
         if(bodyConstructor==null||bodiesField==null||bodySerialField==null)return"ساخت Body تحلیلی آماده نیست";
         SolidCSG mesh=exact.tessellate(PREVIEW_SEGMENTS);if(mesh==null||mesh.isEmpty())return"هندسه تحلیلی Body نساخت";
@@ -289,13 +286,16 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private AnalyticSolidKernel.Primitive currentPrimitive(Object body){
         if(body==null)return null;
+        AnalyticSolidKernel.Primitive cached=analyticByBody.get(body);
+        if(cached!=null)return cached;
         AnalyticSolidKernel.Primitive recognized=AnalyticSolidKernel.recognize(bodyCsg(body));
         if(recognized!=null){analyticByBody.put(body,recognized);return recognized;}
-        return analyticByBody.get(body);
+        return null;
     }
 
     private void refreshRecognizedBodies(){
         for(Object body:bodies()){
+            if(analyticByBody.containsKey(body))continue;
             AnalyticSolidKernel.Primitive p=AnalyticSolidKernel.recognize(bodyCsg(body));
             if(p!=null)analyticByBody.put(body,p);
         }
