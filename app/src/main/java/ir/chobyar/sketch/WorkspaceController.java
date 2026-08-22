@@ -81,7 +81,11 @@ final class WorkspaceController {
         if(tool==Tool.MOVE_ROTATE){
             phase=selection==Selection.NONE?Phase.SELECT_PRIMARY:Phase.PREVIEW;
         }else if(tool==Tool.EXTRUDE){
-            phase=isSketchProfile(selection)?Phase.PREVIEW:Phase.SELECT_PRIMARY;
+            // Starting the 3D preview intentionally clears the sketch selection.
+            // Once a valid preview exists, transient NONE/BODY canvas updates
+            // from dragging or exact-value edits must not disable Commit.
+            if(phase!=Phase.PREVIEW)
+                phase=isSketchProfile(selection)?Phase.PREVIEW:Phase.SELECT_PRIMARY;
         }
         revision++;
         return state();
