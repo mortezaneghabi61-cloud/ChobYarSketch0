@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -53,6 +54,9 @@ public final class ChobYarActivity extends Activity {
     private TextView snapButton;
     private FrameLayout.LayoutParams adaptiveParams;
     private File pendingCadExport;
+    private InternalProjectRepository internalProjects;
+    private String currentInternalProjectId;
+    private String currentInternalProjectName;
     private long feedbackRevision;
     private boolean manualPalette;
     private boolean sketchPalette;
@@ -62,6 +66,7 @@ public final class ChobYarActivity extends Activity {
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(248,249,251));
         gpuSurface=new FilamentCadSurface(this);root.addView(gpuSurface,new FrameLayout.LayoutParams(-1,-1));
         cad=new Shapr3DGuideCadCanvasView(this);
+        internalProjects=new InternalProjectRepository(this);
         // The GPU SurfaceView sits behind the interaction canvas. Keeping this
         // layer transparent is what lets exact Filament bodies remain visible.
         cad.setBackgroundColor(Color.TRANSPARENT);
@@ -271,7 +276,8 @@ public final class ChobYarActivity extends Activity {
 
     private void editSessionValue(){
         WorkspaceController.State state=workspace.state();
-        if(state.tool==WorkspaceController.Tool.REVOLVE)cad.showInteractiveRevolveAngleEditor();
+        if(state.tool==WorkspaceController.Tool.EXTRUDE)cad.showInteractiveExtrudeHeightEditor();
+        else if(state.tool==WorkspaceController.Tool.REVOLVE)cad.showInteractiveRevolveAngleEditor();
         else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad.isBodyTransformSessionActive())cad.showBodyTransformExactEditor();
         else if(state.tool==WorkspaceController.Tool.ALIGN)status(cad.flipAlignSession());
     }
@@ -282,7 +288,8 @@ public final class ChobYarActivity extends Activity {
         if(instructionChip!=null){instructionChip.setText(state.instruction());instructionChip.setVisibility(active?View.VISIBLE:View.GONE);}
         if(sessionTitle!=null){
             String title=state.title();
-            if(state.tool==WorkspaceController.Tool.REVOLVE&&cad!=null&&cad.isInteractiveRevolveActive())title=cad.interactiveRevolveSummary();
+            if(state.tool==WorkspaceController.Tool.EXTRUDE&&cad!=null&&cad.isInteractiveExtrudeActive())title=cad.interactiveExtrudeSummary();
+            else if(state.tool==WorkspaceController.Tool.REVOLVE&&cad!=null&&cad.isInteractiveRevolveActive())title=cad.interactiveRevolveSummary();
             else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad!=null&&cad.isBodyTransformSessionActive())title=cad.bodyTransformSummary();
             else if(state.tool==WorkspaceController.Tool.ALIGN&&cad!=null&&cad.isAlignSessionActive())title=cad.alignSummary();
             sessionTitle.setText(title);
@@ -318,6 +325,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
+            adaptive.addView(tool("⌨","ابعاد دقیق",cad::showSelectedAnalyticEditor));
             adaptive.addView(tool("◉","Material",this::showMaterialPalette));
             adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
@@ -356,6 +364,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⬡","Polygon",()->activateSketchTool(CadCanvasView.TOOL_POLYGON,"Polygon")));
         adaptive.addView(tool("⌁","Constraints",cad::showSmartConstraintMenu));
         adaptive.addView(tool("…","More",cad::showShaprSketchMenu));
+        finishManualPaletteLayout();
     }
 
     private void showAddPalette(){
@@ -369,6 +378,8 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
         adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
+        adaptive.addView(tool("●","Solid دقیق",cad::showSolidManager));
+        finishManualPaletteLayout();
     }
 
     private void showTransformPalette(){
@@ -380,6 +391,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⇲","Scale",()->runAndClose(cad::showScaleTool)));
         adaptive.addView(tool("⇋","Mirror",()->runAndClose(cad::showMirrorTool)));
         adaptive.addView(tool("⠿","Pattern",()->runAndClose(cad::showLinearPatternTool)));
+        finishManualPaletteLayout();
     }
 
     private void showToolsPalette(){
@@ -395,6 +407,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⌁","Snaps",cad::showShaprSnappingOptions));
         adaptive.addView(tool("▱","History",cad::showHistoryManager));
         adaptive.addView(tool("…","More",this::tools));
+        finishManualPaletteLayout();
     }
 
     private void openManualPalette(){
@@ -409,6 +422,23 @@ public final class ChobYarActivity extends Activity {
         else adaptive.setVisibility(View.GONE);
         if(primaryRail!=null)primaryRail.setVisibility(selected?View.GONE:View.VISIBLE);
         updateConstraintRail(cad==null?CadCanvasView.TOOL_SELECT:cad.getTool(),false);
+    }
+
+    /**
+     * A seven-command palette is taller than the usable canvas on high-density
+     * landscape devices.  Centering it allowed its first command to sit behind
+     * the floating top bar, so a tap on Close could activate Project instead.
+     * Keep the portrait rhythm, but compact and top-anchor manual palettes in
+     * landscape so every command remains visible and touchable.
+     */
+    private void finishManualPaletteLayout(){
+        if(adaptive==null)return;
+        boolean landscape=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;
+        if(landscape){
+            for(int i=0;i<adaptive.getChildCount();i++)adaptive.getChildAt(i).setMinimumHeight(dp(38));
+            adaptiveParams=wrap(Gravity.START|Gravity.TOP,8,72,0,0);
+        }else adaptiveParams=wrap(Gravity.START|Gravity.CENTER_VERTICAL,8,0,0,0);
+        adaptive.setLayoutParams(adaptiveParams);
     }
 
     private void activateSketchTool(int tool,String name){
@@ -464,10 +494,40 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showProjectMenu(){
-        String[] rows={"Items / Layers","Save Project","Open Project","Export DXF","Export STEP / STL"};
+        String[] rows={"پروژه‌های داخل اپ","ذخیره در داخل اپ","Items / Layers","Save Project as File","Open Project File","Export DXF","Export STEP / STL"};
         new AlertDialog.Builder(this).setTitle("Project").setItems(rows,(d,w)->{
-            if(w==0)showItems();else if(w==1)saveProject();else if(w==2)openProject();else if(w==3)exportDxf();else showCadExport();
+            if(w==0)showInternalProjects();else if(w==1)saveInsideApp();else if(w==2)showItems();else if(w==3)saveProject();else if(w==4)openProject();else if(w==5)exportDxf();else showCadExport();
         }).setNegativeButton("بستن",null).show();
+    }
+
+    private void showInternalProjects(){
+        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast("ساخت پروژه‌های نمونه انجام نشد");return;}
+        java.util.List<InternalProjectRepository.Entry> entries=internalProjects.entries();
+        String[] rows=new String[entries.size()];for(int i=0;i<rows.length;i++){InternalProjectRepository.Entry p=entries.get(i);rows[i]=(p.builtIn?"◆ ":"● ")+p.name;}
+        new AlertDialog.Builder(this).setTitle("پروژه‌های داخل اپ")
+                .setMessage("هر پروژه با Sketch و History باز می‌شود و Bodyها قابل تغییرند.")
+                .setItems(rows,(d,w)->openInternalProject(entries.get(w))).setNegativeButton("بستن",null).show();
+    }
+
+    private void openInternalProject(InternalProjectRepository.Entry entry){
+        try{
+            String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,internalProjects.load(entry.id));
+            currentInternalProjectId=entry.id;currentInternalProjectName=entry.name;syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);
+            if(workspaceTitle!=null)workspaceTitle.setText(entry.name);status(entry.name+" باز شد • "+result);
+        }catch(Exception e){toast("بازکردن پروژه داخل اپ انجام نشد");}
+    }
+
+    private void saveInsideApp(){
+        EditText input=new EditText(this);input.setSingleLine();input.setText(currentInternalProjectName==null?"پروژه جدید چوب‌یار":currentInternalProjectName);input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this).setTitle("ذخیره در داخل اپ").setMessage("Sketch، Bodyها، History، نما و اندازه‌ها ذخیره می‌شوند.").setView(input)
+                .setPositiveButton("ذخیره",(d,w)->{
+                    try{
+                        String name=input.getText().toString().trim();if(name.isEmpty())throw new IllegalArgumentException();
+                        String id=currentInternalProjectId==null?internalProjects.createId(name):currentInternalProjectId;
+                        internalProjects.save(id,name,CadProjectPersistenceController.encode(cad,appearance,sectionView));
+                        currentInternalProjectId=id;currentInternalProjectName=name;if(workspaceTitle!=null)workspaceTitle.setText(name);toast("پروژه داخل اپ ذخیره شد");
+                    }catch(Exception e){toast("ذخیره داخل اپ انجام نشد");}
+                }).setNegativeButton("لغو",null).show();
     }
 
     private void saveProject(){

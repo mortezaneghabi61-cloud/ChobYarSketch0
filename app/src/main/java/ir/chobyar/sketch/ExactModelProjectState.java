@@ -19,7 +19,7 @@ final class ExactModelProjectState {
     static final int MODEL_VERSION=1;
 
     private static final Set<String> FEATURE_KINDS=new HashSet<>(Arrays.asList(
-            "EXTRUDE","BOOLEAN","REVOLVE","SWEEP","LOFT"));
+            "EXTRUDE","BOOLEAN","REVOLVE","SWEEP","LOFT","SPHERE"));
     private static final Set<String> DIRECT_KINDS=new HashSet<>(Arrays.asList(
             "FILLET","CHAMFER","PUSH_PULL","SHELL","MOVE","ROTATE","SCALE","MIRROR","PATTERN"));
 

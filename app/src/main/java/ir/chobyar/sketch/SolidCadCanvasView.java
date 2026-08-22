@@ -66,6 +66,13 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         }
     }
 
+    private static final class EdgeUse {
+        final Geometry3D.Vec3 a,b,normal;
+        EdgeUse(Geometry3D.Vec3 a,Geometry3D.Vec3 b,Geometry3D.Vec3 normal){
+            this.a=a;this.b=b;this.normal=normal;
+        }
+    }
+
     private final List<SolidBody> bodies = new ArrayList<>();
     private final ArrayDeque<List<SolidBody>> solidUndo = new ArrayDeque<>();
     private int bodySerial = 1;
@@ -116,6 +123,8 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private float extrudePixelsPerMm;
     private PointF extrudeBaseScreen;
     private PointF extrudeTipScreen;
+    private int bodySurfaceColor=Color.rgb(222,226,231);
+    private boolean cleanBodyEdges=true;
 
     public SolidCadCanvasView(Context context) {
         super(context);
@@ -144,7 +153,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     }
 
     private void initSolidPaints() {
-        bodyFill.setColor(Color.argb(68, 76, 137, 210));
+        bodyFill.setColor(bodySurfaceColor);
         bodyFill.setStyle(Paint.Style.FILL);
         bodyWire.setColor(Color.rgb(35, 73, 120));
         bodyWire.setStyle(Paint.Style.STROKE);
@@ -169,6 +178,19 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         extrudeHandleFill.setColor(Color.WHITE);
         extrudeHandleFill.setStyle(Paint.Style.FILL);
     }
+
+    /**
+     * Production appearance contract used by the workspace and reference
+     * validation.  Surface color is intentionally global for now; individual
+     * body materials can build on this API without reflection.
+     */
+    public void setBodyAppearance(int surfaceColor,boolean cleanEdges){
+        bodySurfaceColor=Color.rgb(Color.red(surfaceColor),Color.green(surfaceColor),Color.blue(surfaceColor));
+        cleanBodyEdges=cleanEdges;bodyFill.setColor(bodySurfaceColor);invalidate();
+    }
+
+    public int bodySurfaceColor(){return bodySurfaceColor;}
+    public boolean usesCleanBodyEdges(){return cleanBodyEdges;}
 
     // ------------------------------------------------------------------
     // Public solid workflow
@@ -258,6 +280,25 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     public boolean isInteractiveExtrudeActive(){return extrudeSessionActive;}
 
+    /** The exact value shown by the production Extrude session bar. */
+    public String interactiveExtrudeSummary(){return "Extrude • "+fmt(extrudePreviewHeightMm)+" mm";}
+
+    /**
+     * Apply an exact millimetre value without tearing down the active preview.
+     * Keeping this mutation on the canvas (instead of in the dialog) makes the
+     * preview, workspace state and Commit button update as one operation.
+     */
+    public boolean setInteractiveExtrudeHeightMm(float millimeters){
+        if(!extrudeSessionActive||Float.isNaN(millimeters)||Float.isInfinite(millimeters))return false;
+        if(Math.abs(millimeters)<.1f)millimeters=millimeters<0f?-.1f:.1f;
+        extrudePreviewHeightMm=millimeters;
+        rebuildExtrudePreview(true);
+        dispatchWorkspaceState();
+        return extrudePreview!=null&&!extrudePreview.isEmpty();
+    }
+
+    public void showInteractiveExtrudeHeightEditor(){promptInteractiveExtrudeValue();}
+
     public String commitInteractiveExtrude(){
         if(!extrudeSessionActive)return "Extrude فعال نیست";
         float mm=extrudePreviewHeightMm;clearExtrudeSession();
@@ -282,7 +323,10 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         new AlertDialog.Builder(getContext()).setTitle("Extrude • mm")
                 .setMessage("مقدار منفی جهت حجم را برعکس می‌کند.")
                 .setView(box).setPositiveButton("اعمال",(d,w)->{
-                    try{extrudePreviewHeightMm=parseLengthInput(exact.getText().toString());rebuildExtrudePreview(true);}
+                    try{
+                        if(!setInteractiveExtrudeHeightMm(parseLengthInput(exact.getText().toString())))
+                            toast("پیش‌نمایش Extrude فعال نیست");
+                    }
                     catch(Exception e){toast("اندازه درست نیست • مثال: 20 mm");}
                 }).setNegativeButton("لغو",null).show();
     }
@@ -641,15 +685,79 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         canvas.save();canvas.clipRect(card);
         for(FaceRender r:render){
             Path path=path(r.screen);if(path==null)continue;
-            if(r.polygon==selectedFace&&r.body==selectedBody)canvas.drawPath(path,faceFill);else canvas.drawPath(path,bodyFill);
-            canvas.drawPath(path,r.body==selectedBody?selectedWire:bodyWire);
+            if(r.polygon==selectedFace&&r.body==selectedBody)canvas.drawPath(path,faceFill);
+            else{
+                bodyFill.setColor(shadedSurfaceColor(r.polygon.plane.normal));
+                canvas.drawPath(path,bodyFill);
+            }
+            if(!cleanBodyEdges)canvas.drawPath(path,r.body==selectedBody?selectedWire:bodyWire);
         }
+        bodyFill.setColor(bodySurfaceColor);
+        if(cleanBodyEdges)drawCleanBodyEdges(canvas);
         canvas.restore();
         if(selectedBody!=null){
             String t=selectedBody.name+(selectedFace!=null?" • Face انتخاب شد — Solid > Sketch on Face":" • برای Face روی سطح بزن");
             canvas.drawText(t,card.centerX(),card.top+58f,bodyText);
         }
         drawTopologySelection(canvas);
+    }
+
+    /** Draws design edges, not the tessellation used internally by the CSG preview. */
+    private void drawCleanBodyEdges(Canvas canvas){
+        Geometry3D.Vec3 view=cameraViewDirection();
+        final float creaseCos=(float)Math.cos(Math.toRadians(22f));
+        for(SolidBody body:bodies){
+            if(!body.visible)continue;
+            Map<String,List<EdgeUse>> edges=new LinkedHashMap<>();
+            for(SolidCSG.Polygon polygon:body.csg.polygons()){
+                int count=polygon.vertices.size();
+                for(int i=0;i<count;i++){
+                    Geometry3D.Vec3 a=polygon.vertices.get(i).pos;
+                    Geometry3D.Vec3 b=polygon.vertices.get((i+1)%count).pos;
+                    String key=edgeKey(a,b);
+                    edges.computeIfAbsent(key,k->new ArrayList<>()).add(new EdgeUse(a,b,polygon.plane.normal));
+                }
+            }
+            Paint edgePaint=body==selectedBody?selectedWire:bodyWire;
+            for(List<EdgeUse> uses:edges.values()){
+                if(uses.isEmpty())continue;
+                boolean draw=uses.size()==1;
+                for(int i=0;!draw&&i<uses.size();i++)for(int j=i+1;j<uses.size();j++){
+                    Geometry3D.Vec3 a=uses.get(i).normal.normalized(),b=uses.get(j).normal.normalized();
+                    float dot=a.dot(b);
+                    boolean crease=dot<creaseCos;
+                    float facingA=a.dot(view),facingB=b.dot(view);
+                    boolean silhouette=(facingA<=0f&&facingB>0f)||(facingB<=0f&&facingA>0f);
+                    if(crease||silhouette){draw=true;break;}
+                }
+                if(draw){EdgeUse e=uses.get(0);PointF a=project(e.a),b=project(e.b);canvas.drawLine(a.x,a.y,b.x,b.y,edgePaint);}
+            }
+        }
+    }
+
+    private int shadedSurfaceColor(Geometry3D.Vec3 normal){
+        Geometry3D.Vec3 light=new Geometry3D.Vec3(-.30f,-.45f,.84f).normalized();
+        float amount=.78f+.22f*Math.max(0f,normal.normalized().dot(light));
+        return Color.rgb(Math.min(255,Math.round(Color.red(bodySurfaceColor)*amount)),
+                Math.min(255,Math.round(Color.green(bodySurfaceColor)*amount)),
+                Math.min(255,Math.round(Color.blue(bodySurfaceColor)*amount)));
+    }
+
+    private Geometry3D.Vec3 cameraViewDirection(){
+        try{
+            double yaw=Math.toRadians(cameraYawField.getFloat(this));
+            double pitch=Math.toRadians(cameraPitchField.getFloat(this));
+            return new Geometry3D.Vec3((float)(Math.sin(yaw)*Math.sin(pitch)),
+                    (float)(Math.cos(yaw)*Math.sin(pitch)),(float)Math.cos(pitch)).normalized();
+        }catch(Exception e){return new Geometry3D.Vec3(0,1,0);}
+    }
+
+    private static String edgeKey(Geometry3D.Vec3 a,Geometry3D.Vec3 b){
+        String ka=pointKey(a),kb=pointKey(b);return ka.compareTo(kb)<=0?ka+'|'+kb:kb+'|'+ka;
+    }
+
+    private static String pointKey(Geometry3D.Vec3 p){
+        return Math.round(p.x*1000f)+":"+Math.round(p.y*1000f)+":"+Math.round(p.z*1000f);
     }
 
     private void drawTopologySelection(Canvas canvas){
