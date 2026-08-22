@@ -33,6 +33,7 @@ public final class ChobYarActivity extends Activity {
     private static final int REQUEST_REFERENCE_IMAGE=1702;
     private static final int REQUEST_SAVE_PROJECT=1703;
     private static final int REQUEST_OPEN_PROJECT=1704;
+    private static final int REQUEST_EXPORT_DXF=1705;
     private Shapr3DGuideCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
     private final CadAppearanceController appearance=new CadAppearanceController();
@@ -117,11 +118,19 @@ public final class ChobYarActivity extends Activity {
     private View viewTools(){
         LinearLayout b=rail(true);
         Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        b.addView(tool("+","زوم",()->zoomView(1.6f)));
+        b.addView(tool("−","زوم",()->zoomView(0.625f)));
         b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
         snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
         b.addView(tool("mm","Units",()->status("واحد پروژه: میلی‌متر")));
         updateSnap();
         return b;
+    }
+
+    private void zoomView(float factor){
+        cad.zoomBy(factor);
+        syncGpuCamera();
+        status(factor>1f?"زوم بیشتر":"زوم کمتر");
     }
 
     private void undoAction(){
@@ -455,9 +464,9 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showProjectMenu(){
-        String[] rows={"Items / Layers","Save Project","Open Project","Export STEP / STL"};
+        String[] rows={"Items / Layers","Save Project","Open Project","Export DXF","Export STEP / STL"};
         new AlertDialog.Builder(this).setTitle("Project").setItems(rows,(d,w)->{
-            if(w==0)showItems();else if(w==1)saveProject();else if(w==2)openProject();else showCadExport();
+            if(w==0)showItems();else if(w==1)saveProject();else if(w==2)openProject();else if(w==3)exportDxf();else showCadExport();
         }).setNegativeButton("بستن",null).show();
     }
 
@@ -475,12 +484,20 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","Export STEP / STL","Reference Image","Materials / Appearance","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
+        String[] x={"Items / Layers","Export DXF","Export STEP / STL","Reference Image","Materials / Appearance","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm"};
         new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
-            if(w==0)showItems();else if(w==1)showCadExport();else if(w==2){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}
-            else if(w==3)showMaterialPalette();else if(w==4)setView("TOP");else if(w==5)setView("FRONT");else if(w==6)setView("RIGHT");
-            else if(w==7)setView("ISO");else if(w==8)cad.showShaprSnappingOptions();else status(cad.dualUnitSummary());
+            if(w==0)showItems();else if(w==1)exportDxf();else if(w==2)showCadExport();else if(w==3){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}
+            else if(w==4)showMaterialPalette();else if(w==5)setView("TOP");else if(w==6)setView("FRONT");else if(w==7)setView("RIGHT");
+            else if(w==8)setView("ISO");else if(w==9)cad.showShaprSnappingOptions();else status(cad.dualUnitSummary());
         }).show();
+    }
+
+    private void exportDxf(){
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/dxf");
+        intent.putExtra(Intent.EXTRA_TITLE,"ChobYar-Sketch.dxf");
+        startActivityForResult(intent,REQUEST_EXPORT_DXF);
     }
 
     private void importReferenceImage(){
@@ -581,6 +598,15 @@ public final class ChobYarActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQUEST_EXPORT_DXF){
+            if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+            try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
+                if(out==null)throw new IllegalStateException();
+                out.write(cad.buildDxf().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.flush();toast("فایل DXF ذخیره شد");
+            }catch(Exception e){toast("ذخیره DXF انجام نشد");}
+            return;
+        }
         if(requestCode==REQUEST_SAVE_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
@@ -679,7 +705,7 @@ public final class ChobYarActivity extends Activity {
 
     private LinearLayout plain(boolean vertical){LinearLayout x=new LinearLayout(this);x.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);x.setGravity(Gravity.CENTER);return x;}
     private LinearLayout rail(boolean vertical){LinearLayout x=plain(vertical);x.setPadding(dp(2),dp(3),dp(2),dp(3));x.setBackground(round(Color.argb(246,255,255,255),Color.rgb(217,223,231),18));return x;}
-    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,7.5f,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(56));v.setMinHeight(dp(48));v.setPadding(dp(2),dp(2),dp(2),dp(2));v.setBackgroundColor(Color.TRANSPARENT);v.setOnClickListener(q->r.run());return v;}
+    private TextView tool(String icon,String text,Runnable r){TextView v=label(icon+"\n"+text,7.5f,false);v.setContentDescription(text);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(56));v.setMinHeight(dp(48));v.setPadding(dp(2),dp(2),dp(2),dp(2));v.setBackgroundColor(Color.TRANSPARENT);v.setOnClickListener(q->r.run());return v;}
     private TextView miniAction(String text,Runnable r){TextView v=label(text,15,false);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(34));v.setMinHeight(dp(34));v.setBackground(round(Color.argb(205,255,255,255),Color.TRANSPARENT,17));v.setOnClickListener(q->r.run());return v;}
     private TextView topAction(String text,Runnable r){TextView v=label(text,14,false);v.setGravity(Gravity.CENTER);v.setBackgroundColor(Color.TRANSPARENT);v.setOnClickListener(q->r.run());return v;}
     private TextView sessionButton(String text,Runnable r){TextView v=label(text,9,true);v.setGravity(Gravity.CENTER);v.setMinWidth(dp(58));v.setMinHeight(dp(38));v.setPadding(dp(7),0,dp(7),0);v.setBackground(round(Color.argb(232,255,255,255),Color.rgb(213,220,229),12));v.setOnClickListener(q->r.run());return v;}
@@ -699,7 +725,7 @@ public final class ChobYarActivity extends Activity {
 
     private final class Cube extends View{
         Paint p=new Paint(1);Path a=new Path(),b=new Path(),c=new Path();int mode=0;
-        Cube(){super(ChobYarActivity.this);setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};setView(m[mode]);invalidate();});}
+        Cube(){super(ChobYarActivity.this);setContentDescription("تغییر نما");setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};setView(m[mode]);invalidate();});}
         @Override protected void onDraw(Canvas x){super.onDraw(x);float w=getWidth(),h=getHeight();p.setStrokeWidth(dp(1));p.setStyle(Paint.Style.FILL);
             a.reset();a.moveTo(w*.2f,h*.35f);a.lineTo(w*.5f,h*.17f);a.lineTo(w*.8f,h*.35f);a.lineTo(w*.5f,h*.53f);a.close();p.setColor(Color.rgb(231,237,245));x.drawPath(a,p);
             b.reset();b.moveTo(w*.2f,h*.35f);b.lineTo(w*.5f,h*.53f);b.lineTo(w*.5f,h*.84f);b.lineTo(w*.2f,h*.66f);b.close();p.setColor(Color.rgb(218,227,239));x.drawPath(b,p);
