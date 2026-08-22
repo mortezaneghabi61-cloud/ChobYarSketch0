@@ -57,13 +57,7 @@ public final class FurnitureReferenceInstrumentationTest {
             setBodyAppearance(Color.rgb(224,225,207),true);
         }
         void clearBodySelection() {
-            try {
-                Field f = SolidCadCanvasView.class.getDeclaredField("selectedBody");
-                f.setAccessible(true);
-                f.set(this, null);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
+            clearWorkspaceSelection();
         }
     }
 
