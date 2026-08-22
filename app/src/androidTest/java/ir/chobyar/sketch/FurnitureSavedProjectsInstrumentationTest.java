@@ -13,6 +13,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -34,8 +36,11 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 assertEquals(4,boulder.bodyCount());assertTrue(join(boulder.itemRows()).contains("گوی پایین"));assertTrue(join(boulder.itemRows()).contains("صفحه گرد"));
                 capture(boulder,new File(output(context),"01-boulder-table-iso.png"),"ISO");
                 capture(boulder,new File(output(context),"03-boulder-table-front.png"),"FRONT");
+                assertTrue(boulder.selectItem(0).contains("انتخاب"));
+                assertTrue(boulder.applyProjectBodyTransform(25f,0f,0f,0f,0f,0f));
                 boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("بازسازی"));
                 String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","ویرایش میز سنگی",edited);
+                assertEquals(25.0,sphereCenterX(edited),0.75);
                 Shapr3DGuideCadCanvasView editedCanvas=new Shapr3DGuideCadCanvasView(context);CadProjectPersistenceController.restore(editedCanvas,repo.load("user-boulder-edit-test"));assertEquals(4,editedCanvas.bodyCount());
 
                 Shapr3DGuideCadCanvasView hourglass=new Shapr3DGuideCadCanvasView(context);
@@ -49,6 +54,11 @@ public final class FurnitureSavedProjectsInstrumentationTest {
     }
 
     private static String boulderDocToRaw(InternalProjectRepository repo,String id){return repo.load(id);}
+    private static double sphereCenterX(String raw)throws Exception{
+        String model=CadProjectDocument.decode(raw).modelState;JSONArray features=new JSONObject(model).getJSONArray("features");
+        for(int i=0;i<features.length();i++){JSONObject f=features.getJSONObject(i);if("SPHERE".equals(f.getString("kind")))return f.getJSONObject("params").getJSONArray("center").getDouble(0);}
+        throw new AssertionError("Sphere feature missing");
+    }
     private static String join(String[] rows){StringBuilder s=new StringBuilder();for(String row:rows)s.append(row).append('\n');return s.toString();}
     private static File output(Context context){File f=new File(context.getExternalFilesDir(null),"saved-furniture-validation");assertTrue(f.exists()||f.mkdirs());return f;}
     private static void capture(Shapr3DGuideCadCanvasView view,File file,String standardView)throws Exception{
