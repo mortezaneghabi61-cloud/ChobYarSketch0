@@ -54,6 +54,29 @@ public final class FurnitureReferenceInstrumentationTest {
         FurnitureCanvas(Context context) { super(context); }
         void add(String name, SolidCSG csg) { addIndependentBody(name, csg); }
         void overview() { showModelOverview(); }
+        void presentationStyle() {
+            try {
+                Paint fill = (Paint) privateField(SolidCadCanvasView.class, "bodyFill").get(this);
+                Paint wire = (Paint) privateField(SolidCadCanvasView.class, "bodyWire").get(this);
+                Paint selected = (Paint) privateField(SolidCadCanvasView.class, "selectedWire").get(this);
+                fill.setColor(Color.rgb(224, 225, 207));
+                wire.setColor(Color.argb(115, 54, 71, 89));
+                wire.setStrokeWidth(1.25f);
+                selected.setStrokeWidth(1.25f);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
+        void frontFacingIsoCamera() {
+            try {
+                Field yaw = privateField(SpatialCadCanvasView.class, "cameraYaw");
+                Field pitch = privateField(SpatialCadCanvasView.class, "cameraPitch");
+                yaw.setFloat(this, -38f);
+                pitch.setFloat(this, 24f);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
         void clearBodySelection() {
             try {
                 Field f = SolidCadCanvasView.class.getDeclaredField("selectedBody");
@@ -62,6 +85,11 @@ public final class FurnitureReferenceInstrumentationTest {
             } catch (Exception e) {
                 throw new AssertionError(e);
             }
+        }
+        private static Field privateField(Class<?> owner, String name) throws Exception {
+            Field f = owner.getDeclaredField(name);
+            f.setAccessible(true);
+            return f;
         }
     }
 
@@ -83,6 +111,7 @@ public final class FurnitureReferenceInstrumentationTest {
 
         FurnitureCanvas view = holder[0];
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            view.presentationStyle();
             buildNightstand(view, false);
             view.overview();
             view.setStandardView("FRONT");
@@ -91,6 +120,7 @@ public final class FurnitureReferenceInstrumentationTest {
             captureView(view, new File(output, "01-nightstand-front-closed.png"));
 
             view.setStandardView("ISO");
+            view.frontFacingIsoCamera();
             view.fitAll();
             captureView(view, new File(output, "02-nightstand-iso-closed.png"));
 
@@ -98,6 +128,7 @@ public final class FurnitureReferenceInstrumentationTest {
             buildNightstand(view, true);
             view.overview();
             view.setStandardView("ISO");
+            view.frontFacingIsoCamera();
             view.fitAll();
             view.clearBodySelection();
             captureView(view, new File(output, "03-nightstand-iso-open.png"));
