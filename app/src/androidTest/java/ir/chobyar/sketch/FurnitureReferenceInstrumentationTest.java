@@ -20,7 +20,6 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -55,44 +54,10 @@ public final class FurnitureReferenceInstrumentationTest {
         void add(String name, SolidCSG csg) { addIndependentBody(name, csg); }
         void overview() { showModelOverview(); }
         void presentationStyle() {
-            try {
-                Paint fill = (Paint) privateField(SolidCadCanvasView.class, "bodyFill").get(this);
-                Paint wire = (Paint) privateField(SolidCadCanvasView.class, "bodyWire").get(this);
-                Paint selected = (Paint) privateField(SolidCadCanvasView.class, "selectedWire").get(this);
-                fill.setColor(Color.rgb(224, 225, 207));
-                wire.setColor(Color.argb(115, 54, 71, 89));
-                wire.setStrokeWidth(1.25f);
-                selected.setStrokeWidth(1.25f);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
-        }
-        void frontFacingIsoCamera() {
-            try {
-                Field yaw = privateField(SpatialCadCanvasView.class, "cameraYaw");
-                Field pitch = privateField(SpatialCadCanvasView.class, "cameraPitch");
-                // The cabinet front lies at negative Y. Turn the ISO camera
-                // around the vertical axis while retaining a positive pitch so
-                // the result is both front-facing and viewed from above.
-                yaw.setFloat(this, 218f);
-                pitch.setFloat(this, 24f);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
+            setBodyAppearance(Color.rgb(224,225,207),true);
         }
         void clearBodySelection() {
-            try {
-                Field f = SolidCadCanvasView.class.getDeclaredField("selectedBody");
-                f.setAccessible(true);
-                f.set(this, null);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
-        }
-        private static Field privateField(Class<?> owner, String name) throws Exception {
-            Field f = owner.getDeclaredField(name);
-            f.setAccessible(true);
-            return f;
+            clearWorkspaceSelection();
         }
     }
 
@@ -123,15 +88,17 @@ public final class FurnitureReferenceInstrumentationTest {
             captureView(view, new File(output, "01-nightstand-front-closed.png"));
 
             view.setStandardView("ISO");
-            view.frontFacingIsoCamera();
             view.fitAll();
+            assertTrue(view.usesCleanBodyEdges());
+            assertEquals(Color.rgb(224,225,207), view.bodySurfaceColor());
+            assertEquals(218f, view.gpuCameraState().yaw, 0.001f);
+            assertEquals(24f, view.gpuCameraState().pitch, 0.001f);
             captureView(view, new File(output, "02-nightstand-iso-closed.png"));
 
             view.clearAll();
             buildNightstand(view, true);
             view.overview();
             view.setStandardView("ISO");
-            view.frontFacingIsoCamera();
             view.fitAll();
             view.clearBodySelection();
             captureView(view, new File(output, "03-nightstand-iso-open.png"));

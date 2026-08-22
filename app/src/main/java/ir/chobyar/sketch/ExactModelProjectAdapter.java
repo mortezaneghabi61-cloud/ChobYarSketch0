@@ -223,7 +223,7 @@ final class ExactModelProjectAdapter {
     private static void restoreCamera(Shapr3DGuideCadCanvasView cad,JSONObject camera)throws Exception{
         if(camera==null||camera.length()==0)return;JSONArray target=camera.optJSONArray("target"),pan=camera.optJSONArray("pan");
         field(SpatialCadCanvasView.class,"overview3D").setBoolean(cad,camera.optBoolean("visible",true));
-        field(SpatialCadCanvasView.class,"cameraYaw").setFloat(cad,(float)camera.optDouble("yaw",38));
+        field(SpatialCadCanvasView.class,"cameraYaw").setFloat(cad,(float)camera.optDouble("yaw",218));
         field(SpatialCadCanvasView.class,"cameraPitch").setFloat(cad,(float)camera.optDouble("pitch",24));
         field(SpatialCadCanvasView.class,"spatialScale").setFloat(cad,(float)camera.optDouble("scale",1));
         if(target!=null){

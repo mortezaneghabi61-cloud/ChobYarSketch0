@@ -47,7 +47,13 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     private Field entitiesField;
 
     private boolean overview3D = false;
-    private float cameraYaw = 38f;
+    /*
+     * Model-space convention: FRONT looks along +Y toward the XZ plane.  The
+     * ISO preset must therefore remain on that same side of the model.  The
+     * previous 38 degree yaw placed furniture fronts on the far side and made
+     * tests (and users) repair the camera through reflection/manual orbiting.
+     */
+    private float cameraYaw = 218f;
     private float cameraPitch = 24f;
     private float spatialScale = 1.25f;
     private float cameraTargetX = 0f, cameraTargetY = 0f, cameraTargetZ = 0f;
@@ -189,7 +195,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         if("TOP".equals(key)){cameraYaw=0f;cameraPitch=0f;}
         else if("FRONT".equals(key)){cameraYaw=0f;cameraPitch=90f;}
         else if("RIGHT".equals(key)){cameraYaw=90f;cameraPitch=90f;}
-        else{cameraYaw=38f;cameraPitch=24f;key="ISO";}
+        else{cameraYaw=218f;cameraPitch=24f;key="ISO";}
         invalidate();return key;
     }
 
@@ -222,7 +228,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
                     else if (which == 2) createSketchOnPlane(Geometry3D.yz(), "Sketch YZ");
                     else if (which == 3) showOffsetPlaneDialog();
                     else if (which == 4) toast(toggle3DOverview());
-                    else if (which == 5) { overview3D=true; cameraYaw=38f; cameraPitch=24f; invalidate(); }
+                    else if (which == 5) { setStandardView("ISO"); }
                     else if (which == 6) { overview3D=true; cameraYaw=0f; cameraPitch=0f; invalidate(); }
                     else { overview3D=true; cameraYaw=0f; cameraPitch=90f; invalidate(); }
                 })
