@@ -72,6 +72,16 @@ jobs:
             test -s test-artifacts/furniture-validation/04-nightstand-dimensioned-plan.png
             test -s test-artifacts/saved-furniture-validation/01-boulder-table-iso.png
             test -s test-artifacts/saved-furniture-validation/02-hourglass-table-iso.png
+            test -s test-artifacts/saved-furniture-validation/03-boulder-table-front.png
+            test -s test-artifacts/saved-furniture-validation/04-hourglass-table-front.png
+      - name: Upload editable furniture APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChobYar3D-editable-furniture-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload model evidence
         if: always()
         uses: actions/upload-artifact@v4
