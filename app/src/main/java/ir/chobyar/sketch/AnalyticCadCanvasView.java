@@ -188,15 +188,24 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         return addAnalyticBody("Cone",new AnalyticSolidKernel.Cone(p.origin,axis,r0,r1,h));
     }
 
-    private void showSphereDialog(){
+    public void showSphereDialog(){
         LinearLayout box=form();
         EditText d=input(box,"قطر / Diameter (mm)","50");
+        EditText centerX=input(box,"مرکز X (mm)",num(activePlane().origin.x));
+        EditText centerY=input(box,"مرکز Y (mm)",num(activePlane().origin.y));
+        EditText centerZ=input(box,"مرکز Z (mm)",num(activePlane().origin.z));
         new AlertDialog.Builder(getContext()).setTitle("Sphere دقیق")
-                .setMessage("مرکز کره روی Origin صفحه فعال قرار می‌گیرد.")
+                .setMessage("قطر و جای دقیق مرکز کره را وارد کن. بعداً نیز با انتخاب Body و «ابعاد دقیق» قابل ویرایش است.")
                 .setView(box)
                 .setPositiveButton("ساخت",(x,w)->{
-                    try{float dia=parseLengthMm(d.getText().toString());toast(createSphere(dia));}
-                    catch(Exception e){toast("قطر درست وارد نشده");}
+                    try{
+                        float dia=parseLengthMm(d.getText().toString());
+                        Geometry3D.Vec3 center=new Geometry3D.Vec3(
+                                parseLengthMm(centerX.getText().toString()),
+                                parseLengthMm(centerY.getText().toString()),
+                                parseLengthMm(centerZ.getText().toString()));
+                        toast(createProjectSphere(center,dia));
+                    }catch(Exception e){toast("قطر یا مختصات درست وارد نشده");}
                 }).setNegativeButton("لغو",null).show();
     }
 
@@ -210,6 +219,37 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         if(center==null||diameterMm<=0f)return"Sphere پروژه معتبر نیست";
         return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(center,diameterMm*.5f));
     }
+
+    /** User-facing parameter editor for the exact primitive selected on canvas. */
+    public void showSelectedAnalyticEditor(){
+        Object body=selectedBody();
+        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        AnalyticSolidKernel.Primitive primitive=currentPrimitive(body);
+        if(!(primitive instanceof AnalyticSolidKernel.Sphere)){showAnalyticInspector();return;}
+        AnalyticSolidKernel.Sphere sphere=(AnalyticSolidKernel.Sphere)primitive;
+        LinearLayout box=form();
+        EditText diameter=input(box,"قطر / Diameter (mm)",num(sphere.radiusMm*2f));
+        EditText centerX=input(box,"مرکز X (mm)",num(sphere.center.x));
+        EditText centerY=input(box,"مرکز Y (mm)",num(sphere.center.y));
+        EditText centerZ=input(box,"مرکز Z (mm)",num(sphere.center.z));
+        new AlertDialog.Builder(getContext()).setTitle("ویرایش دقیق • "+bodyName(body))
+                .setMessage("قطر یا محل کره را تغییر بده؛ مدل و History ذخیره‌شده با هم به‌روز می‌شوند.")
+                .setView(box).setPositiveButton("اعمال",(dialog,which)->{
+                    try{
+                        float dia=parseLengthMm(diameter.getText().toString());if(dia<=0f)throw new IllegalArgumentException();
+                        Geometry3D.Vec3 center=new Geometry3D.Vec3(
+                                parseLengthMm(centerX.getText().toString()),
+                                parseLengthMm(centerY.getText().toString()),
+                                parseLengthMm(centerZ.getText().toString()));
+                        AnalyticSolidKernel.Sphere edited=new AnalyticSolidKernel.Sphere(center,dia*.5f);
+                        analyticByBody.put(body,edited);setBodyCsg(body,edited.tessellate(PREVIEW_SEGMENTS));
+                        clearFace();ensure3D();invalidate();toast("قطر و مختصات کره به‌روز شد");
+                    }catch(Exception e){toast("قطر یا مختصات معتبر نیست");}
+                }).setNegativeButton("لغو",null).show();
+    }
+
+    /** Reconcile exact metadata with the displayed solid before persistence. */
+    final void refreshAnalyticBodiesForPersistence(){refreshRecognizedBodies();}
 
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
         if(bodyConstructor==null||bodiesField==null||bodySerialField==null)return"ساخت Body تحلیلی آماده نیست";
