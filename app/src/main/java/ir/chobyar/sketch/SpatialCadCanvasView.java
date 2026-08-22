@@ -148,9 +148,14 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     /** Non-modal plane assignment used when seeding editable bundled projects. */
     final void applyProjectSketchPlane(Geometry3D.Plane3D plane) {
+        applyProjectSketchPlane(getCurrentLayer(), plane);
+    }
+
+    final void applyProjectSketchPlane(String layer, Geometry3D.Plane3D plane) {
         if (plane == null) return;
-        activePlane = plane;
-        planeByLayer.put(getCurrentLayer(), plane);
+        String key=layer==null||layer.trim().isEmpty()?getCurrentLayer():layer.trim();
+        planeByLayer.put(key, plane);
+        if(key.equals(getCurrentLayer()))activePlane = plane;
         invalidate();
     }
 
