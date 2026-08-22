@@ -591,6 +591,16 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         toast(edit.label()+" • ثبت شد");
     }
 
+    /** Deterministic non-modal bridge for bundled editable projects and persistence tests. */
+    final boolean applyProjectBodyTransform(float moveX,float moveY,float moveZ,float rotateX,float rotateY,float rotateZ){
+        Object body=selectedBody();if(body==null)return false;int before=timeline.size();
+        Geometry3D.Vec3 move=new Geometry3D.Vec3(moveX,moveY,moveZ);
+        if(move.length()>1e-5f)recordStable(body,new StableEdit(directSerial++,Kind.MOVE,0,move,null));
+        float[] angles={rotateX,rotateY,rotateZ};Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
+        for(int i=0;i<3;i++)if(Math.abs(angles[i])>1e-4f)recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,angles[i],axes[i],null));
+        return timeline.size()>before;
+    }
+
     private long applyKernel(long handle,StableEdit edit){
         if(handle==0L||edit==null)return 0L;
         Geometry3D.Vec3 anchor=null;int subshapeIndex=-1;

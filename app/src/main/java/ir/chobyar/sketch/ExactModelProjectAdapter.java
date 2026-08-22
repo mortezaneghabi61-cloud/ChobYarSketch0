@@ -83,6 +83,11 @@ final class ExactModelProjectAdapter {
                 }else if("LOFT".equals(kind)){
                     cad.createLoft(entities.get(params.getInt("firstIndex")),entities.get(params.getInt("secondIndex")));
                     body=selectedBody(cad);
+                }else if("SPHERE".equals(kind)){
+                    JSONArray c=params.getJSONArray("center");
+                    cad.createProjectSphere(new Geometry3D.Vec3((float)c.getDouble(0),(float)c.getDouble(1),(float)c.getDouble(2)),
+                            (float)(params.getDouble("radiusMm")*2.0));
+                    body=selectedBody(cad);
                 }else if("BOOLEAN".equals(kind)){
                     Object left=bodiesByKey.get(params.getString("left")),right=bodiesByKey.get(params.getString("right"));
                     List<Object> current=list(field(SolidCadCanvasView.class,"bodies").get(cad));
@@ -128,6 +133,7 @@ final class ExactModelProjectAdapter {
         String kind=feature.getString("kind");JSONObject p=feature.getJSONObject("params");
         if("EXTRUDE".equals(kind))finite(p.getDouble("heightMm"));
         else if("REVOLVE".equals(kind)){entityIndex(p,"profileIndex",entityCount);entityIndex(p,"axisIndex",entityCount);finite(p.getDouble("angleDeg"));finite(p.optDouble("heightMm",0));}
+        else if("SPHERE".equals(kind)){JSONArray c=p.getJSONArray("center");if(c.length()!=3||p.getDouble("radiusMm")<=0)throw new IllegalArgumentException("Sphere parameters are invalid");for(int i=0;i<3;i++)finite(c.getDouble(i));}
         else if("SWEEP".equals(kind)){entityIndex(p,"profileIndex",entityCount);entityIndex(p,"pathIndex",entityCount);}
         else if("LOFT".equals(kind)){entityIndex(p,"firstIndex",entityCount);entityIndex(p,"secondIndex",entityCount);}
         else if("BOOLEAN".equals(kind)){
@@ -150,6 +156,15 @@ final class ExactModelProjectAdapter {
         List<JSONObject> rows=new ArrayList<>();
         for(Object f:list(field(ParametricHistorySolidCadCanvasView.class,"history").get(cad))){JSONObject row=legacyFeature(f,entityIndex);if(row!=null)rows.add(row);}
         for(Object f:list(field(AdvancedParametricSolidCadCanvasView.class,"formHistory").get(cad))){JSONObject row=formFeature(f,entityIndex);if(row!=null)rows.add(row);}
+        @SuppressWarnings("unchecked") Map<Object,AnalyticSolidKernel.Primitive> analytic=
+                (Map<Object,AnalyticSolidKernel.Primitive>)field(AnalyticCadCanvasView.class,"analyticByBody").get(cad);
+        for(Map.Entry<Object,AnalyticSolidKernel.Primitive> entry:analytic.entrySet()){
+            AnalyticSolidKernel.Primitive primitive=entry.getValue();
+            if(!(primitive instanceof AnalyticSolidKernel.Sphere))continue;
+            AnalyticSolidKernel.Sphere sphere=(AnalyticSolidKernel.Sphere)primitive;JSONObject params=bodyParams(entry.getKey());
+            params.put("center",new JSONArray().put(sphere.center.x).put(sphere.center.y).put(sphere.center.z)).put("radiusMm",sphere.radiusMm);
+            rows.add(ExactModelProjectState.feature(1,"SPHERE",bodyKey(entry.getKey()),new JSONArray(),params));
+        }
         rows.sort(Comparator.comparingInt(ExactModelProjectAdapter::outputBodyNumber));
         JSONArray out=new JSONArray();int fileFeatureId=1;for(JSONObject row:rows){row.put("id",fileFeatureId++);out.put(row);}return out;
     }

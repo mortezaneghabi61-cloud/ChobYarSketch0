@@ -188,21 +188,72 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         return addAnalyticBody("Cone",new AnalyticSolidKernel.Cone(p.origin,axis,r0,r1,h));
     }
 
-    private void showSphereDialog(){
+    public void showSphereDialog(){
         LinearLayout box=form();
         EditText d=input(box,"قطر / Diameter (mm)","50");
+        EditText centerX=input(box,"مرکز X (mm)",num(activePlane().origin.x));
+        EditText centerY=input(box,"مرکز Y (mm)",num(activePlane().origin.y));
+        EditText centerZ=input(box,"مرکز Z (mm)",num(activePlane().origin.z));
         new AlertDialog.Builder(getContext()).setTitle("Sphere دقیق")
-                .setMessage("مرکز کره روی Origin صفحه فعال قرار می‌گیرد.")
+                .setMessage("قطر و جای دقیق مرکز کره را وارد کن. بعداً نیز با انتخاب Body و «ابعاد دقیق» قابل ویرایش است.")
                 .setView(box)
                 .setPositiveButton("ساخت",(x,w)->{
-                    try{float dia=parseLengthMm(d.getText().toString());toast(createSphere(dia));}
-                    catch(Exception e){toast("قطر درست وارد نشده");}
+                    try{
+                        float dia=parseLengthMm(d.getText().toString());
+                        Geometry3D.Vec3 center=new Geometry3D.Vec3(
+                                parseLengthMm(centerX.getText().toString()),
+                                parseLengthMm(centerY.getText().toString()),
+                                parseLengthMm(centerZ.getText().toString()));
+                        toast(createProjectSphere(center,dia));
+                    }catch(Exception e){toast("قطر یا مختصات درست وارد نشده");}
                 }).setNegativeButton("لغو",null).show();
     }
 
     private String createSphere(float diameterMm){
         if(diameterMm<=0)return"قطر باید بزرگ‌تر از صفر باشد";
         return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(activePlane().origin,diameterMm*0.5f));
+    }
+
+    /** Deterministic primitive bridge for bundled editable projects and model restore. */
+    final String createProjectSphere(Geometry3D.Vec3 center,float diameterMm){
+        if(center==null||diameterMm<=0f)return"Sphere پروژه معتبر نیست";
+        return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(center,diameterMm*.5f));
+    }
+
+    /** User-facing parameter editor for the exact primitive selected on canvas. */
+    public void showSelectedAnalyticEditor(){
+        Object body=selectedBody();
+        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        AnalyticSolidKernel.Primitive primitive=currentPrimitive(body);
+        if(!(primitive instanceof AnalyticSolidKernel.Sphere)){showAnalyticInspector();return;}
+        AnalyticSolidKernel.Sphere sphere=(AnalyticSolidKernel.Sphere)primitive;
+        LinearLayout box=form();
+        EditText diameter=input(box,"قطر / Diameter (mm)",num(sphere.radiusMm*2f));
+        EditText centerX=input(box,"مرکز X (mm)",num(sphere.center.x));
+        EditText centerY=input(box,"مرکز Y (mm)",num(sphere.center.y));
+        EditText centerZ=input(box,"مرکز Z (mm)",num(sphere.center.z));
+        new AlertDialog.Builder(getContext()).setTitle("ویرایش دقیق • "+bodyName(body))
+                .setMessage("قطر یا محل کره را تغییر بده؛ مدل و History ذخیره‌شده با هم به‌روز می‌شوند.")
+                .setView(box).setPositiveButton("اعمال",(dialog,which)->{
+                    try{
+                        float dia=parseLengthMm(diameter.getText().toString());if(dia<=0f)throw new IllegalArgumentException();
+                        Geometry3D.Vec3 center=new Geometry3D.Vec3(
+                                parseLengthMm(centerX.getText().toString()),
+                                parseLengthMm(centerY.getText().toString()),
+                                parseLengthMm(centerZ.getText().toString()));
+                        toast(updateSelectedProjectSphere(center,dia));
+                    }catch(Exception e){toast("قطر یا مختصات معتبر نیست");}
+                }).setNegativeButton("لغو",null).show();
+    }
+
+    /** Shared production path used by the exact editor and its persistence test. */
+    final String updateSelectedProjectSphere(Geometry3D.Vec3 center,float diameterMm){
+        Object body=selectedBody();if(body==null)return"اول یک Body را انتخاب کن";
+        if(!(currentPrimitive(body) instanceof AnalyticSolidKernel.Sphere))return"Body انتخاب‌شده کرهٔ دقیق نیست";
+        if(center==null||diameterMm<=0f)return"قطر یا مختصات معتبر نیست";
+        AnalyticSolidKernel.Sphere edited=new AnalyticSolidKernel.Sphere(center,diameterMm*.5f);
+        analyticByBody.put(body,edited);setBodyCsg(body,edited.tessellate(PREVIEW_SEGMENTS));
+        clearFace();ensure3D();invalidate();return"قطر و مختصات کره به‌روز شد";
     }
 
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
@@ -243,13 +294,16 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private AnalyticSolidKernel.Primitive currentPrimitive(Object body){
         if(body==null)return null;
+        AnalyticSolidKernel.Primitive cached=analyticByBody.get(body);
+        if(cached!=null)return cached;
         AnalyticSolidKernel.Primitive recognized=AnalyticSolidKernel.recognize(bodyCsg(body));
         if(recognized!=null){analyticByBody.put(body,recognized);return recognized;}
-        return analyticByBody.get(body);
+        return null;
     }
 
     private void refreshRecognizedBodies(){
         for(Object body:bodies()){
+            if(analyticByBody.containsKey(body))continue;
             AnalyticSolidKernel.Primitive p=AnalyticSolidKernel.recognize(bodyCsg(body));
             if(p!=null)analyticByBody.put(body,p);
         }
