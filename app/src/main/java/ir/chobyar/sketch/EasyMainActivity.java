@@ -311,23 +311,12 @@ public class EasyMainActivity extends MainActivity {
     }
 
     private String applyStandardView(String view) {
-        try {
-            Field overview = SpatialCadCanvasView.class.getDeclaredField("overview3D");
-            Field yaw = SpatialCadCanvasView.class.getDeclaredField("cameraYaw");
-            Field pitch = SpatialCadCanvasView.class.getDeclaredField("cameraPitch");
-            Field orbiting = SpatialCadCanvasView.class.getDeclaredField("orbiting");
-            overview.setAccessible(true); yaw.setAccessible(true); pitch.setAccessible(true); orbiting.setAccessible(true);
-            overview.setBoolean(easyCad, true); orbiting.setBoolean(easyCad, false);
-
-            String key = view == null ? "ISO" : view.toUpperCase(Locale.US);
-            if ("TOP".equals(key)) { yaw.setFloat(easyCad,0f); pitch.setFloat(easyCad,0f); easyCad.invalidate(); return "نمای بالا • XY • محور Z"; }
-            if ("FRONT".equals(key)) { yaw.setFloat(easyCad,0f); pitch.setFloat(easyCad,90f); easyCad.invalidate(); return "نمای روبرو • XZ • محور Y"; }
-            if ("RIGHT".equals(key)) { yaw.setFloat(easyCad,90f); pitch.setFloat(easyCad,90f); easyCad.invalidate(); return "نمای راست • YZ • محور X"; }
-            yaw.setFloat(easyCad,38f); pitch.setFloat(easyCad,24f); easyCad.invalidate(); return "نمای ایزومتریک 3D";
-        } catch (Exception e) {
-            easyCad.showPlaneManager();
-            return "View / Plane";
-        }
+        String key = view == null ? "ISO" : view.toUpperCase(Locale.US);
+        String result = easyCad.setStandardView(key);
+        if ("TOP".equals(key)) return "نمای بالا • XY • محور Z";
+        if ("FRONT".equals(key)) return "نمای روبرو • XZ • محور Y";
+        if ("RIGHT".equals(key)) return "نمای راست • YZ • محور X";
+        return result == null || result.trim().isEmpty() ? "نمای ایزومتریک 3D" : result;
     }
 
     private void toggleSnap() {

@@ -271,7 +271,8 @@ public final class ChobYarActivity extends Activity {
 
     private void editSessionValue(){
         WorkspaceController.State state=workspace.state();
-        if(state.tool==WorkspaceController.Tool.REVOLVE)cad.showInteractiveRevolveAngleEditor();
+        if(state.tool==WorkspaceController.Tool.EXTRUDE)cad.showInteractiveExtrudeHeightEditor();
+        else if(state.tool==WorkspaceController.Tool.REVOLVE)cad.showInteractiveRevolveAngleEditor();
         else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad.isBodyTransformSessionActive())cad.showBodyTransformExactEditor();
         else if(state.tool==WorkspaceController.Tool.ALIGN)status(cad.flipAlignSession());
     }
@@ -282,7 +283,8 @@ public final class ChobYarActivity extends Activity {
         if(instructionChip!=null){instructionChip.setText(state.instruction());instructionChip.setVisibility(active?View.VISIBLE:View.GONE);}
         if(sessionTitle!=null){
             String title=state.title();
-            if(state.tool==WorkspaceController.Tool.REVOLVE&&cad!=null&&cad.isInteractiveRevolveActive())title=cad.interactiveRevolveSummary();
+            if(state.tool==WorkspaceController.Tool.EXTRUDE&&cad!=null&&cad.isInteractiveExtrudeActive())title=cad.interactiveExtrudeSummary();
+            else if(state.tool==WorkspaceController.Tool.REVOLVE&&cad!=null&&cad.isInteractiveRevolveActive())title=cad.interactiveRevolveSummary();
             else if(state.tool==WorkspaceController.Tool.MOVE_ROTATE&&cad!=null&&cad.isBodyTransformSessionActive())title=cad.bodyTransformSummary();
             else if(state.tool==WorkspaceController.Tool.ALIGN&&cad!=null&&cad.isAlignSessionActive())title=cad.alignSummary();
             sessionTitle.setText(title);
