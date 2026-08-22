@@ -18,17 +18,19 @@ final class FurnitureSampleProjectFactory {
         Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
         try{
             cad.applyProjectSketchPlane(Geometry3D.xz());
+            cad.applyProjectSketchPlane("Top",new Geometry3D.Plane3D(new Geometry3D.Vec3(0f,0f,585f),
+                    new Geometry3D.Vec3(1f,0f,0f),new Geometry3D.Vec3(0f,1f,0f),"XY • صفحه"));
             List<ProfileRow> rows=new ArrayList<>();
             rows.add(polyline(spheroidHalfProfile(205f,0f,175f,175f,28)));rows.add(axis(0f,0f,350f));
             rows.add(polyline(spheroidHalfProfile(135f,145f,385f,135f,28)));rows.add(axis(145f,250f,520f));
             rows.add(polyline(spheroidHalfProfile(165f,-35f,500f,125f,28)));rows.add(axis(-35f,375f,625f));
-            rows.add(halfRect(0f,585f,380f,630f));rows.add(axis(0f,570f,645f));
+            rows.add(circle("Top",0f,0f,380f));
             importRows(cad,rows);
 
             revolve(cad,0,1,"گوی پایین • Ø410 × H350");
             revolve(cad,2,3,"گوی میانی • Ø270 × H270 • X+145");
             revolve(cad,4,5,"گوی زیر صفحه • Ø330 × H250 • X-35");
-            revolve(cad,6,7,"صفحه گرد • Ø760 × 45");
+            extrude(cad,6,45f,"صفحه گرد • Ø760 × 45",0f,0f,0f);
             cad.setStandardView("ISO");cad.fitAll();cad.clearWorkspaceSelection();
             return CadProjectPersistenceController.encode(cad);
         }finally{cad.clearAll();}
@@ -116,10 +118,8 @@ final class FurnitureSampleProjectFactory {
         catch(Exception e){throw new IllegalStateException(e);}
     }
 
-    private static ProfileRow halfRect(float axisX,float y1,float radius,float y2){
-        try{JSONArray p=new JSONArray().put(new JSONArray().put(axisX+.75f).put(y1)).put(new JSONArray().put(axisX+radius).put(y1))
-                .put(new JSONArray().put(axisX+radius).put(y2)).put(new JSONArray().put(axisX+.75f).put(y2));
-            return base(new JSONObject().put("type","RECT").put("points",p));}
+    private static ProfileRow circle(String layer,float x,float y,float radius){
+        try{return base(new JSONObject().put("type","CIRCLE").put("x",x).put("y",y).put("r",radius),false,layer);}
         catch(Exception e){throw new IllegalStateException(e);}
     }
 
