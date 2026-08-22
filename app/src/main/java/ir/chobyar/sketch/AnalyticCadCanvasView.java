@@ -241,11 +241,19 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
                                 parseLengthMm(centerX.getText().toString()),
                                 parseLengthMm(centerY.getText().toString()),
                                 parseLengthMm(centerZ.getText().toString()));
-                        AnalyticSolidKernel.Sphere edited=new AnalyticSolidKernel.Sphere(center,dia*.5f);
-                        analyticByBody.put(body,edited);setBodyCsg(body,edited.tessellate(PREVIEW_SEGMENTS));
-                        clearFace();ensure3D();invalidate();toast("قطر و مختصات کره به‌روز شد");
+                        toast(updateSelectedProjectSphere(center,dia));
                     }catch(Exception e){toast("قطر یا مختصات معتبر نیست");}
                 }).setNegativeButton("لغو",null).show();
+    }
+
+    /** Shared production path used by the exact editor and its persistence test. */
+    final String updateSelectedProjectSphere(Geometry3D.Vec3 center,float diameterMm){
+        Object body=selectedBody();if(body==null)return"اول یک Body را انتخاب کن";
+        if(!(currentPrimitive(body) instanceof AnalyticSolidKernel.Sphere))return"Body انتخاب‌شده کرهٔ دقیق نیست";
+        if(center==null||diameterMm<=0f)return"قطر یا مختصات معتبر نیست";
+        AnalyticSolidKernel.Sphere edited=new AnalyticSolidKernel.Sphere(center,diameterMm*.5f);
+        analyticByBody.put(body,edited);setBodyCsg(body,edited.tessellate(PREVIEW_SEGMENTS));
+        clearFace();ensure3D();invalidate();return"قطر و مختصات کره به‌روز شد";
     }
 
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
