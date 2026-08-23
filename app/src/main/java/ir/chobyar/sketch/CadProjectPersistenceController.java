@@ -1,8 +1,6 @@
 package ir.chobyar.sketch;
 
 import android.content.Context;
-import java.lang.reflect.Field;
-import java.util.List;
 
 /** Transactional Save/Open boundary for exact model plus renderer-only workspace state. */
 final class CadProjectPersistenceController {
@@ -14,7 +12,7 @@ final class CadProjectPersistenceController {
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         if((appearance==null)!=(section==null))throw new IllegalArgumentException("Visual workspace controllers are incomplete");
         String sketch=cad.exportSketchProjectState();
-        boolean hasBodies=hasAnySolidBody(cad),hasReference=cad.hasReferenceImage();
+        boolean hasBodies=cad.bodyCount()>0,hasReference=cad.hasReferenceImage();
         String model=null;
         if(hasBodies||hasReference){
             model=ExactModelProjectAdapter.exportModel(cad);
@@ -33,15 +31,6 @@ final class CadProjectPersistenceController {
         if(hasReference||visual!=null)return CadProjectDocument.encodeWorkspace(sketch,model,reference,visual);
         if(hasBodies)return CadProjectDocument.encodeModel(sketch,model);
         return CadProjectDocument.encodeSketch(sketch);
-    }
-
-    private static boolean hasAnySolidBody(Shapr3DGuideCadCanvasView cad){
-        try{
-            Field field=SolidCadCanvasView.class.getDeclaredField("bodies");
-            field.setAccessible(true);
-            Object value=field.get(cad);
-            return value instanceof List && !((List<?>)value).isEmpty();
-        }catch(ReflectiveOperationException e){throw new IllegalStateException("Solid model presence could not be inspected",e);}
     }
 
     static CadProjectDocument.Decoded validate(Shapr3DGuideCadCanvasView cad,String raw){

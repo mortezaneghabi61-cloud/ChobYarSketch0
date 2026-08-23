@@ -38,6 +38,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
+                resetTestViewport(c);
                 c.executeCommand("LINE 100 100 220 100");
                 c.executeCommand("LINE 200 55 200 145");
                 c.setTool(CadCanvasView.TOOL_LINE);
@@ -81,6 +82,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
+                resetTestViewport(c);
                 c.setTool(CadCanvasView.TOOL_CIRCLE);
             });
             inst.waitForIdleSync();
@@ -123,13 +125,12 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
+                resetTestViewport(c);
                 c.setTool(CadCanvasView.TOOL_ARC);
                 assertTrue("Production Arc mode did not activate", c.isShaprArcMode());
             });
             inst.waitForIdleSync();
 
-            // Keep every sample comfortably inside the API-35 Pixel 7 Pro canvas.
-            // The previous 420..540 mm X range partly left the 1440px window.
             float[][] worldPath = {
                     {110f, 220f}, {150f, 165f}, {190f, 145f}, {230f, 165f}, {270f, 220f}
             };
@@ -162,6 +163,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
+                resetTestViewport(c);
 
                 c.executeCommand("LINE 40 40 90 40");
                 String lineDim = c.applySelectedDimension("125");
@@ -195,6 +197,7 @@ public final class SketchPrimitivesSnapInstrumentationTest {
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 c.clearAll();
+                resetTestViewport(c);
                 int base = c.entities.size();
 
                 String rect = c.executeCommand("RECT 100 120 600 400");
@@ -270,6 +273,18 @@ public final class SketchPrimitivesSnapInstrumentationTest {
         }
     }
 
+    /**
+     * Workspace recovery intentionally preserves the user's camera. Instrumentation
+     * gestures must not inherit that persisted camera because their world-to-screen
+     * coordinates would become test-order dependent (and can even land off-screen).
+     */
+    private static void resetTestViewport(Shapr3DGuideCadCanvasView c) {
+        c.viewScale = 1f;
+        c.offsetX = 60f;
+        c.offsetY = 100f;
+        c.invalidate();
+    }
+
     private static Shapr3DGuideCadCanvasView canvas(ChobYarActivity activity) {
         Shapr3DGuideCadCanvasView c = find(activity.getWindow().getDecorView());
         assertNotNull("Production Shapr3DGuideCadCanvasView not found", c);
@@ -343,8 +358,12 @@ public final class SketchPrimitivesSnapInstrumentationTest {
     }
 
     private static void send(Instrumentation inst, MotionEvent e) {
-        try { inst.sendPointerSync(e); }
-        finally { e.recycle(); }
+        try {
+            boolean injected = inst.getUiAutomation().injectInputEvent(e, true);
+            assertTrue("Stylus input injection was rejected", injected);
+        } finally {
+            e.recycle();
+        }
     }
 
     private static long now() { return SystemClock.uptimeMillis(); }

@@ -38,6 +38,8 @@ import java.util.Arrays;
  * Filament selects Vulkan where the device supports it and retains its Android
  * OpenGL ES backend as a compatibility path. OCCT remains the geometry source;
  * this class owns only GPU resources, frame scheduling and the physical camera.
+ * Material compilation is deliberately lazy so a blank workspace can reach its
+ * first interactive frame without paying the filamat compiler cost.
  */
 final class FilamentCadSurface extends SurfaceView implements Choreographer.FrameCallback {
     private static boolean initialized;
@@ -50,6 +52,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private final int cameraEntity;
     private final Skybox skybox;
     private Material cadMaterial;
+    private boolean materialBuilderInitialized;
     private final int keyLightEntity;
     private final int fillLightEntity;
     private final UiHelper uiHelper;
@@ -78,8 +81,6 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         camera=engine.createCamera(cameraEntity);
         skybox=new Skybox.Builder().color(0.965f,0.972f,0.982f,1.0f).build(engine);
         scene.setSkybox(skybox);view.setScene(scene);view.setCamera(camera);
-        MaterialBuilder.init();
-        cadMaterial=buildCadMaterial();
         keyLightEntity=EntityManager.get().create();
         new LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1.0f,0.97f,0.92f).intensity(92000f)
                 .direction(-0.55f,-0.70f,-0.85f).castShadows(false).build(engine,keyLightEntity);
@@ -108,6 +109,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     }
 
     private Material buildCadMaterial(){
+        if(!materialBuilderInitialized){MaterialBuilder.init();materialBuilderInitialized=true;}
         String shader="void material(inout MaterialInputs material) { prepareMaterial(material); material.baseColor = float4("+
                 materialRed+", "+materialGreen+", "+materialBlue+", 1.0); material.roughness = "+materialRoughness+
                 "; material.metallic = "+materialMetallic+"; material.reflectance = 0.35; }";
@@ -129,8 +131,11 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         float r=Color.red(color)/255f,g=Color.green(color)/255f,b=Color.blue(color)/255f;
         roughness=Math.max(.04f,Math.min(1f,roughness));metallic=Math.max(0f,Math.min(1f,metallic));
         if(Math.abs(r-materialRed)<.001f&&Math.abs(g-materialGreen)<.001f&&Math.abs(b-materialBlue)<.001f&&Math.abs(roughness-materialRoughness)<.001f&&Math.abs(metallic-materialMetallic)<.001f)return;
-        double[] restore=meshSnapshot;clearMesh();Material old=cadMaterial;materialRed=r;materialGreen=g;materialBlue=b;materialRoughness=roughness;materialMetallic=metallic;
-        cadMaterial=buildCadMaterial();engine.destroyMaterial(old);meshLength=-1;meshHash=0;if(restore.length>=9)setMesh(restore);
+        materialRed=r;materialGreen=g;materialBlue=b;materialRoughness=roughness;materialMetallic=metallic;
+        // No body has been uploaded yet: keep the desired appearance and let
+        // the first setMesh compile exactly one material instead of two.
+        if(cadMaterial==null)return;
+        double[] restore=meshSnapshot;clearMesh();Material old=cadMaterial;cadMaterial=buildCadMaterial();engine.destroyMaterial(old);meshLength=-1;meshHash=0;if(restore.length>=9)setMesh(restore);
     }
 
     void setCameraState(SpatialCadCanvasView.GpuCameraState state){cameraState=state;applyCameraState();}
@@ -165,6 +170,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         clearMesh();meshSnapshot=Arrays.copyOf(xyz,xyz.length);meshLength=xyz.length;meshHash=nextHash;
         int vertexCount=xyz.length/3;
         if(vertexCount<3)return;
+        if(cadMaterial==null)cadMaterial=buildCadMaterial();
 
         ByteBuffer vertexBytes=ByteBuffer.allocateDirect(vertexCount*3*4).order(ByteOrder.nativeOrder());
         FloatBuffer vertices=vertexBytes.asFloatBuffer();
@@ -210,8 +216,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
                 .material(0,cadMaterial.getDefaultInstance())
                 .geometry(0,RenderableManager.PrimitiveType.TRIANGLES,vertexBuffer,indexBuffer,0,vertexCount)
                 .culling(false).build(engine,renderableEntity);
-        scene.addEntity(renderableEntity);
-        applyCameraState();
+        scene.addEntity(renderableEntity);applyCameraState();
     }
 
     private void clearMesh(){
@@ -225,9 +230,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
 
     @Override public void doFrame(long frameTimeNanos) {
         if(!running)return;
-        if(swapChain!=null&&uiHelper.isReadyToRender()&&renderer.beginFrame(swapChain,frameTimeNanos)){
-            renderer.render(view);renderer.endFrame();
-        }
+        if(swapChain!=null&&uiHelper.isReadyToRender()&&renderer.beginFrame(swapChain,frameTimeNanos)){renderer.render(view);renderer.endFrame();}
         Choreographer.getInstance().postFrameCallback(this);
     }
 
@@ -237,7 +240,8 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         clearMesh();scene.removeEntity(keyLightEntity);scene.removeEntity(fillLightEntity);
         engine.destroyEntity(keyLightEntity);engine.destroyEntity(fillLightEntity);
         EntityManager.get().destroy(keyLightEntity);EntityManager.get().destroy(fillLightEntity);
-        engine.destroyMaterial(cadMaterial);MaterialBuilder.shutdown();
+        if(cadMaterial!=null){engine.destroyMaterial(cadMaterial);cadMaterial=null;}
+        if(materialBuilderInitialized){MaterialBuilder.shutdown();materialBuilderInitialized=false;}
         scene.setSkybox(null);engine.destroySkybox(skybox);engine.destroyCameraComponent(cameraEntity);
         engine.destroyView(view);engine.destroyScene(scene);engine.destroyRenderer(renderer);
         EntityManager.get().destroy(cameraEntity);engine.destroy();
