@@ -26,7 +26,7 @@ jobs:
     env:
       CHOBYAR_VERSION_NAME: 0.5.rc.${{ github.run_number }}
       CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
-      APK: app/build/outputs/apk/release/app-release.apk
+      APK: app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
       EXPECTED_DEV_CERT_SHA256: 6d68da0481eb76eae200fe188386d36ae96ac5a9338bd63b921229d5f18a8735
 
     steps:
@@ -72,7 +72,7 @@ jobs:
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
       - name: Build signed release-candidate APK
-        run: gradle :app:assembleRelease --stacktrace
+        run: gradle :app:assembleReleaseCandidate --stacktrace
 
       - name: Verify package, signature, ABI and size budget
         run: |
@@ -114,7 +114,7 @@ jobs:
         with:
           name: ChobYar3D-release-candidate-performance
           path: |
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
             test-artifacts/**
           if-no-files-found: warn
           retention-days: 30
