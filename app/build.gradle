@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
+def productionStoreFile = System.getenv('CHOBYAR_RELEASE_KEYSTORE')
+def productionStorePassword = System.getenv('CHOBYAR_RELEASE_STORE_PASSWORD')
+def productionKeyAlias = System.getenv('CHOBYAR_RELEASE_KEY_ALIAS')
+def productionKeyPassword = System.getenv('CHOBYAR_RELEASE_KEY_PASSWORD')
+def productionSigningReady = productionStoreFile && productionStorePassword && productionKeyAlias && productionKeyPassword
+
 android {
     namespace 'ir.chobyar.sketch'
     compileSdk 35
@@ -9,11 +15,6 @@ android {
 
     def ciVersionCode = System.getenv('CHOBYAR_VERSION_CODE') ?: '1'
     def ciVersionName = System.getenv('CHOBYAR_VERSION_NAME') ?: '0.0.1'
-    def productionStoreFile = System.getenv('CHOBYAR_RELEASE_KEYSTORE')
-    def productionStorePassword = System.getenv('CHOBYAR_RELEASE_STORE_PASSWORD')
-    def productionKeyAlias = System.getenv('CHOBYAR_RELEASE_KEY_ALIAS')
-    def productionKeyPassword = System.getenv('CHOBYAR_RELEASE_KEY_PASSWORD')
-    def productionSigningReady = productionStoreFile && productionStorePassword && productionKeyAlias && productionKeyPassword
 
     defaultConfig {
         applicationId 'ir.chobyar.sketch'
@@ -43,8 +44,8 @@ android {
     }
 
     signingConfigs {
-        // Reproducible public CI/development key. It is intentionally not the
-        // production distribution identity.
+        // Reproducible public CI/development key. This identity is only for
+        // debug and release-candidate builds; it must never sign production.
         chobyarDev {
             storeFile file('../chobyar-dev.jks')
             storePassword 'ChobYarDev123'
@@ -65,11 +66,36 @@ android {
         debug {
             signingConfig signingConfigs.chobyarDev
         }
+
         release {
-            signingConfig productionSigningReady ? signingConfigs.chobyarRelease : signingConfigs.chobyarDev
+            if (productionSigningReady) {
+                signingConfig signingConfigs.chobyarRelease
+            }
             debuggable false
             jniDebuggable false
             minifyEnabled false
+        }
+
+        releaseCandidate {
+            initWith release
+            signingConfig signingConfigs.chobyarDev
+            matchingFallbacks = ['release']
+            debuggable false
+            jniDebuggable false
+            minifyEnabled false
+        }
+    }
+}
+
+// A production build must never silently fall back to the public development
+// key. Keep RC builds installable, but fail any task that actually packages or
+// assembles the production release when production credentials are absent.
+tasks.configureEach { task ->
+    if (task.name in ['assembleRelease', 'bundleRelease', 'packageRelease', 'signReleaseBundle', 'installRelease']) {
+        task.doFirst {
+            if (!productionSigningReady) {
+                throw new GradleException('Production signing configuration is missing. Use assembleReleaseCandidate for an internal RC build or provide CHOBYAR_RELEASE_* credentials for production.')
+            }
         }
     }
 }
