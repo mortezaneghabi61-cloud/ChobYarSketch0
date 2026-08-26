@@ -59,16 +59,16 @@ jobs:
         with:
           gradle-version: '9.1.0'
 
-      - name: Restore persistent signing key
+      - name: Restore reproducible development signing key
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
       - name: Build debug and signed release-candidate APKs
-        run: gradle :app:assembleDebug :app:assembleRelease --stacktrace
+        run: gradle :app:assembleDebug :app:assembleReleaseCandidate --stacktrace
 
       - name: Verify release-candidate APK
         run: |
           set -euo pipefail
-          APK=app/build/outputs/apk/release/app-release.apk
+          APK=app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/chobyar-badging.txt
@@ -86,15 +86,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ChobYar3D-release-candidate
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
 
       - name: Publish installable APK prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk ChobYar3D.apk
+          cp app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk ChobYar3D.apk
           gh release create "android-${{ github.run_number }}" ChobYar3D.apk \
             --target "${{ github.sha }}" \
             --title "ChobYar 3D Android ${{ env.CHOBYAR_VERSION_NAME }}" \
-            --notes "Signed release-candidate Android CAD build from commit ${{ github.sha }} with monotonic versionCode $CHOBYAR_VERSION_CODE. Real-device acceptance is still required before calling this production-ready." \
+            --notes "Signed release-candidate Android CAD build from commit ${{ github.sha }} with monotonic versionCode $CHOBYAR_VERSION_CODE. This is intentionally signed with the reproducible development identity; production release signing requires CHOBYAR_RELEASE_* credentials." \
             --prerelease
