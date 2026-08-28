@@ -464,12 +464,9 @@ public class CadCanvasView extends View {
         if (snapVisible) drawSnapMarker(canvas, snapX, snapY, px);
         canvas.restore();
 
-        String mode = toolName(tool);
-        screenTextPaint.setTextSize(25f);
-        String info = selected == null ? "" : " | انتخاب: " + selected.shortName();
-        int zoomPercent = Math.max(1, Math.round(viewScale * 100f));
-        canvas.drawText("حالت: " + mode + (snapEnabled ? " | Snap" : "") + info + " | Zoom " + zoomPercent + "%",
-                12f, getHeight()-18f, screenTextPaint);
+        // Bottom workspace status is rendered by FigmaWorkspaceStyler.
+        // Do not paint a second status line inside the CAD canvas; the adaptive
+        // contextual toolbar is intentionally positioned above that 40dp bar.
     }
 
     private float adaptiveGridStep() {
