@@ -745,7 +745,7 @@ public final class ChobYarActivity extends Activity {
     private FrameLayout.LayoutParams topLayout(){FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(-1,dp(56),Gravity.TOP);p.setMargins(dp(10),dp(8),dp(10),0);return p;}
     private void setAdaptivePlacement(boolean palette){
         if(adaptive==null)return;adaptive.setOrientation(palette?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);
-        adaptiveParams=wrap(palette?Gravity.START|Gravity.CENTER_VERTICAL:Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,palette?8:0,0,0,palette?0:12);adaptive.setLayoutParams(adaptiveParams);
+        adaptiveParams=wrap(palette?Gravity.START|Gravity.CENTER_VERTICAL:Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,palette?8:0,0,0,palette?0:50);adaptive.setLayoutParams(adaptiveParams);
     }
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 
