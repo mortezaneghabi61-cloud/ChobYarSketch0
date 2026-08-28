@@ -31,7 +31,7 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/** Single production workspace. No activity swapping and no reflection wiring. */
+/** Single production workspace. Bottom chrome reserves the status-bar area. */
 public final class ChobYarActivity extends Activity {
     private static final int REQUEST_EXPORT_CAD=1701;
     private static final int REQUEST_REFERENCE_IMAGE=1702;
