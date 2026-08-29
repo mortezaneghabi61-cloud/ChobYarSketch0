@@ -3,23 +3,31 @@ package ir.chobyar.sketch;
 import android.content.Context;
 import android.view.MotionEvent;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import ir.chobyar.sketch.core.LegacySketchStateBridge;
 import ir.chobyar.sketch.core.SketchDocument;
 import ir.chobyar.sketch.core.SketchEntity;
 
 /**
- * K3.3 migration canvas.
+ * K3 sketch authority migration canvas.
  *
- * The legacy view remains authoritative for user interaction, snapping,
- * constraints and annotations. Supported committed geometry mutations are
- * mirrored into the pure {@link SketchDocument} so the next authority move has
- * a measurable parity seam without prematurely moving solver/snapping state.
+ * K3.3 established a geometry/stable-id mirror while the legacy view remained
+ * authoritative. K3.4 begins the authority flip in deliberately small slices:
+ * exact Move/Delete plus their Undo/Redo history are first validated and
+ * committed in {@link SketchDocument}, then replayed through the legacy adapter
+ * for rendering/interaction compatibility. Unsupported operations still use
+ * the K3.3 full-state mirror and explicitly invalidate transactional history.
+ *
+ * Snapping, constraints, dimensions and annotations remain legacy-owned here.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private final SketchDocument sketchDocument = new SketchDocument();
     private long mirrorSyncCount;
+    private long authorityTransitionCount;
+    private boolean authorityHistoryValid;
     private String lastMirrorError = "";
 
     public K33MirroredCadCanvasView(Context context) {
@@ -30,12 +38,16 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     public long sketchMirrorSyncCount() { return mirrorSyncCount; }
     public String sketchMirrorError() { return lastMirrorError; }
     public List<SketchEntity> sketchMirrorEntities() { return sketchDocument.entities(); }
+    public boolean sketchAuthorityHistoryActive() { return authorityHistoryValid; }
+    public boolean sketchAuthorityCanUndo() { return authorityHistoryValid && sketchDocument.canUndo(); }
+    public boolean sketchAuthorityCanRedo() { return authorityHistoryValid && sketchDocument.canRedo(); }
+    public long sketchAuthorityTransitionCount() { return authorityTransitionCount; }
 
     /** Non-throwing status used by production telemetry/UI. */
     public boolean assertSketchMirrorParity() {
         try {
             boolean ok = LegacySketchStateBridge.hasParity(sketchDocument, exportSketchProjectState());
-            if (!ok) lastMirrorError = "SketchDocument parity mismatch";
+            if (!ok) lastMirrorError = "SketchDocument geometry parity mismatch";
             return ok;
         } catch (RuntimeException e) {
             lastMirrorError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -48,33 +60,157 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         if (!assertSketchMirrorParity()) throw new IllegalStateException(lastMirrorError);
     }
 
+    /**
+     * K3.3 compatibility path. Re-hydration intentionally resets the document's
+     * undo/redo history, so every fallback marks transactional authority stale.
+     */
     private void syncMirror(String source) {
         try {
-            LegacySketchStateBridge.restoreDocument(sketchDocument, exportSketchProjectState());
+            String raw = exportSketchProjectState();
+            LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
             mirrorSyncCount++;
+            authorityHistoryValid = false;
             lastMirrorError = "";
-            if (!LegacySketchStateBridge.hasParity(sketchDocument, exportSketchProjectState())) {
+            if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 lastMirrorError = "Parity failed after " + source;
             }
         } catch (RuntimeException e) {
+            authorityHistoryValid = false;
             lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
+    }
+
+    /**
+     * Starts a fresh transactional authority chain from the current compatible
+     * legacy state and mirrors the stable-id selection into SketchDocument.
+     */
+    private boolean prepareTransactionalSelection(String source) {
+        try {
+            if (!authorityHistoryValid) {
+                String raw = exportSketchProjectState();
+                LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
+                mirrorSyncCount++;
+                authorityHistoryValid = true;
+            }
+
+            Set<String> ids = new LinkedHashSet<>();
+            for (Object value : smartSelectionSnapshot()) {
+                if (value instanceof Entity) ids.add(((Entity) value).stableId());
+            }
+            if (ids.isEmpty() && selected != null) ids.add(selected.stableId());
+            sketchDocument.setSelection(ids);
+            return !ids.isEmpty();
+        } catch (RuntimeException e) {
+            authorityHistoryValid = false;
+            lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Verifies that the legacy adapter produced exactly the model state already
+     * accepted by SketchDocument. A mismatch fails closed by undoing both sides
+     * and returning to the proven K3.3 mirror seam.
+     */
+    private boolean finishTransactionalMutation(String source) {
+        try {
+            String raw = exportSketchProjectState();
+            if (LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
+                authorityTransitionCount++;
+                lastMirrorError = "";
+                return true;
+            }
+        } catch (RuntimeException ignored) {
+            // Roll back below using each side's already-created history entry.
+        }
+
+        String reason = "Transactional parity failed after " + source;
+        try { if (sketchDocument.canUndo()) sketchDocument.undo(); } catch (RuntimeException ignored) {}
+        try { super.undo(); } catch (RuntimeException ignored) {}
+        syncMirror("authority-rollback-" + source);
+        lastMirrorError = reason;
+        return false;
+    }
+
+    private boolean finishTransactionalHistoryStep(String source) {
+        try {
+            String raw = exportSketchProjectState();
+            if (LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
+                authorityTransitionCount++;
+                lastMirrorError = "";
+                return true;
+            }
+        } catch (RuntimeException ignored) {}
+        syncMirror("history-fallback-" + source);
+        return false;
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         boolean handled = super.onTouchEvent(event);
         int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
-        // Drag/draw previews stay legacy-owned; commit the mirror at gesture end.
+        // Freehand/drag previews are still legacy-owned in this first K3.4 slice.
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) syncMirror("touch-commit");
         return handled;
     }
 
     @Override public void clearAll() { super.clearAll(); syncMirror("clear"); }
-    @Override public void undo() { super.undo(); syncMirror("undo"); }
-    @Override public boolean redoSketch() { boolean out=super.redoSketch(); if(out)syncMirror("redo"); return out; }
-    @Override public void deleteSelected() { super.deleteSelected(); syncMirror("delete"); }
+
+    @Override public void undo() {
+        if (authorityHistoryValid && sketchDocument.canUndo()) {
+            boolean changed = sketchDocument.undo();
+            if (changed) {
+                super.undo();
+                finishTransactionalHistoryStep("undo");
+                return;
+            }
+        }
+        super.undo();
+        syncMirror("undo-fallback");
+    }
+
+    @Override public boolean redoSketch() {
+        if (authorityHistoryValid && sketchDocument.canRedo()) {
+            boolean documentChanged = sketchDocument.redo();
+            boolean legacyChanged = super.redoSketch();
+            if (documentChanged && legacyChanged) {
+                finishTransactionalHistoryStep("redo");
+                return true;
+            }
+            syncMirror("redo-fallback");
+            return legacyChanged;
+        }
+        boolean out = super.redoSketch();
+        if (out) syncMirror("redo-fallback");
+        return out;
+    }
+
+    @Override public void deleteSelected() {
+        if (!prepareTransactionalSelection("delete-prepare")) {
+            super.deleteSelected();
+            syncMirror("delete-fallback");
+            return;
+        }
+        int removed = sketchDocument.removeSelected();
+        if (removed <= 0) return;
+        super.deleteSelected();
+        finishTransactionalMutation("delete");
+    }
+
+    @Override public void moveSelected(float dx,float dy) {
+        if (!prepareTransactionalSelection("move-prepare")) {
+            super.moveSelected(dx,dy);
+            syncMirror("move-fallback");
+            return;
+        }
+        boolean changed = sketchDocument.translateSelection(dx,dy);
+        if (!changed) return;
+        super.moveSelected(dx,dy);
+        finishTransactionalMutation("move");
+    }
+
+    // Copy/Create need stable-id injection into the legacy adapter and remain a
+    // deliberate K3.3 fallback until the next K3.4 slice.
     @Override public void copySelected(float dx,float dy) { super.copySelected(dx,dy); syncMirror("copy"); }
-    @Override public void moveSelected(float dx,float dy) { super.moveSelected(dx,dy); syncMirror("move"); }
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
     @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
     @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
@@ -88,7 +224,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
     @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
 
-    // Driving dimensions and constraint application can reposition geometry immediately.
+    // Driving dimensions and constraints remain legacy-owned in this K3.4 slice.
     @Override public String applySelectedDimension(String raw) { String out=super.applySelectedDimension(raw); syncMirror("dimension"); return out; }
     @Override public String setSelectedLineAngle(float degrees) { String out=super.setSelectedLineAngle(degrees); syncMirror("line-angle"); return out; }
     @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
@@ -105,8 +241,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String importSketchProjectState(String raw) { String out=super.importSketchProjectState(raw); syncMirror("project-open"); return out; }
 
     @Override public String executeCommand(String raw) {
+        long before = authorityTransitionCount;
         String out = super.executeCommand(raw);
-        syncMirror("command");
+        // Dynamic dispatch lets MOVE use transactional authority. Other commands
+        // still take the compatibility mirror path and invalidate document history.
+        if (authorityTransitionCount == before) syncMirror("command");
         return out;
     }
 }
