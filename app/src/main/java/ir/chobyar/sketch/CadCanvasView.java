@@ -18,6 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 public class CadCanvasView extends View {
 
@@ -241,6 +244,7 @@ public class CadCanvasView extends View {
         if (selected == null) return;
         saveUndo();
         Entity c = selected.copy();
+        c.regenerateStableId();
         c.translate(dx, dy);
         entities.add(c);
         selected = c;
@@ -260,6 +264,7 @@ public class CadCanvasView extends View {
         if (o == null) return "Offset برای این نوع شکل هنوز فعال نیست";
         saveUndo();
         copyMeta(selected, o);
+        o.regenerateStableId();
         entities.add(o);
         selected = o;
         invalidate();
@@ -301,6 +306,7 @@ public class CadCanvasView extends View {
         Entity seed = selected.copy();
         for (int i = 1; i < count; i++) {
             Entity c = seed.copy();
+            c.regenerateStableId();
             c.translate(dx * i, dy * i);
             entities.add(c);
             selected = c;
@@ -910,7 +916,7 @@ public class CadCanvasView extends View {
     public String exportSketchProjectState() {
         try {
             org.json.JSONObject root=new org.json.JSONObject();
-            root.put("schemaVersion",1);
+            root.put("schemaVersion",2);
             root.put("unit","mm");
             root.put("currentLayer",currentLayer);
             root.put("currentColor",currentColor);
@@ -979,7 +985,8 @@ public class CadCanvasView extends View {
     private ParsedSketchProject parseSketchProjectState(String raw)throws Exception{
         if(raw==null||raw.trim().isEmpty())throw new IllegalArgumentException("empty");
         org.json.JSONObject root=new org.json.JSONObject(raw);
-        if(root.optInt("schemaVersion",-1)!=1)throw new IllegalArgumentException("schema");
+        int schemaVersion=root.optInt("schemaVersion",-1);
+        if(schemaVersion!=1&&schemaVersion!=2)throw new IllegalArgumentException("schema");
         if(!"mm".equals(root.optString("unit","mm")))throw new IllegalArgumentException("unit");
         String layer=root.optString("currentLayer","0").trim();if(layer.isEmpty())layer="0";
         int color=root.optInt("currentColor",Color.rgb(25,25,25));
@@ -1003,13 +1010,22 @@ public class CadCanvasView extends View {
 
         org.json.JSONArray rows=root.getJSONArray("entities");
         List<Entity> restored=new ArrayList<>();
-        for(int i=0;i<rows.length();i++)restored.add(projectEntityFromJson(rows.getJSONObject(i)));
+        Set<String> restoredIds=new HashSet<>();
+        for(int i=0;i<rows.length();i++){
+            org.json.JSONObject row=rows.getJSONObject(i);
+            if(schemaVersion>=2&&!row.has("id"))throw new IllegalArgumentException("entity id");
+            Entity restoredEntity=projectEntityFromJson(row);
+            String restoredId=restoredEntity.stableId();
+            if(!restoredIds.add(restoredId))throw new IllegalArgumentException("duplicate entity id");
+            restored.add(restoredEntity);
+        }
         return new ParsedSketchProject(restored,restoredLayers,layer,color,sides,scale,ox,oy,grid,axes,guides,dims,snap,ortho);
     }
 
     private org.json.JSONObject projectEntityToJson(Entity entity)throws Exception{
         if(!(entity instanceof BaseEntity))throw new IllegalArgumentException("unsupported entity");
         BaseEntity base=(BaseEntity)entity;org.json.JSONObject o=new org.json.JSONObject();
+        o.put("id",base.stableId());
         if(entity instanceof PointEntity){PointEntity e=(PointEntity)entity;o.put("type","POINT");o.put("x",e.x);o.put("y",e.y);}
         else if(entity instanceof LineEntity){LineEntity e=(LineEntity)entity;o.put("type","LINE");o.put("x1",e.x1);o.put("y1",e.y1);o.put("x2",e.x2);o.put("y2",e.y2);}
         else if(entity instanceof RectEntity){RectEntity e=(RectEntity)entity;o.put("type","RECT");o.put("points",projectPoints(e.p));}
@@ -1039,7 +1055,9 @@ public class CadCanvasView extends View {
         else if("ANGLE".equals(type))entity=new AngleEntity(ff(o,"ax"),ff(o,"ay"),ff(o,"cx"),ff(o,"cy"),ff(o,"bx"),ff(o,"by"));
         else if("GUIDE".equals(type))entity=new GuideEntity(o.getBoolean("vertical"),ff(o,"value"));
         else throw new IllegalArgumentException("unknown entity type");
-        BaseEntity base=(BaseEntity)entity;base.layer=o.optString("layer","0");base.color=o.optInt("color",Color.rgb(25,25,25));
+        BaseEntity base=(BaseEntity)entity;
+        String persistedId=o.optString("id","").trim();if(!persistedId.isEmpty())base.restoreStableId(persistedId);
+        base.layer=o.optString("layer","0");base.color=o.optInt("color",Color.rgb(25,25,25));
         base.extrusion=finiteFloat(o.optDouble("extrusion",0));base.construction=o.optBoolean("construction",base.construction);
         base.referenceBodyId=o.optInt("referenceBodyId",-1);base.referenceEdgeIndex=o.optInt("referenceEdgeIndex",-1);base.referenceEdgeKind=o.optInt("referenceEdgeKind",0);
         return entity;
@@ -1091,9 +1109,12 @@ public class CadCanvasView extends View {
         int getReferenceEdgeIndex();
         int getReferenceEdgeKind();
         void setReferenceSource(int bodyId,int edgeIndex,int edgeKind);
+        String stableId();
+        void regenerateStableId();
     }
 
     private abstract static class BaseEntity implements Entity{
+        private String stableId=UUID.randomUUID().toString();
         String layer="0";
         int color=Color.rgb(25,25,25);
         float extrusion=0f;
@@ -1114,7 +1135,10 @@ public class CadCanvasView extends View {
         public int getReferenceEdgeIndex(){return referenceEdgeIndex;}
         public int getReferenceEdgeKind(){return referenceEdgeKind;}
         public void setReferenceSource(int bodyId,int edgeIndex,int edgeKind){referenceBodyId=bodyId;referenceEdgeIndex=edgeIndex;referenceEdgeKind=edgeKind;}
-        void meta(BaseEntity e){e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;e.referenceBodyId=referenceBodyId;e.referenceEdgeIndex=referenceEdgeIndex;e.referenceEdgeKind=referenceEdgeKind;}
+        public String stableId(){return stableId;}
+        public void regenerateStableId(){stableId=UUID.randomUUID().toString();}
+        void restoreStableId(String value){String normalized=value==null?"":value.trim();if(normalized.isEmpty()||normalized.length()>128)throw new IllegalArgumentException("entity id");stableId=normalized;}
+        void meta(BaseEntity e){e.stableId=stableId;e.layer=layer;e.color=color;e.extrusion=extrusion;e.construction=construction;e.referenceBodyId=referenceBodyId;e.referenceEdgeIndex=referenceEdgeIndex;e.referenceEdgeKind=referenceEdgeKind;}
     }
 
     private static class PointEntity extends BaseEntity{

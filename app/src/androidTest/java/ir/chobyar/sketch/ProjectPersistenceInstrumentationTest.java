@@ -120,6 +120,51 @@ public class ProjectPersistenceInstrumentationTest {
         assertEquals(1.25, out.getJSONObject("view").getDouble("scale"), 0.0001);
     }
 
+    @Test public void legacySketchMigratesToStableIdsAndRoundTripPreservesThem() throws Exception {
+        JSONObject[] snapshots = onMain(() -> {
+            Context context = ApplicationProvider.getApplicationContext();
+            CadCanvasView canvas = new CadCanvasView(context);
+            assertTrue(canvas.importSketchProjectState(sketchFixture()).contains("2"));
+            JSONObject migrated = new JSONObject(canvas.exportSketchProjectState());
+            assertEquals(2, migrated.getInt("schemaVersion"));
+            JSONArray entities = migrated.getJSONArray("entities");
+            String firstId = entities.getJSONObject(0).getString("id");
+            String secondId = entities.getJSONObject(1).getString("id");
+            assertFalse(firstId.isEmpty());
+            assertFalse(secondId.isEmpty());
+            assertFalse(firstId.equals(secondId));
+
+            CadCanvasView reopened = new CadCanvasView(context);
+            assertTrue(reopened.canImportSketchProjectState(migrated.toString()));
+            assertTrue(reopened.importSketchProjectState(migrated.toString()).contains("2"));
+            return new JSONObject[]{migrated, new JSONObject(reopened.exportSketchProjectState())};
+        });
+        JSONArray before = snapshots[0].getJSONArray("entities");
+        JSONArray after = snapshots[1].getJSONArray("entities");
+        assertEquals(before.getJSONObject(0).getString("id"), after.getJSONObject(0).getString("id"));
+        assertEquals(before.getJSONObject(1).getString("id"), after.getJSONObject(1).getString("id"));
+    }
+
+    @Test public void schemaV2RejectsDuplicateOrMissingStableIdsBeforeMutation() throws Exception {
+        onMain(() -> {
+            Context context = ApplicationProvider.getApplicationContext();
+            CadCanvasView canvas = new CadCanvasView(context);
+            canvas.importSketchProjectState(sketchFixture());
+            JSONObject validV2 = new JSONObject(canvas.exportSketchProjectState());
+            JSONArray entities = validV2.getJSONArray("entities");
+            String firstId = entities.getJSONObject(0).getString("id");
+
+            JSONObject duplicate = new JSONObject(validV2.toString());
+            duplicate.getJSONArray("entities").getJSONObject(1).put("id", firstId);
+            assertFalse(canvas.canImportSketchProjectState(duplicate.toString()));
+
+            JSONObject missing = new JSONObject(validV2.toString());
+            missing.getJSONArray("entities").getJSONObject(0).remove("id");
+            assertFalse(canvas.canImportSketchProjectState(missing.toString()));
+            return true;
+        });
+    }
+
     @Test public void invalidSketchRestoreDoesNotMutateCurrentCanvas() throws Exception {
         JSONObject[] snapshots = onMain(() -> {
             Context context = ApplicationProvider.getApplicationContext();
