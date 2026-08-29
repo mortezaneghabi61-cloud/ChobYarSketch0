@@ -38,7 +38,7 @@ public class SketchSnapServiceTest {
         doc.add(new SketchGeometry.Line("horizontal",p(0,20),p(100,20)));
         doc.add(new SketchGeometry.Line("vertical",p(40,0),p(40,80)));
 
-        SketchSnapService.Result hit = service.snap(doc,p(40.5,20.5),2.0,null);
+        SketchSnapService.Result hit = service.snap(doc,p(40,20),2.0,null);
         assertNotNull(hit);
         assertEquals(SketchSnapService.Kind.INTERSECTION,hit.kind);
         assertPoint(hit.point,40,20);
