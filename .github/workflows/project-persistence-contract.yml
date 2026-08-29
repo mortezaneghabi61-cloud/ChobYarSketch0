@@ -93,7 +93,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class ir.chobyar.sketch.ProjectPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-v1.txt
-            grep -q 'OK (6 tests)' test-artifacts/project-persistence-v1.txt
+            grep -q 'OK (8 tests)' test-artifacts/project-persistence-v1.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelProjectStateInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-v2.txt
             grep -q 'OK (7 tests)' test-artifacts/project-persistence-v2.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.ExactModelProjectAdapterInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/project-persistence-adapter.txt
