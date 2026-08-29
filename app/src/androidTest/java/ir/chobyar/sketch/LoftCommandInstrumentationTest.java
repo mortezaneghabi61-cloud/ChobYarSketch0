@@ -32,18 +32,19 @@ public final class LoftCommandInstrumentationTest {
                 Shapr3DGuideCadCanvasView c=canvas(activity);
                 c.clearAll();
 
-                String lower=c.executeCommand("RECT 0 0 20 10");
-                assertTrue("Lower Loft RECT rejected: "+lower,lower.contains("Rectangle"));
+                c.executeCommand("RECT 0 0 20 10");
+                CadCanvasView.Entity lower=c.selected;
+                assertNotNull("Lower Loft profile was not created",lower);
 
-                String plane=c.createOffsetSketchSpace(60f,"Loft Upper");
-                assertTrue("Offset Sketch plane was not created: "+plane,plane.contains("Loft Upper")||plane.contains("Sketch"));
-                assertTrue("Offset plane label must expose 60 mm: "+c.activePlaneLabel(),c.activePlaneLabel().contains("60"));
+                c.createOffsetSketchSpace(60f,"Loft Upper");
+                assertTrue("Offset plane must expose the requested 60 mm offset",c.activePlaneLabel().contains("60"));
 
-                String upper=c.executeCommand("RECT 0 0 40 20");
-                assertTrue("Upper Loft RECT rejected: "+upper,upper.contains("Rectangle"));
+                c.executeCommand("RECT 0 0 40 20");
+                CadCanvasView.Entity upper=c.selected;
+                assertNotNull("Upper Loft profile was not created",upper);
+                assertTrue("Upper Loft profile must be distinct from lower profile",upper!=lower);
 
-                String result=c.executeCommand("LOFT3D 1 2");
-                assertTrue("LOFT3D rejected: "+result,result.contains("Loft created"));
+                c.executeCommand("LOFT3D 1 2");
                 assertEquals("Loft must create one Body",1,c.bodyCount());
                 assertTrue("Loft must switch to 3D overview",c.is3DOverview());
 
@@ -59,8 +60,8 @@ public final class LoftCommandInstrumentationTest {
                 near("Loft frustum volume",28000f,(float)actual,.05f);
                 assertEquals("Vertex-preserving rectangular Loft should have four side faces plus two caps",6,loft.polygons().size());
 
-                String rebuilt=c.rebuildHistory();
-                assertTrue("Loft History rebuild failed: "+rebuilt,rebuilt.contains("Form 1")&&!rebuilt.contains("Form Error"));
+                c.rebuildHistory();
+                assertEquals("Loft rebuild must preserve one Body",1,c.bodyCount());
                 SolidCSG replay=selectedCsg(c);
                 near("Loft volume after History rebuild",(float)actual,(float)volume(replay),.5f);
                 assertEquals("Loft face count changed after rebuild",loft.polygons().size(),replay.polygons().size());
