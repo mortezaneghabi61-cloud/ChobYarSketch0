@@ -9,6 +9,7 @@ on:
       - 'app/src/main/java/ir/chobyar/sketch/core/**'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K33SketchMirrorInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K34TransactionalAuthorityInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K34CreateAuthorityInstrumentationTest.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
 
 concurrency:
@@ -73,6 +74,8 @@ jobs:
             grep -q 'OK (3 tests)' test-artifacts/k3-sketch-mirror.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K34TransactionalAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-transactional-authority.txt
             grep -q 'OK (7 tests)' test-artifacts/k3-transactional-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K34CreateAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-create-authority.txt
+            grep -q 'OK (3 tests)' test-artifacts/k3-create-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
