@@ -9,3 +9,7 @@ app/src/main/jniLibs/
 *.log
 __pycache__/
 *.pyc
+.agent-state/
+agent_runtime/private_refs/
+.env
+.env.*

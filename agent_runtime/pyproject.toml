@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chobyar-agent"
+version = "0.1.0"
+description = "OpenAI Agents SDK runtime for the ChobYar CAD professor and engineering reviewer"
+requires-python = ">=3.11"
+dependencies = [
+  "openai-agents==0.22.0",
+]
+
+[project.scripts]
+chobyar-agent = "chobyar_agent.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chobyar_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
