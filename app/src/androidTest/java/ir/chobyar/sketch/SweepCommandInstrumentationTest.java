@@ -32,15 +32,16 @@ public final class SweepCommandInstrumentationTest {
                 Shapr3DGuideCadCanvasView c=canvas(activity);
                 c.clearAll();
 
-                String rect=c.executeCommand("RECT 0 0 20 10");
-                assertTrue("Sweep profile RECT rejected: "+rect,rect.contains("Rectangle"));
-                assertNotNull(c.selected);
-                String line=c.executeCommand("LINE 0 0 0 100");
-                assertTrue("Sweep path LINE rejected: "+line,line.contains("Line"));
-                assertNotNull(c.selected);
+                c.executeCommand("RECT 0 0 20 10");
+                CadCanvasView.Entity profile=c.selected;
+                assertNotNull("Sweep profile was not created",profile);
 
-                String result=c.executeCommand("SWEEP3D 1 2");
-                assertTrue("SWEEP3D rejected: "+result,result.contains("Sweep created"));
+                c.executeCommand("LINE 0 0 0 100");
+                CadCanvasView.Entity path=c.selected;
+                assertNotNull("Sweep path was not created",path);
+                assertTrue("Sweep path must be a distinct entity",path!=profile);
+
+                c.executeCommand("SWEEP3D 1 2");
                 assertEquals("Sweep must create one Body",1,c.bodyCount());
                 assertTrue("Sweep must switch to 3D overview",c.is3DOverview());
 
@@ -53,8 +54,8 @@ public final class SweepCommandInstrumentationTest {
                 near("Sweep exact volume",20000f,(float)actual,1.0f);
                 assertEquals("Straight rectangular Sweep should have six faces",6,swept.polygons().size());
 
-                String rebuilt=c.rebuildHistory();
-                assertTrue("Sweep History rebuild failed: "+rebuilt,rebuilt.contains("Form 1")&&!rebuilt.contains("Form Error"));
+                c.rebuildHistory();
+                assertEquals("Sweep rebuild must preserve one Body",1,c.bodyCount());
                 SolidCSG replay=selectedCsg(c);
                 near("Sweep volume after History rebuild",(float)actual,(float)volume(replay),.5f);
                 assertEquals("Sweep face count changed after rebuild",swept.polygons().size(),replay.polygons().size());
