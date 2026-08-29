@@ -89,11 +89,19 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
      * Starts or resumes one model-authority history chain without changing the
      * user's selection. A full bridge restore is allowed only at the boundary
      * from legacy-owned state into transactional authority.
+     *
+     * Constraints/Solver are intentionally still legacy-owned. They can mutate
+     * geometry through paths that do not pass a K3.4 transactional override
+     * (for example persistent coincident enforcement). Before opening the next
+     * model transaction, detect that out-of-band drift and rebase the document
+     * onto the settled legacy geometry. This drops only the Document history
+     * that is no longer truthful; importantly it does not call legacy Undo,
+     * which would discard identity-based constraint links.
      */
     private boolean prepareTransactionalDocument(String source) {
         try {
-            if (!authorityHistoryValid) {
-                String raw = exportSketchProjectState();
+            String raw = exportSketchProjectState();
+            if (!authorityHistoryValid || !LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
                 mirrorSyncCount++;
                 authorityHistoryValid = true;
