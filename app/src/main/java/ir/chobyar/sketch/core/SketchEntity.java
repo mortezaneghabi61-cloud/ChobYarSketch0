@@ -3,10 +3,12 @@ package ir.chobyar.sketch.core;
 /** Pure model-space sketch entity. No Android UI types are allowed here. */
 public interface SketchEntity {
     enum Kind {
+        POINT,
         LINE,
         CIRCLE,
         ARC,
         RECT,
+        POLYGON,
         POLYLINE
     }
 
