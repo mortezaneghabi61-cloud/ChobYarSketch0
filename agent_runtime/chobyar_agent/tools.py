@@ -10,12 +10,13 @@ from agents import function_tool
 ROOT = Path(os.getenv("CHOBYAR_REPO_ROOT", Path(__file__).resolve().parents[2])).resolve()
 
 _BLOCKED_NAMES = {
-    ".env",
-    ".env.local",
     "credentials.json",
     "secrets.json",
+}
+_BLOCKED_RELATIVE = {
     "AGENTS.md",
     "docs/SHAPR3D_PROFESSOR_AGENT.md",
+    "docs/CAD_KERNEL_REWRITE_V2.md",
 }
 _BLOCKED_SUFFIXES = {".jks", ".keystore", ".p12", ".pfx", ".key", ".pem"}
 _BLOCKED_PARTS = {".git", ".agent-state"}
@@ -39,10 +40,15 @@ def _resolve_repo_path(path: str) -> Path:
     except ValueError as exc:
         raise ValueError("Path escapes the repository root") from exc
     rel = candidate.relative_to(ROOT)
+    rel_text = rel.as_posix()
     if any(part in _BLOCKED_PARTS for part in rel.parts):
         raise ValueError("Path is protected")
-    if candidate.name in _BLOCKED_NAMES or candidate.suffix.lower() in _BLOCKED_SUFFIXES:
-        raise ValueError("Sensitive or policy file is protected")
+    if rel_text in _BLOCKED_RELATIVE:
+        raise ValueError("Policy/architecture file is protected")
+    if candidate.name.startswith(".env") or candidate.name in _BLOCKED_NAMES:
+        raise ValueError("Secret-bearing file is protected")
+    if candidate.suffix.lower() in _BLOCKED_SUFFIXES:
+        raise ValueError("Key/signing file is protected")
     return candidate
 
 
@@ -86,7 +92,7 @@ def repo_overview() -> str:
 
 @function_tool
 def read_repo_file(path: str, start_line: int = 1, end_line: int = 400) -> str:
-    """Read a UTF-8 repository file by relative path and line range. Secret/key files and policy files are protected."""
+    """Read a UTF-8 repository file by relative path and line range. Secret/key and protected policy files are blocked."""
     target = _resolve_repo_path(path)
     if not target.is_file():
         return "not found"
@@ -106,11 +112,11 @@ def search_repo(query: str, path: str = "app/src") -> str:
     if not base.exists():
         return "search path not found"
     if shutil.which("rg"):
-        args = ["rg", "-n", "--hidden", "--glob", "!.git/**", "--glob", "!.agent-state/**", "--glob", "!*.jks", query, str(base)]
+        args = ["rg", "-n", "--hidden", "--glob", "!.git/**", "--glob", "!.agent-state/**", "--glob", "!.env*", "--glob", "!*.jks", query, str(base)]
         return _run(args)[:20000]
     matches: list[str] = []
     for item in base.rglob("*"):
-        if not item.is_file() or item.suffix.lower() in _BLOCKED_SUFFIXES:
+        if not item.is_file() or item.suffix.lower() in _BLOCKED_SUFFIXES or item.name.startswith(".env"):
             continue
         try:
             lines = item.read_text(encoding="utf-8", errors="ignore").splitlines()
