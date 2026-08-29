@@ -13,23 +13,23 @@ import java.util.Set;
 /**
  * Single owner for sketch model state.
  *
- * Geometry is stored by stable id, selection stores ids rather than object
- * identity, and undo/redo snapshots are model-only. The class deliberately has
- * no Android dependency so solver/snapping/persistence can share the same state.
+ * Geometry and constraints are stored by stable id, selection stores entity ids
+ * rather than object identity, and undo/redo snapshots are model-only. The class
+ * deliberately has no Android dependency so solver/snapping/persistence can
+ * share the same state.
  */
 public final class SketchDocument {
     public static final int DEFAULT_MAX_HISTORY = 80;
 
     private final int maxHistory;
     private final LinkedHashMap<String, SketchEntity> entities = new LinkedHashMap<>();
+    private final LinkedHashMap<String, SketchConstraint> constraints = new LinkedHashMap<>();
     private final LinkedHashSet<String> selection = new LinkedHashSet<>();
     private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();
     private final ArrayDeque<Snapshot> redo = new ArrayDeque<>();
     private long revision;
 
-    public SketchDocument() {
-        this(DEFAULT_MAX_HISTORY);
-    }
+    public SketchDocument() { this(DEFAULT_MAX_HISTORY); }
 
     public SketchDocument(int maxHistory) {
         if (maxHistory < 1) throw new IllegalArgumentException("maxHistory must be positive");
@@ -38,22 +38,42 @@ public final class SketchDocument {
 
     public synchronized long revision() { return revision; }
     public synchronized int size() { return entities.size(); }
+    public synchronized int constraintCount() { return constraints.size(); }
     public synchronized boolean isEmpty() { return entities.isEmpty(); }
     public synchronized boolean canUndo() { return !undo.isEmpty(); }
     public synchronized boolean canRedo() { return !redo.isEmpty(); }
 
-    public synchronized boolean contains(String id) {
-        return entities.containsKey(normalizeId(id));
-    }
+    public synchronized boolean contains(String id) { return entities.containsKey(normalizeId(id)); }
+    public synchronized boolean containsConstraint(String id) { return constraints.containsKey(normalizeId(id)); }
 
     public synchronized SketchEntity entity(String id) {
         SketchEntity entity = entities.get(normalizeId(id));
         return entity == null ? null : entity.copy();
     }
 
+    public synchronized SketchConstraint constraint(String id) {
+        SketchConstraint constraint = constraints.get(normalizeId(id));
+        return constraint == null ? null : constraint.copy();
+    }
+
     public synchronized List<SketchEntity> entities() {
         ArrayList<SketchEntity> out = new ArrayList<>(entities.size());
         for (SketchEntity entity : entities.values()) out.add(entity.copy());
+        return Collections.unmodifiableList(out);
+    }
+
+    public synchronized List<SketchConstraint> constraints() {
+        ArrayList<SketchConstraint> out = new ArrayList<>(constraints.size());
+        for (SketchConstraint constraint : constraints.values()) out.add(constraint.copy());
+        return Collections.unmodifiableList(out);
+    }
+
+    public synchronized List<SketchConstraint> constraintsForEntity(String entityId) {
+        String normalized = normalizeId(entityId);
+        ArrayList<SketchConstraint> out = new ArrayList<>();
+        for (SketchConstraint constraint : constraints.values()) {
+            if (constraint.references(normalized)) out.add(constraint.copy());
+        }
         return Collections.unmodifiableList(out);
     }
 
@@ -72,11 +92,24 @@ public final class SketchDocument {
 
     public synchronized void add(SketchEntity entity) {
         requireValid(entity);
-        if (entities.containsKey(entity.id())) {
-            throw new IllegalArgumentException("Duplicate sketch entity id: " + entity.id());
-        }
+        if (entities.containsKey(entity.id())) throw new IllegalArgumentException("Duplicate sketch entity id: " + entity.id());
         pushUndo();
         entities.put(entity.id(), entity.copy());
+        changed();
+    }
+
+    /** Adds one entity and any auto-generated constraints as one user transaction/Undo step. */
+    public synchronized void addWithConstraints(SketchEntity entity, Collection<SketchConstraint> values) {
+        requireValid(entity);
+        if (entities.containsKey(entity.id())) throw new IllegalArgumentException("Duplicate sketch entity id: " + entity.id());
+
+        LinkedHashMap<String, SketchEntity> prospective = copyEntities();
+        prospective.put(entity.id(), entity.copy());
+        LinkedHashMap<String, SketchConstraint> incoming = validateIncomingConstraints(values, prospective, constraints.keySet());
+
+        pushUndo();
+        entities.put(entity.id(), entity.copy());
+        constraints.putAll(copyConstraints(incoming));
         changed();
     }
 
@@ -95,11 +128,27 @@ public final class SketchDocument {
         changed();
     }
 
+    public synchronized void addConstraint(SketchConstraint constraint) {
+        requireValidConstraint(constraint, entities);
+        if (constraints.containsKey(constraint.id)) {
+            throw new IllegalArgumentException("Duplicate sketch constraint id: " + constraint.id);
+        }
+        pushUndo();
+        constraints.put(constraint.id, constraint.copy());
+        changed();
+    }
+
+    public synchronized void addConstraints(Collection<SketchConstraint> values) {
+        LinkedHashMap<String, SketchConstraint> incoming = validateIncomingConstraints(values, entities, constraints.keySet());
+        if (incoming.isEmpty()) return;
+        pushUndo();
+        constraints.putAll(copyConstraints(incoming));
+        changed();
+    }
+
     public synchronized void replace(SketchEntity entity) {
         requireValid(entity);
-        if (!entities.containsKey(entity.id())) {
-            throw new IllegalArgumentException("Sketch entity does not exist: " + entity.id());
-        }
+        if (!entities.containsKey(entity.id())) throw new IllegalArgumentException("Sketch entity does not exist: " + entity.id());
         pushUndo();
         entities.put(entity.id(), entity.copy());
         changed();
@@ -111,6 +160,16 @@ public final class SketchDocument {
         pushUndo();
         entities.remove(normalized);
         selection.remove(normalized);
+        removeConstraintsReferencing(normalized);
+        changed();
+        return true;
+    }
+
+    public synchronized boolean removeConstraint(String id) {
+        String normalized = normalizeId(id);
+        if (!constraints.containsKey(normalized)) return false;
+        pushUndo();
+        constraints.remove(normalized);
         changed();
         return true;
     }
@@ -119,18 +178,26 @@ public final class SketchDocument {
         if (selection.isEmpty()) return 0;
         pushUndo();
         int removed = 0;
+        LinkedHashSet<String> removedIds = new LinkedHashSet<>();
         for (String id : new ArrayList<>(selection)) {
-            if (entities.remove(id) != null) removed++;
+            if (entities.remove(id) != null) {
+                removed++;
+                removedIds.add(id);
+            }
         }
         selection.clear();
-        if (removed > 0) changed();
+        if (removed > 0) {
+            removeConstraintsReferencingAny(removedIds);
+            changed();
+        }
         return removed;
     }
 
     public synchronized void clear() {
-        if (entities.isEmpty()) return;
+        if (entities.isEmpty() && constraints.isEmpty()) return;
         pushUndo();
         entities.clear();
+        constraints.clear();
         selection.clear();
         changed();
     }
@@ -153,15 +220,9 @@ public final class SketchDocument {
         }
     }
 
-    public synchronized void clearSelection() {
-        selection.clear();
-    }
+    public synchronized void clearSelection() { selection.clear(); }
 
-    /**
-     * Translates all selected geometry as one transaction. Every candidate copy
-     * is validated before undo/redo or live model state changes, so a failed
-     * numeric operation cannot corrupt history or partially move a selection.
-     */
+    /** Translates selected geometry as one model transaction. Constraint solving follows in K3.6b+. */
     public synchronized boolean translateSelection(double dxMm, double dyMm) {
         if (!SketchGeometry.finite(dxMm) || !SketchGeometry.finite(dyMm)) {
             throw new IllegalArgumentException("Translation must be finite");
@@ -179,9 +240,7 @@ public final class SketchDocument {
         if (moved.isEmpty()) return false;
 
         pushUndo();
-        for (Map.Entry<String, SketchEntity> entry : moved.entrySet()) {
-            entities.put(entry.getKey(), entry.getValue());
-        }
+        for (Map.Entry<String, SketchEntity> entry : moved.entrySet()) entities.put(entry.getKey(), entry.getValue());
         changed();
         return true;
     }
@@ -204,8 +263,14 @@ public final class SketchDocument {
         return true;
     }
 
-    /** Replaces the complete model without creating an undo entry; intended for project loading. */
+    /** Backward-compatible project loading path for geometry-only schemas. */
     public synchronized void restoreExternal(Collection<? extends SketchEntity> values, Collection<String> selectedIds) {
+        restoreExternal(values, selectedIds, Collections.emptyList());
+    }
+
+    /** Replaces the complete model without creating an undo entry; intended for project loading. */
+    public synchronized void restoreExternal(Collection<? extends SketchEntity> values, Collection<String> selectedIds,
+                                             Collection<SketchConstraint> constraintValues) {
         LinkedHashMap<String, SketchEntity> next = new LinkedHashMap<>();
         if (values != null) {
             for (SketchEntity entity : values) {
@@ -215,8 +280,12 @@ public final class SketchDocument {
                 }
             }
         }
+        LinkedHashMap<String, SketchConstraint> nextConstraints = validateIncomingConstraints(constraintValues, next, Collections.emptySet());
+
         entities.clear();
         entities.putAll(next);
+        constraints.clear();
+        constraints.putAll(copyConstraints(nextConstraints));
         selection.clear();
         if (selectedIds != null) {
             for (String id : selectedIds) {
@@ -245,20 +314,69 @@ public final class SketchDocument {
     }
 
     private Snapshot snapshot() {
+        return new Snapshot(copyEntities(), copyConstraints(constraints), new LinkedHashSet<>(selection));
+    }
+
+    private LinkedHashMap<String, SketchEntity> copyEntities() {
         LinkedHashMap<String, SketchEntity> copied = new LinkedHashMap<>(entities.size());
-        for (Map.Entry<String, SketchEntity> entry : entities.entrySet()) {
-            copied.put(entry.getKey(), entry.getValue().copy());
-        }
-        return new Snapshot(copied, new LinkedHashSet<>(selection));
+        for (Map.Entry<String, SketchEntity> entry : entities.entrySet()) copied.put(entry.getKey(), entry.getValue().copy());
+        return copied;
+    }
+
+    private static LinkedHashMap<String, SketchConstraint> copyConstraints(Map<String, SketchConstraint> source) {
+        LinkedHashMap<String, SketchConstraint> copied = new LinkedHashMap<>(source.size());
+        for (Map.Entry<String, SketchConstraint> entry : source.entrySet()) copied.put(entry.getKey(), entry.getValue().copy());
+        return copied;
     }
 
     private void restore(Snapshot snapshot) {
         entities.clear();
-        for (Map.Entry<String, SketchEntity> entry : snapshot.entities.entrySet()) {
-            entities.put(entry.getKey(), entry.getValue().copy());
-        }
+        for (Map.Entry<String, SketchEntity> entry : snapshot.entities.entrySet()) entities.put(entry.getKey(), entry.getValue().copy());
+        constraints.clear();
+        constraints.putAll(copyConstraints(snapshot.constraints));
         selection.clear();
         for (String id : snapshot.selection) if (entities.containsKey(id)) selection.add(id);
+    }
+
+    private void removeConstraintsReferencing(String entityId) {
+        ArrayList<String> remove = new ArrayList<>();
+        for (SketchConstraint constraint : constraints.values()) if (constraint.references(entityId)) remove.add(constraint.id);
+        for (String id : remove) constraints.remove(id);
+    }
+
+    private void removeConstraintsReferencingAny(Set<String> entityIds) {
+        if (entityIds == null || entityIds.isEmpty()) return;
+        ArrayList<String> remove = new ArrayList<>();
+        for (SketchConstraint constraint : constraints.values()) {
+            for (String entityId : entityIds) {
+                if (constraint.references(entityId)) { remove.add(constraint.id); break; }
+            }
+        }
+        for (String id : remove) constraints.remove(id);
+    }
+
+    private static LinkedHashMap<String, SketchConstraint> validateIncomingConstraints(
+            Collection<SketchConstraint> values, Map<String, SketchEntity> entityMap, Set<String> existingConstraintIds) {
+        LinkedHashMap<String, SketchConstraint> incoming = new LinkedHashMap<>();
+        if (values == null) return incoming;
+        for (SketchConstraint constraint : values) {
+            requireValidConstraint(constraint, entityMap);
+            if (existingConstraintIds.contains(constraint.id) || incoming.containsKey(constraint.id)) {
+                throw new IllegalArgumentException("Duplicate sketch constraint id: " + constraint.id);
+            }
+            incoming.put(constraint.id, constraint.copy());
+        }
+        return incoming;
+    }
+
+    private static void requireValidConstraint(SketchConstraint constraint, Map<String, SketchEntity> entityMap) {
+        if (constraint == null) throw new NullPointerException("constraint");
+        normalizeId(constraint.id);
+        for (String entityId : constraint.referencedEntityIds()) {
+            if (!entityMap.containsKey(entityId)) {
+                throw new IllegalArgumentException("Constraint " + constraint.id + " references missing entity: " + entityId);
+            }
+        }
     }
 
     private static void requireValid(SketchEntity entity) {
@@ -269,16 +387,20 @@ public final class SketchDocument {
 
     private static String normalizeId(String id) {
         String normalized = id == null ? "" : id.trim();
-        if (normalized.isEmpty()) throw new IllegalArgumentException("Sketch entity id is empty");
+        if (normalized.isEmpty()) throw new IllegalArgumentException("Sketch id is empty");
         return normalized;
     }
 
     private static final class Snapshot {
         final LinkedHashMap<String, SketchEntity> entities;
+        final LinkedHashMap<String, SketchConstraint> constraints;
         final LinkedHashSet<String> selection;
 
-        Snapshot(LinkedHashMap<String, SketchEntity> entities, LinkedHashSet<String> selection) {
+        Snapshot(LinkedHashMap<String, SketchEntity> entities,
+                 LinkedHashMap<String, SketchConstraint> constraints,
+                 LinkedHashSet<String> selection) {
             this.entities = entities;
+            this.constraints = constraints;
             this.selection = selection;
         }
     }
