@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.content.Context;
 import android.view.MotionEvent;
 
+import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -81,11 +82,35 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     /**
+     * Locks and sketch-locks still belong to the legacy constraint layer in
+     * K3.4. Query that precondition before mutating SketchDocument. This small
+     * reflective seam is intentionally isolated here and can disappear when
+     * lock/ConstraintGraph authority moves out of the View hierarchy.
+     *
+     * Fail closed: if the legacy guard cannot be queried, do not start a model
+     * authority transaction; let the proven legacy path decide the edit.
+     */
+    private boolean legacySelectionLocked() {
+        try {
+            Method m = ParametricSketchCanvasView.class.getDeclaredMethod("isSelectionLocked");
+            m.setAccessible(true);
+            return Boolean.TRUE.equals(m.invoke(this));
+        } catch (Exception e) {
+            lastMirrorError = "legacy-lock-guard: " + e.getClass().getSimpleName();
+            return true;
+        }
+    }
+
+    /**
      * Starts a fresh transactional authority chain from the current compatible
      * legacy state and mirrors the stable-id selection into SketchDocument.
      */
     private boolean prepareTransactionalSelection(String source) {
         try {
+            // Constraint/lock semantics have not moved yet. Never pre-mutate the
+            // new model when the legacy owner is expected to reject the edit.
+            if (legacySelectionLocked()) return false;
+
             if (!authorityHistoryValid) {
                 String raw = exportSketchProjectState();
                 LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
