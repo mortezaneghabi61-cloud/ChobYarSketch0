@@ -64,6 +64,23 @@ public final class LegacySketchStateBridge {
         document.restoreExternal(result.entities, Collections.emptySet());
     }
 
+    /** Restore modeled legacy geometry except one in-flight candidate id. */
+    public static void restoreDocumentExcluding(SketchDocument document, String raw, String excludedId) {
+        if (document == null) throw new NullPointerException("document");
+        String excluded = normalizedId(excludedId);
+        Result result = parse(raw);
+        ArrayList<SketchEntity> kept = new ArrayList<>();
+        for (SketchEntity entity : result.entities) if (!excluded.equals(entity.id())) kept.add(entity);
+        document.restoreExternal(kept, Collections.emptySet());
+    }
+
+    /** Returns one modeled legacy entity by stable id, or null for annotations/missing ids. */
+    public static SketchEntity entity(String raw, String stableId) {
+        String id = normalizedId(stableId);
+        for (SketchEntity entity : parse(raw).entities) if (id.equals(entity.id())) return entity;
+        return null;
+    }
+
     public static boolean hasParity(SketchDocument document, String raw) {
         if (document == null) return false;
         Result legacy = parse(raw);
@@ -73,6 +90,21 @@ public final class LegacySketchStateBridge {
             if (actual == null || !sameGeometry(expected, actual)) return false;
         }
         return true;
+    }
+
+    /** Compare existing model state while ignoring one just-created legacy candidate. */
+    public static boolean hasParityExcluding(SketchDocument document, String raw, String excludedId) {
+        if (document == null) return false;
+        String excluded = normalizedId(excludedId);
+        Result legacy = parse(raw);
+        int expectedSize = 0;
+        for (SketchEntity expected : legacy.entities) {
+            if (excluded.equals(expected.id())) continue;
+            expectedSize++;
+            SketchEntity actual = document.entity(expected.id());
+            if (actual == null || !sameGeometry(expected, actual)) return false;
+        }
+        return document.size() == expectedSize;
     }
 
     private static SketchEntity toEntity(String type, String id, JSONObject row) throws Exception {
