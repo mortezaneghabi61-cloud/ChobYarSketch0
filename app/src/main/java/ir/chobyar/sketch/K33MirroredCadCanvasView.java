@@ -7,20 +7,22 @@ import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import ir.chobyar.sketch.core.LegacySketchStateBridge;
 import ir.chobyar.sketch.core.SketchDocument;
+import ir.chobyar.sketch.core.SketchEntities;
 import ir.chobyar.sketch.core.SketchEntity;
 
 /**
  * K3 sketch authority migration canvas.
  *
  * K3.3 established a geometry/stable-id mirror while the legacy view remained
- * authoritative. K3.4 begins the authority flip in deliberately small slices:
- * exact Move/Delete plus their Undo/Redo history are first validated and
- * committed in {@link SketchDocument}, then replayed through the legacy adapter
- * for rendering/interaction compatibility. Unsupported operations still use
- * the K3.3 full-state mirror and explicitly invalidate transactional history.
+ * authoritative. K3.4 flips authority in deliberately small slices: exact
+ * Move/Delete/Copy plus their Undo/Redo history are validated and committed in
+ * {@link SketchDocument}, then replayed through the legacy adapter for
+ * rendering/interaction compatibility. Unsupported operations still use the
+ * K3.3 full-state mirror and explicitly invalidate transactional history.
  *
  * Snapping, constraints, dimensions and annotations remain legacy-owned here.
  */
@@ -102,6 +104,33 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     /**
+     * Temporary K3.4 compatibility seam: legacy Copy currently creates its own
+     * UUID internally. Authority must choose the new stable id first, so replace
+     * that generated id before parity is checked. This reflection disappears
+     * when legacy entity construction is replaced by a model-backed renderer.
+     */
+    private boolean restoreLegacySelectedStableId(String stableId) {
+        Object value = selected;
+        if (!(value instanceof Entity)) return false;
+        Class<?> type = value.getClass();
+        while (type != null) {
+            try {
+                Method m = type.getDeclaredMethod("restoreStableId", String.class);
+                m.setAccessible(true);
+                m.invoke(value, stableId);
+                return stableId.equals(((Entity) value).stableId());
+            } catch (NoSuchMethodException e) {
+                type = type.getSuperclass();
+            } catch (Exception e) {
+                lastMirrorError = "legacy-id-injection: " + e.getClass().getSimpleName();
+                return false;
+            }
+        }
+        lastMirrorError = "legacy-id-injection: restoreStableId unavailable";
+        return false;
+    }
+
+    /**
      * Starts a fresh transactional authority chain from the current compatible
      * legacy state and mirrors the stable-id selection into SketchDocument.
      */
@@ -173,7 +202,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public boolean onTouchEvent(MotionEvent event) {
         boolean handled = super.onTouchEvent(event);
         int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
-        // Freehand/drag previews are still legacy-owned in this first K3.4 slice.
+        // Freehand/drag previews are still legacy-owned in this K3.4 slice.
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) syncMirror("touch-commit");
         return handled;
     }
@@ -233,9 +262,44 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         finishTransactionalMutation("move");
     }
 
-    // Copy/Create need stable-id injection into the legacy adapter and remain a
-    // deliberate K3.3 fallback until the next K3.4 slice.
-    @Override public void copySelected(float dx,float dy) { super.copySelected(dx,dy); syncMirror("copy"); }
+    @Override public void copySelected(float dx,float dy) {
+        if (selected == null) return;
+        String sourceId = selected.stableId();
+        if (!prepareTransactionalSelection("copy-prepare")) {
+            super.copySelected(dx,dy);
+            syncMirror("copy-fallback");
+            return;
+        }
+
+        try {
+            SketchEntity source = sketchDocument.entity(sourceId);
+            if (source == null) {
+                super.copySelected(dx,dy);
+                syncMirror("copy-source-fallback");
+                return;
+            }
+
+            String newId = UUID.randomUUID().toString();
+            SketchEntity duplicate = SketchEntities.duplicateAs(source, newId).translated(dx, dy);
+            sketchDocument.add(duplicate); // one model transaction / one Undo entry
+            sketchDocument.selectOnly(newId);
+
+            super.copySelected(dx,dy); // legacy rendering/history replay
+            if (!restoreLegacySelectedStableId(newId)) {
+                finishTransactionalMutation("copy-id-injection");
+                return;
+            }
+            finishTransactionalMutation("copy");
+        } catch (RuntimeException e) {
+            lastMirrorError = "copy-authority: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            // A validation failure before legacy replay leaves the current model
+            // and legacy state unchanged. A later parity failure is rolled back
+            // by finishTransactionalMutation above.
+        }
+    }
+
+    // Create still needs model-first primitive construction from gesture/tool
+    // commits. Other unsupported operations deliberately keep the K3.3 fallback.
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
     @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
     @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
@@ -268,8 +332,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String executeCommand(String raw) {
         long before = authorityTransitionCount;
         String out = super.executeCommand(raw);
-        // Dynamic dispatch lets MOVE use transactional authority. Other commands
-        // still take the compatibility mirror path and invalidate document history.
+        // Dynamic dispatch lets supported K3.4 commands use transactional
+        // authority. Unsupported commands still invalidate document history.
         if (authorityTransitionCount == before) syncMirror("command");
         return out;
     }
