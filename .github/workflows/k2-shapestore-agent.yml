@@ -1,0 +1,248 @@
+name: K2 ShapeStore Agent
+
+on:
+  push:
+    branches:
+      - cad-kernel-v2-k2-shapestore
+    paths:
+      - .github/workflows/k2-shapestore-agent.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: k2-shapestore-agent
+  cancel-in-progress: false
+
+jobs:
+  implement-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CHOBYAR_VERSION_CODE: 26082902
+      CHOBYAR_VERSION_NAME: 0.5.k2-shapestore
+      CHOBYAR_OCCT_ROOT: ${{ github.workspace }}/.occt/install-arm64
+
+    steps:
+      - name: Checkout bounded implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: cad-kernel-v2-k2-shapestore
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android and native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Cache OCCT 8 Android arm64
+        uses: actions/cache@v4
+        with:
+          path: .occt/install-arm64
+          key: occt-v8.0.0-d3056ef80c9668f395da40f5fd7be186cae4501f-android26-arm64-ndk27-step-stl1
+
+      - name: Build or restore exact OCCT backend
+        run: bash .github/scripts/build_occt_android.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Apply bounded ShapeStore refactor
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('app/src/main/cpp')
+          header = root / 'shape_store.h'
+          source = root / 'shape_store.cpp'
+          cmake = root / 'CMakeLists.txt'
+          jni = root / 'occt_brep_jni.cpp'
+
+          header.write_text(r'''#pragma once
+
+#ifdef CHOBYAR_WITH_OCCT
+
+#include <atomic>
+#include <cstdint>
+#include <mutex>
+#include <unordered_map>
+
+#include <TopoDS_Shape.hxx>
+
+namespace chobyar::cad {
+
+/**
+ * Thread-safe owner of exact OCCT shapes.
+ *
+ * Handles are monotonically allocated and deliberately never reused during a
+ * process lifetime. clear() removes shapes but does not reset the counter, so
+ * a stale released handle can never alias a later shape.
+ */
+class ShapeStore final {
+public:
+    using Handle = std::int64_t;
+
+    Handle store(const TopoDS_Shape& shape);
+    bool load(Handle handle, TopoDS_Shape& out) const;
+    bool erase(Handle handle);
+    void clear();
+
+private:
+    mutable std::mutex mutex_;
+    std::unordered_map<Handle, TopoDS_Shape> shapes_;
+    std::atomic<Handle> nextHandle_{1};
+};
+
+} // namespace chobyar::cad
+
+#endif // CHOBYAR_WITH_OCCT
+''', encoding='utf-8')
+
+          source.write_text(r'''#include "shape_store.h"
+
+#ifdef CHOBYAR_WITH_OCCT
+
+#include <utility>
+
+namespace chobyar::cad {
+
+ShapeStore::Handle ShapeStore::store(const TopoDS_Shape& shape) {
+    if (shape.IsNull()) return 0;
+
+    const Handle handle = nextHandle_.fetch_add(1, std::memory_order_relaxed);
+    // A signed overflow must fail closed rather than recycle an old token.
+    if (handle <= 0) return 0;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    shapes_.insert_or_assign(handle, shape);
+    return handle;
+}
+
+bool ShapeStore::load(Handle handle, TopoDS_Shape& out) const {
+    if (handle <= 0) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto it = shapes_.find(handle);
+    if (it == shapes_.end() || it->second.IsNull()) return false;
+    out = it->second;
+    return !out.IsNull();
+}
+
+bool ShapeStore::erase(Handle handle) {
+    if (handle <= 0) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    return shapes_.erase(handle) == 1;
+}
+
+void ShapeStore::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    shapes_.clear();
+    // Intentionally do not reset nextHandle_. This is the stale-handle guard.
+}
+
+} // namespace chobyar::cad
+
+#endif // CHOBYAR_WITH_OCCT
+''', encoding='utf-8')
+
+          cmake_text = cmake.read_text(encoding='utf-8')
+          old_sources = '''        native_brep_jni.cpp\n        occt_brep_with_indexed_direct.cpp\n'''
+          new_sources = '''        native_brep_jni.cpp\n        shape_store.cpp\n        occt_brep_with_indexed_direct.cpp\n'''
+          if cmake_text.count(old_sources) != 1:
+              raise SystemExit('CMake source-list contract changed; refusing broad edit')
+          cmake.write_text(cmake_text.replace(old_sources, new_sources), encoding='utf-8')
+
+          text = jni.read_text(encoding='utf-8')
+          occt_guard = '#ifdef CHOBYAR_WITH_OCCT\n#include <Standard_Failure.hxx>'
+          occt_guard_new = '#ifdef CHOBYAR_WITH_OCCT\n#include "shape_store.h"\n#include <Standard_Failure.hxx>'
+          if text.count(occt_guard) != 1:
+              raise SystemExit('OCCT include contract changed; refusing broad edit')
+          text = text.replace(occt_guard, occt_guard_new)
+
+          old_registry = '''std::mutex gShapeMutex;
+std::unordered_map<jlong, TopoDS_Shape> gShapes;
+std::atomic<jlong> gNextHandle{1};
+
+jlong storeShape(const TopoDS_Shape& shape) {
+    if (shape.IsNull()) return 0;
+    const jlong h = gNextHandle.fetch_add(1);
+    std::lock_guard<std::mutex> lock(gShapeMutex);
+    gShapes[h] = shape;
+    return h;
+}
+
+bool loadShape(jlong handle, TopoDS_Shape& out) {
+    std::lock_guard<std::mutex> lock(gShapeMutex);
+    auto it = gShapes.find(handle);
+    if (it == gShapes.end()) return false;
+    out = it->second;
+    return !out.IsNull();
+}
+'''
+          new_registry = '''chobyar::cad::ShapeStore gShapeStore;
+
+jlong storeShape(const TopoDS_Shape& shape) {
+    return static_cast<jlong>(gShapeStore.store(shape));
+}
+
+bool loadShape(jlong handle, TopoDS_Shape& out) {
+    return gShapeStore.load(static_cast<chobyar::cad::ShapeStore::Handle>(handle), out);
+}
+'''
+          if text.count(old_registry) != 1:
+              raise SystemExit('Shape registry contract changed; refusing broad edit')
+          text = text.replace(old_registry, new_registry)
+
+          old_release = 'std::lock_guard<std::mutex> lock(gShapeMutex);gShapes.erase(handle);'
+          new_release = 'gShapeStore.erase(static_cast<chobyar::cad::ShapeStore::Handle>(handle));'
+          if text.count(old_release) != 1:
+              raise SystemExit('Release contract changed; refusing broad edit')
+          text = text.replace(old_release, new_release)
+
+          old_clear = 'std::lock_guard<std::mutex> lock(gShapeMutex);gShapes.clear();'
+          new_clear = 'gShapeStore.clear();'
+          if text.count(old_clear) != 1:
+              raise SystemExit('Clear contract changed; refusing broad edit')
+          text = text.replace(old_clear, new_clear)
+
+          jni.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- app/src/main/cpp/CMakeLists.txt app/src/main/cpp/occt_brep_jni.cpp app/src/main/cpp/shape_store.h app/src/main/cpp/shape_store.cpp
+
+      - name: Build and test exact-native candidate before commit
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleReleaseCandidate --stacktrace
+
+      - name: Verify exact arm64 native library is packaged
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
+          test -s "$APK"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libchobyar_brep.so'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+
+      - name: Commit only verified bounded changes
+        run: |
+          set -euo pipefail
+          git config user.name "chobyar-kernel-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/src/main/cpp/CMakeLists.txt \
+                  app/src/main/cpp/occt_brep_jni.cpp \
+                  app/src/main/cpp/shape_store.h \
+                  app/src/main/cpp/shape_store.cpp
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "Extract OCCT shape ownership into monotonic ShapeStore"
+          git push origin HEAD:cad-kernel-v2-k2-shapestore
