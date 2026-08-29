@@ -1,3 +1,32 @@
+#include <jni.h>
+#include <cmath>
+
+#ifdef CHOBYAR_WITH_OCCT
+#include "occt_kernel_services.h"
+
+#include <BRepAlgoAPI_Cut.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepFilletAPI_MakeChamfer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <BRepOffset_Mode.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
+#include <GeomAbs_JoinType.hxx>
+#include <NCollection_List.hxx>
+#include <TopAbs_ShapeEnum.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS_Shape.hxx>
+#include <gp_Dir.hxx>
+#include <gp_Vec.hxx>
+
+using chobyar::cad::isSolidResult;
+using chobyar::cad::loadShape;
+using chobyar::cad::planarOutwardNormal;
+using chobyar::cad::storeShape;
+#endif
 
 #ifdef CHOBYAR_WITH_OCCT
 namespace {

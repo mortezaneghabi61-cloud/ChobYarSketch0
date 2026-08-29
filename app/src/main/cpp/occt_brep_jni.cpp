@@ -12,7 +12,7 @@
 #include <vector>
 
 #ifdef CHOBYAR_WITH_OCCT
-#include "shape_store.h"
+#include "occt_kernel_services.h"
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
 #include <TopoDS.hxx>
@@ -82,21 +82,14 @@ constexpr jint PROFILE_POLYGON = 0;
 constexpr jint PROFILE_CIRCLE = 1;
 constexpr double PI = 3.14159265358979323846;
 
-chobyar::cad::ShapeStore gShapeStore;
-
-jlong storeShape(const TopoDS_Shape& shape) {
-    return static_cast<jlong>(gShapeStore.store(shape));
-}
-
-bool loadShape(jlong handle, TopoDS_Shape& out) {
-    return gShapeStore.load(static_cast<chobyar::cad::ShapeStore::Handle>(handle), out);
-}
-
-int countSubShapes(const TopoDS_Shape& shape, TopAbs_ShapeEnum kind) {
-    int count = 0;
-    for (TopExp_Explorer ex(shape, kind); ex.More(); ex.Next()) ++count;
-    return count;
-}
+using chobyar::cad::NativeHandle;
+using chobyar::cad::clearShapes;
+using chobyar::cad::countSubShapes;
+using chobyar::cad::isSolidResult;
+using chobyar::cad::loadShape;
+using chobyar::cad::planarOutwardNormal;
+using chobyar::cad::releaseShape;
+using chobyar::cad::storeShape;
 
 double volumeOf(const TopoDS_Shape& shape) {
     GProp_GProps props;
@@ -184,10 +177,6 @@ bool buildOpenWire(JNIEnv* env, jdoubleArray xyzArray, TopoDS_Wire& out) {
     return !out.IsNull();
 }
 
-bool isSolidResult(const TopoDS_Shape& shape) {
-    return !shape.IsNull() && countSubShapes(shape, TopAbs_SOLID) > 0;
-}
-
 gp_Pnt linearCenter(const TopoDS_Edge& edge) {
     GProp_GProps props;
     BRepGProp::LinearProperties(edge, props, true, false);
@@ -242,14 +231,6 @@ bool largestFace(const TopoDS_Shape& shape,TopoDS_Face& out) {
         if(a>best){best=a;out=face;found=true;}
     }
     return found;
-}
-
-bool planarOutwardNormal(const TopoDS_Face& face,gp_Dir& out) {
-    BRepAdaptor_Surface surface(face,true);
-    if(surface.GetType()!=GeomAbs_Plane)return false;
-    out=surface.Plane().Axis().Direction();
-    if(face.Orientation()==TopAbs_REVERSED)out.Reverse();
-    return true;
 }
 
 gp_Pnt shapeCenter(const TopoDS_Shape& shape) {
@@ -785,7 +766,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctShapeSummary(JNIEnv* env, jcla
 extern "C" JNIEXPORT void JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctRelease(JNIEnv*, jclass, jlong handle) {
 #ifdef CHOBYAR_WITH_OCCT
-    gShapeStore.erase(static_cast<chobyar::cad::ShapeStore::Handle>(handle));
+    releaseShape(static_cast<NativeHandle>(handle));
 #else
     (void)handle;
 #endif
@@ -794,7 +775,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctRelease(JNIEnv*, jclass, jlong
 extern "C" JNIEXPORT void JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctClear(JNIEnv*, jclass) {
 #ifdef CHOBYAR_WITH_OCCT
-    gShapeStore.clear();
+    clearShapes();
 #endif
 }
 

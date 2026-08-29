@@ -48,6 +48,7 @@ jobs:
           STABLE=app/src/main/java/ir/chobyar/sketch/OcctStableCadCanvasView.java
           WORKSPACE=app/src/main/java/ir/chobyar/sketch/WorkspaceController.java
           KERNEL=app/src/main/java/ir/chobyar/sketch/SolidCSG.java
+          CMAKE=app/src/main/cpp/CMakeLists.txt
           grep -q 'applyHistoryBooleanByIndex' "$BOOL"
           grep -q 'keepLeft' "$BOOL"
           grep -q 'keepRight' "$BOOL"
@@ -88,8 +89,21 @@ jobs:
           grep -q 'ALIGN' "$WORKSPACE"
           grep -q 'REVOLVE' "$WORKSPACE"
           grep -q 'resampleClosedPreservingVertices' "$KERNEL"
-          test -f app/src/main/cpp/occt_brep_with_indexed_direct.cpp
-          test -f app/src/main/cpp/occt_indexed_direct_extension.inc
+
+          # Native architecture contract: exact OCCT JNI and indexed direct-edit
+          # are independent translation units sharing one kernel-service boundary.
+          test -f app/src/main/cpp/occt_brep_jni.cpp
+          test -f app/src/main/cpp/occt_indexed_direct.cpp
+          test -f app/src/main/cpp/occt_kernel_services.h
+          test -f app/src/main/cpp/occt_kernel_services.cpp
+          ! test -e app/src/main/cpp/occt_brep_with_indexed_direct.cpp
+          ! test -e app/src/main/cpp/occt_indexed_direct_extension.inc
+          grep -q 'occt_brep_jni.cpp' "$CMAKE"
+          grep -q 'occt_indexed_direct.cpp' "$CMAKE"
+          grep -q 'occt_kernel_services.cpp' "$CMAKE"
+          grep -q 'occt_kernel_services.h' app/src/main/cpp/occt_brep_jni.cpp
+          grep -q 'occt_kernel_services.h' app/src/main/cpp/occt_indexed_direct.cpp
+
           test -f .github/scripts/run-production-cad-regression.sh
           for t in \
             TouchInputContractInstrumentationTest \
