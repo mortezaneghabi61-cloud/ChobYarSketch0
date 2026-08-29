@@ -7,7 +7,9 @@ add_library(
         SHARED
         native_brep_jni.cpp
         shape_store.cpp
-        occt_brep_with_indexed_direct.cpp
+        occt_kernel_services.cpp
+        occt_brep_jni.cpp
+        occt_indexed_direct.cpp
 )
 
 target_compile_features(chobyar_brep PRIVATE cxx_std_17)
