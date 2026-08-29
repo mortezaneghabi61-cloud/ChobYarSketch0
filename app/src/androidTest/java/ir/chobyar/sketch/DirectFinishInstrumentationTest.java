@@ -52,7 +52,7 @@ public final class DirectFinishInstrumentationTest {
                 assertNear("Fillet volume", (float) expectedVolume, (float) actualVolume, 55f);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("Fillet Direct History not replayed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("خطا"));
+                assertTrue("Fillet Direct History not replayed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("Error"));
                 SolidCSG replay = selectedCsg(c);
                 double replayVolume = volume(replay);
                 assertNear("Fillet volume after History rebuild", (float) actualVolume, (float) replayVolume, 1.5f);
@@ -91,7 +91,7 @@ public final class DirectFinishInstrumentationTest {
                 assertNear("Chamfer exact volume", (float) expectedVolume, (float) actualVolume, 1.0f);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("Chamfer Direct History not replayed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("خطا"));
+                assertTrue("Chamfer Direct History not replayed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("Error"));
                 SolidCSG replay = selectedCsg(c);
                 assertNear("Chamfer volume after History rebuild", (float) actualVolume, (float) volume(replay), 0.5f);
                 assertEquals("Chamfer face count changed after rebuild", after.polygons().size(), replay.polygons().size());
@@ -106,9 +106,9 @@ public final class DirectFinishInstrumentationTest {
         Shapr3DGuideCadCanvasView c = canvas(activity);
         c.clearAll();
         String rect = c.executeCommand("RECT 0 0 100 80");
-        assertTrue("RECT rejected: " + rect, rect.contains("مستطیل"));
+        assertTrue("RECT rejected: " + rect, rect.contains("Rectangle"));
         String ext = c.executeCommand("EXTRUDE 20");
-        assertTrue("EXTRUDE rejected: " + ext, ext.contains("ساخته شد"));
+        assertTrue("EXTRUDE rejected: " + ext, ext.contains("created"));
         assertEquals(1, c.bodyCount());
         return c;
     }

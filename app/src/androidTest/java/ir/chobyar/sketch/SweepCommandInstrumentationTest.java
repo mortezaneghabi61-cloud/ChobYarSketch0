@@ -33,14 +33,14 @@ public final class SweepCommandInstrumentationTest {
                 c.clearAll();
 
                 String rect=c.executeCommand("RECT 0 0 20 10");
-                assertTrue("Sweep profile RECT rejected: "+rect,rect.contains("مستطیل"));
+                assertTrue("Sweep profile RECT rejected: "+rect,rect.contains("Rectangle"));
                 assertNotNull(c.selected);
                 String line=c.executeCommand("LINE 0 0 0 100");
-                assertTrue("Sweep path LINE rejected: "+line,line.contains("خط"));
+                assertTrue("Sweep path LINE rejected: "+line,line.contains("Line"));
                 assertNotNull(c.selected);
 
                 String result=c.executeCommand("SWEEP3D 1 2");
-                assertTrue("SWEEP3D rejected: "+result,result.contains("Sweep ساخته شد"));
+                assertTrue("SWEEP3D rejected: "+result,result.contains("Sweep created"));
                 assertEquals("Sweep must create one Body",1,c.bodyCount());
                 assertTrue("Sweep must switch to 3D overview",c.is3DOverview());
 
@@ -54,7 +54,7 @@ public final class SweepCommandInstrumentationTest {
                 assertEquals("Straight rectangular Sweep should have six faces",6,swept.polygons().size());
 
                 String rebuilt=c.rebuildHistory();
-                assertTrue("Sweep History rebuild failed: "+rebuilt,rebuilt.contains("Form 1")&&!rebuilt.contains("Form خطا"));
+                assertTrue("Sweep History rebuild failed: "+rebuilt,rebuilt.contains("Form 1")&&!rebuilt.contains("Form Error"));
                 SolidCSG replay=selectedCsg(c);
                 near("Sweep volume after History rebuild",(float)actual,(float)volume(replay),.5f);
                 assertEquals("Sweep face count changed after rebuild",swept.polygons().size(),replay.polygons().size());

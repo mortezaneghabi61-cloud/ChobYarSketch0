@@ -36,7 +36,7 @@ public final class BooleanKeepOriginalsInstrumentationTest {
                 assertEquals("Keep Originals must retain target + tool + result",3,c.bodyCount());
                 assertExtents("UNION KEEP result",selectedCsg(c),20f,100f,150f);
                 String rebuild=c.rebuildHistory();
-                assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("خطا"));
+                assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("Error"));
                 assertEquals("Rebuild must preserve both originals",3,c.bodyCount());
                 String undo=c.undoLastFeature();
                 assertTrue("Undo did not remove Boolean feature: "+undo,undo.contains("UNION"));
@@ -61,7 +61,7 @@ public final class BooleanKeepOriginalsInstrumentationTest {
                 assertTrue("SUBTRACT KEEP_TARGET rejected: "+result,result.contains("Keep Target"));
                 assertEquals("Keep Target must leave target + result",2,c.bodyCount());
                 assertExtents("SUBTRACT KEEP_TARGET result",selectedCsg(c),20f,50f,100f);
-                String rebuild=c.rebuildHistory();assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("خطا"));
+                String rebuild=c.rebuildHistory();assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("Error"));
                 assertEquals(2,c.bodyCount());
                 String undo=c.undoLastFeature();assertTrue(undo.contains("SUBTRACT"));assertEquals(2,c.bodyCount());
                 String redo=c.redoLastFeature();assertTrue(redo.contains("SUBTRACT"));assertEquals(2,c.bodyCount());
@@ -82,7 +82,7 @@ public final class BooleanKeepOriginalsInstrumentationTest {
                 assertTrue("INTERSECT KEEP_TOOL rejected: "+result,result.contains("Keep Tool"));
                 assertEquals("Keep Tool must leave tool + result",2,c.bodyCount());
                 assertExtents("INTERSECT KEEP_TOOL result",selectedCsg(c),20f,50f,100f);
-                String rebuild=c.rebuildHistory();assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("خطا"));
+                String rebuild=c.rebuildHistory();assertTrue("Rebuild failed: "+rebuild,!rebuild.contains("Error"));
                 assertEquals(2,c.bodyCount());
                 String undo=c.undoLastFeature();assertTrue(undo.contains("INTERSECT"));assertEquals(2,c.bodyCount());
                 String redo=c.redoLastFeature();assertTrue(redo.contains("INTERSECT"));assertEquals(2,c.bodyCount());
@@ -94,10 +94,10 @@ public final class BooleanKeepOriginalsInstrumentationTest {
 
     private static void makeOverlappingBodies(Shapr3DGuideCadCanvasView c){
         c.clearAll();
-        String a=c.executeCommand("RECT 0 0 100 100");assertTrue("First RECT rejected: "+a,a.contains("مستطیل"));CadCanvasView.Entity first=c.selected;assertNotNull(first);
-        String b=c.executeCommand("RECT 50 0 100 100");assertTrue("Second RECT rejected: "+b,b.contains("مستطیل"));CadCanvasView.Entity second=c.selected;assertNotNull(second);
-        selectSketch(c,first);String e1=c.executeCommand("EXTRUDE 20");assertTrue("First EXTRUDE rejected: "+e1,e1.contains("ساخته شد"));
-        selectSketch(c,second);String e2=c.executeCommand("EXTRUDE 20");assertTrue("Second EXTRUDE rejected: "+e2,e2.contains("ساخته شد"));
+        String a=c.executeCommand("RECT 0 0 100 100");assertTrue("First RECT rejected: "+a,a.contains("Rectangle"));CadCanvasView.Entity first=c.selected;assertNotNull(first);
+        String b=c.executeCommand("RECT 50 0 100 100");assertTrue("Second RECT rejected: "+b,b.contains("Rectangle"));CadCanvasView.Entity second=c.selected;assertNotNull(second);
+        selectSketch(c,first);String e1=c.executeCommand("EXTRUDE 20");assertTrue("First EXTRUDE rejected: "+e1,e1.contains("created"));
+        selectSketch(c,second);String e2=c.executeCommand("EXTRUDE 20");assertTrue("Second EXTRUDE rejected: "+e2,e2.contains("created"));
         assertEquals("Fixture must contain exactly two bodies",2,c.bodyCount());
     }
 

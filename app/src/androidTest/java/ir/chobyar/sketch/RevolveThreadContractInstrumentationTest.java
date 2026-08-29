@@ -30,17 +30,17 @@ public final class RevolveThreadContractInstrumentationTest {
         WorkspaceController.State profile=controller.begin(WorkspaceController.Tool.REVOLVE);
         assertEquals(WorkspaceController.Phase.SELECT_PRIMARY,profile.phase);
         assertFalse(profile.canCommit());
-        assertTrue(profile.instruction().contains("پروفایل"));
+        assertTrue(profile.instruction().contains("text"));
 
         WorkspaceController.State axis=controller.primaryAccepted();
         assertEquals(WorkspaceController.Phase.SELECT_SECONDARY,axis.phase);
         assertFalse(axis.canCommit());
-        assertTrue(axis.instruction().contains("محور"));
+        assertTrue(axis.instruction().contains("Axis"));
 
         WorkspaceController.State preview=controller.previewReady();
         assertEquals(WorkspaceController.Phase.PREVIEW,preview.phase);
         assertTrue(preview.canCommit());
-        assertTrue(preview.instruction().contains("حلقه"));
+        assertTrue(preview.instruction().contains("text"));
         assertTrue(preview.instruction().contains("Height"));
         assertTrue(preview.instruction().contains("Pitch"));
     }
@@ -55,7 +55,7 @@ public final class RevolveThreadContractInstrumentationTest {
         Object feature=newRevolveFeature(3600f,25.2f);
         String detail=(String)method(feature,"detail").invoke(feature);
         assertTrue(detail.contains("H 25.2 mm"));
-        assertTrue(detail.contains("10 دور"));
+        assertTrue(detail.contains("10 text"));
         assertTrue(detail.contains("Pitch 2.52 mm"));
     }
 

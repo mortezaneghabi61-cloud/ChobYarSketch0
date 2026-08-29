@@ -33,13 +33,13 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 Shapr3DGuideCadCanvasView boulder=new Shapr3DGuideCadCanvasView(context);
                 CadProjectDocument.Decoded boulderDoc=CadProjectDocument.decode(repo.load(InternalProjectRepository.BOULDER_TABLE_ID));
                 assertTrue(boulderDoc.hasExactModel());CadProjectPersistenceController.restore(boulder,boulderDocToRaw(repo,InternalProjectRepository.BOULDER_TABLE_ID));
-                assertEquals(4,boulder.bodyCount());assertTrue(join(boulder.itemRows()).contains("گوی پایین"));assertTrue(join(boulder.itemRows()).contains("صفحه گرد"));
+                assertEquals(4,boulder.bodyCount());assertTrue(join(boulder.itemRows()).contains("text text"));assertTrue(join(boulder.itemRows()).contains("Plane text"));
                 capture(boulder,new File(output(context),"01-boulder-table-iso.png"),"ISO");
                 capture(boulder,new File(output(context),"03-boulder-table-front.png"),"FRONT");
-                assertTrue(boulder.selectItem(0).contains("انتخاب"));
-                assertTrue(boulder.updateSelectedProjectSphere(new Geometry3D.Vec3(25f,0f,205f),410f).contains("به‌روز"));
-                boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("بازسازی"));
-                String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","ویرایش میز سنگی",edited);
+                assertTrue(boulder.selectItem(0).contains("Selection"));
+                assertTrue(boulder.updateSelectedProjectSphere(new Geometry3D.Vec3(25f,0f,205f),410f).contains("text"));
+                boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("Rebuild"));
+                String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","text text text",edited);
                 assertEquals(25.0,sphereCenterX(edited),0.01);
                 Shapr3DGuideCadCanvasView editedCanvas=new Shapr3DGuideCadCanvasView(context);CadProjectPersistenceController.restore(editedCanvas,repo.load("user-boulder-edit-test"));assertEquals(4,editedCanvas.bodyCount());
                 String reopened=CadProjectPersistenceController.encode(editedCanvas);assertEquals(25.0,sphereCenterX(reopened),0.01);

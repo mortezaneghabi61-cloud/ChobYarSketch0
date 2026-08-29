@@ -42,7 +42,7 @@ public final class ProductionHardeningInstrumentationTest {
             repo.save(InternalProjectRepository.BOULDER_TABLE_ID,"must not overwrite",payload);
             fail("Bundled project overwrite must be rejected");
         }catch(IllegalStateException expected){
-            assertTrue(expected.getMessage().contains("کپی"));
+            assertTrue(expected.getMessage().contains("text"));
         }
         try{
             repo.delete(InternalProjectRepository.BOULDER_TABLE_ID);

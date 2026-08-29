@@ -209,7 +209,7 @@ public class K34TransactionalAuthorityInstrumentationTest {
             K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
             cad.importSketchProjectState(fixture());
             cad.selected=cad.entities.get(0);
-            assertTrue(cad.toggleSelectedLock().contains("قفل"));
+            assertTrue(cad.toggleSelectedLock().contains("Lock"));
 
             cad.moveSelected(12f,0f);
             cad.requireSketchMirrorParity();

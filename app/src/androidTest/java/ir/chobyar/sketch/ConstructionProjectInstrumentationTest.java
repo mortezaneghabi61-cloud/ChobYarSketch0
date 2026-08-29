@@ -32,7 +32,7 @@ public final class ConstructionProjectInstrumentationTest {
             scenario.onActivity(activity->{
                 Shapr3DGuideCadCanvasView c=canvas(activity);c.clearAll();
                 String made=c.executeCommand("LINE 10 20 110 20");
-                assertTrue(made.contains("خط"));assertNotNull(c.selected);
+                assertTrue(made.contains("Line"));assertNotNull(c.selected);
                 assertFalse(c.selected.isConstruction());
 
                 String state=c.executeCommand("CONSTRUCTION");

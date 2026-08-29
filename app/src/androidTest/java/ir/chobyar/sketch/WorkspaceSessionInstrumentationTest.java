@@ -31,8 +31,8 @@ public final class WorkspaceSessionInstrumentationTest {
         assertEquals(WorkspaceController.Phase.PREVIEW,state.phase);
         assertEquals(WorkspaceController.Selection.BODY,state.selection);
         assertTrue(state.canCommit());
-        assertTrue(state.instruction().contains("فلش"));
-        assertTrue(state.instruction().contains("دوربین"));
+        assertTrue(state.instruction().contains("text"));
+        assertTrue(state.instruction().contains("text"));
     }
 
     @Test public void moveRotateWithoutSelectionWaitsThenBecomesPreviewAfterBodyPick() {
@@ -60,7 +60,7 @@ public final class WorkspaceSessionInstrumentationTest {
         WorkspaceController.State target=controller.primaryAccepted();
         assertEquals(WorkspaceController.Phase.SELECT_SECONDARY,target.phase);
         assertFalse(target.canCommit());
-        assertTrue(target.instruction().contains("مقصد"));
+        assertTrue(target.instruction().contains("text"));
 
         WorkspaceController.State preview=controller.previewReady();
         assertEquals(WorkspaceController.Phase.PREVIEW,preview.phase);

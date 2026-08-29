@@ -48,7 +48,7 @@ public final class ShellPushPullInstrumentationTest {
                 assertTrue("Shell must create cavity topology", shell.polygons().size() > 6);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("Shell History replay failed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("خطا"));
+                assertTrue("Shell History replay failed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("Error"));
                 SolidCSG replay = selectedCsg(c);
                 near("Shell volume after History rebuild", (float) actual, (float) volume(replay), .5f);
                 assertEquals("Shell face count changed after rebuild", shell.polygons().size(), replay.polygons().size());
@@ -80,7 +80,7 @@ public final class ShellPushPullInstrumentationTest {
                 near("Push/Pull exact volume", 240000f, (float) actual, 1.0f);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("Push/Pull History replay failed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("خطا"));
+                assertTrue("Push/Pull History replay failed: " + rebuilt, rebuilt.contains("Direct 1") && !rebuilt.contains("Error"));
                 SolidCSG replay = selectedCsg(c);
                 near("Push/Pull volume after History rebuild", (float) actual, (float) volume(replay), .5f);
                 assertEquals("Push/Pull face count changed after rebuild", pushed.polygons().size(), replay.polygons().size());
@@ -95,9 +95,9 @@ public final class ShellPushPullInstrumentationTest {
         Shapr3DGuideCadCanvasView c = canvas(activity);
         c.clearAll();
         String rect = c.executeCommand("RECT 0 0 100 80");
-        assertTrue("RECT rejected: " + rect, rect.contains("مستطیل"));
+        assertTrue("RECT rejected: " + rect, rect.contains("Rectangle"));
         String ext = c.executeCommand("EXTRUDE 20");
-        assertTrue("EXTRUDE rejected: " + ext, ext.contains("ساخته شد"));
+        assertTrue("EXTRUDE rejected: " + ext, ext.contains("created"));
         assertEquals(1, c.bodyCount());
         return c;
     }

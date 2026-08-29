@@ -50,7 +50,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 CadCanvasView.Entity p1 = make(c, "LINE 60 190 170 225");
                 select(c, p0, p1);
                 String parallel = c.applyParallelConstraint();
-                assertTrue("Parallel rejected: " + parallel, parallel.contains("موازی"));
+                assertTrue("Parallel rejected: " + parallel, parallel.contains("Parallel"));
                 assertParallel(p0, p1);
                 PointF p1b = endpoint(p1, 1);
                 p1.moveControlPoint(1, p1b.x - 30f, p1b.y + 42f);
@@ -60,7 +60,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 CadCanvasView.Entity q1 = make(c, "LINE 300 90 345 185");
                 select(c, q0, q1);
                 String perp = c.applyPerpendicularConstraint();
-                assertTrue("Perpendicular rejected: " + perp, perp.contains("عمود"));
+                assertTrue("Perpendicular rejected: " + perp, perp.contains("Perpendicular"));
                 assertPerpendicular(q0, q1);
                 PointF q1b = endpoint(q1, 1);
                 q1.moveControlPoint(1, q1b.x + 55f, q1b.y - 28f);
@@ -98,7 +98,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                     select(c, a, b);
                     String coincident = invokeCoincident(c);
                     assertTrue("Coincident rejected: " + coincident,
-                            coincident.contains("Coincident") || coincident.contains("متصل") || coincident.contains("اتصال"));
+                            coincident.contains("Coincident") || coincident.contains("text") || coincident.contains("text"));
                     closestEndpointPair(a, b, linked);
                     assertCoincident(a, linked[0], b, linked[1]);
                     PointF bp = endpoint(b, linked[1]);
@@ -241,15 +241,15 @@ public final class SketchConstraintSolverInstrumentationTest {
                 float len = length(line);
 
                 String locked = c.toggleSelectedLock();
-                assertTrue("Lock rejected: " + locked, locked.contains("قفل"));
+                assertTrue("Lock rejected: " + locked, locked.contains("Lock"));
                 c.moveSelected(55f, 42f);
                 String dim = c.applySelectedDimension("250");
-                assertTrue("Locked dimension was not rejected: " + dim, dim.contains("قفل"));
+                assertTrue("Locked dimension was not rejected: " + dim, dim.contains("Lock"));
                 assertPointNear("locked center", before, line.center());
                 assertNear("locked length", len, length(line));
 
                 String unlocked = c.toggleSelectedLock();
-                assertTrue("Unlock rejected: " + unlocked, unlocked.contains("باز"));
+                assertTrue("Unlock rejected: " + unlocked, unlocked.contains("text"));
                 c.moveSelected(10f, 5f);
                 assertNear("unlocked dx", 10f, line.center().x - before.x);
                 assertNear("unlocked dy", 5f, line.center().y - before.y);

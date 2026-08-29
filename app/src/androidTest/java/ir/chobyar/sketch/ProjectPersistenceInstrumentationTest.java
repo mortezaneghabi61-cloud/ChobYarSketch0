@@ -174,7 +174,7 @@ public class ProjectPersistenceInstrumentationTest {
             JSONObject bad = new JSONObject(sketchFixture());
             bad.getJSONArray("entities").getJSONObject(0).put("type", "UNKNOWN");
             assertFalse(canvas.canImportSketchProjectState(bad.toString()));
-            assertTrue(canvas.importSketchProjectState(bad.toString()).contains("نامعتبر"));
+            assertTrue(canvas.importSketchProjectState(bad.toString()).contains("invalid"));
             JSONObject after = new JSONObject(canvas.exportSketchProjectState());
             return new JSONObject[]{before, after};
         });

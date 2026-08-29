@@ -120,27 +120,27 @@ public final class FurnitureReferenceInstrumentationTest {
         SolidCSG cavity = roundedPrismXZ(0f, PLINTH_HEIGHT + BODY_HEIGHT / 2f,
                 WIDTH - 2f * PANEL, BODY_HEIGHT - 2f * PANEL, 30f,
                 -1f, DEPTH - PANEL + 1f);
-        view.add("پوسته اصلی 18mm", outer.subtract(cavity));
+        view.add("text text 18mm", outer.subtract(cavity));
 
-        view.add("پایه عقب نشسته", roundedPrismXZ(0f, PLINTH_HEIGHT / 2f,
+        view.add("text text text", roundedPrismXZ(0f, PLINTH_HEIGHT / 2f,
                 390f, PLINTH_HEIGHT, 10f, 62f, 318f));
 
         float lowerZ = PLINTH_HEIGHT + PANEL + FRONT_HEIGHT / 2f;
         float upperZ = lowerZ + FRONT_HEIGHT + FRONT_GAP;
         float upperPull = open ? -118f : -12f;
         float lowerPull = open ? -228f : -12f;
-        addDrawer(view, "کشوی بالا", upperZ, upperPull, open);
-        addDrawer(view, "کشوی پایین", lowerZ, lowerPull, open);
+        addDrawer(view, "text Top", upperZ, upperPull, open);
+        addDrawer(view, "text text", lowerZ, lowerPull, open);
 
         // A shallow centered finger lip, matching the reference seam detail.
-        view.add("لبه دستگیره", roundedPrismXZ(0f,
+        view.add("Edge text", roundedPrismXZ(0f,
                 lowerZ + FRONT_HEIGHT / 2f + 1f,
                 112f, 9f, 4.5f, lowerPull - 7f, 8f));
     }
 
     private static void addDrawer(FurnitureCanvas view, String name,
                                   float centerZ, float frontY, boolean open) {
-        view.add(name + " • نما", roundedPrismXZ(0f, centerZ,
+        view.add(name + " • View", roundedPrismXZ(0f, centerZ,
                 FRONT_WIDTH, FRONT_HEIGHT, FRONT_RADIUS, frontY, 28f));
         if (!open) return;
 
@@ -150,13 +150,13 @@ public final class FurnitureReferenceInstrumentationTest {
         float sideHeight = FRONT_HEIGHT - 42f;
         float sideCenterZ = boxBottomZ + sideHeight / 2f;
 
-        view.add(name + " • کف", roundedPrismXZ(0f, boxBottomZ,
+        view.add(name + " • text", roundedPrismXZ(0f, boxBottomZ,
                 FRONT_WIDTH - 34f, 18f, 2f, boxStart, boxDepth));
-        view.add(name + " • بغل چپ", roundedPrismXZ(-FRONT_WIDTH / 2f + 26f,
+        view.add(name + " • text text", roundedPrismXZ(-FRONT_WIDTH / 2f + 26f,
                 sideCenterZ, 18f, sideHeight, 3f, boxStart, boxDepth));
-        view.add(name + " • بغل راست", roundedPrismXZ(FRONT_WIDTH / 2f - 26f,
+        view.add(name + " • text Right", roundedPrismXZ(FRONT_WIDTH / 2f - 26f,
                 sideCenterZ, 18f, sideHeight, 3f, boxStart, boxDepth));
-        view.add(name + " • پشت", roundedPrismXZ(0f, sideCenterZ,
+        view.add(name + " • text", roundedPrismXZ(0f, sideCenterZ,
                 FRONT_WIDTH - 52f, sideHeight, 5f,
                 boxStart + boxDepth - 18f, 18f));
     }

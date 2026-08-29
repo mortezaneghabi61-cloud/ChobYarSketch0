@@ -34,11 +34,11 @@ public final class SolidCommandInstrumentationTest {
                 c.clearAll();
 
                 String rect = c.executeCommand("RECT 40 40 120 80");
-                assertTrue("RECT rejected: " + rect, rect.contains("مستطیل"));
+                assertTrue("RECT rejected: " + rect, rect.contains("Rectangle"));
                 assertNotNull(c.selected);
 
                 String extrude = c.executeCommand("EXTRUDE 30");
-                assertTrue("EXTRUDE rejected: " + extrude, extrude.contains("ساخته شد"));
+                assertTrue("EXTRUDE rejected: " + extrude, extrude.contains("created"));
                 assertTrue("Extrude must report millimeters: " + extrude, extrude.contains("30") && extrude.contains("mm"));
                 assertEquals("Extrude must create one body", 1, c.bodyCount());
                 assertTrue("Extrude must switch to 3D overview", c.is3DOverview());
@@ -53,7 +53,7 @@ public final class SolidCommandInstrumentationTest {
                 assertNear("Extrude largest extent", 120f, extents[2]);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("History rebuild did not report success: " + rebuilt, rebuilt.contains("History") && !rebuilt.contains("خطا"));
+                assertTrue("History rebuild did not report success: " + rebuilt, rebuilt.contains("History") && !rebuilt.contains("Error"));
 
                 String undo = c.undoLastFeature();
                 assertTrue("3D undo rejected: " + undo, undo.contains("Extrude"));
@@ -83,12 +83,12 @@ public final class SolidCommandInstrumentationTest {
                 c.clearAll();
 
                 String rect = c.executeCommand("RECT 40 30 35 70");
-                assertTrue("REVOLVE profile RECT rejected: " + rect, rect.contains("مستطیل"));
+                assertTrue("REVOLVE profile RECT rejected: " + rect, rect.contains("Rectangle"));
                 Object profile = c.selected;
                 assertNotNull(profile);
 
                 String revolve = c.createRevolve(profile, null, false, 360f);
-                assertTrue("REVOLVE rejected: " + revolve, revolve.contains("Revolve ساخته شد"));
+                assertTrue("REVOLVE rejected: " + revolve, revolve.contains("Revolve created"));
                 assertEquals("Revolve must create one body", 1, c.bodyCount());
 
                 SolidCSG solid = selectedCsg(c);
@@ -100,7 +100,7 @@ public final class SolidCommandInstrumentationTest {
                 assertTrue("Revolve Z extent must be positive", before.dz() > 1f);
 
                 String rebuilt = c.rebuildHistory();
-                assertTrue("Revolve history was not rebuilt: " + rebuilt, rebuilt.contains("Form 1") && !rebuilt.contains("Form خطا"));
+                assertTrue("Revolve history was not rebuilt: " + rebuilt, rebuilt.contains("Form 1") && !rebuilt.contains("Form Error"));
                 SolidCSG after = selectedCsg(c);
                 assertNotNull(after);
                 assertEquals("Revolve topology changed face count after rebuild", solid.polygons().size(), after.polygons().size());

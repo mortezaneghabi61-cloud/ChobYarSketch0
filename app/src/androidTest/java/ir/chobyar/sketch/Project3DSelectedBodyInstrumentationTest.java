@@ -45,7 +45,7 @@ public class Project3DSelectedBodyInstrumentationTest {
 
         String result=runProject(c);
         assertTrue(c.requested.isEmpty());
-        assertTrue(result,result.contains("انتخاب"));
+        assertTrue(result,result.contains("Selection"));
         android.util.Log.i("Manual26100Project3D","PROJECT3D_NO_SELECTION_RESULT requested=0 guarded=true");
     }
 
@@ -59,7 +59,7 @@ public class Project3DSelectedBodyInstrumentationTest {
 
         String result=runProject(c);
         assertTrue(c.requested.isEmpty());
-        assertTrue(result,result.contains("Body انتخاب‌شده"));
+        assertTrue(result,result.contains("Body selected"));
         android.util.Log.i("Manual26100Project3D","PROJECT3D_NO_EXACT_RESULT requested=0 guarded=true");
     }
 

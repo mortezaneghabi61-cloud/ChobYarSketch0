@@ -67,7 +67,7 @@ public final class ProductionNavigationExportInstrumentationTest {
                 assertNotNull(canvas);
                 canvas.clearAll();
                 String result=canvas.executeCommand("RECT 0 0 600 400");
-                assertTrue(result,result.contains("مستطیل"));
+                assertTrue(result,result.contains("Rectangle"));
                 String dxf=canvas.buildDxf();
                 assertTrue("DXF must declare millimeters",dxf.contains("$INSUNITS\n70\n4"));
                 assertTrue("DXF must contain rectangle geometry",dxf.contains("LWPOLYLINE"));
@@ -78,7 +78,7 @@ public final class ProductionNavigationExportInstrumentationTest {
 
     private static void collectZoomButtons(View view,List<TextView> out){
         CharSequence description=view.getContentDescription();
-        if(view instanceof TextView&&description!=null&&"زوم".contentEquals(description))out.add((TextView)view);
+        if(view instanceof TextView&&description!=null&&"text".contentEquals(description))out.add((TextView)view);
         if(view instanceof ViewGroup){
             ViewGroup group=(ViewGroup)view;
             for(int i=0;i<group.getChildCount();i++)collectZoomButtons(group.getChildAt(i),out);
