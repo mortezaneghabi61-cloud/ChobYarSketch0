@@ -72,7 +72,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.K33SketchMirrorInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-sketch-mirror.txt
             grep -q 'OK (3 tests)' test-artifacts/k3-sketch-mirror.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K34TransactionalAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-transactional-authority.txt
-            grep -q 'OK (6 tests)' test-artifacts/k3-transactional-authority.txt
+            grep -q 'OK (7 tests)' test-artifacts/k3-transactional-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
