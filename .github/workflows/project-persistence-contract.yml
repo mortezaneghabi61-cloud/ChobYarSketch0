@@ -9,6 +9,7 @@ on:
       - 'app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java'
       - 'app/src/main/java/ir/chobyar/sketch/CadCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java'
+      - 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java'
       - 'app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java'
       - 'app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java'
@@ -21,6 +22,8 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K33SketchMirrorInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K34TransactionalAuthorityInstrumentationTest.java'
       - '.github/workflows/project-persistence-contract.yml'
 
 permissions:
