@@ -34,7 +34,10 @@ public class K35SnapTouchAuthorityInstrumentationTest {
             long snapBefore=cad.sketchModelSnapCount();
 
             cad.setTool(CadCanvasView.TOOL_LINE);
-            stroke(cad,screen(cad,20f,25f),screen(cad,99.35f,0.35f),true);
+            // Beyond the segment endpoint, nearest-edge projection clamps to the
+            // endpoint as well. The model service's deterministic rank therefore
+            // selects ENDPOINT rather than ON_EDGE for this true endpoint case.
+            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);
             cad.requireSketchMirrorParity();
 
             String out=cad.exportSketchProjectState();
@@ -64,24 +67,23 @@ public class K35SnapTouchAuthorityInstrumentationTest {
         onMain(() -> {
             Context context=ApplicationProvider.getApplicationContext();
             K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
-            cad.executeCommand("ARC 0 0 7.071 0 90");
+            // Radius sqrt(15^2 + 15^2): (-15,-15) lies on the supporting circle
+            // around 225 degrees, while the real arc exists only from 0..90.
+            // The radius is > the 10 mm model snap radius, so CENTER cannot mask
+            // the test. (-15,-15) is also >5.8 mm from every 10 mm grid point.
+            cad.executeCommand("ARC 0 0 21.213203 0 90");
             cad.requireSketchMirrorParity();
             Set<String> before=ids(cad.exportSketchProjectState());
 
-            // This query is close to the supporting circle around ~223 degrees,
-            // but the actual arc exists only from 0..90 degrees. It is also far
-            // enough from the 10 mm grid that Grid must not mask the assertion.
             cad.setTool(CadCanvasView.TOOL_POINT);
-            tap(cad,screen(cad,-5.3f,-5.0f),true);
+            tap(cad,screen(cad,-15f,-15f),true);
             cad.requireSketchMirrorParity();
 
             String out=cad.exportSketchProjectState();
-            Set<String> after=ids(out);
-            after.removeAll(before);
-            assertEquals(1,after.size());
-            String point=after.iterator().next();
-            assertEquals(-5.3,pointX(out,point),EPS);
-            assertEquals(-5.0,pointY(out,point),EPS);
+            String point=onlyNewIdOfType(before,out,"POINT");
+            assertEquals("POINT",entity(out,point).getString("type"));
+            assertEquals(-15.0,pointX(out,point),EPS);
+            assertEquals(-15.0,pointY(out,point),EPS);
             return true;
         });
     }
@@ -143,6 +145,20 @@ public class K35SnapTouchAuthorityInstrumentationTest {
 
     private static String onlyId(String raw)throws Exception{
         Set<String> values=ids(raw);assertEquals(1,values.size());return values.iterator().next();
+    }
+
+    private static String onlyNewIdOfType(Set<String> before,String raw,String type)throws Exception{
+        JSONArray rows=new JSONObject(raw).getJSONArray("entities");
+        String found=null;
+        for(int i=0;i<rows.length();i++){
+            JSONObject row=rows.getJSONObject(i);
+            String id=row.getString("id");
+            if(before.contains(id)||!type.equals(row.optString("type")))continue;
+            if(found!=null)throw new AssertionError("multiple new "+type+" entities");
+            found=id;
+        }
+        if(found==null)throw new AssertionError("new "+type+" entity missing; state="+raw);
+        return found;
     }
 
     private static double lineX2(String raw,String id)throws Exception{
