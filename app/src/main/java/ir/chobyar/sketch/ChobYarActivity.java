@@ -39,7 +39,7 @@ public final class ChobYarActivity extends Activity {
     private static final int REQUEST_OPEN_PROJECT=1704;
     private static final int REQUEST_EXPORT_DXF=1705;
     private static final long MAX_PROJECT_BYTES=64L*1024L*1024L;
-    private Shapr3DGuideCadCanvasView cad;
+    private K33MirroredCadCanvasView cad;
     private FilamentCadSurface gpuSurface;
     private final CadAppearanceController appearance=new CadAppearanceController();
     private final SectionViewController sectionView=new SectionViewController();
@@ -71,7 +71,7 @@ public final class ChobYarActivity extends Activity {
         super.onCreate(state);immersive();
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(248,249,251));
         gpuSurface=new FilamentCadSurface(this);root.addView(gpuSurface,new FrameLayout.LayoutParams(-1,-1));
-        cad=new Shapr3DGuideCadCanvasView(this);
+        cad=new K33MirroredCadCanvasView(this);
         internalProjects=new InternalProjectRepository(this);
         recoveryStore=new WorkspaceRecoveryStore(this);
         // The GPU SurfaceView sits behind the interaction canvas. Keeping this
