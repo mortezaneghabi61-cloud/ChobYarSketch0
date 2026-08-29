@@ -79,7 +79,7 @@ public final class ProductionNavigationExportInstrumentationTest {
     private static void collectZoomButtons(View view,List<TextView> out){
         if(view instanceof TextView){
             String text=((TextView)view).getText().toString();
-            if("+".equals(text)||"−".equals(text))out.add((TextView)view);
+            if(text.startsWith("+")||text.startsWith("−"))out.add((TextView)view);
         }
         if(view instanceof ViewGroup){
             ViewGroup group=(ViewGroup)view;
