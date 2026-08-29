@@ -1,0 +1,14 @@
+name: English-only UI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  english-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject Persian or Arabic script in production source
+        run: python3 .github/scripts/english_only_audit.py
