@@ -20,8 +20,8 @@ import ir.chobyar.sketch.core.SketchPoint;
  * K3 sketch authority migration canvas.
  *
  * K3.3 established a geometry/stable-id mirror while the legacy view remained
- * authoritative. K3.4 flips authority in deliberately small slices: exact
- * Create/Move/Delete/Copy plus their Undo/Redo history are validated and
+ * authoritative. K3.4 flips authority in deliberately small slices: exact and
+ * gesture Create/Move/Delete/Copy plus their Undo/Redo history are validated and
  * committed in {@link SketchDocument}, then replayed through the legacy adapter
  * for rendering/interaction compatibility. Unsupported operations still use
  * the K3.3 full-state mirror and explicitly invalidate transactional history.
@@ -225,12 +225,117 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
+    private boolean isTransactionalGestureTool(int tool) {
+        return tool == TOOL_POINT || tool == TOOL_LINE || tool == TOOL_RECT
+                || tool == TOOL_CIRCLE || tool == TOOL_ARC
+                || tool == TOOL_POLYGON || tool == TOOL_FREE;
+    }
+
+    private boolean isGestureCreateCommitAttempt(int tool, int action, boolean drawingBefore) {
+        if (!isTransactionalGestureTool(tool)) return false;
+        if (tool == TOOL_POINT) return action == MotionEvent.ACTION_DOWN;
+        return action == MotionEvent.ACTION_UP && drawingBefore;
+    }
+
+    /**
+     * Gesture Create cannot be replayed after a parity failure. Preserve the
+     * user's settled legacy geometry and fall back to the K3.3 mirror instead of
+     * destructively undoing a pen/touch stroke that cannot be reconstructed.
+     */
+    private boolean finishTransactionalGesture(String source) {
+        try {
+            String raw = exportSketchProjectState();
+            if (LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
+                authorityTransitionCount++;
+                lastMirrorError = "";
+                return true;
+            }
+        } catch (RuntimeException ignored) {}
+        String reason = "Gesture parity failed after " + source;
+        syncMirror("gesture-fallback-" + source);
+        lastMirrorError = reason;
+        return false;
+    }
+
+    /**
+     * Adopt the final snap/ortho/constraint-settled candidate produced by the
+     * legacy touch engine. The model chooses stable identity before the legacy
+     * commit; the legacy engine remains only the candidate geometry calculator.
+     */
+    private boolean adoptLegacyGestureCandidate(String stableId, String source) {
+        try {
+            if (!restoreLegacySelectedStableId(stableId)) {
+                syncMirror(source + "-id-fallback");
+                return false;
+            }
+
+            String raw = exportSketchProjectState();
+            SketchEntity candidate = LegacySketchStateBridge.entity(raw, stableId);
+            if (candidate == null || !candidate.isValid()) {
+                syncMirror(source + "-candidate-fallback");
+                return false;
+            }
+
+            // Legacy-owned constraint enforcement may settle existing geometry
+            // during the same gesture. Rebase only the existing entities, then
+            // add the newly created candidate as the one Document transaction.
+            if (!LegacySketchStateBridge.hasParityExcluding(sketchDocument, raw, stableId)) {
+                LegacySketchStateBridge.restoreDocumentExcluding(sketchDocument, raw, stableId);
+                mirrorSyncCount++;
+                authorityHistoryValid = true;
+            }
+
+            sketchDocument.add(candidate);
+            sketchDocument.selectOnly(stableId);
+            return finishTransactionalGesture(source);
+        } catch (RuntimeException e) {
+            syncMirror(source + "-exception-fallback");
+            lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * A selection tap, zoom or cancelled gesture must not destroy model history.
+     * Only real legacy-owned geometry drift should force a K3.3 re-hydration.
+     */
+    private void reconcileLegacyTouchIfNeeded(String source) {
+        try {
+            String raw = exportSketchProjectState();
+            if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
+        } catch (RuntimeException e) {
+            syncMirror(source + "-error");
+        }
+    }
+
     @Override public boolean onTouchEvent(MotionEvent event) {
+        if (event == null) return false;
+
+        int action = event.getActionMasked();
+        int toolBefore = getTool();
+        boolean drawingBefore = drawing;
+        int legacyCountBefore = entities.size();
+
+        boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);
+        String authorityId = commitAttempt ? UUID.randomUUID().toString() : null;
+        boolean prepared = commitAttempt && prepareTransactionalDocument("gesture-create-prepare");
+
         boolean handled = super.onTouchEvent(event);
-        int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
-        // Gesture/freehand Create remains legacy-owned until K3.4c-b. Exact
-        // command Create is already transactional and does not pass this path.
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) syncMirror("touch-commit");
+
+        if (commitAttempt && prepared) {
+            boolean legacyCreated = entities.size() == legacyCountBefore + 1 && selected != null;
+            if (legacyCreated) {
+                adoptLegacyGestureCandidate(authorityId, "gesture-create");
+                return handled;
+            }
+            // Tiny/cancelled gestures may reach ACTION_UP without creating
+            // geometry. No model mutation occurred, so keep truthful history.
+        }
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
+                || (toolBefore == TOOL_POINT && action == MotionEvent.ACTION_DOWN)) {
+            reconcileLegacyTouchIfNeeded("touch-legacy-mutation");
+        }
         return handled;
     }
 
@@ -329,8 +434,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
      * K3.4c-a exact Create authority. Parse and validate the same deterministic
      * primitive grammar used by CadCanvasView, create the model entity first,
      * then let the legacy view replay only for rendering/history compatibility.
-     * Polygon and gesture/freehand creation remain on the fallback path until
-     * their exact vertex/snap semantics are migrated.
+     * Polygon exact command creation remains on the fallback path; gesture
+     * Polygon/Polyline candidates are adopted in K3.4c-b above.
      */
     private SketchEntity exactCreateEntity(String raw, String id) {
         if (raw == null) return null;
