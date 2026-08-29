@@ -1,0 +1,85 @@
+name: ChobYar CAD Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "CAD/Android engineering task for the ChobYar professor agent"
+        required: true
+        type: string
+      apply_changes:
+        description: "Allow guarded code/test/doc edits and open a PR when files change"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CHOBYAR_AGENT_MODEL: gpt-5.6
+      TASK: ${{ inputs.task }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agent_runtime/pyproject.toml
+
+      - name: Install agent runtime
+        run: python -m pip install -e agent_runtime pytest
+
+      - name: Guardrail tests
+        run: pytest -q agent_runtime/tests
+
+      - name: Run professor engineering agent
+        run: |
+          args=()
+          if [[ "${{ inputs.apply_changes }}" == "true" ]]; then
+            args+=(--apply)
+          fi
+          chobyar-agent --task "$TASK" "${args[@]}"
+
+      - name: Upload agent report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chobyar-agent-report-${{ github.run_id }}
+          path: .agent-state/latest_report.md
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Open candidate pull request
+        if: ${{ inputs.apply_changes }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Agent produced no repository changes."
+            exit 0
+          fi
+          branch="agent/auto-${GITHUB_RUN_ID}"
+          git config user.name "chobyar-agent"
+          git config user.email "chobyar-agent@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -m "Agent candidate: CAD engineering task"
+          git push origin "$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "ChobYar agent candidate #${GITHUB_RUN_ID}" \
+            --body-file .agent-state/latest_report.md
