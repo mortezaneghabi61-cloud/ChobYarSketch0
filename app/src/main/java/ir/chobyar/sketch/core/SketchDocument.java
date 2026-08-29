@@ -146,6 +146,34 @@ public final class SketchDocument {
         changed();
     }
 
+    /**
+     * Adds constraints and commits their solved geometry as one fail-closed user
+     * transaction. The solver operates on a prospective copy, so conflict or an
+     * unsupported constraint never mutates geometry, constraint state or history.
+     */
+    public synchronized SketchConstraintSolver.Result addConstraintsAndSolve(
+            Collection<SketchConstraint> values, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        LinkedHashMap<String, SketchConstraint> incoming =
+                validateIncomingConstraints(values, entities, constraints.keySet());
+        if (incoming.isEmpty()) {
+            return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                    0, 0.0, "", entities.values());
+        }
+
+        LinkedHashMap<String, SketchConstraint> prospectiveConstraints = copyConstraints(constraints);
+        prospectiveConstraints.putAll(copyConstraints(incoming));
+        SketchConstraintSolver.Result solution = solver.solve(entities.values(), prospectiveConstraints.values());
+        LinkedHashMap<String, SketchEntity> solved = requireSolvedSnapshot(solution, entities);
+
+        pushUndo();
+        entities.clear();
+        entities.putAll(solved);
+        constraints.putAll(copyConstraints(incoming));
+        changed();
+        return solution;
+    }
+
     public synchronized void replace(SketchEntity entity) {
         requireValid(entity);
         if (!entities.containsKey(entity.id())) throw new IllegalArgumentException("Sketch entity does not exist: " + entity.id());
@@ -229,20 +257,49 @@ public final class SketchDocument {
         }
         if (selection.isEmpty() || (Math.abs(dxMm) < 1.0e-12 && Math.abs(dyMm) < 1.0e-12)) return false;
 
-        LinkedHashMap<String, SketchEntity> moved = new LinkedHashMap<>();
-        for (String id : selection) {
-            SketchEntity current = entities.get(id);
-            if (current == null) continue;
-            SketchEntity candidate = current.translated(dxMm, dyMm);
-            requireValid(candidate);
-            moved.put(id, candidate);
-        }
+        LinkedHashMap<String, SketchEntity> moved = translatedSelectionSnapshot(dxMm, dyMm);
         if (moved.isEmpty()) return false;
 
         pushUndo();
-        for (Map.Entry<String, SketchEntity> entry : moved.entrySet()) entities.put(entry.getKey(), entry.getValue());
+        entities.clear();
+        entities.putAll(moved);
         changed();
         return true;
+    }
+
+    /**
+     * Moves the selected geometry and solves all model-owned constraints before
+     * committing. This is the edit-propagation seam used by K3.6b+ and future
+     * mature solver adapters.
+     */
+    public synchronized SketchConstraintSolver.Result translateSelectionAndSolve(
+            double dxMm, double dyMm, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        if (!SketchGeometry.finite(dxMm) || !SketchGeometry.finite(dyMm)) {
+            throw new IllegalArgumentException("Translation must be finite");
+        }
+        if (selection.isEmpty() || (Math.abs(dxMm) < 1.0e-12 && Math.abs(dyMm) < 1.0e-12)) {
+            return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                    0, 0.0, "", entities.values());
+        }
+
+        LinkedHashMap<String, SketchEntity> prospective = translatedSelectionSnapshot(dxMm, dyMm);
+        if (prospective.isEmpty()) {
+            return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                    0, 0.0, "", entities.values());
+        }
+
+        SketchConstraintSolver.Result solution = constraints.isEmpty()
+                ? new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                        0, 0.0, "", prospective.values())
+                : solver.solve(prospective.values(), constraints.values());
+        LinkedHashMap<String, SketchEntity> solved = requireSolvedSnapshot(solution, prospective);
+
+        pushUndo();
+        entities.clear();
+        entities.putAll(solved);
+        changed();
+        return solution;
     }
 
     public synchronized boolean undo() {
@@ -296,6 +353,46 @@ public final class SketchDocument {
         undo.clear();
         redo.clear();
         revision++;
+    }
+
+    private LinkedHashMap<String, SketchEntity> translatedSelectionSnapshot(double dxMm, double dyMm) {
+        LinkedHashMap<String, SketchEntity> moved = copyEntities();
+        boolean any = false;
+        for (String id : selection) {
+            SketchEntity current = moved.get(id);
+            if (current == null) continue;
+            SketchEntity candidate = current.translated(dxMm, dyMm);
+            requireValid(candidate);
+            moved.put(id, candidate);
+            any = true;
+        }
+        return any ? moved : new LinkedHashMap<>();
+    }
+
+    private static LinkedHashMap<String, SketchEntity> requireSolvedSnapshot(
+            SketchConstraintSolver.Result solution, Map<String, SketchEntity> expectedIds) {
+        if (solution == null) throw new IllegalStateException("Sketch constraint solver returned null");
+        if (!solution.solved()) {
+            throw new IllegalStateException("Sketch constraint solve failed: " + solution.status
+                    + (solution.message.isEmpty() ? "" : " — " + solution.message));
+        }
+        LinkedHashMap<String, SketchEntity> solved = new LinkedHashMap<>();
+        for (SketchEntity entity : solution.entities()) {
+            requireValid(entity);
+            if (!expectedIds.containsKey(entity.id())) {
+                throw new IllegalStateException("Solver returned unknown sketch entity: " + entity.id());
+            }
+            if (solved.put(entity.id(), entity.copy()) != null) {
+                throw new IllegalStateException("Solver returned duplicate sketch entity: " + entity.id());
+            }
+        }
+        if (solved.size() != expectedIds.size()) {
+            throw new IllegalStateException("Solver changed sketch entity cardinality");
+        }
+        for (String id : expectedIds.keySet()) {
+            if (!solved.containsKey(id)) throw new IllegalStateException("Solver dropped sketch entity: " + id);
+        }
+        return solved;
     }
 
     private void pushUndo() {
