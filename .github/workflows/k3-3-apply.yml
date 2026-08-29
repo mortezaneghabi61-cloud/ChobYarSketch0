@@ -21,6 +21,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore reproducible development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
       - name: Wire production canvas
         run: python tools/k33_wire_production.py
       - name: Verify patch shape
