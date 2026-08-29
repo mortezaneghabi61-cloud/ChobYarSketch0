@@ -6,6 +6,7 @@ add_library(
         chobyar_brep
         SHARED
         native_brep_jni.cpp
+        shape_store.cpp
         occt_brep_with_indexed_direct.cpp
 )
 
