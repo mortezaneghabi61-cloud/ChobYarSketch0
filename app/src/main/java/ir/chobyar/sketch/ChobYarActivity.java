@@ -107,9 +107,9 @@ public final class ChobYarActivity extends Activity {
         b.setPadding(dp(6),dp(3),dp(6),dp(3));
         b.setBackground(round(Color.argb(248,255,255,255),Color.rgb(214,220,228),22));
         b.addView(topAction("⌂",this::showProjectMenu),new LinearLayout.LayoutParams(dp(42),dp(48)));
-        workspaceTitle=label("چوب‌یار 3D",13,true);workspaceTitle.setGravity(Gravity.CENTER);
+        workspaceTitle=label("ChobYar 3D",13,true);workspaceTitle.setGravity(Gravity.CENTER);
         b.addView(workspaceTitle,new LinearLayout.LayoutParams(0,dp(48),1f));
-        modeButton=topAction("تمام",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
+        modeButton=topAction("text",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
         b.addView(modeButton,new LinearLayout.LayoutParams(dp(48),dp(40)));
         b.addView(topAction("↶",this::undoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
         b.addView(topAction("↷",this::redoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
@@ -130,11 +130,11 @@ public final class ChobYarActivity extends Activity {
     private View viewTools(){
         LinearLayout b=rail(true);
         Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        b.addView(tool("+","زوم",()->zoomView(1.6f)));
-        b.addView(tool("−","زوم",()->zoomView(0.625f)));
+        b.addView(tool("+","text",()->zoomView(1.6f)));
+        b.addView(tool("−","text",()->zoomView(0.625f)));
         b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
         snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
-        b.addView(tool("mm","Units",()->status("واحد پروژه: میلی‌متر")));
+        b.addView(tool("mm","Units",()->status("Project Units: mm")));
         updateSnap();
         return b;
     }
@@ -142,7 +142,7 @@ public final class ChobYarActivity extends Activity {
     private void zoomView(float factor){
         cad.zoomBy(factor);
         syncGpuCamera();
-        status(factor>1f?"زوم بیشتر":"زوم کمتر");
+        status(factor>1f?"text text":"text text");
     }
 
     private void undoAction(){
@@ -151,10 +151,10 @@ public final class ChobYarActivity extends Activity {
             return;
         }
         if(!cad.canUndoSketch()){
-            status("Undo خالی است");
+            status("Undo is empty");
             return;
         }
-        cad.undo();status("برگشت");scheduleRecoverySnapshot();
+        cad.undo();status("text");scheduleRecoverySnapshot();
     }
 
     private void redoAction(){
@@ -162,7 +162,7 @@ public final class ChobYarActivity extends Activity {
             status(cad.redoLastFeature());scheduleRecoverySnapshot();
             return;
         }
-        status(cad.redoSketch()?"جلو":"Redo خالی است");scheduleRecoverySnapshot();
+        status(cad.redoSketch()?"text":"Redo is empty");scheduleRecoverySnapshot();
     }
 
     private View bottomLeftControls(){
@@ -195,12 +195,12 @@ public final class ChobYarActivity extends Activity {
     private LinearLayout sessionTools(){
         LinearLayout b=plain(false);b.setPadding(dp(3),dp(2),dp(3),dp(2));
         b.setBackground(round(Color.argb(248,255,255,255),Color.rgb(210,218,228),18));
-        b.addView(sessionButton("لغو",this::cancelWorkspaceTool));
+        b.addView(sessionButton("Cancel",this::cancelWorkspaceTool));
         sessionCopy=sessionButton("Copy",()->status(cad.toggleBodyTransformCopy()));sessionCopy.setVisibility(View.GONE);b.addView(sessionCopy);
         sessionTitle=label("",9,true);sessionTitle.setGravity(Gravity.CENTER);
         sessionTitle.setOnClickListener(v->editSessionValue());
         b.addView(sessionTitle,new LinearLayout.LayoutParams(dp(116),dp(38)));
-        sessionDone=sessionButton("انجام",this::finishWorkspaceTool);b.addView(sessionDone);
+        sessionDone=sessionButton("Done",this::finishWorkspaceTool);b.addView(sessionDone);
         return b;
     }
 
@@ -327,7 +327,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
         }else if("BODY".equals(k)){
             adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
-            adaptive.addView(tool("⌨","ابعاد دقیق",cad::showSelectedAnalyticEditor));
+            adaptive.addView(tool("⌨","Exact Dimensions",cad::showSelectedAnalyticEditor));
             adaptive.addView(tool("◉","Material",this::showMaterialPalette));
             adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
             adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
@@ -339,7 +339,7 @@ public final class ChobYarActivity extends Activity {
             adaptive.addView(tool("⧉","Offset",cad::showOffsetEdgeTool));
             adaptive.addView(tool("✂","Trim",()->status(cad.trimSelectedLines())));
             adaptive.addView(tool("╱","Extend",()->status(cad.extendSelectedLines())));
-            adaptive.addView(tool("⌨","اندازه",this::editDimension));
+            adaptive.addView(tool("⌨","Dimension",this::editDimension));
             adaptive.addView(tool("⬆","Extrude",this::beginExtrude));
         }
         adaptive.addView(tool("⌁","More",this::tools));
@@ -376,7 +376,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
         adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
-        adaptive.addView(tool("●","Solid دقیق",cad::showSolidManager));finishManualPaletteLayout();
+        adaptive.addView(tool("●","Solid text",cad::showSolidManager));finishManualPaletteLayout();
     }
 
     private void showTransformPalette(){
@@ -430,13 +430,13 @@ public final class ChobYarActivity extends Activity {
 
     private void activateSketchTool(int tool,String name){
         if(cad.is3DOverview())cad.enterActiveSketchView();
-        cad.setTool(tool);status(name+" فعال شد");updateWorkspaceChrome();updateConstraintRail(tool,false);
+        cad.setTool(tool);status(name+" activated");updateWorkspaceChrome();updateConstraintRail(tool,false);
     }
 
     private void finishSketchView(){
         if(cad==null||cad.is3DOverview())return;
         closeManualPalette();cad.setTool(CadCanvasView.TOOL_SELECT);
-        cad.setStandardView("ISO");cad.post(cad::fitAll);syncGpuCamera();updateWorkspaceChrome();status("نمای 3D");scheduleRecoverySnapshot();
+        cad.setStandardView("ISO");cad.post(cad::fitAll);syncGpuCamera();updateWorkspaceChrome();status("3D View");scheduleRecoverySnapshot();
     }
 
     private void updateConstraintRail(int activeTool,boolean sessionActive){
@@ -449,7 +449,7 @@ public final class ChobYarActivity extends Activity {
 
     private void search(){
         String[] x={"Sketch","Extrude","Revolve","Sweep","Loft","Move / Rotate","Align","Scale","Mirror","Pattern","Fillet","Chamfer","Shell","Boolean","Measure","Constraints","Material","Section","History","Plane","Snaps"};
-        new AlertDialog.Builder(this).setTitle("جستجوی فرمان").setItems(x,(d,w)->{
+        new AlertDialog.Builder(this).setTitle("Command Search").setItems(x,(d,w)->{
             if(w==0)showSketchPalette();else if(w==1)beginExtrude();else if(w==2)beginRevolve();else if(w==3)cad.showSweepTool();else if(w==4)cad.showLoftTool();
             else if(w==5)beginMoveRotate();else if(w==6)beginAlign();else if(w==7)cad.showScaleTool();else if(w==8)cad.showMirrorTool();else if(w==9)cad.showLinearPatternTool();
             else if(w==10)cad.showSelectedFillet();else if(w==11)cad.showSelectedChamfer();else if(w==12)cad.showSelectedShell();else if(w==13)cad.showSolidManager();
@@ -471,55 +471,55 @@ public final class ChobYarActivity extends Activity {
         String[] items={"↗ Move / Rotate","⇲ Scale","⇋ Mirror","⠿ Linear Pattern"};
         new AlertDialog.Builder(this).setTitle("Transform").setItems(items,(d,w)->{
             if(w==0)beginMoveRotate();else if(w==1)cad.showScaleTool();else if(w==2)cad.showMirrorTool();else cad.showLinearPatternTool();
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 
     private void showProjectMenu(){
-        String[] rows={"پروژه جدید","پروژه‌های داخل اپ","ذخیره در داخل اپ","Items / Layers","Save Project as File","Open Project File","Export DXF","Export STEP / STL"};
+        String[] rows={"New Project","Projects","Save Project","Items / Layers","Save Project as File","Open Project File","Export DXF","Export STEP / STL"};
         new AlertDialog.Builder(this).setTitle("Project").setItems(rows,(d,w)->{
             if(w==0)newProject();else if(w==1)showInternalProjects();else if(w==2)saveInsideApp();else if(w==3)showItems();else if(w==4)saveProject();else if(w==5)openProject();else if(w==6)exportDxf();else showCadExport();
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 
     private void newProject(){
-        new AlertDialog.Builder(this).setTitle("پروژه جدید").setMessage("Workspace فعلی بسته می‌شود. اگر لازم است اول آن را ذخیره کن.")
-                .setPositiveButton("ایجاد",(d,w)->{
+        new AlertDialog.Builder(this).setTitle("New Project").setMessage("Workspace text text text. text text text First text text Save text.")
+                .setPositiveButton("Create",(d,w)->{
                     if(workspace.state().sessionActive())cancelWorkspaceTool();
                     cad.clearAll();appearance.restore(CadMaterialPreset.of(CadMaterialPreset.Preset.WOOD),gpuSurface::setAppearance);
                     sectionView.restore(false,SectionViewController.Axis.Z,0.0,false);currentInternalProjectId=null;currentInternalProjectName=null;currentSelectionKind="NONE";
-                    if(recoveryStore!=null)recoveryStore.clear();syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("پروژه جدید آماده است");scheduleRecoverySnapshot();
-                }).setNegativeButton("لغو",null).show();
+                    if(recoveryStore!=null)recoveryStore.clear();syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("New Project Ready text");scheduleRecoverySnapshot();
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void showInternalProjects(){
-        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast("ساخت پروژه‌های نمونه انجام نشد");return;}
+        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast("Create Projecttext text Done text");return;}
         java.util.List<InternalProjectRepository.Entry> entries=internalProjects.entries();
         String[] rows=new String[entries.size()];for(int i=0;i<rows.length;i++){InternalProjectRepository.Entry p=entries.get(i);rows[i]=(p.builtIn?"◆ ":"● ")+p.name;}
-        new AlertDialog.Builder(this).setTitle("پروژه‌های داخل اپ")
-                .setMessage("هر پروژه با Sketch و History باز می‌شود و Bodyها قابل تغییرند. پروژه‌های ◆ نمونه هنگام ذخیره به‌صورت کپی حفظ می‌شوند.")
-                .setItems(rows,(d,w)->openInternalProject(entries.get(w))).setNegativeButton("بستن",null).show();
+        new AlertDialog.Builder(this).setTitle("Projects")
+                .setMessage("text Project text Sketch text History text text text Bodytext text Transformtext. Projecttext ◆ text text Save text text text text.")
+                .setItems(rows,(d,w)->openInternalProject(entries.get(w))).setNegativeButton("Close",null).show();
     }
 
     private void openInternalProject(InternalProjectRepository.Entry entry){
         try{
             String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,internalProjects.load(entry.id));
             currentInternalProjectId=entry.id;currentInternalProjectName=entry.name;syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);persistRecoverySnapshot();
-            status(entry.name+" باز شد • "+result);
-        }catch(Exception e){toast("بازکردن پروژه داخل اپ انجام نشد");}
+            status(entry.name+" text text • "+result);
+        }catch(Exception e){toast("text Project text text Done text");}
     }
 
     private void saveInsideApp(){
-        EditText input=new EditText(this);input.setSingleLine();input.setText(currentInternalProjectName==null?"پروژه جدید چوب‌یار":currentInternalProjectName);input.setSelectAllOnFocus(true);
+        EditText input=new EditText(this);input.setSingleLine();input.setText(currentInternalProjectName==null?"New Project ChobYar":currentInternalProjectName);input.setSelectAllOnFocus(true);
         boolean copy=currentInternalProjectId!=null&&InternalProjectRepository.isBuiltIn(currentInternalProjectId);
-        new AlertDialog.Builder(this).setTitle(copy?"ذخیره کپی پروژه نمونه":"ذخیره در داخل اپ").setMessage("Sketch، Bodyها، History، نما و اندازه‌ها ذخیره می‌شوند.").setView(input)
-                .setPositiveButton("ذخیره",(d,w)->{
+        new AlertDialog.Builder(this).setTitle(copy?"Save text Project text":"Save Project").setMessage("Sketch, Bodytext, History, View text Dimensiontext Save text.").setView(input)
+                .setPositiveButton("Save",(d,w)->{
                     try{
                         String name=input.getText().toString().trim();if(name.isEmpty())throw new IllegalArgumentException();
                         String id=(currentInternalProjectId==null||InternalProjectRepository.isBuiltIn(currentInternalProjectId))?internalProjects.createId(name):currentInternalProjectId;
                         internalProjects.save(id,name,CadProjectPersistenceController.encode(cad,appearance,sectionView));
-                        currentInternalProjectId=id;currentInternalProjectName=name;updateWorkspaceChrome();persistRecoverySnapshot();toast(copy?"کپی پروژه داخل اپ ذخیره شد":"پروژه داخل اپ ذخیره شد");
-                    }catch(Exception e){toast("ذخیره داخل اپ انجام نشد");}
-                }).setNegativeButton("لغو",null).show();
+                        currentInternalProjectId=id;currentInternalProjectName=name;updateWorkspaceChrome();persistRecoverySnapshot();toast(copy?"text Project text text Save text":"Project text text Save text");
+                    }catch(Exception e){toast("Save text text Done text");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void saveProject(){
@@ -532,8 +532,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","Export DXF","Export STEP / STL","Reference Image","Materials / Appearance","نمای بالا","نمای روبرو","نمای راست","نمای ایزومتریک","Snaps / Guides","واحد پروژه: mm","راهنمای Workspace"};
-        new AlertDialog.Builder(this).setTitle("چوب‌یار 3D").setItems(x,(d,w)->{
+        String[] x={"Items / Layers","Export DXF","Export STEP / STL","Reference Image","Materials / Appearance","Top View","Front View","Right View","Isometric View","Snaps / Guides","Project Units: mm","Guidetext Workspace"};
+        new AlertDialog.Builder(this).setTitle("ChobYar 3D").setItems(x,(d,w)->{
             if(w==0)showItems();else if(w==1)exportDxf();else if(w==2)showCadExport();else if(w==3){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}
             else if(w==4)showMaterialPalette();else if(w==5)setView("TOP");else if(w==6)setView("FRONT");else if(w==7)setView("RIGHT");
             else if(w==8)setView("ISO");else if(w==9)cad.showShaprSnappingOptions();else if(w==10)status(cad.dualUnitSummary());else showWorkspaceHelp();
@@ -550,37 +550,37 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showWorkspaceHelp(){
-        new AlertDialog.Builder(this).setTitle("راهنمای Workspace")
-                .setMessage("قلم: طراحی و انتخاب دقیق\nانگشت: چرخش، جابه‌جایی و زوم\n\nیک سطح، لبه یا بدنه را لمس کن تا فقط ابزارهای مربوط به همان انتخاب ظاهر شوند. همه اندازه‌ها میلی‌متر هستند. آخرین Workspace به‌صورت خودکار برای بازیابی ذخیره می‌شود.")
-                .setPositiveButton("باشه",null).show();
+        new AlertDialog.Builder(this).setTitle("Guidetext Workspace")
+                .setMessage("text: text text Selection text \n text: text, text text text \n  \n text Face, Edge text Body text touch text until text Toolstext text text text Selection text text. All Dimensiontext mm text. text Workspace text text text text Save text.")
+                .setPositiveButton("OK",null).show();
     }
 
     private void showSectionViewPanel(){
-        String[] choices={"خاموش","XY • محور Z","YZ • محور X","XZ • محور Y","Flip side"};
+        String[] choices={"Off","XY • Axis Z","YZ • Axis X","XZ • Axis Y","Flip side"};
         LinearLayout box=plain(true);box.setPadding(dp(18),dp(4),dp(18),0);
         TextView offsetLabel=label("Offset • "+String.format(java.util.Locale.US,"%.1f mm",sectionView.offsetMm()),11,true);box.addView(offsetLabel);
         EditText offsetInput=new EditText(this);offsetInput.setSingleLine(true);offsetInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         offsetInput.setText(String.format(java.util.Locale.US,"%.1f",sectionView.offsetMm()));box.addView(offsetInput,new LinearLayout.LayoutParams(dp(280),dp(48)));
         new AlertDialog.Builder(this).setTitle("Section View")
-                .setMessage("این برش فقط نمای رندر را کلیپ می‌کند؛ هندسه OCCT، History، ابعاد و Export تغییر نمی‌کنند.")
+                .setMessage("text text text Viewtext text text text text; Geometry OCCT, History, text text Export Transform text.")
                 .setView(box).setSingleChoiceItems(choices,sectionView.selectedIndex(),(d,w)->{
                     if(w==0)sectionView.disable();else if(w==1)sectionView.enable(SectionViewController.Axis.Z);else if(w==2)sectionView.enable(SectionViewController.Axis.X);else if(w==3)sectionView.enable(SectionViewController.Axis.Y);else sectionView.flip();
                     syncGpuMesh();status(sectionView.summary());scheduleRecoverySnapshot();
-                }).setPositiveButton("اعمال فاصله",(d,w)->{
+                }).setPositiveButton("Apply Distance",(d,w)->{
                     try{sectionView.setOffsetMm(Double.parseDouble(offsetInput.getText().toString().trim()));}
-                    catch(Exception ignored){status("Offset نامعتبر بود");return;}
+                    catch(Exception ignored){status("Offset invalid text");return;}
                     if(!sectionView.isEnabled())sectionView.enable(SectionViewController.Axis.Z);
                     syncGpuMesh();status(sectionView.summary());scheduleRecoverySnapshot();
-                }).setNegativeButton("بستن",null).show();
+                }).setNegativeButton("Close",null).show();
     }
 
     private void showMaterialPalette(){
         CadMaterialPreset.Preset[] presets=CadMaterialPreset.Preset.values();CadMaterialPreset.State current=appearance.state();String[] names=new String[presets.length];
         for(int i=0;i<presets.length;i++){CadMaterialPreset.Preset p=presets[i];names[i]=(p==current.preset?"✓ ":"")+p.key.toUpperCase(java.util.Locale.US)+" • "+p.label;}
         new AlertDialog.Builder(this).setTitle("Materials / Appearance")
-                .setMessage("فقط ظاهر رندر تغییر می‌کند؛ هندسه، ابعاد، History و خروجی CAD ثابت می‌مانند.")
+                .setMessage("text text text Transform text; Geometry, text, History text text CAD text text.")
                 .setItems(names,(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(presets[w],gpuSurface::setAppearance);showAppearanceEditor(state);scheduleRecoverySnapshot();})
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     private void showAppearanceEditor(CadMaterialPreset.State initial){
@@ -593,11 +593,11 @@ public final class ChobYarActivity extends Activity {
         TextView metallic=label("Metallic • "+Math.round(initial.metallic*100f)+"%",11,false);box.addView(metallic);
         roughness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int progress,boolean fromUser){value.setText("Roughness • "+progress+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         new AlertDialog.Builder(this).setTitle(initial.preset.label+" • Appearance").setView(box)
-                .setPositiveButton("اعمال",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{int color=parseAppearanceColor(colorInput.getText().toString());appearance.setColor(color,null);CadMaterialPreset.State state=appearance.setRoughness(Math.max(.04f,roughness.getProgress()/100f),gpuSurface::setAppearance);status("Material • "+state.summary());scheduleRecoverySnapshot();}
-                    catch(Exception e){toast("کد رنگ باید مثل #B98758 باشد");}
-                }).setNeutralButton("بازنشانی",(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(initial.preset,gpuSurface::setAppearance);status("Material • "+state.summary());scheduleRecoverySnapshot();})
-                .setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("text Paint text text #B98758 text");}
+                }).setNeutralButton("Reset",(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(initial.preset,gpuSurface::setAppearance);status("Material • "+state.summary());scheduleRecoverySnapshot();})
+                .setNegativeButton("Cancel",null).show();
     }
 
     private static int parseAppearanceColor(String raw){
@@ -606,13 +606,13 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showCadExport(){
-        String[] formats={"STEP • مدل دقیق قابل ویرایش","STL • مناسب چاپ سه‌بعدی / CAM"};
-        new AlertDialog.Builder(this).setTitle("Export CAD").setItems(formats,(d,w)->exportCad(w)).setNegativeButton("لغو",null).show();
+        String[] formats={"STEP • Model text text text","STL • text text text / CAM"};
+        new AlertDialog.Builder(this).setTitle("Export CAD").setItems(formats,(d,w)->exportCad(w)).setNegativeButton("Cancel",null).show();
     }
 
     private void exportCad(int format){
         String ext=format==0?"step":"stl";File file=new File(getCacheDir(),"ChobYar-Model."+ext);
-        if(!cad.exportVisibleCad(file.getAbsolutePath(),format)){toast("بدنه دقیق قابل خروجی وجود ندارد");return;}
+        if(!cad.exportVisibleCad(file.getAbsolutePath(),format)){toast("Body text text text text text");return;}
         pendingCadExport=file;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(format==0?"model/step":"model/stl");
         intent.putExtra(Intent.EXTRA_TITLE,file.getName());startActivityForResult(intent,REQUEST_EXPORT_CAD);
     }
@@ -622,15 +622,15 @@ public final class ChobYarActivity extends Activity {
         if(requestCode==REQUEST_EXPORT_DXF){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                if(out==null)throw new IllegalStateException();out.write(cad.buildDxf().getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("فایل DXF ذخیره شد");
-            }catch(Exception e){toast("ذخیره DXF انجام نشد");}return;
+                if(out==null)throw new IllegalStateException();out.write(cad.buildDxf().getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("text DXF Save text");
+            }catch(Exception e){toast("Save DXF Done text");}return;
         }
         if(requestCode==REQUEST_SAVE_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
                 if(out==null)throw new IllegalStateException();String json=CadProjectPersistenceController.encode(cad,appearance,sectionView);
-                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();persistRecoverySnapshot();toast("پروژه ذخیره شد");
-            }catch(Exception e){toast("ذخیره پروژه انجام نشد");}return;
+                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();persistRecoverySnapshot();toast("Project Save text");
+            }catch(Exception e){toast("Save Project Done text");}return;
         }
         if(requestCode==REQUEST_OPEN_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
@@ -640,18 +640,18 @@ public final class ChobYarActivity extends Activity {
                 String raw=new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
                 String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw);
                 currentInternalProjectId=null;currentInternalProjectName=null;currentSelectionKind="NONE";syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);persistRecoverySnapshot();status(result);
-            }catch(Exception e){toast("بازکردن پروژه انجام نشد");}return;
+            }catch(Exception e){toast("text Project Done text");}return;
         }
         if(requestCode==REQUEST_REFERENCE_IMAGE){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try{Bitmap bitmap=decodeReferenceBitmap(data);status(cad.setReferenceImage(bitmap,"Reference Image"));cad.showReferenceImageSettings();scheduleRecoverySnapshot();}
-            catch(Exception e){toast("خواندن تصویر مرجع انجام نشد");}return;
+            catch(Exception e){toast("text text text Done text");}return;
         }
         if(requestCode!=REQUEST_EXPORT_CAD||resultCode!=RESULT_OK||data==null||data.getData()==null||pendingCadExport==null)return;
         File exportFile=pendingCadExport;
         try(FileInputStream in=new FileInputStream(exportFile);OutputStream out=getContentResolver().openOutputStream(data.getData())){
-            if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){if(n>0)out.write(buffer,0,n);}out.flush();toast("فایل CAD ذخیره شد");
-        }catch(Exception e){toast("ذخیره فایل انجام نشد");}finally{pendingCadExport=null;if(exportFile.exists())exportFile.delete();}
+            if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){if(n>0)out.write(buffer,0,n);}out.flush();toast("text CAD Save text");
+        }catch(Exception e){toast("Save text Done text");}finally{pendingCadExport=null;if(exportFile.exists())exportFile.delete();}
     }
 
     private Bitmap decodeReferenceBitmap(Intent data)throws Exception{
@@ -667,23 +667,23 @@ public final class ChobYarActivity extends Activity {
 
     private void showItems(){
         String[] bodies=cad.itemRows();boolean image=cad.hasReferenceImage();
-        if(bodies.length==0&&!image){toast("هنوز Body یا تصویر مرجعی وجود ندارد");return;}
+        if(bodies.length==0&&!image){toast("text Body text text text text text");return;}
         String[] rows=new String[bodies.length+(image?1:0)];System.arraycopy(bodies,0,rows,0,bodies.length);if(image)rows[rows.length-1]="▧ Reference Image";
-        new AlertDialog.Builder(this).setTitle("Items").setMessage("Bodyها و تصویر مرجع از همین‌جا انتخاب و مدیریت می‌شوند.")
-                .setItems(rows,(d,w)->{if(image&&w==rows.length-1)cad.showReferenceImageSettings();else{status(cad.selectItem(w));showItemActions(w);}}).setNegativeButton("بستن",null).show();
+        new AlertDialog.Builder(this).setTitle("Items").setMessage("Bodytext text text text text text Selection text text text.")
+                .setItems(rows,(d,w)->{if(image&&w==rows.length-1)cad.showReferenceImageSettings();else{status(cad.selectItem(w));showItemActions(w);}}).setNegativeButton("Close",null).show();
     }
 
     private void showItemActions(int index){
-        String[] actions={"نمایش / مخفی","تغییر نام","Fit همه"};
+        String[] actions={"Show / Hide","Transform text","Fit All"};
         new AlertDialog.Builder(this).setTitle("Body").setItems(actions,(d,w)->{
             if(w==0){status(cad.toggleItemVisibility(index));showItems();}else if(w==1)renameItem(index);else{cad.fitAll();status("Fit");}
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 
     private void renameItem(int index){
         EditText e=new EditText(this);e.setSingleLine();
-        new AlertDialog.Builder(this).setTitle("تغییر نام Body").setView(e)
-                .setPositiveButton("ذخیره",(d,w)->{status(cad.renameItem(index,e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("لغو",null).show();
+        new AlertDialog.Builder(this).setTitle("Transform text Body").setView(e)
+                .setPositiveButton("Save",(d,w)->{status(cad.renameItem(index,e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("Cancel",null).show();
     }
 
     private void editDimension(){
@@ -691,7 +691,7 @@ public final class ChobYarActivity extends Activity {
         EditText e=new EditText(this);e.setSingleLine();e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         e.setText(cad.exactDimensionCurrentValue());e.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this).setTitle(cad.exactDimensionTitle()).setMessage(cad.exactDimensionHint()).setView(e)
-                .setPositiveButton("اعمال",(d,w)->{status(cad.applySelectedDimension(e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("لغو",null).show();
+                .setPositiveButton("Apply",(d,w)->{status(cad.applySelectedDimension(e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("Cancel",null).show();
     }
 
     private void updateSnap(){if(snapButton!=null){snapButton.setText("⌁\nSnap");snapButton.setTextColor(cad.isSnapEnabled()?Color.rgb(0,105,210):Color.rgb(80,86,96));}}
@@ -699,9 +699,9 @@ public final class ChobYarActivity extends Activity {
     private void updateWorkspaceChrome(){
         if(cad==null)return;boolean model=cad.is3DOverview();
         if(workspaceTitle!=null){
-            String project=(currentInternalProjectName==null||currentInternalProjectName.trim().isEmpty())?"چوب‌یار 3D":currentInternalProjectName;
+            String project=(currentInternalProjectName==null||currentInternalProjectName.trim().isEmpty())?"ChobYar 3D":currentInternalProjectName;
             String title=model?project:project+" • Sketch • "+cad.activePlaneLabel()+" • mm";
-            if(model&&!"NONE".equals(currentSelectionKind))title=project+" • "+currentSelectionKind+" انتخاب شد";
+            if(model&&!"NONE".equals(currentSelectionKind))title=project+" • "+currentSelectionKind+" selected";
             workspaceTitle.setText(title);
         }
         if(modeButton!=null)modeButton.setVisibility(model?View.GONE:View.VISIBLE);
@@ -722,7 +722,7 @@ public final class ChobYarActivity extends Activity {
         try{
             CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,snapshot.payload);
             currentInternalProjectId=null;currentInternalProjectName=snapshot.name==null||snapshot.name.trim().isEmpty()?null:snapshot.name;currentSelectionKind="NONE";
-            syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("آخرین Workspace بازیابی شد");
+            syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("text Workspace text text");
         }catch(Exception e){recoveryStore.clear();}
     }
 
@@ -762,7 +762,7 @@ public final class ChobYarActivity extends Activity {
 
     private final class Cube extends View{
         Paint p=new Paint(1);Path a=new Path(),b=new Path(),c=new Path();int mode=0;
-        Cube(){super(ChobYarActivity.this);setContentDescription("تغییر نما");setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};setView(m[mode]);invalidate();});}
+        Cube(){super(ChobYarActivity.this);setContentDescription("Transform View");setOnClickListener(v->{mode=(mode+1)%4;String[] m={"ISO","TOP","FRONT","RIGHT"};setView(m[mode]);invalidate();});}
         @Override protected void onDraw(Canvas x){super.onDraw(x);float w=getWidth(),h=getHeight();p.setStrokeWidth(dp(1));p.setStyle(Paint.Style.FILL);
             a.reset();a.moveTo(w*.2f,h*.35f);a.lineTo(w*.5f,h*.17f);a.lineTo(w*.8f,h*.35f);a.lineTo(w*.5f,h*.53f);a.close();p.setColor(Color.rgb(231,237,245));x.drawPath(a,p);
             b.reset();b.moveTo(w*.2f,h*.35f);b.lineTo(w*.5f,h*.53f);b.lineTo(w*.5f,h*.84f);b.lineTo(w*.2f,h*.66f);b.close();p.setColor(Color.rgb(218,227,239));x.drawPath(b,p);

@@ -314,7 +314,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 double d = Math.hypot(p.x - rawX, p.y - rawY);
                 if (d <= radiusMm * GUIDE_RADIUS_FACTOR
                         && (best == null || d < best.distanceMm)) {
-                    best = new RoutedSnap(p.x, p.y, d, "راهنما", null);
+                    best = new RoutedSnap(p.x, p.y, d, "Guide", null);
                 }
             }
         }
@@ -333,14 +333,14 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private String snapLabel(SketchSnapService.Kind kind) {
         if (kind == null) return "";
         switch (kind) {
-            case POINT: return "نقطه";
-            case ENDPOINT: return "انتها";
-            case INTERSECTION: return "تقاطع";
-            case MIDPOINT: return "وسط";
-            case CENTER: return "مرکز";
-            case QUADRANT: return "ربع";
+            case POINT: return "Point";
+            case ENDPOINT: return "Endpoint";
+            case INTERSECTION: return "Intersection";
+            case MIDPOINT: return "Midpoint";
+            case CENTER: return "Center";
+            case QUADRANT: return "text";
             case ON_EDGE:
-            default: return "روی شیء";
+            default: return "Roy text";
         }
     }
 

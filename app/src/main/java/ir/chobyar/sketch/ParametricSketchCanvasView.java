@@ -162,14 +162,14 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         super.setLayerVisible(s.layerName, true);
         invalidate();
         dispatchWorkspaceState();
-        return "اسکچ فعال: " + s.name;
+        return "Sketch text: " + s.name;
     }
 
     public String switchSketchSpace(int index) {
-        if (index < 0 || index >= sketchSpaces.size()) return "اسکچ پیدا نشد";
+        if (index < 0 || index >= sketchSpaces.size()) return "Sketch was not found";
         activeSketchIndex = index;
         SketchSpace s = activeSketch();
-        if (s == null) return "اسکچ پیدا نشد";
+        if (s == null) return "Sketch was not found";
         super.setLayer(s.layerName);
         if (!s.visible) {
             s.visible = true;
@@ -178,38 +178,38 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         super.setTool(TOOL_SELECT);
         invalidate();
         dispatchWorkspaceState();
-        return "اسکچ فعال: " + s.name + (s.locked ? " — قفل" : "");
+        return "Sketch text: " + s.name + (s.locked ? " — Lock" : "");
     }
 
     public String toggleActiveSketchLock() {
         SketchSpace s = activeSketch();
-        if (s == null) return "اسکچ فعال وجود ندارد";
+        if (s == null) return "Sketch text text text";
         s.locked = !s.locked;
         if (s.locked) super.setTool(TOOL_SELECT);
         invalidate();
         dispatchWorkspaceState();
-        return s.locked ? s.name + " قفل شد" : s.name + " باز شد";
+        return s.locked ? s.name + " Lock text" : s.name + " text text";
     }
 
     public String toggleActiveSketchVisibility() {
         SketchSpace s = activeSketch();
-        if (s == null) return "اسکچ فعال وجود ندارد";
+        if (s == null) return "Sketch text text text";
         s.visible = !s.visible;
         super.setLayerVisible(s.layerName, s.visible);
         invalidate();
-        return s.name + (s.visible ? " نمایش داده شد" : " مخفی شد");
+        return s.name + (s.visible ? " Show text text" : " Hide text");
     }
 
     private void showSketchManager() {
         SketchSpace s = activeSketch();
-        String lockText = s != null && s.locked ? "🔓 باز کردن اسکچ فعال" : "🔒 قفل اسکچ فعال";
-        String visText = s != null && s.visible ? "◉ مخفی کردن اسکچ فعال" : "◉ نمایش اسکچ فعال";
-        String selLock = isSelectionLocked() ? "🔓 باز کردن انتخاب" : "🔒 قفل انتخاب";
-        String autoText = autoConstraints ? "Auto Constraints: روشن" : "Auto Constraints: خاموش";
-        String badgeText = showParametricConstraints ? "نمایش قیود: روشن" : "نمایش قیود: خاموش";
+        String lockText = s != null && s.locked ? "🔓 text text Sketch text" : "🔒 Lock Sketch text";
+        String visText = s != null && s.visible ? "◉ Hide text Sketch text" : "◉ Show Sketch text";
+        String selLock = isSelectionLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";
+        String autoText = autoConstraints ? "Auto Constraints: On" : "Auto Constraints: Off";
+        String badgeText = showParametricConstraints ? "Show Constraints: On" : "Show Constraints: Off";
         String[] items = {
-                "☷ لیست اسکچ‌ها (" + sketchSpaces.size() + ")",
-                "＋ اسکچ جدید",
+                "☷ text Sketchtext (" + sketchSpaces.size() + ")",
+                "＋ Sketch text",
                 lockText,
                 visText,
                 selLock,
@@ -224,10 +224,10 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                     else if (which == 2) toast(toggleActiveSketchLock());
                     else if (which == 3) toast(toggleActiveSketchVisibility());
                     else if (which == 4) toast(toggleSelectedLock());
-                    else if (which == 5) { autoConstraints = !autoConstraints; toast(autoConstraints ? "Auto Constraints روشن" : "Auto Constraints خاموش"); invalidate(); }
+                    else if (which == 5) { autoConstraints = !autoConstraints; toast(autoConstraints ? "Auto Constraints On" : "Auto Constraints Off"); invalidate(); }
                     else { showParametricConstraints = !showParametricConstraints; invalidate(); }
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
@@ -236,28 +236,28 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         for (int i = 0; i < sketchSpaces.size(); i++) {
             SketchSpace s = sketchSpaces.get(i);
             items[i] = (i == activeSketchIndex ? "● " : "○ ") + s.name
-                    + (s.locked ? "  🔒" : "") + (s.visible ? "" : "  مخفی");
+                    + (s.locked ? "  🔒" : "") + (s.visible ? "" : "  Hide");
         }
         new AlertDialog.Builder(getContext())
                 .setTitle("Items / Sketches")
                 .setItems(items, (d, which) -> toast(switchSketchSpace(which)))
-                .setPositiveButton("اسکچ جدید", (d, w) -> showCreateSketchDialog())
-                .setNegativeButton("بستن", null)
+                .setPositiveButton("Sketch text", (d, w) -> showCreateSketchDialog())
+                .setNegativeButton("Close", null)
                 .show();
     }
 
     private void showCreateSketchDialog() {
         EditText input = new EditText(getContext());
         input.setSingleLine(true);
-        input.setHint("مثال: نمای روبرو");
+        input.setHint("text: Front View");
         input.setText("Sketch " + sketchSerial);
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("اسکچ جدید")
-                .setMessage("اسکچ جدید مستقل ساخته می‌شود. تعداد اسکچ‌ها محدودیت نرم‌افزاری ثابتی ندارد.")
+                .setTitle("Sketch text")
+                .setMessage("Sketch text text created text. text Sketchtext text text text text.")
                 .setView(input)
-                .setPositiveButton("ساخت", (d, w) -> toast(createSketchSpace(input.getText().toString())))
-                .setNegativeButton("لغو", null)
+                .setPositiveButton("Create", (d, w) -> toast(createSketchSpace(input.getText().toString())))
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -267,7 +267,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     public String toggleSelectedLock() {
         List<Object> sel = selectionObjects();
-        if (sel.isEmpty()) return "اول شکل یا خط را انتخاب کن";
+        if (sel.isEmpty()) return "First text text Line text Selection text";
         boolean shouldLock = false;
         for (Object e : sel) if (!Boolean.TRUE.equals(elementLocks.get(e))) { shouldLock = true; break; }
         for (Object e : sel) {
@@ -276,7 +276,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         }
         invalidate();
         dispatchWorkspaceState();
-        return shouldLock ? sel.size() + " مورد قفل شد" : sel.size() + " مورد باز شد";
+        return shouldLock ? sel.size() + " text Lock text" : sel.size() + " text text text";
     }
 
     private boolean isEntityLocked(Object e) {
@@ -310,7 +310,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (base == null) base = "";
         SketchSpace s = activeSketch();
         String extra = s == null ? "" : " | " + s.name;
-        if (isSelectionLocked()) extra += " | 🔒 قفل";
+        if (isSelectionLocked()) extra += " | 🔒 Lock";
         return base + extra;
     }
 
@@ -318,7 +318,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     public void setTool(int newTool) {
         if (newTool != TOOL_SELECT && activeSketchLocked()) {
             super.setTool(TOOL_SELECT);
-            toast("اسکچ فعال قفل است؛ برای رسم اول بازش کن");
+            toast("Sketch text Lock text; text text First text text");
             return;
         }
         super.setTool(newTool);
@@ -326,49 +326,49 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     public String beginAnchorMove() {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.beginAnchorMove();
     }
 
     @Override
     public void moveSelected(float dx, float dy) {
-        if (isSelectionLocked()) { toast("انتخاب قفل است"); return; }
+        if (isSelectionLocked()) { toast("Selection Lock text"); return; }
         super.moveSelected(dx, dy);
     }
 
     @Override
     public String rotateSelected(float deg) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.rotateSelected(deg);
     }
 
     @Override
     public String scaleSelected(float factor) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.scaleSelected(factor);
     }
 
     @Override
     public String mirrorSelected(boolean acrossXAxis, float axisValue) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.mirrorSelected(acrossXAxis, axisValue);
     }
 
     @Override
     public String offsetSelected(float distance) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.offsetSelected(distance);
     }
 
     @Override
     public String applySelectedDimension(String raw) {
-        if (isSelectionLocked()) return "انتخاب قفل است؛ اندازه تغییر نمی‌کند";
+        if (isSelectionLocked()) return "Selection Lock text; Dimension Transform text";
         return super.applySelectedDimension(raw);
     }
 
     @Override
     public void deleteSelected() {
-        if (isSelectionLocked()) { toast("انتخاب قفل است"); return; }
+        if (isSelectionLocked()) { toast("Selection Lock text"); return; }
         List<Object> before = selectionObjects();
         super.deleteSelected();
         for (Object e : before) elementLocks.remove(e);
@@ -377,31 +377,31 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     public String trimSelectedLines() {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.trimSelectedLines();
     }
 
     @Override
     public String extendSelectedLines() {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.extendSelectedLines();
     }
 
     @Override
     public String filletSelectedLines(float radius) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.filletSelectedLines(radius);
     }
 
     @Override
     public String chamferSelectedLines(float distance) {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.chamferSelectedLines(distance);
     }
 
     @Override
     public String joinSelectedLines() {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         return super.joinSelectedLines();
     }
 
@@ -424,33 +424,33 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     private void showAngleEditor() {
         List<Object> lines = selectedLines();
         if (lines.size() != 1 && lines.size() != 2) return;
-        if (isSelectionLocked()) { toast("انتخاب قفل است"); return; }
+        if (isSelectionLocked()) { toast("Selection Lock text"); return; }
         EditText input = new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
         float current = lines.size() == 1 ? displayLineAngle(lines.get(0)) : angleBetween(lines.get(0), lines.get(1));
         input.setText(fmt(current));
         input.setSelectAllOnFocus(true);
-        String title = lines.size() == 1 ? "زاویه خط نسبت به افق" : "زاویه بین دو خط";
+        String title = lines.size() == 1 ? "Angle Line text text text" : "Angle text text Line";
         new AlertDialog.Builder(getContext())
-                .setTitle(title + " — درجه")
-                .setMessage(lines.size() == 1 ? "مثال: 35" : "زاویه 0 تا 180 درجه؛ مثال: 90")
+                .setTitle(title + " — degrees")
+                .setMessage(lines.size() == 1 ? "text: 35" : "Angle 0 until 180 degrees; text: 90")
                 .setView(input)
-                .setPositiveButton("اعمال", (d, w) -> {
+                .setPositiveButton("Apply", (d, w) -> {
                     try {
                         float value = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
                         String result = lines.size() == 1 ? setSelectedLineAngle(value) : setSelectedLinesAngle(value);
                         toast(result);
-                    } catch (Exception e) { toast("زاویه درست وارد نشده"); }
+                    } catch (Exception e) { toast("Angle was entered incorrectly"); }
                 })
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     public String setSelectedLineAngle(float degrees) {
         List<Object> lines = selectedLines();
-        if (lines.size() != 1) return "یک خط را انتخاب کن";
-        if (isSelectionLocked()) return "خط قفل است";
+        if (lines.size() != 1) return "text Line text Selection text";
+        if (isSelectionLocked()) return "Line Lock text";
         Object line = lines.get(0);
         saveUndo();
         clearDirectionalConstraints(line);
@@ -461,14 +461,14 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         enforcePointLinks();
         invalidate();
         dispatchWorkspaceState();
-        return "زاویه خط = " + fmt(displayLineAngle(line)) + "°";
+        return "Angle Line = " + fmt(displayLineAngle(line)) + "°";
     }
 
     public String setSelectedLinesAngle(float degrees) {
-        if (degrees < 0f || degrees > 180f) return "زاویه باید بین 0 و 180 باشد";
+        if (degrees < 0f || degrees > 180f) return "Angle text text 0 text 180 text";
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "دو خط را انتخاب کن";
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (lines.size() != 2) return "text Line text Selection text";
+        if (isSelectionLocked()) return "Selection Lock text";
         Object fixed = lines.get(0), moving = lines.get(1);
         saveUndo();
         clearDirectionalConstraints(moving);
@@ -483,7 +483,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         enforcePointLinks();
         invalidate();
         dispatchWorkspaceState();
-        return "زاویه بین خطوط = " + fmt(angleBetween(fixed, moving)) + "°";
+        return "Angle text Linetext = " + fmt(angleBetween(fixed, moving)) + "°";
     }
 
     private void clearDirectionalConstraints(Object line) {
@@ -558,16 +558,16 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     private void showConstraintsMenu() {
         String[] items = {
-                "H/V — افقی/عمودی",
-                "⊥ Perpendicular — عمود",
-                "∥ Parallel — موازی",
-                "● Coincident — اتصال نزدیک‌ترین سر دو خط",
-                isSelectionLocked() ? "🔓 Unlock — باز کردن" : "🔒 Lock — قفل",
-                autoConstraints ? "Auto Constraints — روشن" : "Auto Constraints — خاموش",
-                showParametricConstraints ? "نمایش علامت قیود — روشن" : "نمایش علامت قیود — خاموش"
+                "H/V — Horizontal/Vertical",
+                "⊥ Perpendicular — Perpendicular",
+                "∥ Parallel — Parallel",
+                "● Coincident — text text text text Line",
+                isSelectionLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
+                autoConstraints ? "Auto Constraints — On" : "Auto Constraints — Off",
+                showParametricConstraints ? "Show text Constraints — On" : "Show text Constraints — Off"
         };
         new AlertDialog.Builder(getContext())
-                .setTitle("Constraints / قیود")
+                .setTitle("Constraints / Constraints")
                 .setItems(items, (d, which) -> {
                     String result = null;
                     if (which == 0) result = applyHorizontalVerticalConstraint();
@@ -575,19 +575,19 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                     else if (which == 2) result = applyParallelConstraint();
                     else if (which == 3) result = applyManualCoincident();
                     else if (which == 4) result = toggleSelectedLock();
-                    else if (which == 5) { autoConstraints = !autoConstraints; result = autoConstraints ? "Auto Constraints روشن" : "Auto Constraints خاموش"; }
-                    else { showParametricConstraints = !showParametricConstraints; result = showParametricConstraints ? "علامت قیود نمایش داده می‌شود" : "علامت قیود مخفی شد"; }
+                    else if (which == 5) { autoConstraints = !autoConstraints; result = autoConstraints ? "Auto Constraints On" : "Auto Constraints Off"; }
+                    else { showParametricConstraints = !showParametricConstraints; result = showParametricConstraints ? "text Constraints Show text text" : "text Constraints Hide text"; }
                     if (result != null) toast(result);
                     invalidate();
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
     private String applyManualCoincident() {
-        if (isSelectionLocked()) return "انتخاب قفل است";
+        if (isSelectionLocked()) return "Selection Lock text";
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "برای Coincident دو خط را انتخاب کن";
+        if (lines.size() != 2) return "text Coincident text Line text Selection text";
         Object a = lines.get(0), b = lines.get(1);
         int ai = 0, bi = 0;
         float best = Float.MAX_VALUE;
@@ -601,7 +601,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
             }
         }
         PointF target = endpoint(a, ai);
-        if (target == null) return "اتصال ممکن نشد";
+        if (target == null) return "text text text";
         saveUndo();
         setEndpoint(b, bi, target.x, target.y);
         // Manual Coincident must create the same persistent relation as auto-connect.
@@ -609,7 +609,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         removePointLink(b, bi);
         registerPersistentCoincident(a, ai, b, bi);
         invalidate();
-        return "دو خط به هم متصل شدند";
+        return "text Line text text text became";
     }
 
     // ---------------------------------------------------------------------
@@ -818,7 +818,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         float right = getWidth() - 12f;
         float w = 170f;
         constraintsChip.set(right - w, 148f, right, 148f + UI_H);
-        drawChip(canvas, constraintsChip, autoConstraints ? "⌁ قیود • Auto" : "⌁ قیود • Manual");
+        drawChip(canvas, constraintsChip, autoConstraints ? "⌁ Constraints • Auto" : "⌁ Constraints • Manual");
     }
 
     private void drawAngleChip(Canvas canvas) {
@@ -842,7 +842,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         PointF c = selectionCenter(sel);
         if (c == null) return;
         PointF s = worldToScreen(c.x, c.y);
-        String text = isSelectionLocked() ? "🔒 قفل" : "🔓 آزاد";
+        String text = isSelectionLocked() ? "🔒 Lock" : "🔓 Unlocked";
         float w = 105f;
         float left = clamp(s.x + 70f, 10f, Math.max(10f, getWidth() - w - 10f));
         float top = clamp(s.y + 5f, 205f, Math.max(205f, getHeight() - 130f));
@@ -886,7 +886,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
         if (activeSketchLocked() && getTool() != TOOL_SELECT && action == MotionEvent.ACTION_DOWN) {
             super.setTool(TOOL_SELECT);
-            toast("اسکچ فعال قفل است");
+            toast("Sketch text Lock text");
             return true;
         }
 
@@ -904,7 +904,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
             if (isEntityLocked(hit)) {
                 selectOnly(hit);
                 lockedGesture = true;
-                toast("این هندسه قفل است؛ انتخاب می‌شود ولی تغییر نمی‌کند");
+                toast("text Geometry Lock text; Selection text but Transform text");
                 return true;
             }
             if (isSelectionLocked()) {
@@ -913,7 +913,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                     PointF cs = worldToScreen(c.x, c.y);
                     if (dist(sx, sy, cs.x, cs.y) <= 115f) {
                         lockedGesture = true;
-                        toast("انتخاب قفل است");
+                        toast("Selection Lock text");
                         return true;
                     }
                 }
@@ -1209,9 +1209,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         StringBuilder b = new StringBuilder(s.length());
         for (int i=0;i<s.length();i++) {
             char c=s.charAt(i);
-            if(c>='۰'&&c<='۹') b.append((char)('0'+c-'۰'));
-            else if(c>='٠'&&c<='٩') b.append((char)('0'+c-'٠'));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

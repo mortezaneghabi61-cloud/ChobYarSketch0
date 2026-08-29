@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
         root.addView(makeViewRail(), frameWrap(Gravity.END | Gravity.BOTTOM, 0, 0, 10, 20));
 
         status = new TextView(this);
-        status.setText("cm | قلم/لمس: طراحی دقیق • دو انگشت: Zoom/Pan");
+        status.setText("cm | text/touch: text text • text text: Zoom/Pan");
         status.setTextSize(11);
         status.setTextColor(Color.rgb(65, 72, 82));
         status.setGravity(Gravity.CENTER);
@@ -88,29 +88,29 @@ public class MainActivity extends Activity {
         bar.setBackground(round(Color.argb(247,255,255,255), Color.rgb(218,223,230), 17));
         bar.setElevation(dp(5));
 
-        bar.addView(iconBtn("⌂", "خانه", () -> Toast.makeText(this, "پروژه چوب‌یار", Toast.LENGTH_SHORT).show()));
+        bar.addView(iconBtn("⌂", "text", () -> Toast.makeText(this, "Project ChobYar", Toast.LENGTH_SHORT).show()));
 
         TextView title = new TextView(this);
-        title.setText("چوب‌یار  •  مدل‌سازی");
+        title.setText("ChobYar  •  Modeltext");
         title.setTextSize(14);
         title.setTextColor(Color.rgb(35, 42, 52));
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(46), 1f);
         bar.addView(title, tp);
 
-        bar.addView(iconBtn("↶", "Undo", () -> { cad.undo(); say("یک مرحله برگشت"); }));
-        bar.addView(iconBtn("⇩", "خروجی DXF", this::exportDxf));
-        bar.addView(iconBtn("⋯", "بیشتر", this::showMoreMenu));
+        bar.addView(iconBtn("↶", "Undo", () -> { cad.undo(); say("text text text"); }));
+        bar.addView(iconBtn("⇩", "text DXF", this::exportDxf));
+        bar.addView(iconBtn("⋯", "text", this::showMoreMenu));
         return bar;
     }
 
     private View makeMainRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("⌕", "ابزار", this::showAllTools));
+        rail.addView(railBtn("⌕", "Tools", this::showAllTools));
         rail.addView(railBtn("✎", "Sketch", this::showSketchMenu));
-        rail.addView(railBtn("＋", "افزودن", this::showInsertMenu));
-        rail.addView(railBtn("⌖", "ساخت", this::showConstructMenu));
-        rail.addView(railBtn("↗", "تغییر", this::showTransformMenu));
+        rail.addView(railBtn("＋", "Add", this::showInsertMenu));
+        rail.addView(railBtn("⌖", "Create", this::showConstructMenu));
+        rail.addView(railBtn("↗", "Transform", this::showTransformMenu));
         rail.addView(railBtn("⌁", "Tools", this::showToolsMenu));
         return rail;
     }
@@ -118,12 +118,12 @@ public class MainActivity extends Activity {
     private LinearLayout makeAdaptiveRail() {
         LinearLayout rail = verticalRail();
         rail.setBackground(round(Color.argb(248, 235, 244, 255), Color.rgb(145, 181, 235), 17));
-        rail.addView(railBtn("⌨", "اندازه", this::showExactDimension));
+        rail.addView(railBtn("⌨", "Dimension", this::showExactDimension));
         rail.addView(railBtn("⌖", "Snap Move", () -> say(cad.beginAnchorMove())));
-        rail.addView(railBtn("⟳", "چرخش", () -> promptCommand("چرخش — درجه", "مثال: 45", "ROTATE ")));
-        rail.addView(railBtn("↕", "Offset", () -> promptCommand("Offset — cm", "مثال: 1.8", "OFFSET ")));
-        rail.addView(railBtn("⋯", "بیشتر", this::showTransformMenu));
-        rail.addView(railBtn("⌫", "حذف", this::deleteSelectedQuick));
+        rail.addView(railBtn("⟳", "text", () -> promptCommand("text — degrees", "text: 45", "ROTATE ")));
+        rail.addView(railBtn("↕", "Offset", () -> promptCommand("Offset — cm", "text: 1.8", "OFFSET ")));
+        rail.addView(railBtn("⋯", "text", this::showTransformMenu));
+        rail.addView(railBtn("⌫", "Delete", this::deleteSelectedQuick));
         return rail;
     }
 
@@ -131,31 +131,31 @@ public class MainActivity extends Activity {
         LinearLayout rail = verticalRail();
         rail.addView(railBtn("⌁", "Snap", () -> {
             cad.toggleSnap();
-            say(cad.isSnapEnabled() ? "Snap روشن" : "Snap خاموش");
+            say(cad.isSnapEnabled() ? "Snap On" : "Snap Off");
         }));
         rail.addView(railBtn("⊥", "Ortho", () -> {
             cad.toggleOrtho();
-            say(cad.isOrthoEnabled() ? "قفل افقی/عمودی روشن" : "قفل افقی/عمودی خاموش");
+            say(cad.isOrthoEnabled() ? "Lock Horizontal/Vertical On" : "Lock Horizontal/Vertical Off");
         }));
         rail.addView(railBtn("#", "Grid", () -> {
             cad.toggleGrid();
-            say(cad.isShowGrid() ? "Grid روشن" : "Grid خاموش");
+            say(cad.isShowGrid() ? "Grid On" : "Grid Off");
         }));
         return rail;
     }
 
     private View makeModeRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("↔", "اندازه", () -> setTool(CadCanvasView.TOOL_MEASURE, "اندازه‌گیری")));
-        rail.addView(railBtn("☑", "چندانتخاب", () -> say(cad.toggleMultiSelectMode())));
+        rail.addView(railBtn("↔", "Dimension", () -> setTool(CadCanvasView.TOOL_MEASURE, "Measure")));
+        rail.addView(railBtn("☑", "textSelection", () -> say(cad.toggleMultiSelectMode())));
         return rail;
     }
 
     private View makeViewRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("◇", "Fit", () -> { cad.fitAll(); say("تمام نقشه در صفحه"); }));
+        rail.addView(railBtn("◇", "Fit", () -> { cad.fitAll(); say("text text text Plane"); }));
         rail.addView(railBtn("⌁", "Snap", this::showSnapMenu));
-        rail.addView(railBtn("cm", "واحد", () -> Toast.makeText(this, "واحد کاری: سانتی‌متر (cm)", Toast.LENGTH_SHORT).show()));
+        rail.addView(railBtn("cm", "text", () -> Toast.makeText(this, "text text: cm (cm)", Toast.LENGTH_SHORT).show()));
         rail.addView(railBtn("◫", "View", this::showViewMenu));
         return rail;
     }
@@ -213,7 +213,7 @@ public class MainActivity extends Activity {
     }
 
     private void onWorkspaceStateChanged(String info, boolean exactAvailable, int activeTool) {
-        boolean hasSelection = info != null && !info.startsWith("هیچ") && !info.startsWith("اول");
+        boolean hasSelection = info != null && !info.startsWith("None") && !info.startsWith("First");
         if (adaptiveRail != null) adaptiveRail.setVisibility(hasSelection ? View.VISIBLE : View.GONE);
         if (constraintRail != null) constraintRail.setVisibility(activeTool == CadCanvasView.TOOL_SELECT ? View.GONE : View.VISIBLE);
         if (hasSelection) say(info);
@@ -221,75 +221,75 @@ public class MainActivity extends Activity {
 
     private void setTool(int tool, String name) {
         cad.setTool(tool);
-        say("Sketch • " + name + " — اندازه زنده کنار شکل نمایش داده می‌شود");
+        say("Sketch • " + name + " — Dimension text text text Show text text");
     }
 
     private void showSketchMenu() {
         String[] items = {
-                "／ خط", "□ مستطیل", "○ دایره", "⌒ قوس", "⬡ چندضلعی",
-                "• نقطه", "✎ رسم آزاد", "↔ اندازه‌گیری", "┼ راهنما"
+                "／ Line", "□ Rectangle", "○ Circle", "⌒ Arc", "⬡ Polygon",
+                "• Point", "✎ text Unlocked", "↔ Measure", "┼ Guide"
         };
         new AlertDialog.Builder(this)
-                .setTitle("Sketch / طراحی دوبعدی")
+                .setTitle("Sketch / text text")
                 .setItems(items, (d, w) -> {
                     switch (w) {
-                        case 0: setTool(CadCanvasView.TOOL_LINE, "خط"); break;
-                        case 1: setTool(CadCanvasView.TOOL_RECT, "مستطیل"); break;
-                        case 2: setTool(CadCanvasView.TOOL_CIRCLE, "دایره"); break;
-                        case 3: setTool(CadCanvasView.TOOL_ARC, "قوس"); break;
+                        case 0: setTool(CadCanvasView.TOOL_LINE, "Line"); break;
+                        case 1: setTool(CadCanvasView.TOOL_RECT, "Rectangle"); break;
+                        case 2: setTool(CadCanvasView.TOOL_CIRCLE, "Circle"); break;
+                        case 3: setTool(CadCanvasView.TOOL_ARC, "Arc"); break;
                         case 4: showPolygonToolDialog(); break;
-                        case 5: setTool(CadCanvasView.TOOL_POINT, "نقطه"); break;
-                        case 6: setTool(CadCanvasView.TOOL_FREE, "رسم آزاد"); break;
-                        case 7: setTool(CadCanvasView.TOOL_MEASURE, "اندازه‌گیری"); break;
-                        default: setTool(CadCanvasView.TOOL_GUIDE, "راهنما"); break;
+                        case 5: setTool(CadCanvasView.TOOL_POINT, "Point"); break;
+                        case 6: setTool(CadCanvasView.TOOL_FREE, "text Unlocked"); break;
+                        case 7: setTool(CadCanvasView.TOOL_MEASURE, "Measure"); break;
+                        default: setTool(CadCanvasView.TOOL_GUIDE, "Guide"); break;
                     }
                 }).show();
     }
 
     private void showInsertMenu() {
-        String[] items = {"• نقطه مرجع", "┼ Guide / راهنما", "⬡ چندضلعی"};
+        String[] items = {"• Point text", "┼ Guide / Guide", "⬡ Polygon"};
         new AlertDialog.Builder(this)
-                .setTitle("افزودن")
+                .setTitle("Add")
                 .setItems(items, (d, w) -> {
-                    if (w == 0) setTool(CadCanvasView.TOOL_POINT, "نقطه مرجع");
+                    if (w == 0) setTool(CadCanvasView.TOOL_POINT, "Point text");
                     else if (w == 1) setTool(CadCanvasView.TOOL_GUIDE, "Guide");
                     else showPolygonToolDialog();
                 }).show();
     }
 
     private void showConstructMenu() {
-        String[] items = {"┼ ساخت Guide", "محورهای X/Y", "Grid", "نمایش/مخفی Guide"};
+        String[] items = {"┼ Create Guide", "Axestext X/Y", "Grid", "Show/Hide Guide"};
         new AlertDialog.Builder(this)
-                .setTitle("Construct / هندسه کمکی")
+                .setTitle("Construct / Geometry text")
                 .setItems(items, (d, w) -> {
                     if (w == 0) setTool(CadCanvasView.TOOL_GUIDE, "Guide");
-                    else if (w == 1) { cad.toggleAxes(); say(cad.isShowAxes()?"محورها روشن":"محورها مخفی"); }
-                    else if (w == 2) { cad.toggleGrid(); say(cad.isShowGrid()?"Grid روشن":"Grid خاموش"); }
-                    else { cad.toggleGuides(); say(cad.isShowGuides()?"Guide روشن":"Guide مخفی"); }
+                    else if (w == 1) { cad.toggleAxes(); say(cad.isShowAxes()?"Axes On":"Axes Hide"); }
+                    else if (w == 2) { cad.toggleGrid(); say(cad.isShowGrid()?"Grid On":"Grid Off"); }
+                    else { cad.toggleGuides(); say(cad.isShowGuides()?"Guide On":"Guide Hide"); }
                 }).show();
     }
 
     private void showTransformMenu() {
         String[] items = {
-                "⌨ اندازه دقیق", "⌖ جابه‌جایی با Snap", "↔ Move عددی", "⧉ Copy",
+                "⌨ Exact Dimension", "⌖ text text Snap", "↔ Move text", "⧉ Copy",
                 "⟳ Rotate", "↗ Scale", "⇄ Mirror X", "⇅ Mirror Y",
-                "Array", "Offset", "گروه", "بازکردن گروه"
+                "Array", "Offset", "text", "text text"
         };
         new AlertDialog.Builder(this)
-                .setTitle("Transform / تغییر")
+                .setTitle("Transform / Transform")
                 .setMessage(cad.selectedInfo())
                 .setItems(items, (d, w) -> {
                     switch (w) {
                         case 0: showExactDimension(); break;
                         case 1: say(cad.beginAnchorMove()); break;
-                        case 2: promptCommand("Move — cm", "dx dy، مثال: 5 0", "MOVE "); break;
-                        case 3: promptCommand("Copy — cm", "dx dy، مثال: 10 0", "COPY "); break;
-                        case 4: promptCommand("Rotate — درجه", "مثال: 45", "ROTATE "); break;
-                        case 5: promptCommand("Scale", "مثال: 1.5", "SCALE "); break;
-                        case 6: promptCommand("Mirror X — cm", "محور، مثال: 0", "MIRROR X "); break;
-                        case 7: promptCommand("Mirror Y — cm", "محور، مثال: 0", "MIRROR Y "); break;
-                        case 8: promptCommand("Array", "تعداد dx dy، مثال: 4 10 0", "ARRAY "); break;
-                        case 9: promptCommand("Offset — cm", "مثال: 1.8", "OFFSET "); break;
+                        case 2: promptCommand("Move — cm", "dx dy, text: 5 0", "MOVE "); break;
+                        case 3: promptCommand("Copy — cm", "dx dy, text: 10 0", "COPY "); break;
+                        case 4: promptCommand("Rotate — degrees", "text: 45", "ROTATE "); break;
+                        case 5: promptCommand("Scale", "text: 1.5", "SCALE "); break;
+                        case 6: promptCommand("Mirror X — cm", "Axis, text: 0", "MIRROR X "); break;
+                        case 7: promptCommand("Mirror Y — cm", "Axis, text: 0", "MIRROR Y "); break;
+                        case 8: promptCommand("Array", "text dx dy, text: 4 10 0", "ARRAY "); break;
+                        case 9: promptCommand("Offset — cm", "text: 1.8", "OFFSET "); break;
                         case 10: say(cad.groupSelected()); break;
                         default: say(cad.ungroupSelected()); break;
                     }
@@ -299,7 +299,7 @@ public class MainActivity extends Activity {
     private void showToolsMenu() {
         String[] items = {
                 "Trim", "Extend", "Fillet", "Chamfer", "Join",
-                "متریال", "لایه‌ها", "DXF خروجی", "3D / Extrude"
+                "Material", "text", "DXF text", "3D / Extrude"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Tools")
@@ -307,8 +307,8 @@ public class MainActivity extends Activity {
                     switch (w) {
                         case 0: say(cad.trimSelectedLines()); break;
                         case 1: say(cad.extendSelectedLines()); break;
-                        case 2: promptCommand("Fillet — شعاع cm", "مثال: 1", "FILLET "); break;
-                        case 3: promptCommand("Chamfer — cm", "مثال: 1", "CHAMFER "); break;
+                        case 2: promptCommand("Fillet — Radius cm", "text: 1", "FILLET "); break;
+                        case 3: promptCommand("Chamfer — cm", "text: 1", "CHAMFER "); break;
                         case 4: say(cad.joinSelectedLines()); break;
                         case 5: showMaterialMenu(); break;
                         case 6: showLayerMenu(); break;
@@ -319,20 +319,20 @@ public class MainActivity extends Activity {
     }
 
     private void showAllTools() {
-        String[] items = {"Sketch", "Transform", "Construct", "Tools", "انتخاب"};
+        String[] items = {"Sketch", "Transform", "Construct", "Tools", "Selection"};
         new AlertDialog.Builder(this)
-                .setTitle("ابزارها")
+                .setTitle("Toolstext")
                 .setItems(items, (d, w) -> {
                     if (w == 0) showSketchMenu();
                     else if (w == 1) showTransformMenu();
                     else if (w == 2) showConstructMenu();
                     else if (w == 3) showToolsMenu();
-                    else setTool(CadCanvasView.TOOL_SELECT, "انتخاب");
+                    else setTool(CadCanvasView.TOOL_SELECT, "Selection");
                 }).show();
     }
 
     private void showSnapMenu() {
-        String[] items = {"Snap روشن/خاموش", "Ortho افقی/عمودی", "Grid", "Guide", "ابعاد"};
+        String[] items = {"Snap On/Off", "Ortho Horizontal/Vertical", "Grid", "Guide", "text"};
         new AlertDialog.Builder(this)
                 .setTitle("Snaps / Guides")
                 .setItems(items, (d, w) -> {
@@ -341,14 +341,14 @@ public class MainActivity extends Activity {
                     else if (w == 2) cad.toggleGrid();
                     else if (w == 3) cad.toggleGuides();
                     else cad.toggleDimensions();
-                    say("تنظیمات Snap/View به‌روزرسانی شد");
+                    say("text Snap/View text text");
                 }).show();
     }
 
     private void showViewMenu() {
-        String[] items = {"Fit All", "Zoom In", "Zoom Out", "محور X/Y", "Grid", "ابعاد"};
+        String[] items = {"Fit All", "Zoom In", "Zoom Out", "Axis X/Y", "Grid", "text"};
         new AlertDialog.Builder(this)
-                .setTitle("View / نمایش")
+                .setTitle("View / Show")
                 .setItems(items, (d, w) -> {
                     if (w == 0) cad.fitAll();
                     else if (w == 1) cad.zoomBy(1.8f);
@@ -356,14 +356,14 @@ public class MainActivity extends Activity {
                     else if (w == 3) cad.toggleAxes();
                     else if (w == 4) cad.toggleGrid();
                     else cad.toggleDimensions();
-                    say("نمایش به‌روزرسانی شد");
+                    say("Show text text");
                 }).show();
     }
 
     private void showMoreMenu() {
-        String[] items = {"خروجی DXF", "لایه‌ها", "متریال", "پاک کردن کل نقشه", "درباره چوب‌یار"};
+        String[] items = {"text DXF", "text", "Material", "text text text text", "text ChobYar"};
         new AlertDialog.Builder(this)
-                .setTitle("چوب‌یار")
+                .setTitle("ChobYar")
                 .setItems(items, (d, w) -> {
                     if (w == 0) exportDxf();
                     else if (w == 1) showLayerMenu();
@@ -380,18 +380,18 @@ public class MainActivity extends Activity {
         input.setText("6");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
-                .setTitle("چندضلعی — تعداد ضلع")
-                .setMessage("۳ تا ۶۴ ضلع")
+                .setTitle("Polygon — text side")
+                .setMessage("3 until 64 side")
                 .setView(input)
-                .setPositiveButton("رسم", (d, w) -> {
+                .setPositiveButton("text", (d, w) -> {
                     try {
                         int sides = Integer.parseInt(normalizeDigits(input.getText().toString().trim()));
-                        if (sides < 3 || sides > 64) { say("تعداد ضلع باید بین 3 و 64 باشد"); return; }
+                        if (sides < 3 || sides > 64) { say("text side text text 3 text 64 text"); return; }
                         cad.executeCommand("POLYSIDES " + sides);
-                        setTool(CadCanvasView.TOOL_POLYGON, sides + " ضلعی");
-                    } catch (Exception e) { say("تعداد ضلع درست نیست"); }
+                        setTool(CadCanvasView.TOOL_POLYGON, sides + " text");
+                    } catch (Exception e) { say("text side is invalid"); }
                 })
-                .setNegativeButton("لغو", null).show();
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void showExactDimension() {
@@ -411,11 +411,11 @@ public class MainActivity extends Activity {
                 .setTitle(cad.exactDimensionTitle())
                 .setMessage(cad.exactDimensionHint())
                 .setView(input)
-                .setPositiveButton("اعمال", (d, w) -> {
+                .setPositiveButton("Apply", (d, w) -> {
                     say(cad.applySelectedDimension(input.getText().toString()));
                     cad.dispatchWorkspaceState();
                 })
-                .setNegativeButton("لغو", null).show();
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void promptCommand(String title, String hint, String prefix) {
@@ -426,28 +426,28 @@ public class MainActivity extends Activity {
                 .setTitle(title)
                 .setMessage(cad.selectedInfo())
                 .setView(input)
-                .setPositiveButton("اعمال", (d, w) -> {
+                .setPositiveButton("Apply", (d, w) -> {
                     say(cad.executeCommand(prefix + normalizeDigits(input.getText().toString().trim())));
                     cad.dispatchWorkspaceState();
                 })
-                .setNegativeButton("لغو", null).show();
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void showLayerMenu() {
-        String[] items = {"لایه جاری", "انتقال انتخاب به لایه", "مخفی کردن لایه", "نمایش لایه"};
+        String[] items = {"text text", "text Selection text text", "Hide text text", "Show text"};
         new AlertDialog.Builder(this)
                 .setTitle("Items / Layers")
-                .setMessage("لایه جاری: " + cad.getCurrentLayer())
+                .setMessage("text text: " + cad.getCurrentLayer())
                 .setItems(items, (d, w) -> {
-                    if (w == 0) promptCommand("نام لایه جاری", "مثال: MDF18", "LAYER ");
-                    else if (w == 1) promptCommand("انتقال به لایه", "مثال: پایه", "ASSIGNLAYER ");
-                    else if (w == 2) promptCommand("مخفی کردن لایه", "نام لایه", "LAYERHIDE ");
-                    else promptCommand("نمایش لایه", "نام لایه", "LAYERSHOW ");
+                    if (w == 0) promptCommand("text text text", "text: MDF18", "LAYER ");
+                    else if (w == 1) promptCommand("text text text", "text: text", "ASSIGNLAYER ");
+                    else if (w == 2) promptCommand("Hide text text", "text text", "LAYERHIDE ");
+                    else promptCommand("Show text", "text text", "LAYERSHOW ");
                 }).show();
     }
 
     private void showMaterialMenu() {
-        String[] items = {"WOOD — چوب", "MDF", "METAL — فلز", "GLASS — شیشه", "DEFAULT"};
+        String[] items = {"WOOD — Wood", "MDF", "METAL — Metal", "GLASS — Glass", "DEFAULT"};
         String[] values = {"WOOD", "MDF", "METAL", "GLASS", "DEFAULT"};
         new AlertDialog.Builder(this)
                 .setTitle("Material")
@@ -458,9 +458,9 @@ public class MainActivity extends Activity {
         String[] items = {"Extrude / Push-Pull", "Revolve", "Loft", "Sweep", "Shell", "Union", "Subtract", "Intersect"};
         new AlertDialog.Builder(this)
                 .setTitle("3D")
-                .setMessage("Extrude فعلاً پیش‌نمایش 2.5D است؛ ابزارهای Solid بعد از هسته سه‌بعدی واقعی فعال می‌شوند.")
+                .setMessage("Extrude text Preview 2.5D text; Toolstext Solid text text text text text text text.")
                 .setItems(items, (d, w) -> {
-                    if (w == 0) promptCommand("Extrude — cm", "ارتفاع؛ مثال: 1.8", "EXTRUDE ");
+                    if (w == 0) promptCommand("Extrude — cm", "Height; text: 1.8", "EXTRUDE ");
                     else {
                         String[] c = {"", "REVOLVE", "LOFT", "SWEEP", "SHELL", "UNION", "SUBTRACT", "INTERSECT"};
                         say(cad.executeCommand(c[w]));
@@ -470,20 +470,20 @@ public class MainActivity extends Activity {
 
     private void deleteSelectedQuick() {
         String info = cad.selectedInfo();
-        if (info == null || info.startsWith("هیچ")) { say("اول یک شیء را انتخاب کن"); return; }
+        if (info == null || info.startsWith("None")) { say("First text text text Selection text"); return; }
         new AlertDialog.Builder(this)
-                .setTitle("حذف انتخاب؟")
+                .setTitle("Delete Selection?")
                 .setMessage(info)
-                .setPositiveButton("حذف", (d, w) -> { cad.deleteSelected(); say("انتخاب حذف شد"); })
-                .setNegativeButton("لغو", null).show();
+                .setPositiveButton("Delete", (d, w) -> { cad.deleteSelected(); say("Selection Delete text"); })
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void confirmClear() {
         new AlertDialog.Builder(this)
-                .setTitle("پاک کردن کل نقشه؟")
-                .setMessage("Undo برای برگشت مرحله قبل در دسترس است.")
-                .setPositiveButton("پاک کن", (d, w) -> { cad.clearAll(); say("صفحه پاک شد"); })
-                .setNegativeButton("لغو", null).show();
+                .setTitle("text text text text?")
+                .setMessage("Undo text text text text text text text.")
+                .setPositiveButton("text text", (d, w) -> { cad.clearAll(); say("Plane text text"); })
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void say(String s) {
@@ -507,9 +507,9 @@ public class MainActivity extends Activity {
         try (OutputStream out = getContentResolver().openOutputStream(uri)) {
             if (out == null) throw new IllegalStateException("No output stream");
             out.write(cad.buildDxf().getBytes(StandardCharsets.UTF_8));
-            Toast.makeText(this, "فایل DXF ذخیره شد", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "text DXF Save text", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "خطا در ذخیره DXF", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error text Save DXF", Toast.LENGTH_LONG).show();
         }
         enterImmersiveMode();
     }
@@ -537,9 +537,7 @@ public class MainActivity extends Activity {
         StringBuilder b = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c >= '۰' && c <= '۹') b.append((char)('0' + c - '۰'));
-            else if (c >= '٠' && c <= '٩') b.append((char)('0' + c - '٠'));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

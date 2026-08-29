@@ -75,7 +75,7 @@ public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
 
     /** User-visible unit policy. */
     public String dualUnitSummary() {
-        return "واحد پروژه: میلی‌متر (mm)";
+        return "Project Units: mm (mm)";
     }
 
     @Override
@@ -86,21 +86,21 @@ public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
     @Override
     public String exactDimensionTitle() {
         String title = super.exactDimensionTitle();
-        title = title.replace(" — cm", "").replace(" — سانتی‌متر", "");
+        title = title.replace(" — cm", "").replace(" — cm", "");
         return title.endsWith("— mm") ? title : title + " — mm";
     }
 
     @Override
     public String exactDimensionHint() {
         Object selected = selectedObject();
-        if (selected == null) return "اول فقط یک شکل را انتخاب کن";
+        if (selected == null) return "First, select only one shape";
         String type = selected.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "طول به میلی‌متر؛ مثال: 800";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع به میلی‌متر؛ مثال: 600 400";
-        if ("CircleEntity".equals(type)) return "قطر به میلی‌متر؛ مثال: 80";
-        if ("ArcEntity".equals(type)) return "شعاع به میلی‌متر؛ مثال: 50";
-        if ("PolygonEntity".equals(type)) return "شعاع به میلی‌متر؛ مثال: 80";
-        return "برای این شکل ویرایش عددی تعریف نشده";
+        if ("LineEntity".equals(type)) return "Length text mm; text: 800";
+        if ("RectEntity".equals(type)) return "Width text Height text mm; text: 600 400";
+        if ("CircleEntity".equals(type)) return "Diameter text mm; text: 80";
+        if ("ArcEntity".equals(type)) return "Radius text mm; text: 50";
+        if ("PolygonEntity".equals(type)) return "Radius text mm; text: 80";
+        return "No numerical editing is defined for this figure";
     }
 
     @Override
@@ -299,9 +299,7 @@ public class DualUnitSolidCadCanvasView extends SolidCadCanvasView {
         StringBuilder b=new StringBuilder(s.length());
         for(int i=0;i<s.length();i++){
             char c=s.charAt(i);
-            if(c>='۰'&&c<='۹')b.append((char)('0'+(c-'۰')));
-            else if(c>='٠'&&c<='٩')b.append((char)('0'+(c-'٠')));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

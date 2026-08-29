@@ -11,11 +11,11 @@ import java.util.Locale;
  */
 final class CadMaterialPreset {
     enum Preset {
-        WOOD("wood", "چوب", 0xFFB98758, 0.68f, 0.00f),
-        FABRIC("fabric", "پارچه", 0xFF7A8290, 0.90f, 0.00f),
-        PLASTIC("plastic", "پلاستیک", 0xFFD5D8DD, 0.48f, 0.00f),
-        METAL("metal", "فلز", 0xFFAAB3BD, 0.28f, 0.88f),
-        PAINT("paint", "رنگ", 0xFF3E78C8, 0.38f, 0.04f);
+        WOOD("wood", "Wood", 0xFFB98758, 0.68f, 0.00f),
+        FABRIC("fabric", "Fabric", 0xFF7A8290, 0.90f, 0.00f),
+        PLASTIC("plastic", "Plastic", 0xFFD5D8DD, 0.48f, 0.00f),
+        METAL("metal", "Metal", 0xFFAAB3BD, 0.28f, 0.88f),
+        PAINT("paint", "Paint", 0xFF3E78C8, 0.38f, 0.04f);
 
         final String key;
         final String label;

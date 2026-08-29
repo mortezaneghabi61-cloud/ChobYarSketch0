@@ -181,30 +181,30 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     public void showDirectManager(){
         pruneDeadBodies();
         Object body=selectedBody();Object record=body==null?null:ensureNativeRecord(body);
-        String state=body==null?"Body انتخاب نشده"
-                :record==null?bodyName(body)+" • Shape دقیق آماده نیست"
-                :bodyName(body)+" • OCCT Exact • Topology naming روشن";
-        String edge=selectedEdgeRef==null||selectedEdgeBody!=body?"Edge انتخاب نشده":"Edge: "+selectedEdgeRef.id;
+        String state=body==null?"No body selected"
+                :record==null?bodyName(body)+" • Shape text is not ready"
+                :bodyName(body)+" • OCCT Exact • Topology naming On";
+        String edge=selectedEdgeRef==null||selectedEdgeBody!=body?"No edge selected":"Edge: "+selectedEdgeRef.id;
         SolidCSG.Polygon face=selectedFace();
-        String faceState=face==null?"Face انتخاب نشده":"Face آماده ثبت شناسه پایدار";
+        String faceState=face==null?"No face selected":"Face Ready text text text";
         String[] items={
-                "⌁ انتخاب Edge دقیق / Stable Edge ID",
-                "⌒ Fillet روی Edge انتخاب‌شده",
-                "◩ Chamfer روی Edge انتخاب‌شده",
-                "↕ Push/Pull روی Face انتخاب‌شده",
-                "▱ Shell — بازکردن Face انتخاب‌شده",
-                "↔ Move Body در X / Y / Z",
-                "⟳ Rotate Body حول X / Y / Z",
-                "⇲ Scale Body دقیق",
-                "⇋ Mirror حول صفحه مرکزی",
+                "⌁ Selection Edge text / Stable Edge ID",
+                "⌒ Fillet Roy Edge selected",
+                "◩ Chamfer is selected on Edge",
+                "↕ Push/Pull on Face selected",
+                "▱ Shell — Open Face selected",
+                "↔ Move Body text X / Y / Z",
+                "⟳ Rotate Body text X / Y / Z",
+                "⇲ Scale Body text",
+                "⇋ Mirror text Plane Centertext",
                 "⠿ Linear Pattern",
-                "⏱ History پارامتریک + OCCT",
-                "↶ Undo آخرین Direct Feature",
-                "⌘ ابزار Exact قبلی / Inspector"
+                "⏱ History Parametric + OCCT",
+                "↶ Undo text Direct Feature",
+                "⌘ Tools Exact text / Inspector"
         };
         new AlertDialog.Builder(getContext()).setTitle("Edit 3D • Stable OCCT")
                 .setMessage(state+"\n"+edge+"\n"+faceState
-                        +"\n\nFace/Edge به شناسه منطقی متصل می‌شود و بعد از تغییر Featureهای قبلی دوباره روی Shape جدید پیدا می‌شود.")
+                        +" \n  \n Face/Edge text text text text text text text text Transform Featuretext text text Roy Shape text text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)beginEdgePick();
                     else if(w==1)askEdgeFeature(Kind.FILLET);
@@ -219,25 +219,25 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                     else if(w==10)showHistoryManager();
                     else if(w==11)toast(undoStable());
                     else OcctStableCadCanvasView.super.showDirectManager();
-                }).setNegativeButton("بستن",null).show();
+                }).setNegativeButton("Close",null).show();
     }
 
     @Override
     public void showFinishManager(){showDirectManager();}
 
     private void beginEdgePick(){
-        Object body=selectedBody();if(body==null){ensure3D();toast("اول Body را انتخاب کن");return;}
-        if(ensureNativeRecord(body)==null){toast("Shape دقیق این Body آماده نیست");return;}
+        Object body=selectedBody();if(body==null){ensure3D();toast("Select a body first");return;}
+        if(ensureNativeRecord(body)==null){toast("Shape text text Body is not ready");return;}
         ensure3D();edgePickMode=true;edgeA=edgeB=edgeAnchor=null;selectedEdgeRef=null;selectedEdgeBody=null;invalidate();
-        toast("روی لبه بزن؛ برایش Stable Edge ID ساخته می‌شود");
+        toast("Roy Edge text; text Stable Edge ID created text");
     }
 
     private void askEdgeFeature(Kind kind){
         Object body=selectedBody();
         if(body==null||selectedEdgeRef==null||selectedEdgeBody!=body){beginEdgePick();return;}
-        String title=kind==Kind.FILLET?"Fillet — شعاع":"Chamfer — فاصله";
-        askLength(title,"مثال: 5mm یا 0.5cm","5mm",false,v->{
-            if(v<=0){toast("مقدار باید بزرگ‌تر از صفر باشد");return;}
+        String title=kind==Kind.FILLET?"Fillet — Radius":"Chamfer — Distance";
+        askLength(title,"text: 5mm text 0.5cm","5mm",false,v->{
+            if(v<=0){toast("text text text text text text");return;}
             recordStable(body,new StableEdit(directSerial++,kind,v,null,selectedEdgeRef));
         });
     }
@@ -249,8 +249,8 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private void showEdgeFeaturePreview(Kind kind){
         Object body=selectedBody();
-        if(body==null||selectedEdgeRef==null||selectedEdgeBody!=body){toast("اول Edge را لمس کن");return;}
-        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق آماده نیست");return;}
+        if(body==null||selectedEdgeRef==null||selectedEdgeBody!=body){toast("Select an edge first");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape text is not ready");return;}
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(6),dp(20),0);
         TextView value=new TextView(getContext());value.setTextSize(18f);
         SeekBar slider=new SeekBar(getContext());slider.setMax(200);slider.setProgress(20);
@@ -265,13 +265,13 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         });
         preview.run();
         AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle(kind==Kind.FILLET?"Fillet":"Chamfer")
-                .setMessage(selectedEdgeRef.id+" • پیش‌نمایش دقیق OCCT").setView(box)
+                .setMessage(selectedEdgeRef.id+" • Preview text OCCT").setView(box)
                 .setPositiveButton("Done",null).setNegativeButton("Cancel",null).create();
         dialog.setOnShowListener(x->{
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try{double mm=Math.abs(parseLengthMm(exact.getText().toString()));if(mm<=0)throw new IllegalArgumentException();
                     clearFeaturePreview();dialog.dismiss();recordStable(body,new StableEdit(directSerial++,kind,mm,null,selectedEdgeRef));
-                }catch(Exception e){exact.setError("مثال: 2mm یا 0.2cm");}
+                }catch(Exception e){exact.setError("text: 2mm text 0.2cm");}
             });
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearFeaturePreview();dialog.dismiss();});
         });
@@ -291,11 +291,11 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private void showFaceFeaturePreview(Kind kind){
         Object body=selectedBody();SolidCSG.Polygon face=selectedFace();
-        if(body==null||face==null){toast("اول Face را لمس کن");return;}
-        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق آماده نیست");return;}
+        if(body==null||face==null){toast("Select a face first");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape text is not ready");return;}
         String id=nextTopologyId(body,OcctTopologyRef.FACE);
         OcctTopologyRef.Ref ref=OcctTopologyRef.captureFace(recordHandle(record),face.centroid(),id);
-        if(ref==null){toast("Face دقیق پیدا نشد");return;}
+        if(ref==null){toast("Face text was not found");return;}
 
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(6),dp(20),0);
         TextView value=new TextView(getContext());value.setTextSize(18f);
@@ -314,14 +314,14 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         preview.run();
         String title=kind==Kind.PUSH_PULL?"Offset Face / Push-Pull":"Shell";
         AlertDialog dialog=new AlertDialog.Builder(getContext()).setTitle(title)
-                .setMessage(ref.id+" • پیش‌نمایش B-Rep دقیق").setView(box)
+                .setMessage(ref.id+" • Preview B-Rep text").setView(box)
                 .setPositiveButton("Done",null).setNegativeButton("Cancel",null).create();
         dialog.setOnShowListener(x->{
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try{double mm=parseLengthMm(exact.getText().toString());if(kind==Kind.SHELL)mm=Math.abs(mm);
                     if(Math.abs(mm)<1e-8)throw new IllegalArgumentException();clearFeaturePreview();dialog.dismiss();
                     recordStable(body,new StableEdit(directSerial++,kind,mm,null,ref));
-                }catch(Exception e){exact.setError(kind==Kind.PUSH_PULL?"مثال: -5mm یا 1cm":"مثال: 2mm");}
+                }catch(Exception e){exact.setError(kind==Kind.PUSH_PULL?"text: -5mm text 1cm":"text: 2mm");}
             });
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{clearFeaturePreview();dialog.dismiss();});
         });
@@ -346,19 +346,19 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private void askFaceFeature(Kind kind){
         Object body=selectedBody();SolidCSG.Polygon face=selectedFace();
-        if(body==null||face==null){ensure3D();toast("اول Face موردنظر را لمس کن");return;}
-        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق آماده نیست");return;}
+        if(body==null||face==null){ensure3D();toast("First Face text text touch text");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape text is not ready");return;}
         String id=nextTopologyId(body,OcctTopologyRef.FACE);
         OcctTopologyRef.Ref ref=OcctTopologyRef.captureFace(recordHandle(record),face.centroid(),id);
-        if(ref==null){toast("برای این Face شناسه پایدار ساخته نشد");return;}
+        if(ref==null){toast("Persistent identifier could not be created for this Face");return;}
         if(kind==Kind.PUSH_PULL){
-            askLength("Push/Pull Face","مثبت = بیرون، منفی = داخل؛ "+ref.id,"10mm",true,v->{
-                if(Math.abs(v)<1e-8){toast("فاصله نباید صفر باشد");return;}
+            askLength("Push/Pull Face","text = text, text = text; "+ref.id,"10mm",true,v->{
+                if(Math.abs(v)<1e-8){toast("Distance text text text");return;}
                 recordStable(body,new StableEdit(directSerial++,Kind.PUSH_PULL,v,null,ref));
             });
         }else{
-            askLength("Shell — ضخامت","Face بازشونده: "+ref.id+" • مثال 2mm","2mm",false,v->{
-                if(v<=0){toast("ضخامت باید بزرگ‌تر از صفر باشد");return;}
+            askLength("Shell — Thickness","Face text: "+ref.id+" • text 2mm","2mm",false,v->{
+                if(v<=0){toast("Thickness text text text text text");return;}
                 recordStable(body,new StableEdit(directSerial++,Kind.SHELL,v,null,ref));
             });
         }
@@ -370,27 +370,27 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(initial);input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext()).setTitle(title+" • mm").setMessage(message).setView(input)
-                .setPositiveButton("اعمال",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{double v=parseLengthMm(input.getText().toString());if(!signed)v=Math.abs(v);consumer.accept(v);}
-                    catch(Exception e){toast("اندازه درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("Dimension was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void showMoveDialog(StableEdit editing){
-        Object body=editing==null?selectedBody():bodyFor(editing);if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=editing==null?selectedBody():bodyFor(editing);if(body==null){toast("Select a body first");return;}
         Geometry3D.Vec3 old=editing==null?new Geometry3D.Vec3(0,0,0):editing.vector;
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"X",mmText(old.x)),y=axisInput(box,"Y",mmText(old.y)),z=axisInput(box,"Z",mmText(old.z));
-        new AlertDialog.Builder(getContext()).setTitle((editing==null?"Move Body":"ویرایش D"+editing.id)+" • mm")
-                .setView(box).setPositiveButton("اعمال",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle((editing==null?"Move Body":"text D"+editing.id)+" • mm")
+                .setView(box).setPositiveButton("Apply",(d,w)->{
                     try{
                         Geometry3D.Vec3 v=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
                                 (float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
-                        if(v.length()<1e-8){toast("حرکت صفر است");return;}
+                        if(v.length()<1e-8){toast("text text text");return;}
                         if(editing==null)recordStable(body,new StableEdit(directSerial++,Kind.MOVE,0,v,null));
                         else{editing.vector=v;toast(rebuildAllStable());}
-                    }catch(Exception e){toast("مقدار X/Y/Z درست نیست");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("text X/Y/Z is invalid");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     /** Entry used by the production workspace: transform stays on the canvas. */
@@ -399,13 +399,13 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     }
 
     public String beginBodyTransformSession(){
-        Object body=selectedBody();if(body==null)return "اول Body را انتخاب کن";
-        Object record=ensureNativeRecord(body);if(record==null)return "Shape دقیق این Body آماده نیست";
+        Object body=selectedBody();if(body==null)return "Select a body first";
+        Object record=ensureNativeRecord(body);if(record==null)return "Shape text text Body is not ready";
         clearFeaturePreview();bodyTransformBody=body;bodyTransformActive=true;
         bodyTransformCopy=false;
         bodyTransformMove=new Geometry3D.Vec3(0,0,0);bodyTransformRotate=new Geometry3D.Vec3(0,0,0);
         bodyTransformCenter=bodyCenter(bodyCsg(body));bodyGizmoDrag=0;ensure3D();invalidate();dispatchWorkspaceState();
-        return "Move / Rotate • فلش‌های X/Y/Z یا حلقه‌ها را بکش";
+        return "Move / Rotate • text X/Y/Z text text text text";
     }
 
     public boolean isBodyTransformSessionActive(){return bodyTransformActive;}
@@ -417,11 +417,11 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         return copy+"X "+mmText(bodyTransformMove.x)+"  Y "+mmText(bodyTransformMove.y)+"  Z "+mmText(bodyTransformMove.z);
     }
 
-    public String toggleBodyTransformCopy(){if(!bodyTransformActive)return "Move / Rotate فعال نیست";bodyTransformCopy=!bodyTransformCopy;invalidate();dispatchWorkspaceState();return bodyTransformCopy?"Copy روشن شد • بدنهٔ جدید ساخته می‌شود":"Copy خاموش شد";}
+    public String toggleBodyTransformCopy(){if(!bodyTransformActive)return "Move / Rotate text text";bodyTransformCopy=!bodyTransformCopy;invalidate();dispatchWorkspaceState();return bodyTransformCopy?"Copy On text • Bodytext text created text":"Copy Off text";}
     public boolean isBodyTransformCopy(){return bodyTransformCopy;}
 
     public String commitBodyTransformSession(){
-        if(!bodyTransformActive||bodyTransformBody==null)return "Move / Rotate فعال نیست";
+        if(!bodyTransformActive||bodyTransformBody==null)return "Move / Rotate text text";
         Object body=bodyTransformBody;Geometry3D.Vec3 move=bodyTransformMove,rotate=bodyTransformRotate;boolean copy=bodyTransformCopy;
         if(copy){
             String result=commitExactBodyCopy(body,move,rotate);endBodyTransformPreview();return result;
@@ -431,7 +431,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         Geometry3D.Vec3[] axes={new Geometry3D.Vec3(1,0,0),new Geometry3D.Vec3(0,1,0),new Geometry3D.Vec3(0,0,1)};
         float[] angles={rotate.x,rotate.y,rotate.z};
         for(int i=0;i<3;i++)if(Math.abs(angles[i])>1e-4f){recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,angles[i],axes[i],null));count++;}
-        return count==0?"Transform بدون تغییر بسته شد":"Move / Rotate دقیق ثبت شد • "+count+" Feature";
+        return count==0?"Transform text Transform text text":"Move / Rotate text text text • "+count+" Feature";
     }
 
     public void cancelBodyTransformSession(){if(!bodyTransformActive)return;endBodyTransformPreview();dispatchWorkspaceState();}
@@ -445,12 +445,12 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0);
         EditText x=axisInput(box,"Move X",mmText(bodyTransformMove.x)),y=axisInput(box,"Move Y",mmText(bodyTransformMove.y)),z=axisInput(box,"Move Z",mmText(bodyTransformMove.z));
         EditText rx=axisInput(box,"Rotate X",num(bodyTransformRotate.x)+"°"),ry=axisInput(box,"Rotate Y",num(bodyTransformRotate.y)+"°"),rz=axisInput(box,"Rotate Z",num(bodyTransformRotate.z)+"°");
-        new AlertDialog.Builder(getContext()).setTitle("Move / Rotate • مقدار دقیق")
-                .setMessage("جابجایی بر حسب mm و دوران بر حسب درجه است.").setView(box)
-                .setPositiveButton("پیش‌نمایش",(d,w)->{try{
+        new AlertDialog.Builder(getContext()).setTitle("Move / Rotate • text text")
+                .setMessage("text text text mm text text text text degrees text.").setView(box)
+                .setPositiveButton("Preview",(d,w)->{try{
                     bodyTransformMove=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),(float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
                     bodyTransformRotate=new Geometry3D.Vec3(parseAngleDeg(rx),parseAngleDeg(ry),parseAngleDeg(rz));refreshBodyTransformPreview(true);dispatchWorkspaceState();
-                }catch(Exception e){toast("مقادیر Move / Rotate درست نیست");}}).setNegativeButton("لغو",null).show();
+                }catch(Exception e){toast("text Move / Rotate is invalid");}}).setNegativeButton("Cancel",null).show();
     }
 
     private static float parseAngleDeg(EditText e){
@@ -459,29 +459,29 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     public String beginAlignSession(){
         Object body=selectedBody();SolidCSG.Polygon face=selectedFace();
-        if(body==null||face==null)return "برای Align ابتدا Face مبدأ را انتخاب کن";
-        if(ensureNativeRecord(body)==null)return "Shape دقیق Face مبدأ آماده نیست";
+        if(body==null||face==null)return "text Align Start point Face text text Selection text";
+        if(ensureNativeRecord(body)==null)return "Shape text Face text is not ready";
         cancelBodyTransformSession();clearFeaturePreview();alignActive=true;alignReady=false;alignFlip=true;alignBody=body;
         alignSourcePoint=face.centroid();alignSourceNormal=face.plane.normal.normalized();alignTargetPoint=null;alignTargetNormal=null;
-        invalidate();dispatchWorkspaceState();return "Align • حالا Face مقصد را لمس کن";
+        invalidate();dispatchWorkspaceState();return "Align • text Face text text touch text";
     }
 
     public boolean isAlignSessionActive(){return alignActive;}
     public boolean isAlignPreviewReady(){return alignActive&&alignReady;}
-    public String alignSummary(){return !alignReady?"Align • Face مقصد":"Align "+(alignFlip?"Opposed":"Same")+" • R "+num(alignRotationDeg)+"°";}
+    public String alignSummary(){return !alignReady?"Align • Face text":"Align "+(alignFlip?"Opposed":"Same")+" • R "+num(alignRotationDeg)+"°";}
 
     public String flipAlignSession(){
-        if(!alignReady)return "ابتدا Face مقصد را انتخاب کن";alignFlip=!alignFlip;
-        return refreshAlignPreview()?"Align • جهت برعکس شد":"پیش‌نمایش Align ساخته نشد";
+        if(!alignReady)return "Start point Face text text Selection text";alignFlip=!alignFlip;
+        return refreshAlignPreview()?"Align • text text text":"Preview Align created text";
     }
 
     public String commitAlignSession(){
-        if(!alignActive||!alignReady||alignBody==null)return "Align هنوز مقصد معتبر ندارد";
+        if(!alignActive||!alignReady||alignBody==null)return "Align text text text text";
         Object body=alignBody;Geometry3D.Vec3 axis=alignRotationAxis,move=alignMove;float angle=alignRotationDeg;
         endAlignSession();try{selectedBodyField.set(this,body);}catch(Exception ignored){}
         int count=0;if(Math.abs(angle)>1e-4f){recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,angle,axis,null));count++;}
         if(move.length()>1e-5f){recordStable(body,new StableEdit(directSerial++,Kind.MOVE,0,move,null));count++;}
-        return count==0?"دو Face از قبل هم‌راستا بودند":"Align دقیق ثبت شد • "+count+" Feature";
+        return count==0?"text Face text text textRighttext text":"Align text text text • "+count+" Feature";
     }
 
     public void cancelAlignSession(){if(!alignActive)return;endAlignSession();dispatchWorkspaceState();}
@@ -522,58 +522,58 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     }
 
     private void showRotateAxis(StableEdit editing){
-        Object body=editing==null?selectedBody():bodyFor(editing);if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=editing==null?selectedBody():bodyFor(editing);if(body==null){toast("Select a body first");return;}
         if(editing!=null){showRotateAngle(body,editing.vector,editing);return;}
         String[] axes={"X","Y","Z"};
-        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • محور")
+        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • Axis")
                 .setItems(axes,(d,w)->showRotateAngle(body,w==0?new Geometry3D.Vec3(1,0,0):w==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1),null))
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private void showRotateAngle(Object body,Geometry3D.Vec3 axis,StableEdit editing){
         EditText input=new EditText(getContext());input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         input.setText(editing==null?"90":num(editing.value));input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(getContext()).setTitle("Rotate حول "+axisName(axis))
-                .setMessage("زاویه بر حسب درجه؛ مرکز دوران = مرکز جرم Body")
-                .setView(input).setPositiveButton("اعمال",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle("Rotate text "+axisName(axis))
+                .setMessage("Angle text text degrees; Center text = Center text Body")
+                .setView(input).setPositiveButton("Apply",(d,w)->{
                     try{
-                        double deg=Double.parseDouble(normalizeDigits(input.getText().toString()));if(Math.abs(deg)<1e-8){toast("زاویه صفر است");return;}
+                        double deg=Double.parseDouble(normalizeDigits(input.getText().toString()));if(Math.abs(deg)<1e-8){toast("Angle text text");return;}
                         if(editing==null)recordStable(body,new StableEdit(directSerial++,Kind.ROTATE,deg,axis,null));
                         else{editing.value=deg;toast(rebuildAllStable());}
-                    }catch(Exception e){toast("زاویه درست نیست");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Angle is invalid");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     public void showScaleTool(){
-        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=selectedBody();if(body==null){toast("Select a body first");return;}
         EditText input=new EditText(getContext());input.setSingleLine();input.setText("1.25");input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(getContext()).setTitle("Scale Body • ضریب دقیق").setMessage("مثال: 2 یعنی دو برابر؛ 0.5 یعنی نصف")
-                .setView(input).setPositiveButton("اعمال",(d,w)->{try{double factor=Double.parseDouble(normalizeDigits(input.getText().toString()));
+        new AlertDialog.Builder(getContext()).setTitle("Scale Body • text text").setMessage("text: 2 text text text; 0.5 text text")
+                .setView(input).setPositiveButton("Apply",(d,w)->{try{double factor=Double.parseDouble(normalizeDigits(input.getText().toString()));
                     if(factor<=1e-6)throw new IllegalArgumentException();recordStable(body,new StableEdit(directSerial++,Kind.SCALE,factor,null,null));}
-                    catch(Exception e){toast("ضریب Scale درست نیست");}}).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("text Scale is invalid");}}).setNegativeButton("Cancel",null).show();
     }
 
     public void showMirrorTool(){
-        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
-        String[] planes={"YZ • برعکس‌کردن X","XZ • برعکس‌کردن Y","XY • برعکس‌کردن Z"};
-        new AlertDialog.Builder(getContext()).setTitle("Mirror Body • صفحه از مرکز Body").setItems(planes,(d,w)->{
+        Object body=selectedBody();if(body==null){toast("Select a body first");return;}
+        String[] planes={"YZ • text X","XZ • text Y","XY • text Z"};
+        new AlertDialog.Builder(getContext()).setTitle("Mirror Body • Plane text Center Body").setItems(planes,(d,w)->{
             Geometry3D.Vec3 normal=w==0?new Geometry3D.Vec3(1,0,0):w==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
             recordStable(body,new StableEdit(directSerial++,Kind.MIRROR,0,normal,null));
-        }).setNegativeButton("لغو",null).show();
+        }).setNegativeButton("Cancel",null).show();
     }
 
     public void showLinearPatternTool(){
-        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=selectedBody();if(body==null){toast("Select a body first");return;}
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"Step X","50mm"),y=axisInput(box,"Step Y","0mm"),z=axisInput(box,"Step Z","0mm");
-        EditText count=axisInput(box,"تعداد نسخه‌ها","3");
-        new AlertDialog.Builder(getContext()).setTitle("Linear Pattern • OCCT Exact").setMessage("فاصله هر تکرار و تعداد کل نسخه‌ها")
-                .setView(box).setPositiveButton("ساخت",(d,w)->{try{Geometry3D.Vec3 step=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
+        EditText count=axisInput(box,"text text","3");
+        new AlertDialog.Builder(getContext()).setTitle("Linear Pattern • OCCT Exact").setMessage("Distance text text text text text text")
+                .setView(box).setPositiveButton("Create",(d,w)->{try{Geometry3D.Vec3 step=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
                     (float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
                     int n=Integer.parseInt(normalizeDigits(count.getText().toString()).trim());if(step.length()<1e-8||n<2||n>256)throw new IllegalArgumentException();
-                    recordStable(body,new StableEdit(directSerial++,Kind.PATTERN,n,step,null));}catch(Exception e){toast("فاصله یا تعداد Pattern درست نیست");}})
-                .setNegativeButton("لغو",null).show();
+                    recordStable(body,new StableEdit(directSerial++,Kind.PATTERN,n,step,null));}catch(Exception e){toast("Distance text text Pattern is invalid");}})
+                .setNegativeButton("Cancel",null).show();
     }
 
     // ------------------------------------------------------------------
@@ -581,14 +581,14 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     // ------------------------------------------------------------------
 
     private void recordStable(Object body,StableEdit edit){
-        Object record=ensureNativeRecord(body);if(record==null){toast("Shape دقیق پیدا نشد");return;}
+        Object record=ensureNativeRecord(body);if(record==null){toast("Shape text was not found");return;}
         long old=recordHandle(record),next=applyKernel(old,edit);
         if(next==0L){toast(failure(edit));return;}
-        if(!replaceRecord(body,record,next,appendKind(recordKind(record),edit))){NativeBRepKernel.occtRelease(next);toast("ثبت Shape جدید انجام نشد");return;}
+        if(!replaceRecord(body,record,next,appendKind(recordKind(record),edit))){NativeBRepKernel.occtRelease(next);toast("text Shape text Done text");return;}
         List<StableEdit> list=stableByBody.get(body);if(list==null){list=new ArrayList<>();stableByBody.put(body,list);}list.add(edit);
         timeline.add(new TimelineEntry(body,edit));edit.broken=false;edit.warning="";
         updateFallbackFromNative(body);clearSubSelection();ensure3D();invalidate();dispatchWorkspaceState();
-        toast(edit.label()+" • ثبت شد");
+        toast(edit.label()+" • text text");
     }
 
     /** Deterministic non-modal bridge for bundled editable projects and persistence tests. */
@@ -606,7 +606,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         Geometry3D.Vec3 anchor=null;int subshapeIndex=-1;
         if(edit.target!=null){
             OcctTopologyRef.Resolution r=OcctTopologyRef.resolve(handle,edit.target);
-            if(r==null||r.score>180.0){edit.broken=true;edit.warning="Topology دوباره پیدا نشد";return 0L;}
+            if(r==null||r.score>180.0){edit.broken=true;edit.warning="Topology text was not found";return 0L;}
             anchor=r.anchor;subshapeIndex=r.subshapeIndex;
         }
         switch(edit.kind){
@@ -632,11 +632,11 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
 
     private String failure(StableEdit e){
         String target=e.target==null?"":" • "+e.target.id;
-        if(e.kind==Kind.FILLET)return"Fillet ساخته نشد؛ شعاع را کمتر کن"+target;
-        if(e.kind==Kind.CHAMFER)return"Chamfer ساخته نشد؛ فاصله را کمتر کن"+target;
-        if(e.kind==Kind.PUSH_PULL)return"Push/Pull روی این Face/فاصله ساخته نشد"+target;
-        if(e.kind==Kind.SHELL)return"Shell با این ضخامت ساخته نشد"+target;
-        return"Transform دقیق انجام نشد";
+        if(e.kind==Kind.FILLET)return"Fillet created text; Radius text text text"+target;
+        if(e.kind==Kind.CHAMFER)return"Chamfer created text; Distance text text text"+target;
+        if(e.kind==Kind.PUSH_PULL)return"Push/Pull Roy text Face/Distance created text"+target;
+        if(e.kind==Kind.SHELL)return"Shell text text Thickness created text"+target;
+        return"Transform text Done text";
     }
 
     private String rebuildAllStable(){
@@ -652,7 +652,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         int copyFailures=rebuildManualCopies();broken+=copyFailures;ok+=manualCopies.size()-copyFailures;
         for(Object body:new ArrayList<>(stableByBody.keySet()))if(isManualCopyOutput(body)){if(replayOneBody(body))ok++;else broken++;}
         invalidate();dispatchWorkspaceState();
-        return "Stable History بازسازی شد • "+ok+" Body"+(broken>0?" • "+broken+" خطا":"");
+        return "Stable History Rebuild text • "+ok+" Body"+(broken>0?" • "+broken+" Error":"");
     }
 
     private boolean isManualCopyOutput(Object body){for(ManualCopy copy:manualCopies)if(copy.output==body)return true;return false;}
@@ -677,7 +677,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         for(StableEdit e:edits){
             e.broken=false;e.warning="";
             long next=applyKernel(current,e);
-            if(next==0L){failed=e;if(e.warning.isEmpty())e.warning="OCCT Feature نامعتبر شد";break;}
+            if(next==0L){failed=e;if(e.warning.isEmpty())e.warning="OCCT Feature invalid text";break;}
             generated.add(next);current=next;
         }
         if(failed!=null){
@@ -703,7 +703,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         pruneDeadBodies();if(timeline.isEmpty())return super.undoLastFeature();
         TimelineEntry last=timeline.remove(timeline.size()-1);List<StableEdit> list=stableByBody.get(last.body);
         if(list!=null){list.remove(last.edit);if(list.isEmpty())stableByBody.remove(last.body);}
-        rebuildAllStable();return "D"+last.edit.id+" برگشت • "+last.edit.kind.name();
+        rebuildAllStable();return "D"+last.edit.id+" text • "+last.edit.kind.name();
     }
 
     private String undoStable(){return undoLastFeature();}
@@ -723,50 +723,50 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
             rows[i+1]=f.label()+" • "+bodyName(e.body)+(f.broken?" • ⚠ "+f.warning:"");
         }
         new AlertDialog.Builder(getContext()).setTitle("History • Parametric + OCCT")
-                .setMessage("Direct Featureها Stable Face/Edge ID دارند. اگر Feature قبلی تغییر کند، Shape پایه ساخته و Topology دوباره تطبیق داده می‌شود.")
+                .setMessage("Direct Featuretext Stable Face/Edge ID text. text Feature text Transform text, Shape text created text Topology text text text text.")
                 .setItems(rows,(d,w)->{if(w==0)OcctStableCadCanvasView.super.showHistoryManager();else editStableEntry(timeline.get(w-1));})
-                .setNeutralButton("بازسازی همه",(d,w)->toast(rebuildHistory()))
-                .setNegativeButton("بستن",null).show();
+                .setNeutralButton("Rebuild All",(d,w)->toast(rebuildHistory()))
+                .setNegativeButton("Close",null).show();
     }
 
     private void editStableEntry(TimelineEntry entry){
         StableEdit e=entry.edit;
         String topo=e.target==null?"Body Feature":OcctTopologyRef.debug(e.target);
-        String[] actions={"✎ ویرایش پارامتر","↻ بازسازی History","⌫ حذف Feature"};
+        String[] actions={"✎ text text","↻ Rebuild History","⌫ Delete Feature"};
         new AlertDialog.Builder(getContext()).setTitle(e.label()).setMessage(topo+(e.broken?"\n⚠ "+e.warning:""))
                 .setItems(actions,(d,w)->{
                     if(w==0)editParameter(e);
                     else if(w==1)toast(rebuildHistory());
                     else confirmDelete(entry);
-                }).setNegativeButton("بستن",null).show();
+                }).setNegativeButton("Close",null).show();
     }
 
     private void editParameter(StableEdit e){
         if(e.kind==Kind.MOVE){showMoveDialog(e);return;}
         if(e.kind==Kind.ROTATE){showRotateAxis(e);return;}
-        if(e.kind==Kind.MIRROR){toast("برای تغییر صفحه Mirror، Feature را حذف و دوباره بساز");return;}
-        if(e.kind==Kind.PATTERN){toast("ویرایش Pattern از پنل اختصاصی در مرحله بعد افزوده می‌شود");return;}
+        if(e.kind==Kind.MIRROR){toast("text Transform Plane Mirror, Feature text Delete text text text");return;}
+        if(e.kind==Kind.PATTERN){toast("text Pattern text text text text text text text text");return;}
         if(e.kind==Kind.SCALE){
             EditText input=new EditText(getContext());input.setSingleLine();input.setText(num(e.value));input.setSelectAllOnFocus(true);
-            new AlertDialog.Builder(getContext()).setTitle("ویرایش Scale D"+e.id).setView(input).setPositiveButton("اعمال",(d,w)->{
+            new AlertDialog.Builder(getContext()).setTitle("text Scale D"+e.id).setView(input).setPositiveButton("Apply",(d,w)->{
                 try{double factor=Double.parseDouble(normalizeDigits(input.getText().toString()));if(factor<=1e-6)throw new IllegalArgumentException();e.value=factor;toast(rebuildAllStable());}
-                catch(Exception ex){toast("ضریب درست نیست");}}).setNegativeButton("لغو",null).show();return;
+                catch(Exception ex){toast("text is invalid");}}).setNegativeButton("Cancel",null).show();return;
         }
         boolean signed=e.kind==Kind.PUSH_PULL;
-        askLength("ویرایش D"+e.id,e.target==null?"":e.target.shortLabel(),mmText(e.value),signed,v->{
-            if(!signed&&v<=0){toast("مقدار باید مثبت باشد");return;}
-            if(signed&&Math.abs(v)<1e-8){toast("فاصله نباید صفر باشد");return;}
+        askLength("text D"+e.id,e.target==null?"":e.target.shortLabel(),mmText(e.value),signed,v->{
+            if(!signed&&v<=0){toast("text text text text");return;}
+            if(signed&&Math.abs(v)<1e-8){toast("Distance text text text");return;}
             e.value=v;toast(rebuildAllStable());
         });
     }
 
     private void confirmDelete(TimelineEntry entry){
-        new AlertDialog.Builder(getContext()).setTitle("حذف "+entry.edit.label()+"؟")
-                .setMessage("Feature حذف می‌شود و تمام Direct Featureهای باقی‌مانده از Shape پایه دوباره محاسبه می‌شوند.")
-                .setPositiveButton("حذف",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle("Delete "+entry.edit.label()+"?")
+                .setMessage("Feature Delete text text text Direct Featuretext text text Shape text text text text.")
+                .setPositiveButton("Delete",(d,w)->{
                     timeline.remove(entry);List<StableEdit> list=stableByBody.get(entry.body);
                     if(list!=null){list.remove(entry.edit);if(list.isEmpty())stableByBody.remove(entry.body);}toast(rebuildAllStable());
-                }).setNegativeButton("لغو",null).show();
+                }).setNegativeButton("Cancel",null).show();
     }
 
     @Override
@@ -786,8 +786,8 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         }
         boolean handled=super.onTouchEvent(event);
         if(edgePickMode&&action==MotionEvent.ACTION_UP&&!edgeMoved&&is3DOverview()){
-            if(pickWorkspaceEdge(event.getX(),event.getY())){edgePickMode=false;toast("Edge انتخاب شد • "+selectedEdgeRef.id);}
-            else toast("لبه دقیق نزدیک محل لمس پیدا نشد");
+            if(pickWorkspaceEdge(event.getX(),event.getY())){edgePickMode=false;toast("Edge selected • "+selectedEdgeRef.id);}
+            else toast("Edge text near place touch was not found");
             invalidate();dispatchWorkspaceState();
         }
         return handled;
@@ -875,16 +875,16 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     }
 
     private String commitExactBodyCopy(Object source,Geometry3D.Vec3 move,Geometry3D.Vec3 rotate){
-        Object sourceRecord=ensureNativeRecord(source);if(sourceRecord==null)return "Shape دقیق برای Copy آماده نیست";
-        long handle=transformedCopyHandle(recordHandle(sourceRecord),move,rotate);if(handle==0L)return "Copy دقیق ساخته نشد";
+        Object sourceRecord=ensureNativeRecord(source);if(sourceRecord==null)return "Shape text text Copy is not ready";
+        long handle=transformedCopyHandle(recordHandle(sourceRecord),move,rotate);if(handle==0L)return "Copy text created text";
         double[] mesh=NativeBRepKernel.occtTriangulate(handle,.24);SolidCSG csg=csgFromMesh(mesh);
-        if(csg==null||csg.isEmpty()){NativeBRepKernel.occtRelease(handle);return "مش Copy ساخته نشد";}
-        Object output=addIndependentBody(bodyName(source)+" Copy",csg);if(output==null){NativeBRepKernel.occtRelease(handle);return "Body جدید ساخته نشد";}
+        if(csg==null||csg.isEmpty()){NativeBRepKernel.occtRelease(handle);return "text Copy created text";}
+        Object output=addIndependentBody(bodyName(source)+" Copy",csg);if(output==null){NativeBRepKernel.occtRelease(handle);return "Body text created text";}
         try{
             Object nativeRecord=nativeRecordConstructor.newInstance(handle,"Exact Transform Copy",mesh);Map<Object,Object> map=nativeMap();if(map==null)throw new IllegalStateException();map.put(output,nativeRecord);
             manualCopies.add(new ManualCopy(source,output,move,rotate));selectedBodyField.set(this,output);clearSubSelection();invalidate();dispatchWorkspaceState();
-            return "Copy دقیق ساخته شد • Body مستقل";
-        }catch(Exception e){NativeBRepKernel.occtRelease(handle);return "ثبت Copy دقیق انجام نشد";}
+            return "Copy text created • Body text";
+        }catch(Exception e){NativeBRepKernel.occtRelease(handle);return "text Copy text Done text";}
     }
 
     private long transformedCopyHandle(long base,Geometry3D.Vec3 move,Geometry3D.Vec3 rotate){
@@ -947,8 +947,8 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
                                     Geometry3D.Vec3 selectedA,Geometry3D.Vec3 selectedB){
         if(alignActive&&"FACE".equals(kind)){
             SolidCSG.Polygon target=selectedFace();
-            if(captureAlignTarget(body,target)){toast("Align • پیش‌نمایش آماده است");return;}
-            if(body==alignBody)toast("Face مقصد باید روی Body دیگری باشد");
+            if(captureAlignTarget(body,target)){toast("Align • Preview Ready text");return;}
+            if(body==alignBody)toast("Face text text Roy Body the other text");
         }
         if(body==null||!"EDGE".equals(kind)||anchor==null||selectedA==null||selectedB==null){
             selectedEdgeRef=null;selectedEdgeBody=null;edgeA=edgeB=edgeAnchor=null;return;
@@ -1056,13 +1056,13 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     // ------------------------------------------------------------------
 
     private static double parseLengthMm(String raw){
-        String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');
-        boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");
-        s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();
+        String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace(',','.');
+        boolean cm=s.endsWith("cm")||s.endsWith("cm")||s.endsWith("cm");
+        s=s.replace("mm","").replace("mm","").replace("cm","").replace("cm","").replace("mm","").replace("cm","").trim();
         double v=Double.parseDouble(s);return cm?v*10.0:v;
     }
 
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString().trim();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString().trim();}
     private static String dual(double mm){return num(mm)+" mm";}
     private static String signedDual(double mm){return(mm>=0?"+":"")+dual(mm);}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}

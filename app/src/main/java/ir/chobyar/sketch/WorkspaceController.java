@@ -45,23 +45,23 @@ final class WorkspaceController {
         String instruction(){
             if(tool==Tool.MOVE_ROTATE){
                 return phase==Phase.SELECT_PRIMARY
-                        ? "شکل، پروفایل یا بدنه‌ای را برای حرکت انتخاب کن"
-                        : "فلش یا حلقه را بکش؛ دوربین بدون خروج از ابزار قابل حرکت است";
+                        ? "text, text text Bodytext text text text Selection text"
+                        : "text text text text text; text text text text Tools text text text";
             }
             if(tool==Tool.ALIGN){
-                if(phase==Phase.SELECT_PRIMARY)return "قطعه‌ای را که باید جابه‌جا شود انتخاب کن";
-                if(phase==Phase.SELECT_SECONDARY)return "سطح، لبه یا محور مقصد را انتخاب کن";
-                return "پیش‌نمایش را بررسی کن؛ لمس Align جهت Same/Opposed را عوض می‌کند";
+                if(phase==Phase.SELECT_PRIMARY)return "text text text text text text Selection text";
+                if(phase==Phase.SELECT_SECONDARY)return "Face, Edge text Axis text text Selection text";
+                return "Preview text text text; touch Align text Same/Opposed text change text";
             }
             if(tool==Tool.EXTRUDE){
                 return phase==Phase.SELECT_PRIMARY
-                        ? "داخل یک پروفایل بسته را انتخاب کن"
-                        : "فلش را بکش یا ارتفاع دقیق را به میلی‌متر وارد کن";
+                        ? "text text text text text Selection text"
+                        : "text text text text Height text text text mm text text";
             }
             if(tool==Tool.REVOLVE){
-                if(phase==Phase.SELECT_PRIMARY)return "پروفایل بستهٔ خراطی را انتخاب کن";
-                if(phase==Phase.SELECT_SECONDARY)return "خط یا محور دوران را انتخاب کن";
-                return "حلقه=زاویه، فلش=Height؛ برای رزوه Angle=360×دور و Height=Pitch×دور";
+                if(phase==Phase.SELECT_PRIMARY)return "text text text text Selection text";
+                if(phase==Phase.SELECT_SECONDARY)return "Line text Axis text text Selection text";
+                return "text=Angle, text=Height; text text Angle=360×text text Height=Pitch×text";
             }
             return "";
         }

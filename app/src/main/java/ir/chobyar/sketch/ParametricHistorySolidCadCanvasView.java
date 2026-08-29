@@ -149,7 +149,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         Geometry3D.Plane3D plane=p==null?activePlane():planeForLayer(p.layer);
         String result=super.extrudeSelectedBody(heightCm);
         Object body=selectedBody();
-        if(body!=null && p!=null && result!=null && result.contains("ساخته شد")){
+        if(body!=null && p!=null && result!=null && result.contains("created")){
             ExtrudeFeature f=new ExtrudeFeature(featureSerial++,sources,p.layer,plane,heightCm*10f);
             f.outputBody=body;
             f.signature=profileSignature(p.points);
@@ -172,20 +172,20 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     public void showSolidManager() {
         String bodyName=bodyName(selectedBody());
         String[] items={
-                "⬆ Extrude / تبدیل Sketch بسته به Body",
+                "⬆ Extrude / text Sketch text text Body",
                 "▣ Bodies ("+bodyCount()+")",
-                "▱ Sketch روی Face انتخاب‌شده",
-                "∪ Union / یکی‌کردن",
-                "− Subtract / کم‌کردن",
-                "∩ Intersect / اشتراک",
-                "⏱ History / تاریخچه پارامتریک ("+history.size()+")",
-                "↶ Undo آخرین Feature",
-                is3DOverview()?"□ برگشت به Sketch 2D":"◇ نمایش 3D"
+                "▱ Sketch Roy Face selected",
+                "∪ Union / text",
+                "− Subtract / text",
+                "∩ Intersect / text",
+                "⏱ History / History Parametric ("+history.size()+")",
+                "↶ Undo text Feature",
+                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Parametric")
-                .setMessage((bodyName.isEmpty()?"هیچ Body انتخاب نشده":"Body: "+bodyName)
-                        +"\nتغییر Sketchهای منبع، Extrude و Booleanهای وابسته را دوباره محاسبه می‌کند.")
+                .setMessage((bodyName.isEmpty()?"No body selected":"Body: "+bodyName)
+                        +" \n Transform Sketchtext text, Extrude text Booleantext text text text text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)showHistoryExtrudeDialog();
                     else if(w==1)invokeBodiesDialog();
@@ -197,7 +197,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                     else if(w==7)toast(undoLastFeature());
                     else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     private void showHistoryExtrudeDialog() {
@@ -207,47 +207,47 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         input.setText("20");input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
                 .setTitle("Extrude — mm")
-                .setMessage("اندازه را به میلی‌متر وارد کن. عدد منفی جهت Extrude را برعکس می‌کند.")
+                .setMessage("Dimension text text mm text text. text text text Extrude text text text.")
                 .setView(input)
-                .setPositiveButton("ساخت Body",(d,w)->{
+                .setPositiveButton("Create Body",(d,w)->{
                     try{float mm=parseLengthMm(input.getText().toString());toast(extrudeSelectedBody(mm/10f));}
-                    catch(Exception e){toast("ارتفاع درست وارد نشده");}
+                    catch(Exception e){toast("Height was entered incorrectly");}
                 })
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private void startHistoryBoolean(String op) {
         List<Object> bodies=bodies();
-        if(bodies.size()<2){toast("برای Boolean حداقل دو Body لازم است");return;}
+        if(bodies.size()<2){toast("text Boolean text text Body text text");return;}
         Object primary=selectedBody();
         if(primary==null){
             String[] names=new String[bodies.size()];
             for(int i=0;i<bodies.size();i++)names[i]=bodyName(bodies.get(i));
-            new AlertDialog.Builder(getContext()).setTitle("Body اصلی")
+            new AlertDialog.Builder(getContext()).setTitle("Body text")
                     .setItems(names,(d,w)->chooseHistoryBoolean(op,bodies.get(w)))
-                    .setNegativeButton("لغو",null).show();
+                    .setNegativeButton("Cancel",null).show();
         }else chooseHistoryBoolean(op,primary);
     }
 
     private void chooseHistoryBoolean(String op,Object primary) {
         List<Object> options=new ArrayList<>();
         for(Object b:bodies())if(b!=primary)options.add(b);
-        if(options.isEmpty()){toast("Body دوم وجود ندارد");return;}
+        if(options.isEmpty()){toast("Body text text text");return;}
         String[] names=new String[options.size()];
         for(int i=0;i<options.size();i++)names[i]=bodyName(options.get(i));
         new AlertDialog.Builder(getContext())
-                .setTitle(op+" — Body دوم")
-                .setMessage("Body اصلی: "+bodyName(primary))
+                .setTitle(op+" — Body text")
+                .setMessage("Body text: "+bodyName(primary))
                 .setItems(names,(d,w)->showBooleanKeepOptions(op,primary,options.get(w)))
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private void showBooleanKeepOptions(String op,Object target,Object tool) {
         String[] choices={
-                "حذف هر دو ورودی",
-                "Keep Originals • حفظ هر دو",
-                "Keep Target • حفظ Body اصلی",
-                "Keep Tool • حفظ Body دوم"
+                "Delete text text text",
+                "Keep Originals • text text text",
+                "Keep Target • text Body text",
+                "Keep Tool • text Body text"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle(op+" • Keep Originals")
@@ -257,7 +257,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                     boolean keepRight=w==1||w==3;
                     toast(applyHistoryBoolean(op,target,tool,keepLeft,keepRight));
                 })
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private String applyHistoryBoolean(String op,Object left,Object right) {
@@ -270,7 +270,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
             setSelectedBody(left);
             String result=String.valueOf(applyBooleanMethod.invoke(this,op,left,right));
             Object out=selectedBody();
-            if(out!=null && out!=left && out!=right && !result.contains("تغییر نکردند")){
+            if(out!=null && out!=left && out!=right && !result.contains("Transform text")){
                 List<Object> current=bodies();
                 if(keepLeft&&!current.contains(left))current.add(left);
                 if(keepRight&&!current.contains(right))current.add(right);
@@ -284,7 +284,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                 }
             } else if(before!=null) setSelectedBody(before);
             return result;
-        }catch(Exception e){return "Boolean انجام نشد";}
+        }catch(Exception e){return "Boolean Done text";}
     }
 
     /**
@@ -300,12 +300,12 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     public String applyHistoryBooleanByIndex(String operation,int leftNumber,int rightNumber,boolean keepLeft,boolean keepRight) {
         String op=operation==null?"":operation.trim().toUpperCase(Locale.US);
         if(!"UNION".equals(op)&&!"SUBTRACT".equals(op)&&!"INTERSECT".equals(op))
-  return "عملیات Boolean نامعتبر است";
+  return "text Boolean invalid text";
         List<Object> current=bodies();
-        if(current.size()<2)return "برای Boolean حداقل دو Body لازم است";
+        if(current.size()<2)return "text Boolean text text Body text text";
         if(leftNumber<1||rightNumber<1||leftNumber>current.size()||rightNumber>current.size())
-  return "شماره Body باید بین 1 تا "+current.size()+" باشد";
-        if(leftNumber==rightNumber)return "دو Body متفاوت لازم است";
+  return "text Body text text 1 until "+current.size()+" text";
+        if(leftNumber==rightNumber)return "text Body text text text";
         return applyHistoryBoolean(op,current.get(leftNumber-1),current.get(rightNumber-1),keepLeft,keepRight);
     }
 
@@ -321,7 +321,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
       // UNION/SUBTRACT/INTERSECT command.  Supplying body numbers
       // makes the command deterministic and non-modal.
       if(booleanOp&&a.length>1){
-          if(a.length<3||a.length>4)return op+" — مثال: "+op+" 1 2 [KEEP|KEEP_TARGET|KEEP_TOOL]";
+          if(a.length<3||a.length>4)return op+" — text: "+op+" 1 2 [KEEP|KEEP_TARGET|KEEP_TOOL]";
           try{
               boolean keepLeft=false,keepRight=false;
               if(a.length==4){
@@ -329,11 +329,11 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                   if("KEEP".equals(keep)||"KEEP_BOTH".equals(keep)||"KEEP_ORIGINALS".equals(keep)){keepLeft=true;keepRight=true;}
                   else if("KEEP_TARGET".equals(keep)||"KEEP_LEFT".equals(keep))keepLeft=true;
                   else if("KEEP_TOOL".equals(keep)||"KEEP_RIGHT".equals(keep))keepRight=true;
-                  else return "گزینه Keep نامعتبر است";
+                  else return "text Keep invalid text";
               }
               return applyHistoryBooleanByIndex(op,Integer.parseInt(a[1]),Integer.parseInt(a[2]),keepLeft,keepRight);
           }catch(NumberFormatException e){
-              return "شماره Body باید عدد صحیح باشد";
+              return "text Body text text text text";
           }
       }
   }
@@ -355,13 +355,13 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                     ExtrudeFeature e=(ExtrudeFeature)f;
                     Profile p=profileFromSources(e.sourceEntities);
                     if(p==null||p.points.size()<3){
-                        e.broken=true;e.warning="Sketch منبع پیدا نشد";broken++;continue;
+                        e.broken=true;e.warning="Sketch text was not found";broken++;continue;
                     }
                     String sig=profileSignature(p.points);
                     // Always evaluate here; signature is retained so callers can tell whether geometry changed.
                     SolidCSG csg=SolidCSG.extrude(p.points,e.plane,e.heightMm);
                     if(csg.isEmpty()){
-                        e.broken=true;e.warning="Extrude نامعتبر شد";broken++;continue;
+                        e.broken=true;e.warning="Extrude invalid text";broken++;continue;
                     }
                     setBodyCsg(e.outputBody,csg);
                     e.signature=sig;e.broken=false;e.warning="";rebuilt++;
@@ -369,21 +369,21 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
                     BooleanFeature b=(BooleanFeature)f;
                     SolidCSG a=bodyCsg(b.leftBody),c=bodyCsg(b.rightBody);
                     if(a==null||c==null||a.isEmpty()||c.isEmpty()){
-                        b.broken=true;b.warning="ورودی Boolean معتبر نیست";broken++;continue;
+                        b.broken=true;b.warning="text Boolean text text";broken++;continue;
                     }
                     SolidCSG result;
                     if("UNION".equals(b.operation))result=a.union(c);
                     else if("SUBTRACT".equals(b.operation))result=a.subtract(c);
                     else result=a.intersect(c);
                     if(result.isEmpty()){
-                        b.broken=true;b.warning="نتیجه Boolean خالی است";broken++;continue;
+                        b.broken=true;b.warning="text Boolean is empty";broken++;continue;
                     }
                     setBodyCsg(b.outputBody,result);
                     b.broken=false;b.warning="";rebuilt++;
                 }
             }
         }finally{rebuilding=false;invalidate();}
-        return "History بازسازی شد • "+rebuilt+" Feature"+(broken>0?" • "+broken+" خطا":"");
+        return "History Rebuild text • "+rebuilt+" Feature"+(broken>0?" • "+broken+" Error":"");
     }
 
     private void rebuildQuietly(){
@@ -422,18 +422,18 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     // ------------------------------------------------------------------
 
     public void showHistoryManager() {
-        if(history.isEmpty()){toast("History هنوز خالی است");return;}
+        if(history.isEmpty()){toast("History text is empty");return;}
         String[] rows=new String[history.size()];
         for(int i=0;i<history.size();i++){
             Feature f=history.get(i);
             rows[i]=(i+1)+". "+f.detail()+(f.broken&&!f.warning.isEmpty()?" — "+f.warning:"");
         }
         new AlertDialog.Builder(getContext())
-                .setTitle("History • پارامتریک")
-                .setMessage("Feature را لمس کن. تغییر Sketch منبع، عملیات بعدی را به ترتیب بازسازی می‌کند.")
+                .setTitle("History • Parametric")
+                .setMessage("Feature text touch text. Transform Sketch text, text text text text text Rebuild text.")
                 .setItems(rows,(d,w)->showFeatureEditor(w))
-                .setNeutralButton("بازسازی همه",(d,w)->toast(rebuildHistory()))
-                .setNegativeButton("بستن",null).show();
+                .setNeutralButton("Rebuild All",(d,w)->toast(rebuildHistory()))
+                .setNegativeButton("Close",null).show();
     }
 
     private void showFeatureEditor(int index) {
@@ -442,9 +442,9 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         if(f instanceof ExtrudeFeature){showExtrudeFeatureEditor((ExtrudeFeature)f,index);return;}
         new AlertDialog.Builder(getContext())
                 .setTitle(f.detail())
-                .setMessage("این Feature به Bodyهای قبلی وابسته است. با تغییر Extrude یا Sketchهای قبل از آن، نتیجه خودکار دوباره محاسبه می‌شود.")
-                .setPositiveButton("بازسازی از اینجا",(d,w)->toast(rebuildHistory()))
-                .setNegativeButton("بستن",null).show();
+                .setMessage("text Feature text Bodytext text text text. text Transform Extrude text Sketchtext text text text, text text text text text.")
+                .setPositiveButton("Rebuild text text",(d,w)->toast(rebuildHistory()))
+                .setNegativeButton("Close",null).show();
     }
 
     private void showExtrudeFeatureEditor(ExtrudeFeature f,int index) {
@@ -453,18 +453,18 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(num(f.heightMm));input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("ویرایش Extrude #"+f.id)
-                .setMessage("فعلی: "+dual(f.heightMm)+"\nمثال: 18 mm")
+                .setTitle("text Extrude #"+f.id)
+                .setMessage("text: "+dual(f.heightMm)+" \n text: 18 mm")
                 .setView(input)
-                .setPositiveButton("اعمال و بازسازی",(d,w)->{
+                .setPositiveButton("Apply text Rebuild",(d,w)->{
                     try{f.heightMm=parseLengthMm(input.getText().toString());toast(rebuildHistory());}
-                    catch(Exception e){toast("اندازه درست وارد نشده");}
+                    catch(Exception e){toast("Dimension was entered incorrectly");}
                 })
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     public String undoLastFeature() {
-        if(history.isEmpty())return"History خالی است";
+        if(history.isEmpty())return"History is empty";
         Feature f=history.remove(history.size()-1);
         redoHistory.addLast(f);
         producerByBody.remove(f.outputBody);
@@ -478,11 +478,11 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         }else setSelectedBody(bs.isEmpty()?null:bs.get(bs.size()-1));
         setSelectedFace(null);
         invalidate();
-        return "Feature آخر برگشت: "+f.kind;
+        return "Feature text text: "+f.kind;
     }
 
     public String redoLastFeature(){
-        if(redoHistory.isEmpty())return "Redo خالی است";
+        if(redoHistory.isEmpty())return "Redo is empty";
         Feature f=redoHistory.removeLast();
         List<Object> bs=bodies();
         if(f instanceof BooleanFeature){
@@ -494,7 +494,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         history.add(f);producerByBody.put(f.outputBody,f);
         setSelectedBody(f.outputBody);setSelectedFace(null);
         String rebuilt=rebuildHistory();post(this::fitAll);invalidate();
-        return "Feature دوباره اجرا شد: "+f.kind+" • "+rebuilt;
+        return "Feature text text text: "+f.kind+" • "+rebuilt;
     }
 
     public boolean canRedoFeature(){return !redoHistory.isEmpty();}
@@ -586,7 +586,7 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     private void setSelectedBody(Object b){try{if(selectedBodyField!=null)selectedBodyField.set(this,b);}catch(Exception ignored){}}
     private void setSelectedFace(Object f){try{if(selectedFaceField!=null)selectedFaceField.set(this,f);}catch(Exception ignored){}}
 
-    private void invokeBodiesDialog(){try{showBodiesDialogMethod.invoke(this);}catch(Exception e){toast("Bodies باز نشد");}}
+    private void invokeBodiesDialog(){try{showBodiesDialogMethod.invoke(this);}catch(Exception e){toast("Bodies text text");}}
 
     private SolidCSG bodyCsg(Object body){
         try{Field f=findField(body.getClass(),"csg");Object v=f==null?null:f.get(body);return v instanceof SolidCSG?(SolidCSG)v:null;}catch(Exception e){return null;}
@@ -616,9 +616,9 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
         return Float.parseFloat(s);
     }
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String dual(float mm){return num(mm)+" mm";}
-    private static boolean looksLikeError(String s){if(s==null)return true;return s.contains("اول")||s.contains("نیست")||s.contains("نشده")||s.contains("درست نیست")||s.contains("نامعتبر");}
+    private static boolean looksLikeError(String s){if(s==null)return true;return s.contains("First")||s.contains("text")||s.contains("text")||s.contains("is invalid")||s.contains("invalid");}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

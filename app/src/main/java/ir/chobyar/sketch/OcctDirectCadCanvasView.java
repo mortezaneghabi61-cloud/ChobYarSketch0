@@ -114,27 +114,27 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     public void showDirectManager(){
         Object body=selectedBody();
         Object record=body==null?null:ensureNativeRecord(body);
-        String state=body==null?"Body انتخاب نشده"
-                :record==null?bodyName(body)+" • هنوز Shape دقیق آماده نیست"
-                :bodyName(body)+" • OCCT TopoDS_Shape آماده";
-        String edge=exactEdgeAnchor==null||exactEdgeBody!=body?"Edge انتخاب نشده":"Edge دقیق آماده Fillet/Chamfer";
-        String face=selectedFace()==null?"Face انتخاب نشده":"Face آماده Push/Pull یا Shell";
+        String state=body==null?"No body selected"
+                :record==null?bodyName(body)+" • text Shape text is not ready"
+                :bodyName(body)+" • OCCT TopoDS_Shape Ready";
+        String edge=exactEdgeAnchor==null||exactEdgeBody!=body?"No edge selected":"Edge text Ready Fillet/Chamfer";
+        String face=selectedFace()==null?"No face selected":"Face Ready Push/Pull text Shell";
         String[] items={
-                "⌁ انتخاب Edge دقیق با لمس روی مدل",
-                "⌒ Fillet روی Edge انتخاب‌شده",
-                "◩ Chamfer روی Edge انتخاب‌شده",
-                "↕ Push/Pull روی Face انتخاب‌شده",
-                "▱ Shell — بازکردن Face انتخاب‌شده",
-                "↔ Move Body در X / Y / Z",
-                "⟳ Rotate Body حول X / Y / Z",
+                "⌁ Selection Edge text text touch Roy Model",
+                "⌒ Fillet Roy Edge selected",
+                "◩ Chamfer is selected on Edge",
+                "↕ Push/Pull on Face selected",
+                "▱ Shell — Open Face selected",
+                "↔ Move Body text X / Y / Z",
+                "⟳ Rotate Body text X / Y / Z",
                 "⏱ Exact Direct History",
-                "↶ Undo آخرین Exact Edit",
-                "⌘ Inspector / ابزارهای سازگاری قبلی"
+                "↶ Undo text Exact Edit",
+                "⌘ Inspector / Toolstext text text"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Edit 3D • OCCT Exact")
                 .setMessage(state+"\n"+edge+"\n"+face
-                        +"\n\nEdge یا Face را انتخاب کن و عملیات را بزن. محاسبه روی B-Rep واقعی انجام می‌شود؛ واحد طول mm است.")
+                        +" \n  \n Edge text Face text Selection text text text text text. text Roy B-Rep text Done text; text Length mm text.")
                 .setItems(items,(d,w)->{
                     if(w==0)beginExactEdgePick();
                     else if(w==1)askExactEdge(ExactKind.FILLET_EDGE);
@@ -147,7 +147,7 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
                     else if(w==8)toast(undoExactEdit());
                     else OcctDirectCadCanvasView.super.showDirectManager();
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     /** Finish now opens the exact direct editor as well. */
@@ -156,22 +156,22 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
 
     private void beginExactEdgePick(){
         Object body=selectedBody();
-        if(body==null){ensure3D();toast("اول روی Body بزن");return;}
-        if(ensureNativeRecord(body)==null){toast("Shape دقیق این Body هنوز آماده نیست");return;}
+        if(body==null){ensure3D();toast("Select a body first");return;}
+        if(ensureNativeRecord(body)==null){toast("Shape text text Body text is not ready");return;}
         ensure3D();
         exactEdgePickMode=true;
         exactEdgeA=exactEdgeB=exactEdgeAnchor=null;
         exactEdgeBody=null;
         invalidate();
-        toast("انتخاب Edge روشن شد — روی خود لبه بزن");
+        toast("Selection Edge On text — Roy text Edge text");
     }
 
     private void askExactEdge(ExactKind kind){
         Object body=selectedBody();
         if(body==null||exactEdgeAnchor==null||exactEdgeBody!=body){beginExactEdgePick();return;}
-        String title=kind==ExactKind.FILLET_EDGE?"Fillet Edge — شعاع":"Chamfer Edge — فاصله";
-        askLength(title,"مثال: 5mm یا 0.5cm","5mm",false,v->{
-            if(v<=0){toast("مقدار باید بزرگ‌تر از صفر باشد");return;}
+        String title=kind==ExactKind.FILLET_EDGE?"Fillet Edge — Radius":"Chamfer Edge — Distance";
+        askLength(title,"text: 5mm text 0.5cm","5mm",false,v->{
+            if(v<=0){toast("text text text text text text");return;}
             recordExact(body,new ExactEdit(kind,v,exactEdgeAnchor,null));
         });
     }
@@ -179,10 +179,10 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     private void askExactFacePushPull(){
         Object body=selectedBody();
         SolidCSG.Polygon face=selectedFace();
-        if(body==null||face==null){ensure3D();toast("اول روی Face موردنظر بزن");return;}
+        if(body==null||face==null){ensure3D();toast("Select the target face first");return;}
         Geometry3D.Vec3 anchor=face.centroid();
-        askLength("Push/Pull Face","مثبت = بیرون، منفی = داخل؛ مثال 12mm یا -0.5cm","10mm",true,v->{
-            if(Math.abs(v)<1e-7){toast("فاصله نباید صفر باشد");return;}
+        askLength("Push/Pull Face","text = text, text = text; text 12mm text -0.5cm","10mm",true,v->{
+            if(Math.abs(v)<1e-7){toast("Distance text text text");return;}
             recordExact(body,new ExactEdit(ExactKind.PUSH_PULL_FACE,v,anchor,null));
         });
     }
@@ -190,10 +190,10 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     private void askExactShell(){
         Object body=selectedBody();
         SolidCSG.Polygon face=selectedFace();
-        if(body==null||face==null){ensure3D();toast("اول Faceای که باید باز شود را انتخاب کن");return;}
+        if(body==null||face==null){ensure3D();toast("First Facetext text text text text text Selection text");return;}
         Geometry3D.Vec3 anchor=face.centroid();
-        askLength("Shell — ضخامت دیواره","Face انتخاب‌شده حذف می‌شود؛ مثال 2mm یا 0.2cm","2mm",false,v->{
-            if(v<=0){toast("ضخامت باید بزرگ‌تر از صفر باشد");return;}
+        askLength("Shell — Thickness text","Face selected Delete text; text 2mm text 0.2cm","2mm",false,v->{
+            if(v<=0){toast("Thickness text text text text text");return;}
             recordExact(body,new ExactEdit(ExactKind.SHELL_FACE,v,anchor,null));
         });
     }
@@ -207,30 +207,30 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         input.setText(initial);input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext()).setTitle(title+" • mm")
                 .setMessage(message).setView(input)
-                .setPositiveButton("اعمال",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{
                         double v=parseLengthMm(input.getText().toString());
                         if(!signed)v=Math.abs(v);
                         consumer.accept(v);
-                    }catch(Exception e){toast("اندازه درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Dimension was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void showExactMoveDialog(){
         Object body=selectedBody();
-        if(body==null){toast("اول Body را انتخاب کن");return;}
+        if(body==null){toast("Select a body first");return;}
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"X","0mm"),y=axisInput(box,"Y","0mm"),z=axisInput(box,"Z","0mm");
         new AlertDialog.Builder(getContext()).setTitle("Move Body • OCCT")
-                .setMessage("مقدار مثبت یا منفی به میلی‌متر")
-                .setView(box).setPositiveButton("حرکت",(d,w)->{
+                .setMessage("text text text text text mm")
+                .setView(box).setPositiveButton("text",(d,w)->{
                     try{
                         Geometry3D.Vec3 v=new Geometry3D.Vec3((float)parseLengthMm(x.getText().toString()),
                                 (float)parseLengthMm(y.getText().toString()),(float)parseLengthMm(z.getText().toString()));
-                        if(v.length()<1e-7){toast("حرکت صفر است");return;}
+                        if(v.length()<1e-7){toast("text text text");return;}
                         recordExact(body,new ExactEdit(ExactKind.MOVE,0,null,v));
-                    }catch(Exception e){toast("مقدار X/Y/Z درست نیست");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("text X/Y/Z is invalid");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private EditText axisInput(LinearLayout parent,String axis,String initial){
@@ -239,10 +239,10 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     }
 
     private void showExactRotateAxis(){
-        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=selectedBody();if(body==null){toast("Select a body first");return;}
         String[] axes={"X","Y","Z"};
-        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • محور")
-                .setItems(axes,(d,w)->showExactRotateAngle(body,w)).setNegativeButton("لغو",null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • Axis")
+                .setItems(axes,(d,w)->showExactRotateAngle(body,w)).setNegativeButton("Cancel",null).show();
     }
 
     private void showExactRotateAngle(Object body,int axisIndex){
@@ -250,25 +250,25 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         input.setText("90");input.setSelectAllOnFocus(true);
         Geometry3D.Vec3 axis=axisIndex==0?new Geometry3D.Vec3(1,0,0):axisIndex==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
-        new AlertDialog.Builder(getContext()).setTitle("Rotate حول "+axisName(axis))
-                .setMessage("زاویه بر حسب درجه؛ مرکز دوران = مرکز جرم Body")
-                .setView(input).setPositiveButton("چرخش",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle("Rotate text "+axisName(axis))
+                .setMessage("Angle text text degrees; Center text = Center text Body")
+                .setView(input).setPositiveButton("text",(d,w)->{
                     try{
                         double deg=Double.parseDouble(normalizeDigits(input.getText().toString()));
-                        if(Math.abs(deg)<1e-8){toast("زاویه صفر است");return;}
+                        if(Math.abs(deg)<1e-8){toast("Angle text text");return;}
                         recordExact(body,new ExactEdit(ExactKind.ROTATE,deg,null,axis));
-                    }catch(Exception e){toast("زاویه درست نیست");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Angle is invalid");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void recordExact(Object body,ExactEdit edit){
         Object record=ensureNativeRecord(body);
-        if(record==null){toast("Shape دقیق برای این Body موجود نیست");return;}
+        if(record==null){toast("Shape text text text Body text text");return;}
         long oldHandle=recordHandle(record);
         long next=applyKernel(oldHandle,edit);
         if(next==0L){toast(failureText(edit.kind));return;}
         if(!replaceRecord(body,record,next,appendKind(recordKind(record),edit.kind))){
-            NativeBRepKernel.occtRelease(next);toast("به‌روزرسانی Shape انجام نشد");return;
+            NativeBRepKernel.occtRelease(next);toast("text Shape Done text");return;
         }
         List<ExactEdit> list=exactEditsByBody.get(body);
         if(list==null){list=new ArrayList<>();exactEditsByBody.put(body,list);}list.add(edit);
@@ -291,60 +291,60 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     }
 
     private String failureText(ExactKind kind){
-        if(kind==ExactKind.FILLET_EDGE)return"Fillet برای این Edge/شعاع توسط OCCT ساخته نشد؛ شعاع را کمتر کن";
-        if(kind==ExactKind.CHAMFER_EDGE)return"Chamfer برای این Edge/فاصله ساخته نشد؛ مقدار را کمتر کن";
-        if(kind==ExactKind.PUSH_PULL_FACE)return"Push/Pull فقط روی Face تخت معتبر اجرا می‌شود یا فاصله نامعتبر است";
-        if(kind==ExactKind.SHELL_FACE)return"Shell با این ضخامت/Face ساخته نشد؛ ضخامت را کمتر کن";
-        return"Transform دقیق انجام نشد";
+        if(kind==ExactKind.FILLET_EDGE)return"Fillet text text Edge/Radius textMidpoint OCCT created text; Radius text text text";
+        if(kind==ExactKind.CHAMFER_EDGE)return"Chamfer text text Edge/Distance created text; text text text text";
+        if(kind==ExactKind.PUSH_PULL_FACE)return"Push/Pull text Roy Face text text text text text Distance invalid text";
+        if(kind==ExactKind.SHELL_FACE)return"Shell was not created with this Thickness/Face; Reduce the Thickness";
+        return"Transform text Done text";
     }
 
     public void showExactHistory(){
-        Object body=selectedBody();if(body==null){toast("اول Body را انتخاب کن");return;}
+        Object body=selectedBody();if(body==null){toast("Select a body first");return;}
         List<ExactEdit> list=exactEditsByBody.get(body);
-        if(list==null||list.isEmpty()){toast("Exact Direct History خالی است");return;}
+        if(list==null||list.isEmpty()){toast("Exact Direct History is empty");return;}
         String[] rows=new String[list.size()];for(int i=0;i<list.size();i++)rows[i]=(i+1)+". "+list.get(i).label();
         new AlertDialog.Builder(getContext()).setTitle("Exact Direct History • "+bodyName(body))
-                .setMessage("Feature را لمس کن تا حذف شود؛ Shape از History دوباره ساخته می‌شود.")
+                .setMessage("Feature text touch text until Delete text; Shape text History text created text.")
                 .setItems(rows,(d,w)->confirmDeleteExact(body,w))
-                .setNeutralButton("بازسازی",(d,w)->toast(rebuildExactBody(body)))
-                .setNegativeButton("بستن",null).show();
+                .setNeutralButton("Rebuild",(d,w)->toast(rebuildExactBody(body)))
+                .setNegativeButton("Close",null).show();
     }
 
     private void confirmDeleteExact(Object body,int index){
         List<ExactEdit> list=exactEditsByBody.get(body);if(list==null||index<0||index>=list.size())return;
-        new AlertDialog.Builder(getContext()).setTitle("حذف "+list.get(index).label()+"؟")
-                .setPositiveButton("حذف",(d,w)->{list.remove(index);if(list.isEmpty())exactEditsByBody.remove(body);toast(rebuildExactBody(body));})
-                .setNegativeButton("لغو",null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Delete "+list.get(index).label()+"?")
+                .setPositiveButton("Delete",(d,w)->{list.remove(index);if(list.isEmpty())exactEditsByBody.remove(body);toast(rebuildExactBody(body));})
+                .setNegativeButton("Cancel",null).show();
     }
 
     private String undoExactEdit(){
-        Object body=selectedBody();if(body==null)return"اول Body را انتخاب کن";
-        List<ExactEdit> list=exactEditsByBody.get(body);if(list==null||list.isEmpty())return"Exact Undo خالی است";
+        Object body=selectedBody();if(body==null)return"Select a body first";
+        List<ExactEdit> list=exactEditsByBody.get(body);if(list==null||list.isEmpty())return"Exact Undo is empty";
         list.remove(list.size()-1);if(list.isEmpty())exactEditsByBody.remove(body);
-        String r=rebuildExactBody(body);return r.startsWith("✓")?"آخرین Exact Edit برگشت":r;
+        String r=rebuildExactBody(body);return r.startsWith("✓")?"text Exact Edit text":r;
     }
 
     private String rebuildExactBody(Object body){
         forceParentSync();
-        Object record=nativeRecord(body);if(record==null)return"Shape پایه OCCT پیدا نشد";
+        Object record=nativeRecord(body);if(record==null)return"Shape text OCCT was not found";
         List<ExactEdit> edits=exactEditsByBody.get(body);
         if(edits==null||edits.isEmpty()){
-            updateFallbackFromNative(body);clearSubSelection();invalidate();return"✓ Shape پایه بازسازی شد";
+            updateFallbackFromNative(body);clearSubSelection();invalidate();return"✓ The basic shape was rebuilt";
         }
         long base=recordHandle(record),current=base;
         List<Long> generated=new ArrayList<>();
         for(ExactEdit e:edits){
             long next=applyKernel(current,e);
-            if(next==0L){for(long h:generated)NativeBRepKernel.occtRelease(h);return"خطا در بازسازی: "+e.label();}
+            if(next==0L){for(long h:generated)NativeBRepKernel.occtRelease(h);return"Error text Rebuild: "+e.label();}
             generated.add(next);current=next;
         }
         if(!replaceRecordWithoutRelease(body,record,current,"Exact Direct × "+edits.size())){
-            for(long h:generated)NativeBRepKernel.occtRelease(h);return"خطا در ثبت Shape بازسازی‌شده";
+            for(long h:generated)NativeBRepKernel.occtRelease(h);return"Error text text Shape Rebuildtext";
         }
         NativeBRepKernel.occtRelease(base);
         for(int i=0;i<generated.size()-1;i++)NativeBRepKernel.occtRelease(generated.get(i));
         updateFallbackFromNative(body);clearSubSelection();invalidate();
-        return"✓ Exact Direct بازسازی شد • "+edits.size()+" Feature";
+        return"✓ Exact Direct Rebuild text • "+edits.size()+" Feature";
     }
 
     private void replayAllExact(){
@@ -389,8 +389,8 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
         boolean handled=super.onTouchEvent(event);
         if(exactEdgePickMode&&action==MotionEvent.ACTION_UP&&!exactEdgeMoved&&is3DOverview()){
             if(pickNearestWorkspaceEdge(event.getX(),event.getY())){
-                exactEdgePickMode=false;toast("Edge انتخاب شد — حالا Fillet یا Chamfer را بزن");
-            }else toast("لبه نزدیک محل لمس پیدا نشد");
+                exactEdgePickMode=false;toast("Edge selected — text Fillet text Chamfer text text");
+            }else toast("Edge near the touch point was not found");
             invalidate();
         }
         return handled;
@@ -492,15 +492,15 @@ public class OcctDirectCadCanvasView extends OcctModelCadCanvasView {
     // ------------------------------------------------------------------
 
     private static double parseLengthMm(String raw){
-        String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');
-        boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");
-        s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();
+        String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace(',','.');
+        boolean cm=s.endsWith("cm")||s.endsWith("cm")||s.endsWith("cm");
+        s=s.replace("mm","").replace("mm","").replace("cm","").replace("cm","").replace("mm","").replace("cm","").trim();
         double v=Double.parseDouble(s);return cm?v*10.0:v;
     }
 
     private static String normalizeDigits(String s){
         if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){
-            char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);
+            char c=s.charAt(i);b.append(c);
         }return b.toString().trim();
     }
 

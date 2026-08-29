@@ -372,7 +372,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         rebuildSpline(spline, param);
         activeSpline = spline;
         activePoint = insert;
-        toast("New Spline Point اضافه شد");
+        toast("New Spline Point text text");
         dispatchWorkspaceState();
         invalidate();
     }
@@ -383,11 +383,11 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         List<PointF> points = splinePoints(param);
         if (param == null || points == null || activePoint < 0 || activePoint >= points.size()) return;
         if (isEntityLocked(spline) || isPointLocked(spline, activePoint)) {
-            toast("این نقطه قفل است");
+            toast("text Point Lock text");
             return;
         }
         if (points.size() <= 3) {
-            toast("Spline حداقل سه نقطه لازم دارد");
+            toast("Spline text text Point text text");
             return;
         }
         saveUndo();
@@ -396,7 +396,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         shiftPointStateAfterDelete(spline, removed);
         activePoint = Math.min(removed, points.size() - 1);
         rebuildSpline(spline, param);
-        toast("Spline Point حذف شد");
+        toast("Spline Point Delete text");
         dispatchWorkspaceState();
         invalidate();
     }
@@ -407,7 +407,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         List<PointF> p = splinePoints(param);
         if (param == null || p == null || activePoint < 0 || activePoint >= p.size()) return;
         if (isEntityLocked(spline)) {
-            toast("Spline قفل است");
+            toast("Spline Lock text");
             return;
         }
         if (activePoint == 0 || activePoint == p.size() - 1) joinAtEndpoint(spline, activePoint);
@@ -429,7 +429,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         clearCurveState(spline);
         activeSpline = second != null ? second : first;
         activePoint = activeSpline == second ? 0 : Math.max(0, a.size() - 1);
-        toast("Spline در نقطه انتخابی Break شد");
+        toast("Spline text Point Selectiontext Break text");
         dispatchWorkspaceState();
         invalidate();
     }
@@ -437,12 +437,12 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
     private void joinAtEndpoint(Object spline, int endpointIndex) {
         Object other = nearestJoinCandidate(spline, endpointIndex);
         if (other == null) {
-            toast("برای Join یک Spline دوم را هم انتخاب کن یا انتهای آن را نزدیک کن");
+            toast("text Join text Spline text text text Selection text text Endpointtext text text near text");
             return;
         }
         Object pa = splineParam(spline), pb = splineParam(other);
         if (pa == null || pb == null || splineFit(pa) != splineFit(pb)) {
-            toast("Join فقط بین دو Spline هم‌نوع انجام می‌شود");
+            toast("Join text text text Spline text Done text");
             return;
         }
         List<PointF> a = copy(splinePoints(pa));
@@ -471,7 +471,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         clearCurveState(other);
         activeSpline = joined;
         activePoint = a.size() - 1;
-        toast("Splineها Join شدند");
+        toast("Splinetext Join became");
         dispatchWorkspaceState();
         invalidate();
     }
@@ -501,10 +501,10 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         if (set == null) { set = new HashSet<>(); lockedSplinePoints.put(activeSpline, set); }
         if (set.contains(activePoint)) {
             set.remove(activePoint);
-            toast("Spline Point باز شد");
+            toast("Spline Point text text");
         } else {
             set.add(activePoint);
-            toast("Spline Point قفل شد");
+            toast("Spline Point Lock text");
         }
         dispatchWorkspaceState();
         invalidate();
@@ -605,12 +605,12 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
                     : new String[]{"＋ New Control Point (Long tap)", "− Delete selected point", "Break / Join", "Lock / Unlock point"};
             new AlertDialog.Builder(getContext()).setTitle(isFitSpline(one) ? "Fit Point Spline" : "Control Point Spline")
                     .setItems(items, (d,w)->{
-                        if (w == 0) toast("روی خود Spline نگه دار تا New Spline Point ساخته شود");
+                        if (w == 0) toast("Roy text Spline text text until New Spline Point created text");
                         else if (w == 1) deleteActiveSplinePoint();
                         else if (w == 2) breakOrJoinActivePoint();
                         else if (isFitSpline(one) && w == 3) toggleTangentLink(one, activePoint);
                         else toggleActivePointLock();
-                    }).setNegativeButton("بستن", null).show();
+                    }).setNegativeButton("Close", null).show();
             return;
         }
         super.showCurveEditor();
@@ -619,7 +619,7 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
     private void toggleTangentLink(Object spline, int index) {
         TangentPair t = tangentPair(spline, index, true);
         t.linked = !t.linked;
-        toast(t.linked ? "Tangent handles linked" : "Tangent handles مستقل");
+        toast(t.linked ? "Tangent handles linked" : "Tangent handles text");
         invalidate();
     }
 
@@ -636,9 +636,9 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
         angle.setHint("Rotation °");
         box.addView(major); box.addView(minor); box.addView(angle);
         new AlertDialog.Builder(getContext()).setTitle("Ellipse • Driving dimensions")
-                .setMessage("Major/Minor اندازه را قفل می‌کنند؛ مرکز هنوز قابل جابه‌جایی است.")
+                .setMessage("Major/Minor Dimension text Lock text; Center text text text text.")
                 .setView(box)
-                .setPositiveButton("اعمال", (d,w)->{
+                .setPositiveButton("Apply", (d,w)->{
                     try {
                         saveUndo();
                         setFloat(e, "rx", Math.max(.05f, lengthMm(major.getText().toString()) / 2f));
@@ -650,15 +650,15 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
                         rebuildEllipse(ellipse, e);
                         dispatchWorkspaceState();
                         invalidate();
-                    } catch (Exception ex) { toast("مقادیر Ellipse درست نیست"); }
-                }).setNegativeButton("لغو", null).show();
+                    } catch (Exception ex) { toast("text Ellipse is invalid"); }
+                }).setNegativeButton("Cancel", null).show();
     }
 
     @Override
     public String applySelectedDimension(String raw) {
         Object before = singleSelectedLocal();
         String result = super.applySelectedDimension(raw);
-        if (isEllipse(before) && result != null && !result.contains("درست نیست") && !result.contains("وارد کن")) {
+        if (isEllipse(before) && result != null && !result.contains("is invalid") && !result.contains("text text")) {
             ellipseMajorDriven.put(before, true);
             ellipseMinorDriven.put(before, true);
         }
@@ -826,8 +826,8 @@ public class ShaprSplineEditingCadCanvasView extends ShaprParametricCurveCadCanv
     private static float ellipseAngle(Object e){return floatField(e,"angle");}
 
     private EditText input(String text){EditText e=new EditText(getContext());e.setSingleLine(true);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setText(text);e.setSelectAllOnFocus(true);return e;}
-    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("cm")||s.endsWith("cm");s=s.replace("mm","").replace("mm","").replace("cm","").replace("cm","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String dual(float mm){return fmt(mm)+" mm";}
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private void toast(String s){Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}

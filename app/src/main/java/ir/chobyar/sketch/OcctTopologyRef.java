@@ -237,7 +237,7 @@ final class OcctTopologyRef {
     }
 
     static String debug(Ref ref){
-        if(ref==null)return"بدون Topology ID";
+        if(ref==null)return"text Topology ID";
         return ref.shortLabel()+" • "+String.format(Locale.US,"%.2f",ref.measure)+(ref.kind==FACE?" mm²":" mm");
     }
 

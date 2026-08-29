@@ -217,24 +217,24 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         orbiting = false;
         invalidate();
         return overview3D
-                ? "نمای فضایی 3D روشن شد — با یک انگشت بچرخان"
-                : "بازگشت به Sketch دوبعدی";
+                ? "Viewtext text 3D On text — text text text text"
+                : "Back text Sketch text";
     }
 
     public void showPlaneManager() {
         String[] items = {
-                "＋ Sketch جدید روی XY / بالا",
-                "＋ Sketch جدید روی XZ / روبرو",
-                "＋ Sketch جدید روی YZ / بغل",
-                "＋ صفحه موازی با فاصله دقیق",
-                overview3D ? "□ بستن نمای فضایی 3D" : "◇ نمایش فضایی 3D",
-                "◎ نمای ایزومتریک",
-                "⌂ نمای روبرو",
-                "⌃ نمای بالا"
+                "＋ Sketch text Roy XY / Top",
+                "＋ Sketch text Roy XZ / Front",
+                "＋ Sketch text Roy YZ / text",
+                "＋ Plane Parallel text Distance text",
+                overview3D ? "□ Close Viewtext text 3D" : "◇ Show text 3D",
+                "◎ Isometric View",
+                "⌂ Front View",
+                "⌃ Top View"
         };
         new AlertDialog.Builder(getContext())
-                .setTitle("صفحه Sketch / Plane")
-                .setMessage("صفحه فعال: " + activePlaneLabel() + "\nهر Sketch مختصات دوبعدی خودش را روی یک صفحه واقعی XYZ نگه می‌دارد.")
+                .setTitle("Plane Sketch / Plane")
+                .setMessage("Plane text: " + activePlaneLabel() + " \n text Sketch text text text text Roy text Plane text XYZ text text.")
                 .setItems(items, (d, which) -> {
                     if (which == 0) createSketchOnPlane(Geometry3D.xy(), "Sketch XY");
                     else if (which == 1) createSketchOnPlane(Geometry3D.xz(), "Sketch XZ");
@@ -245,7 +245,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
                     else if (which == 6) { overview3D=true; cameraYaw=0f; cameraPitch=0f; invalidate(); }
                     else { overview3D=true; cameraYaw=0f; cameraPitch=90f; invalidate(); }
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
@@ -258,7 +258,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
     public String createOffsetSketchSpace(float offsetMm, String requestedName) {
-        if (!Float.isFinite(offsetMm)) return "فاصله Plane معتبر نیست";
+        if (!Float.isFinite(offsetMm)) return "Distance Plane text text";
         Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
         String label = base.label + " + " + fmt(offsetMm) + " mm";
         pendingPlane = base.offset(offsetMm, label);
@@ -277,22 +277,22 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         EditText input = new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
-        input.setHint("مثال: 12.5");
+        input.setHint("Example: 12.5");
         input.setText("10");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("صفحه موازی — فاصله mm")
-                .setMessage("صفحه جدید موازی صفحه فعال ساخته می‌شود. مقدار مثبت در جهت Normal است.")
+                .setTitle("Plane Parallel — Distance mm")
+                .setMessage("Plane text Parallel Plane text created text. text text text text Normal text.")
                 .setView(input)
-                .setPositiveButton("ساخت", (d,w) -> {
+                .setPositiveButton("Create", (d,w) -> {
                     try {
                         float mm = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
                         Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
                         Geometry3D.Plane3D p = base.offset(mm, base.label + " + " + fmt(mm) + " mm");
                         createSketchOnPlane(p, "Offset Plane");
-                    } catch (Exception e) { toast("فاصله درست وارد نشده"); }
+                    } catch (Exception e) { toast("Distance was entered incorrectly"); }
                 })
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -321,9 +321,9 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     public String setReferenceImage(Bitmap bitmap,String name){
-        if(bitmap==null||bitmap.getWidth()<2||bitmap.getHeight()<2)return "تصویر مرجع معتبر نیست";
+        if(bitmap==null||bitmap.getWidth()<2||bitmap.getHeight()<2)return "text text text text";
         referenceImage=new ReferenceImage(bitmap,name==null?"Reference Image":name,activePlane==null?Geometry3D.xy():activePlane);
-        overview3D=true;invalidate();post(this::fitAll);return "تصویر مرجع روی Plane فعال اضافه شد • 100 mm";
+        overview3D=true;invalidate();post(this::fitAll);return "text text Roy Plane text text text • 100 mm";
     }
 
     public boolean hasReferenceImage(){return referenceImage!=null;}
@@ -335,20 +335,20 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     public void showReferenceImageSettings(){
-        if(referenceImage==null){toast("ابتدا از Add > Image یک تصویر وارد کن");return;}ReferenceImage image=referenceImage;
+        if(referenceImage==null){toast("Start point from Add > Image, insert an image");return;}ReferenceImage image=referenceImage;
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);int pad=(int)(16f*getResources().getDisplayMetrics().density);box.setPadding(pad,0,pad,0);
         EditText width=referenceInput(box,"Width (mm)",fmt(image.widthMm)),x=referenceInput(box,"Position U (mm)",fmt(image.centerU)),y=referenceInput(box,"Position V (mm)",fmt(image.centerV)),angle=referenceInput(box,"Rotate (deg)",fmt(image.rotationDeg));
         TextView opacityLabel=new TextView(getContext());opacityLabel.setText("Opacity • "+Math.round(image.opacity*100f)+"%");box.addView(opacityLabel);
         SeekBar opacity=new SeekBar(getContext());opacity.setMax(100);opacity.setProgress(Math.round(image.opacity*100f));box.addView(opacity);
         opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int value,boolean fromUser){image.opacity=Math.max(.05f,value/100f);opacityLabel.setText("Opacity • "+value+"%");invalidate();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         new AlertDialog.Builder(getContext()).setTitle(image.name+" • Reference")
-                .setMessage("ابعاد واقعی تصویر را وارد کن و مدل را مستقیماً روی آن مقایسه کن.").setView(box)
-                .setPositiveButton("اعمال",(d,w)->{try{image.widthMm=Math.max(1f,parseLocal(width));image.centerU=parseLocal(x);image.centerV=parseLocal(y);image.rotationDeg=parseLocal(angle);invalidate();}catch(Exception e){toast("مقادیر تصویر درست نیست");}})
-                .setNeutralButton(image.visible?"مخفی":"نمایش",(d,w)->{image.visible=!image.visible;invalidate();})
-                .setNegativeButton("بستن",null).show();
+                .setMessage("text text text text text text text Model text text Roy text text text.").setView(box)
+                .setPositiveButton("Apply",(d,w)->{try{image.widthMm=Math.max(1f,parseLocal(width));image.centerU=parseLocal(x);image.centerV=parseLocal(y);image.rotationDeg=parseLocal(angle);invalidate();}catch(Exception e){toast("Image values ​​is invalid");}})
+                .setNeutralButton(image.visible?"Hide":"Show",(d,w)->{image.visible=!image.visible;invalidate();})
+                .setNegativeButton("Close",null).show();
     }
 
-    public String removeReferenceImage(){if(referenceImage==null)return "تصویر مرجعی وجود ندارد";referenceImage=null;invalidate();return "تصویر مرجع حذف شد";}
+    public String removeReferenceImage(){if(referenceImage==null)return "text text text text";referenceImage=null;invalidate();return "The reference image was deleted";}
 
     private EditText referenceInput(LinearLayout box,String label,String value){TextView text=new TextView(getContext());text.setText(label);box.addView(text);EditText input=new EditText(getContext());input.setSingleLine(true);input.setText(value);input.setSelectAllOnFocus(true);box.addView(input);return input;}
     private static float parseLocal(EditText input){return Float.parseFloat(normalizeDigits(input.getText().toString()).replace("mm","").replace("°","").trim());}
@@ -586,7 +586,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     private static String normalizeDigits(String s) {
         if(s==null)return"";StringBuilder b=new StringBuilder();
-        for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();
+        for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();
     }
 
     private static String fmt(float v){return String.format(Locale.US,"%.1f",v);}

@@ -86,60 +86,60 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
 
     public String applyEqualConstraint() {
         List<Object> s = selectionObjects();
-        if (s.size() < 2) return "برای Equal حداقل دو خط یا دو دایره/قوس را انتخاب کن";
+        if (s.size() < 2) return "text Equal text text Line text text Circle/Arc text Selection text";
         boolean lines = isLine(s.get(0));
         boolean curves = isCurve(s.get(0));
-        if (!lines && !curves) return "Equal برای خط، دایره و قوس فعال است";
+        if (!lines && !curves) return "Equal text Line, Circle text Arc text text";
         for (Object e : s) {
-            if (lines && !isLine(e)) return "همه انتخاب‌ها باید خط باشند";
-            if (curves && !isCurve(e)) return "همه انتخاب‌ها باید دایره/قوس باشند";
+            if (lines && !isLine(e)) return "All Selectiontext text Line text";
+            if (curves && !isCurve(e)) return "All Selectiontext text Circle/Arc text";
         }
         EqualRelation r = new EqualRelation(new ArrayList<>(s), lines);
         equalRelations.add(r);
         r.enforce();
         invalidate();
-        return lines ? "Equal: طول خطوط برابر شد" : "Equal: شعاع‌ها برابر شد";
+        return lines ? "Equal: Length Linetext text text" : "Equal: Radiustext text text";
     }
 
     /** Select two lines, then the axis as the third selected line. */
     public String applySymmetryConstraint() {
         List<Object> lines = selectedLines();
-        if (lines.size() != 3) return "Symmetry: دو خط و سپس خط محور را انتخاب کن";
+        if (lines.size() != 3) return "Symmetry: text Line text Then Line Axis text Selection text";
         SymmetryRelation r = new SymmetryRelation(lines.get(0), lines.get(1), lines.get(2));
         symmetryRelations.add(r);
         r.enforce();
         invalidate();
-        return "Symmetry اعمال شد";
+        return "Symmetry Apply text";
     }
 
     /** First line contributes its nearest endpoint; second line is the host. */
     public String applyMidpointConstraint() {
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "Midpoint: دو خط را انتخاب کن";
+        if (lines.size() != 2) return "Midpoint: text Line text Selection text";
         PointF m = midpoint(lines.get(1));
-        if (m == null) return "Midpoint ممکن نشد";
+        if (m == null) return "Midpoint text text";
         MidpointRelation r = new MidpointRelation(lines.get(0), nearestEndpointIndex(lines.get(0), m), lines.get(1));
         midpointRelations.add(r);
         r.enforce();
         invalidate();
-        return "Midpoint: سر خط اول به وسط خط دوم متصل شد";
+        return "Midpoint: text Line First text Midpoint Line text text text";
     }
 
     public String applyTangentConstraint() {
         List<Object> s = selectionObjects();
-        if (s.size() != 2) return "Tangent: یک خط و یک دایره/قوس را انتخاب کن";
+        if (s.size() != 2) return "Tangent: text Line text text Circle/Arc text Selection text";
         Object line = null, curve = null;
         for (Object e : s) {
             if (isLine(e)) line = e;
             else if (isCurve(e)) curve = e;
         }
-        if (line == null || curve == null) return "Tangent به یک خط و یک دایره/قوس نیاز دارد";
+        if (line == null || curve == null) return "Tangent text text Line text text Circle/Arc text text";
         TangentRelation r = createTangentRelation(line, curve);
-        if (r == null) return "مماس ممکن نشد؛ نقطه ثابت خط باید بیرون منحنی باشد";
+        if (r == null) return "Tangent text text; Point text Line text text text text";
         tangentRelations.add(r);
         r.enforce();
         invalidate();
-        return "Tangent اعمال شد";
+        return "Tangent Apply text";
     }
 
     // ------------------------------------------------------------------
@@ -153,7 +153,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
      * ChobYar command input is cm, therefore the values below are divided by 10.
      */
     public String buildActionMountLab() {
-        if (labBuilt) return "Action Mount LAB قبلاً ساخته شده";
+        if (labBuilt) return "Action Mount LAB text createdtext";
 
         createSketchSpace("LAB • Action Mount");
 
@@ -215,9 +215,9 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
         labBuilt = true;
         invalidate();
         Toast.makeText(getContext(),
-                "LAB ساخته شد: زاویه، Offset، Symmetry، Equal، Midpoint، Tangent و Lock را دستکاری کن",
+                "LAB created: Angle, Offset, Symmetry, Equal, Midpoint, Tangent text Lock text text text",
                 Toast.LENGTH_LONG).show();
-        return "Action Mount LAB ساخته شد";
+        return "Action Mount LAB created";
     }
 
     private Object make(String command) {
@@ -350,7 +350,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
         labChip.set(right-w,204f,right,204f+CHIP_H);
         canvas.drawRoundRect(labChip,14f,14f,chipFill);
         canvas.drawRoundRect(labChip,14f,14f,chipStroke);
-        canvas.drawText(labBuilt?"LAB • Action Mount":"LAB • تمرین سخت",labChip.centerX(),labChip.centerY()+7f,chipText);
+        canvas.drawText(labBuilt?"LAB • Action Mount":"LAB • text text",labChip.centerX(),labChip.centerY()+7f,chipText);
     }
 
     private void drawRelationBadges(Canvas canvas) {
@@ -384,16 +384,16 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
 
     private void showLabMenu() {
         String[] items={
-                labBuilt?"✓ Action Mount LAB ساخته شده":"ساخت Action Mount LAB",
-                "= Equal / برابری",
-                "S Symmetry / تقارن",
-                "M Midpoint / وسط خط",
-                "T Tangent / مماس",
+                labBuilt?"✓ Action Mount LAB createdtext":"Create Action Mount LAB",
+                "= Equal / text",
+                "S Symmetry / Symmetry",
+                "M Midpoint / Midpoint Line",
+                "T Tangent / Tangent",
                 "Fit All"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("ChobYar • Shapr LAB")
-                .setMessage("تمرین‌های سخت اینجا با موتور واقعی چوب‌یار ساخته می‌شوند تا کمبود ابزارها معلوم شود.")
+                .setMessage("text text text text text text ChobYar created text until text Toolstext text text.")
                 .setItems(items,(d,w)->{
                     String result;
                     if(w==0)result=buildActionMountLab();
@@ -404,7 +404,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
                     else{fitAll();result="Fit All";}
                     Toast.makeText(getContext(),result,Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     @Override

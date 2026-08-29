@@ -120,35 +120,35 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
             else if(w==15){stopCurveMode();toast(toggleSelectedLock());}
             else if(w==16){stopCurveMode();toast(invokeParentString("toggleConstruction"));}
             else {stopCurveMode();deleteSelected();dispatchWorkspaceState();}
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 
     private void showSplineTypeMenu(){
         String[] a={"Fit Point Spline","Control Point Spline"};
         new AlertDialog.Builder(getContext()).setTitle("Spline").setItems(a,(d,w)->{
             if(w==0)startFitSplineMode();else startControlSplineMode();
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 
     private void startEllipseMode(){
         stopParentAutomatic();
         super.setTool(TOOL_SELECT);
         curveMode=MODE_ELLIPSE;ellipseCenter=null;
-        toast("Ellipse: مرکز را لمس کن و بکش • محورهای بزرگ/کوچک بعداً دقیق قابل ویرایش‌اند");
+        toast("Ellipse: Center text touch text text text • Axestext text/text text text text text");
     }
 
     private void startFitSplineMode(){
         stopParentAutomatic();
         super.setTool(TOOL_SELECT);
         curveMode=MODE_SPLINE_FIT;penStroke.clear();controlBuild.clear();
-        toast("Fit Point Spline: مسیر را با قلم بکش و قلم را بردار");
+        toast("Fit Point Spline: text text text text text text text text text");
     }
 
     private void startControlSplineMode(){
         stopParentAutomatic();
         super.setTool(TOOL_SELECT);
         curveMode=MODE_SPLINE_CONTROL;controlBuild.clear();lastControlTapMs=0;
-        toast("Control Point Spline: نقاط را یکی‌یکی بزن • روی نقطه آخر دوبار بزن تا تمام شود");
+        toast("Control Point Spline: text text text text • Roy Point text text text until text text");
     }
 
     private void stopCurveMode(){curveMode=MODE_NONE;ellipseCenter=null;penStroke.clear();controlBuild.clear();draggedCurve=null;draggedPoint=-1;draggedKind=0;}
@@ -167,9 +167,9 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
             if(a==MotionEvent.ACTION_DOWN){ellipseCenter=world(e.getX(),e.getY());return true;}
             if(a==MotionEvent.ACTION_UP&&ellipseCenter!=null){
                 PointF q=world(e.getX(),e.getY());float rx=Math.abs(q.x-ellipseCenter.x),ry=Math.abs(q.y-ellipseCenter.y);
-                if(rx<0.5f||ry<0.5f){toast("Ellipse خیلی کوچک است");ellipseCenter=null;return true;}
+                if(rx<0.5f||ry<0.5f){toast("Ellipse text text text");ellipseCenter=null;return true;}
                 Object obj=createEllipse(ellipseCenter.x,ellipseCenter.y,rx,ry,0f);
-                ellipseCenter=null;curveMode=MODE_NONE;if(obj!=null)toast("Ellipse پارامتریک ساخته شد");dispatchWorkspaceState();return true;
+                ellipseCenter=null;curveMode=MODE_NONE;if(obj!=null)toast("Ellipse Parametric created");dispatchWorkspaceState();return true;
             }
             if(a==MotionEvent.ACTION_CANCEL){stopCurveMode();return true;}
             return true;
@@ -177,7 +177,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
         if(curveMode==MODE_SPLINE_FIT){
             if(a==MotionEvent.ACTION_DOWN){penStroke.clear();penStroke.add(world(e.getX(),e.getY()));return true;}
             if(a==MotionEvent.ACTION_MOVE){PointF p=world(e.getX(),e.getY());if(penStroke.isEmpty()||dist(p,penStroke.get(penStroke.size()-1))>0.8f)penStroke.add(p);return true;}
-            if(a==MotionEvent.ACTION_UP){penStroke.add(world(e.getX(),e.getY()));List<PointF> fit=simplify(penStroke,10);if(fit.size()>=3){Object obj=createSpline(fit,true);if(obj!=null)toast("Fit Point Spline ساخته شد");}else toast("برای Spline مسیر بلندتری بکش");penStroke.clear();curveMode=MODE_NONE;dispatchWorkspaceState();return true;}
+            if(a==MotionEvent.ACTION_UP){penStroke.add(world(e.getX(),e.getY()));List<PointF> fit=simplify(penStroke,10);if(fit.size()>=3){Object obj=createSpline(fit,true);if(obj!=null)toast("Fit Point Spline created");}else toast("text Spline text text text");penStroke.clear();curveMode=MODE_NONE;dispatchWorkspaceState();return true;}
             if(a==MotionEvent.ACTION_CANCEL){stopCurveMode();return true;}
         }
         if(curveMode==MODE_SPLINE_CONTROL){
@@ -185,7 +185,7 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
                 PointF p=world(e.getX(),e.getY());long now=System.currentTimeMillis();boolean finish=false;
                 if(!controlBuild.isEmpty()&&dist(p,controlBuild.get(controlBuild.size()-1))<2.0f&&now-lastControlTapMs<420)finish=true;
                 else {controlBuild.add(p);lastControlTapMs=now;invalidate();}
-                if(finish&&controlBuild.size()>=3){Object obj=createSpline(controlBuild,false);controlBuild.clear();curveMode=MODE_NONE;if(obj!=null)toast("Control Point Spline ساخته شد");dispatchWorkspaceState();}
+                if(finish&&controlBuild.size()>=3){Object obj=createSpline(controlBuild,false);controlBuild.clear();curveMode=MODE_NONE;if(obj!=null)toast("Control Point Spline created");dispatchWorkspaceState();}
                 return true;
             }
             if(a==MotionEvent.ACTION_CANCEL){stopCurveMode();return true;}
@@ -278,41 +278,41 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
 
     public void showCurveEditor(){
         Object s=singleSelected();EllipseParam ep=ellipses.get(s);SplineParam sp=splines.get(s);
-        if(ep!=null){showEllipseEditor(s,ep);return;}if(sp!=null){showSplineEditor(s,sp);return;}toast("اول Ellipse یا Spline را انتخاب کن");
+        if(ep!=null){showEllipseEditor(s,ep);return;}if(sp!=null){showSplineEditor(s,sp);return;}toast("First Ellipse text Spline text Selection text");
     }
 
     private void showEllipseEditor(Object obj,EllipseParam e){
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
         EditText major=input(fmt(e.rx*2f)),minor=input(fmt(e.ry*2f)),ang=input(fmt(e.angle));major.setHint("Major axis • mm");minor.setHint("Minor axis • mm");ang.setHint("Rotation °");box.addView(major);box.addView(minor);box.addView(ang);
-        new AlertDialog.Builder(getContext()).setTitle("Ellipse • Major / Minor Axis").setView(box).setPositiveButton("اعمال",(d,w)->{
+        new AlertDialog.Builder(getContext()).setTitle("Ellipse • Major / Minor Axis").setView(box).setPositiveButton("Apply",(d,w)->{
             try{saveUndo();e.rx=Math.max(.05f,lengthMm(major.getText().toString())/2f);e.ry=Math.max(.05f,lengthMm(minor.getText().toString())/2f);e.angle=Float.parseFloat(normalizeDigits(ang.getText().toString()));rebuildEllipse(obj,e);invalidate();dispatchWorkspaceState();}
-            catch(Exception ex){toast("مقادیر Ellipse درست نیست");}
-        }).setNegativeButton("لغو",null).show();
+            catch(Exception ex){toast("text Ellipse is invalid");}
+        }).setNegativeButton("Cancel",null).show();
     }
 
     private void showSplineEditor(Object obj,SplineParam s){
-        String[] a={s.fit?"نوع: Fit Point":"نوع: Control Point","＋ افزودن نقطه در انتها","− حذف آخرین نقطه"};
+        String[] a={s.fit?"text: Fit Point":"text: Control Point","＋ Add Point text Endpoint","− Delete text Point"};
         new AlertDialog.Builder(getContext()).setTitle("Spline • "+(s.fit?"Fit":"Control")).setItems(a,(d,w)->{
             if(w==0)return;
             if(w==1){PointF p=s.points.isEmpty()?new PointF(0,0):s.points.get(s.points.size()-1);s.points.add(new PointF(p.x+10f,p.y));rebuildSpline(obj,s);invalidate();}
-            else if(s.points.size()>3){s.points.remove(s.points.size()-1);rebuildSpline(obj,s);invalidate();}else toast("Spline حداقل سه نقطه لازم دارد");
-        }).setNegativeButton("بستن",null).show();
+            else if(s.points.size()>3){s.points.remove(s.points.size()-1);rebuildSpline(obj,s);invalidate();}else toast("Spline text text Point text text");
+        }).setNegativeButton("Close",null).show();
     }
 
     @Override
     public boolean canEditExactDimension(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return true;if(s!=null&&splines.containsKey(s))return false;return super.canEditExactDimension();}
 
     @Override
-    public String exactDimensionTitle(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"محور بزرگ و کوچک Ellipse — mm";return super.exactDimensionTitle();}
+    public String exactDimensionTitle(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"Axis text text text Ellipse — mm";return super.exactDimensionTitle();}
     @Override
-    public String exactDimensionHint(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"Major Minor؛ مثال: 10cm 6cm یا 100mm 60mm";return super.exactDimensionHint();}
+    public String exactDimensionHint(){Object s=singleSelected();if(s!=null&&ellipses.containsKey(s))return"Major Minor; text: 10cm 6cm text 100mm 60mm";return super.exactDimensionHint();}
     @Override
     public String exactDimensionCurrentValue(){Object s=singleSelected();EllipseParam e=ellipses.get(s);if(e!=null)return cm(e.rx*2f)+" "+cm(e.ry*2f);return super.exactDimensionCurrentValue();}
 
     @Override
     public String applySelectedDimension(String raw){
         Object s=singleSelected();EllipseParam e=ellipses.get(s);if(e==null)return super.applySelectedDimension(raw);
-        try{String[] a=raw.trim().split("[ ,×xX]+");if(a.length<2)return"دو مقدار Major و Minor وارد کن";saveUndo();e.rx=Math.max(.05f,lengthMm(a[0])/2f);e.ry=Math.max(.05f,lengthMm(a[1])/2f);rebuildEllipse(s,e);invalidate();dispatchWorkspaceState();return"Ellipse = "+dual(e.rx*2f)+" × "+dual(e.ry*2f);}catch(Exception ex){return"مقدار Ellipse درست نیست";}
+        try{String[] a=raw.trim().split("[ ,×xX]+");if(a.length<2)return"text text Major text Minor text text";saveUndo();e.rx=Math.max(.05f,lengthMm(a[0])/2f);e.ry=Math.max(.05f,lengthMm(a[1])/2f);rebuildEllipse(s,e);invalidate();dispatchWorkspaceState();return"Ellipse = "+dual(e.rx*2f)+" × "+dual(e.ry*2f);}catch(Exception ex){return"text Ellipse is invalid";}
     }
 
     @Override
@@ -357,13 +357,13 @@ public class ShaprParametricCurveCadCanvasView extends ShaprConstraintSolverCadC
     private PointF screen(PointF p){return screen(p.x,p.y);}private PointF screen(float x,float y){float k=PX_PER_MM*viewScale();return new PointF(offsetX()+x*k,offsetY()+y*k);}
     private float viewScale(){try{return viewScaleField.getFloat(this);}catch(Exception e){return 1f;}}private float offsetX(){try{return offsetXField.getFloat(this);}catch(Exception e){return 0f;}}private float offsetY(){try{return offsetYField.getFloat(this);}catch(Exception e){return 0f;}}
 
-    private void invokePen(String name){try{Method m=OcctShaprPenCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(this);}catch(Exception e){toast("ابزار در دسترس نیست");}}
-    private void invokeParent(String name){try{Method m=OcctShaprCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(this);}catch(Exception e){toast("ابزار در دسترس نیست");}}
-    private String invokeParentString(String name){try{Method m=OcctShaprCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);Object r=m.invoke(this);return r==null?"":String.valueOf(r);}catch(Exception e){return"ابزار در دسترس نیست";}}
+    private void invokePen(String name){try{Method m=OcctShaprPenCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(this);}catch(Exception e){toast("Tools is unavailable");}}
+    private void invokeParent(String name){try{Method m=OcctShaprCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(this);}catch(Exception e){toast("Tools is unavailable");}}
+    private String invokeParentString(String name){try{Method m=OcctShaprCadCanvasView.class.getDeclaredMethod(name);m.setAccessible(true);Object r=m.invoke(this);return r==null?"":String.valueOf(r);}catch(Exception e){return"Tools is unavailable";}}
 
     private EditText input(String s){EditText e=new EditText(getContext());e.setSingleLine(true);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setText(s);e.setSelectAllOnFocus(true);return e;}
-    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace('،','.').replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("سانتیمتر")||s.endsWith("سانتی‌متر");s=s.replace("میلی‌متر","").replace("میلیمتر","").replace("سانتی‌متر","").replace("سانتیمتر","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static float lengthMm(String raw){String s=normalizeDigits(raw).toLowerCase(Locale.US).trim().replace(',','.');boolean cm=s.endsWith("cm")||s.endsWith("cm")||s.endsWith("cm");s=s.replace("mm","").replace("mm","").replace("cm","").replace("cm","").replace("mm","").replace("cm","").trim();float v=Float.parseFloat(s);return cm?v*10f:v;}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String cm(float mm){return fmt(mm);}private static String dual(float mm){return fmt(mm)+" mm";}
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static float dist(PointF a,PointF b){return(float)Math.hypot(b.x-a.x,b.y-a.y);}

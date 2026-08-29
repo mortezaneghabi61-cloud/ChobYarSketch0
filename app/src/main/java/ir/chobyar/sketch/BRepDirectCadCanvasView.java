@@ -56,20 +56,20 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     @Override
     public void showDirectManager() {
         Object body=selectedBody();
-        String bodyLabel=body==null?"Body انتخاب نشده":bodyName(body);
+        String bodyLabel=body==null?"No body selected":bodyName(body);
         String[] items={
-                "✥ ابزار مستقیم Edge / Face (Fillet, Chamfer, Push/Pull, Shell)",
-                "⌘ B-Rep Inspector / ساختار Body",
-                "▱ اندازه Face انتخاب‌شده",
-                "— اندازه Edge انتخاب‌شده",
-                "↔ Move Body در X / Y / Z",
-                "⟳ Rotate Body حول X / Y / Z",
-                "↶ Undo آخرین جابه‌جایی/چرخش Body",
-                "✓ بررسی سلامت Topology"
+                "✥ Tools text Edge / Face (Fillet, Chamfer, Push/Pull, Shell)",
+                "⌘ B-Rep Inspector / Createtext Body",
+                "▱ Dimension Face selected",
+                "— Dimension Edge selected",
+                "↔ Move Body text X / Y / Z",
+                "⟳ Rotate Body text X / Y / Z",
+                "↶ Undo text text/text Body",
+                "✓ text text Topology"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Edit 3D • B-Rep")
-                .setMessage(bodyLabel+"\n\nکاربر عادی: گزینه اول.\nکار حرفه‌ای: Topology، اندازه‌های دقیق و Transform سه‌بعدی همین‌جا در دسترس است.")
+                .setMessage(bodyLabel+" \n  \n text text: text First. \n text text: Topology, Dimensiontext text text Transform text text text text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)super.showDirectManager();
                     else if(w==1)showTopologyInspector();
@@ -80,55 +80,55 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
                     else if(w==6)toast(undoBodyTransform());
                     else showTopologyHealth();
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     public void showTopologyInspector() {
         Object body=selectedBody();
-        if(body==null){ensure3D();toast("اول روی یک Body بزن");return;}
+        if(body==null){ensure3D();toast("Select a body first");return;}
         BRepTopology topo=topology(body);
         BRepTopology.TopoFace face=topo.findFace(selectedFace());
         String message=topo.summary();
-        if(face!=null)message+="\n\nFace انتخاب‌شده:\n"+BRepTopology.faceInfo(face);
+        if(face!=null)message+=" \n  \n Face selected: \n "+BRepTopology.faceInfo(face);
         new AlertDialog.Builder(getContext())
                 .setTitle("B-Rep Inspector • "+bodyName(body))
                 .setMessage(message)
-                .setPositiveButton("باشه",null).show();
+                .setPositiveButton("OK",null).show();
     }
 
     private void showTopologyHealth() {
         Object body=selectedBody();
-        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){toast("Select a body first");return;}
         BRepTopology t=topology(body);
         String message=t.isClosedManifold()
-                ?"✓ Body یک پوسته بسته و Manifold دارد. هر Edge دقیقاً بین دو Face مشترک است."
-                :"⚠ Topology نیاز به بررسی دارد.\nBoundary Edge: "+t.boundaryEdgeCount+"\nNon-manifold Edge: "+t.nonManifoldEdgeCount;
+                ?"✓ Body text text text text Manifold text. text Edge text text text Face text text."
+                :"⚠ Topology text text text text. \n Boundary Edge: "+t.boundaryEdgeCount+"\nNon-manifold Edge: "+t.nonManifoldEdgeCount;
         message+="\n\nVertex: "+t.vertices.size()+" • Edge: "+t.edges.size()+" • Face: "+t.faces.size();
-        new AlertDialog.Builder(getContext()).setTitle("Topology Health").setMessage(message).setPositiveButton("باشه",null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Topology Health").setMessage(message).setPositiveButton("OK",null).show();
     }
 
     private void showSelectedFaceMeasure() {
         Object body=selectedBody();
         SolidCSG.Polygon selected=selectedFace();
-        if(body==null||selected==null){ensure3D();toast("اول روی Face موردنظر بزن");return;}
+        if(body==null||selected==null){ensure3D();toast("Select the target face first");return;}
         BRepTopology.TopoFace f=topology(body).findFace(selected);
-        if(f==null){toast("Face در Topology پیدا نشد");return;}
+        if(f==null){toast("Face text Topology was not found");return;}
         new AlertDialog.Builder(getContext())
                 .setTitle("Face • "+f.id)
                 .setMessage(BRepTopology.faceInfo(f))
-                .setPositiveButton("باشه",null).show();
+                .setPositiveButton("OK",null).show();
     }
 
     private void showSelectedEdgeMeasure() {
         Object body=selectedBody();
         Geometry3D.Vec3 a=selectedEdgeA(),b=selectedEdgeB();
         if(body==null||a==null||b==null||selectedEdgeBody()!=body){
-            ensure3D();toast("اول از ابزار مستقیم، Edge را انتخاب کن");return;
+            ensure3D();toast("First text Tools text, Edge text Selection text");return;
         }
         float mm=b.sub(a).length();
         Geometry3D.Vec3 d=b.sub(a).normalized();
         String msg="Length: "+dual(mm)+"\nDirection: ("+num(d.x)+", "+num(d.y)+", "+num(d.z)+")";
-        new AlertDialog.Builder(getContext()).setTitle("Edge Measurement").setMessage(msg).setPositiveButton("باشه",null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Edge Measurement").setMessage(msg).setPositiveButton("OK",null).show();
     }
 
     // ------------------------------------------------------------------
@@ -137,23 +137,23 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
 
     private void showMoveBodyDialog() {
         Object body=selectedBody();
-        if(body==null){ensure3D();toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){ensure3D();toast("Select a body first");return;}
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
         EditText x=axisInput(box,"X", "0mm");
         EditText y=axisInput(box,"Y", "0mm");
         EditText z=axisInput(box,"Z", "0mm");
         new AlertDialog.Builder(getContext())
                 .setTitle("Move Body • mm")
-                .setMessage("مقدار مثبت/منفی را برای هر محور به میلی‌متر وارد کن؛ مثال: -15")
+                .setMessage("text text/text text text text Axis text mm text text; text: -15")
                 .setView(box)
-                .setPositiveButton("حرکت",(d,w)->{
+                .setPositiveButton("text",(d,w)->{
                     try{
                         float dx=parseLengthMm(x.getText().toString());
                         float dy=parseLengthMm(y.getText().toString());
                         float dz=parseLengthMm(z.getText().toString());
                         toast(moveBody(body,dx,dy,dz));
-                    }catch(Exception e){toast("مقدار X/Y/Z درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("text X/Y/Z was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private EditText axisInput(LinearLayout parent,String axis,String initial) {
@@ -165,8 +165,8 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     }
 
     private String moveBody(Object body,float dx,float dy,float dz) {
-        if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)<1e-6f)return"حرکت صفر است";
-        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body معتبر نیست";
+        if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)<1e-6f)return"text text text";
+        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body text text";
         pushTransformUndo(body,c);
         setBodyCsg(body,transform(c,p->new Geometry3D.Vec3(p.x+dx,p.y+dy,p.z+dz)));
         clearSubSelection();ensure3D();invalidate();
@@ -174,10 +174,10 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     }
 
     private void showRotateBodyAxisDialog() {
-        if(selectedBody()==null){ensure3D();toast("اول یک Body را انتخاب کن");return;}
+        if(selectedBody()==null){ensure3D();toast("Select a body first");return;}
         String[] axes={"X","Y","Z"};
-        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • محور")
-                .setItems(axes,(d,w)->showRotateAngle(w)).setNegativeButton("لغو",null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Rotate Body • Axis")
+                .setItems(axes,(d,w)->showRotateAngle(w)).setNegativeButton("Cancel",null).show();
     }
 
     private void showRotateAngle(int axisIndex) {
@@ -186,18 +186,18 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         input.setText("90");input.setSelectAllOnFocus(true);
         String axis=axisIndex==0?"X":axisIndex==1?"Y":"Z";
-        new AlertDialog.Builder(getContext()).setTitle("Rotate حول "+axis)
-                .setMessage("زاویه بر حسب درجه؛ مرکز دوران = مرکز Body")
+        new AlertDialog.Builder(getContext()).setTitle("Rotate text "+axis)
+                .setMessage("Angle text text degrees; Center text = Center Body")
                 .setView(input)
-                .setPositiveButton("چرخش",(d,w)->{
+                .setPositiveButton("text",(d,w)->{
                     try{float deg=Float.parseFloat(normalizeDigits(input.getText().toString()));toast(rotateBody(body,axisIndex,deg));}
-                    catch(Exception e){toast("زاویه درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("Angle was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private String rotateBody(Object body,int axisIndex,float deg) {
-        if(Math.abs(deg)<1e-5f)return"زاویه صفر است";
-        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body معتبر نیست";
+        if(Math.abs(deg)<1e-5f)return"Angle text text";
+        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body text text";
         Geometry3D.Vec3 center=bodyCenter(c);
         Geometry3D.Vec3 axis=axisIndex==0?new Geometry3D.Vec3(1,0,0):axisIndex==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
         double rad=Math.toRadians(deg);
@@ -208,11 +208,11 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     }
 
     private String undoBodyTransform() {
-        Object body=selectedBody();if(body==null)return"اول یک Body را انتخاب کن";
+        Object body=selectedBody();if(body==null)return"Select a body first";
         ArrayDeque<SolidCSG> stack=transformUndo.get(body);
-        if(stack==null||stack.isEmpty())return"Undo Transform خالی است";
+        if(stack==null||stack.isEmpty())return"Undo Transform is empty";
         setBodyCsg(body,stack.removeLast());clearSubSelection();invalidate();
-        return"آخرین Move/Rotate برگشت";
+        return"text Move/Rotate text";
     }
 
     private void pushTransformUndo(Object body,SolidCSG csg) {
@@ -277,7 +277,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
         return Float.parseFloat(s);
     }
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}

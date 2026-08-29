@@ -46,55 +46,55 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
     /** Trim crossing line segments to their intersection, keeping the longer side of each line. */
     public String trimSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "برای Trim دقیقاً دو خط را با چندانتخاب انتخاب کن";
+        if (pair == null) return "text Trim text text Line text text textSelection Selection text";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF p = infiniteIntersection(a, b);
-        if (p == null) return "این دو خط موازی هستند";
+        if (p == null) return "text text Line Parallel text";
         if (!pointOnSegment(p, a, 0.05f) || !pointOnSegment(p, b, 0.05f))
-            return "محل برخورد بیرون خط‌هاست؛ برای این حالت Extend را بزن";
+            return "place text text Linetext; text text text Extend text text";
 
         saveUndo();
         keepFarSideAt(pair.get(0), a, p);
         keepFarSideAt(pair.get(1), b, p);
         invalidate();
-        return "Trim انجام شد — قسمت کوتاه‌تر هر خط حذف شد";
+        return "Trim completed — text text text Line Delete text";
     }
 
     /** Extends only the selected lines that do not currently reach the common infinite-line intersection. */
     public String extendSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "برای Extend دقیقاً دو خط را با چندانتخاب انتخاب کن";
+        if (pair == null) return "text Extend text text Line text text textSelection Selection text";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF p = infiniteIntersection(a, b);
-        if (p == null) return "خط‌های موازی به هم نمی‌رسند";
+        if (p == null) return "Linetext Parallel text text text";
 
         boolean aHas = pointOnSegment(p, a, 0.05f);
         boolean bHas = pointOnSegment(p, b, 0.05f);
-        if (aHas && bHas) return "دو خط همین حالا همدیگر را قطع می‌کنند؛ Trim را استفاده کن";
+        if (aHas && bHas) return "text Line text text text text text text; Trim text text text";
 
         saveUndo();
         if (!aHas) moveNearestEndpoint(pair.get(0), a, p);
         if (!bHas) moveNearestEndpoint(pair.get(1), b, p);
         invalidate();
-        return "Extend انجام شد و خط‌ها به محل تقاطع رسیدند";
+        return "Extend completed text Linetext text place Intersection text";
     }
 
     /** Creates a straight chamfer between two selected line directions. */
     public String chamferSelectedLines(float setback) {
-        if (setback <= 0f) return "فاصله پخ باید بزرگ‌تر از صفر باشد";
+        if (setback <= 0f) return "Distance text text text text text text";
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "برای Chamfer دقیقاً دو خط را انتخاب کن";
+        if (pair == null) return "text Chamfer text text Line text Selection text";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF corner = infiniteIntersection(a, b);
-        if (corner == null) return "روی خط‌های موازی Chamfer ساخته نمی‌شود";
+        if (corner == null) return "Roy Linetext Parallel Chamfer created text";
 
         Branch ba = keptBranch(a, corner);
         Branch bb = keptBranch(b, corner);
         if (ba.length <= setback || bb.length <= setback)
-            return "فاصله پخ از طول یکی از خط‌ها بزرگ‌تر است";
+            return "Distance text text Length text text Linetext text text";
 
         PointF pa = add(corner, mul(ba.u, setback));
         PointF pb = add(corner, mul(bb.u, setback));
@@ -105,18 +105,18 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         Object bridge = newLine(pa.x, pa.y, pb.x, pb.y, pair.get(0));
         if (bridge != null) entities().add(bridge);
         invalidate();
-        return "Chamfer = " + fmt(setback) + " mm ساخته شد";
+        return "Chamfer = " + fmt(setback) + " mm created";
     }
 
     /** Creates a tangent circular fillet between two selected line directions. */
     public String filletSelectedLines(float radius) {
-        if (radius <= 0f) return "شعاع Fillet باید بزرگ‌تر از صفر باشد";
+        if (radius <= 0f) return "Radius Fillet text text text text text";
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "برای Fillet دقیقاً دو خط را انتخاب کن";
+        if (pair == null) return "text Fillet text text Line text Selection text";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF corner = infiniteIntersection(a, b);
-        if (corner == null) return "روی خط‌های موازی Fillet ساخته نمی‌شود";
+        if (corner == null) return "Roy Linetext Parallel Fillet created text";
 
         Branch ba = keptBranch(a, corner);
         Branch bb = keptBranch(b, corner);
@@ -124,11 +124,11 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         double theta = Math.acos(dot);
         double degrees = Math.toDegrees(theta);
         if (degrees < 5.0 || degrees > 175.0)
-            return "زاویه دو خط برای Fillet مناسب نیست";
+            return "Angle text Line text Fillet text text";
 
         float tangent = (float)(radius / Math.tan(theta / 2.0));
         if (tangent <= 0f || tangent >= ba.length || tangent >= bb.length)
-            return "شعاع Fillet برای طول این خط‌ها بزرگ است";
+            return "Radius Fillet text Length text Linetext text text";
 
         PointF pa = add(corner, mul(ba.u, tangent));
         PointF pb = add(corner, mul(bb.u, tangent));
@@ -146,24 +146,24 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         Object arc = newArc(center.x, center.y, radius, start, sweep, pair.get(0));
         if (arc != null) entities().add(arc);
         invalidate();
-        return "Fillet R " + fmt(radius) + " mm ساخته شد";
+        return "Fillet R " + fmt(radius) + " mm created";
     }
 
     /** Joins two almost-collinear lines that touch or have only a small gap. */
     public String joinSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "برای Join دقیقاً دو خط را انتخاب کن";
+        if (pair == null) return "text Join text text Line text Selection text";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
-        if (a == null || b == null) return "فقط دو Line قابل Join هستند";
+        if (a == null || b == null) return "text text Line text Join text";
 
         PointF da = unit(a.x2-a.x1, a.y2-a.y1);
         PointF db = unit(b.x2-b.x1, b.y2-b.y1);
         float cross = Math.abs(da.x*db.y-da.y*db.x);
-        if (cross > 0.025f) return "دو خط هم‌راستا نیستند";
+        if (cross > 0.025f) return "text Line textRighttext text";
 
         EndpointPair nearest = nearestEndpointPair(a, b);
-        if (nearest.distance > 5f) return "فاصله دو خط برای Join بیشتر از 5 mm است";
+        if (nearest.distance > 5f) return "Distance text Line text Join text text 5 mm text";
 
         PointF farA = nearest.aIndex == 0 ? new PointF(a.x2,a.y2) : new PointF(a.x1,a.y1);
         PointF farB = nearest.bIndex == 0 ? new PointF(b.x2,b.y2) : new PointF(b.x1,b.y1);
@@ -175,7 +175,7 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         one.add(pair.get(0));
         setSmartSelection(one);
         invalidate();
-        return "دو خط Join شدند";
+        return "text Line Join became";
     }
 
     @Override
@@ -189,16 +189,16 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
             if ("TR".equals(cmd) || "TRIM".equals(cmd)) return trimSelectedLines();
             if ("EX".equals(cmd) || "EXTEND".equals(cmd)) return extendSelectedLines();
             if ("F".equals(cmd) || "FILLET".equals(cmd)) {
-                if (a.length < 2) return "شعاع Fillet را وارد کن";
+                if (a.length < 2) return "Radius Fillet text text text";
                 return filletSelectedLines(Float.parseFloat(a[1]));
             }
             if ("CHA".equals(cmd) || "CHAMFER".equals(cmd)) {
-                if (a.length < 2) return "فاصله Chamfer را وارد کن";
+                if (a.length < 2) return "Distance Chamfer text text text";
                 return chamferSelectedLines(Float.parseFloat(a[1]));
             }
             if ("J".equals(cmd) || "JOIN".equals(cmd)) return joinSelectedLines();
         } catch (Exception e) {
-            return "فرمت عدد درست نیست";
+            return "Number format is invalid";
         }
         return super.executeCommand(s);
     }
@@ -366,9 +366,7 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         StringBuilder b=new StringBuilder();
         for(int i=0;i<s.length();i++){
             char c=s.charAt(i);
-            if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));
-            else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

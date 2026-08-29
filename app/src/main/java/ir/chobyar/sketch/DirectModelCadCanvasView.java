@@ -135,27 +135,27 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
     public void showDirectManager() {
         Object body = selectedBody();
         Object face = selectedFace();
-        String bodyText = body == null ? "Body انتخاب نشده" : bodyName(body);
-        String faceText = face == null ? "Face انتخاب نشده" : "Face آماده Push/Pull است";
-        String edgeText = selectedEdgeA == null ? "Edge انتخاب نشده" : "Edge انتخاب شده";
+        String bodyText = body == null ? "No body selected" : bodyName(body);
+        String faceText = face == null ? "No face selected" : "Face Ready Push/Pull text";
+        String edgeText = selectedEdgeA == null ? "No edge selected" : "Edge selected";
 
         String[] items = {
-                "⌁ انتخاب Edge با لمس روی مدل",
-                "⌒ Fillet فقط Edge انتخاب‌شده",
-                "◩ Chamfer فقط Edge انتخاب‌شده",
-                "↕ Push/Pull یا Offset روی Face انتخاب‌شده",
-                "⌒ Fillet همه لبه‌های عمودی",
-                "◩ Chamfer همه لبه‌های عمودی",
-                "▱ Shell / توخالی",
+                "⌁ Selection Edge text touch Roy Model",
+                "⌒ Fillet text Edge selected",
+                "◩ Chamfer text Edge selected",
+                "↕ Push/Pull text Offset Roy Face selected",
+                "⌒ Fillet All Edgetext Vertical",
+                "◩ Chamfer All Edgetext Vertical",
+                "▱ Shell / text",
                 "⏱ Direct Edit History",
-                "↺ پاک‌کردن Direct Editهای Body"
+                "↺ text Direct Edittext Body"
         };
 
         new AlertDialog.Builder(getContext())
-                .setTitle("Edit 3D • مستقیم")
+                .setTitle("Edit 3D • text")
                 .setMessage(bodyText + "\n" + faceText + " • " + edgeText
-                        + "\n\nبرای Face فقط روی سطح بزن. برای Edge گزینه اول را بزن و بعد خود لبه را لمس کن."
-                        + "\nواحد همه اندازه‌ها: میلی‌متر (mm)")
+                        + " \n  \n text Face text Roy Face text. text Edge text First Hit and then yourself Edge text touch text."
+                        + " \n text All Dimensiontext: mm (mm)")
                 .setItems(items, (d,w) -> {
                     if (w == 0) beginEdgePick();
                     else if (w == 1) askEdgeEdit(EditKind.EDGE_FILLET);
@@ -167,7 +167,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                     else if (w == 7) showDirectHistory();
                     else toast(clearDirectEdits());
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
@@ -179,7 +179,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
     private void beginEdgePick() {
         if (selectedBody() == null) {
             ensure3D();
-            toast("اول روی Body بزن، بعد دوباره انتخاب Edge را بزن");
+            toast("Select a body first, then hit Selection Edge again");
             return;
         }
         ensure3D();
@@ -187,7 +187,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         selectedEdgeA = selectedEdgeB = null;
         selectedEdgeBody = null;
         invalidate();
-        toast("حالت انتخاب Edge روشن شد — روی لبه موردنظر بزن");
+        toast("text Selection Edge On text — Roy Edge text text");
     }
 
     private void askEdgeEdit(EditKind kind) {
@@ -197,13 +197,13 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
             return;
         }
         PrismData p = analyzePrism(bodyCsg(body));
-        if (p == null) { toast("این Edge فعلاً برای Bodyهای Prism/Extrude قابل ویرایش مستقیم است"); return; }
+        if (p == null) { toast("This Edge is currently directly editable for Prism Bodys/Extrude"); return; }
         if (!isVerticalEdge(p, selectedEdgeA, selectedEdgeB)) {
-            toast("Edge انتخاب شد، ولی Fillet/Chamfer انتخابی فعلاً روی لبه‌های عمودی Prism اجرا می‌شود");
+            toast("Edge selected, but Fillet/Chamfer Selectiontext text Roy Edgetext Vertical Prism text text");
             return;
         }
-        String title = kind == EditKind.EDGE_FILLET ? "Fillet Edge — شعاع" : "Chamfer Edge — فاصله";
-        askLength(title, "مثال: 5", "5", value -> {
+        String title = kind == EditKind.EDGE_FILLET ? "Fillet Edge — Radius" : "Chamfer Edge — Distance";
+        askLength(title, "text: 5", "5", value -> {
             DirectOp op = new DirectOp(kind, value, 0, midpoint(selectedEdgeA, selectedEdgeB));
             toast(recordAndApply(body, op));
         });
@@ -214,28 +214,28 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         SolidCSG.Polygon face = selectedFace();
         if (body == null || face == null) {
             ensure3D();
-            toast("اول در نمای 3D روی Face موردنظر بزن");
+            toast("First, click on the desired Face in 3D View");
             return;
         }
         PrismData p = analyzePrism(bodyCsg(body));
-        if (p == null) { toast("Push/Pull فعلی روی Faceهای Bodyهای Prism/Extrude اجرا می‌شود"); return; }
+        if (p == null) { toast("Push/Pull text Roy Facetext Bodytext Prism/Extrude text text"); return; }
         int selector = faceSelector(p, face);
         Geometry3D.Vec3 anchor = face.centroid();
-        askLength("Push/Pull Face — فاصله", "مثبت = بیرون، منفی = داخل؛ مثال: 12", "10", value -> {
-            if (Math.abs(value) < 1e-5f) { toast("فاصله نباید صفر باشد"); return; }
+        askLength("Push/Pull Face — Distance", "text = text, text = text; text: 12", "10", value -> {
+            if (Math.abs(value) < 1e-5f) { toast("Distance text text text"); return; }
             toast(recordAndApply(body, new DirectOp(EditKind.FACE_OFFSET, value, selector, anchor)));
         });
     }
 
     private void askBodyEdit(EditKind kind) {
         Object body = selectedBody();
-        if (body == null) { toast("اول یک Body را انتخاب کن"); return; }
-        String title = kind == EditKind.ALL_FILLET ? "Fillet همه Edgeها — شعاع"
-                : kind == EditKind.ALL_CHAMFER ? "Chamfer همه Edgeها — فاصله"
-                : "Shell — ضخامت دیواره";
+        if (body == null) { toast("Select a body first"); return; }
+        String title = kind == EditKind.ALL_FILLET ? "Fillet All Edgetext — Radius"
+                : kind == EditKind.ALL_CHAMFER ? "Chamfer All Edgetext — Distance"
+                : "Shell — Thickness text";
         String def = kind == EditKind.SHELL ? "2" : "5";
-        askLength(title, "میلی‌متر", def, value -> {
-            if (!(value > 0f)) { toast("مقدار باید بزرگ‌تر از صفر باشد"); return; }
+        askLength(title, "mm", def, value -> {
+            if (!(value > 0f)) { toast("text text text text text text"); return; }
             toast(recordAndApply(body, new DirectOp(kind, value, 0, null)));
         });
     }
@@ -252,43 +252,43 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                 .setTitle(title + " • mm")
                 .setMessage(message)
                 .setView(input)
-                .setPositiveButton("اعمال", (d,w) -> {
+                .setPositiveButton("Apply", (d,w) -> {
                     try { consumer.accept(parseLengthMm(input.getText().toString())); }
-                    catch (Exception e) { toast("اندازه درست وارد نشده"); }
+                    catch (Exception e) { toast("Dimension was entered incorrectly"); }
                 })
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     /** Deterministic non-modal 3D finishing entry for command/tests. */
     public String applyAllFillet(float radiusMm) {
-        if (!(radiusMm > 0f)) return "شعاع Fillet باید بزرگ‌تر از صفر باشد";
+        if (!(radiusMm > 0f)) return "Radius Fillet text text text text text";
         Object body = selectedBody();
-        if (body == null) return "اول یک Body را انتخاب کن";
+        if (body == null) return "Select a body first";
         return recordAndApply(body, new DirectOp(EditKind.ALL_FILLET, radiusMm, 0, null));
     }
 
     /** Deterministic non-modal 3D finishing entry for command/tests. */
     public String applyAllChamfer(float distanceMm) {
-        if (!(distanceMm > 0f)) return "فاصله Chamfer باید بزرگ‌تر از صفر باشد";
+        if (!(distanceMm > 0f)) return "Distance Chamfer must be greater than zero";
         Object body = selectedBody();
-        if (body == null) return "اول یک Body را انتخاب کن";
+        if (body == null) return "Select a body first";
         return recordAndApply(body, new DirectOp(EditKind.ALL_CHAMFER, distanceMm, 0, null));
     }
 
     /** Deterministic one-open-face Shell for prism/extrude bodies. */
     public String applyShell3D(float wallMm) {
-        if (!(wallMm > 0f)) return "ضخامت Shell باید بزرگ‌تر از صفر باشد";
+        if (!(wallMm > 0f)) return "Thickness Shell must be greater than zero";
         Object body = selectedBody();
-        if (body == null) return "اول یک Body را انتخاب کن";
+        if (body == null) return "Select a body first";
         return recordAndApply(body, new DirectOp(EditKind.SHELL, wallMm, 0, null));
     }
 
     /** Deterministic axial Push/Pull. Positive distance extends the selected cap outward. */
     public String applyAxialFaceOffset(boolean top, float distanceMm) {
-        if (Math.abs(distanceMm) < 1e-5f) return "فاصله Push/Pull نباید صفر باشد";
+        if (Math.abs(distanceMm) < 1e-5f) return "Distance Push/Pull text text text";
         Object body = selectedBody();
-        if (body == null) return "اول یک Body را انتخاب کن";
+        if (body == null) return "Select a body first";
         return recordAndApply(body, new DirectOp(EditKind.FACE_OFFSET, distanceMm, top ? FACE_TOP : FACE_BOTTOM, null));
     }
 
@@ -302,25 +302,25 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                 boolean fillet = "FILLET3D".equals(op) || "FILLETALL".equals(op);
                 boolean chamfer = "CHAMFER3D".equals(op) || "CHAMFERALL".equals(op);
                 if ("SHELL3D".equals(op)) {
-                    if (a.length != 2) return "SHELL3D — ضخامت بر حسب mm لازم است؛ مثال: SHELL3D 5";
+                    if (a.length != 2) return "SHELL3D — Thickness text text mm text text; text: SHELL3D 5";
                     try { return applyShell3D(parseLengthMm(a[1])); }
-                    catch (Exception e) { return "ضخامت Shell درست نیست"; }
+                    catch (Exception e) { return "Thickness Shell is invalid"; }
                 }
                 if ("PUSHPULL3D".equals(op)) {
-                    if (a.length != 3) return "PUSHPULL3D — TOP/BOTTOM و فاصله لازم است؛ مثال: PUSHPULL3D TOP 10";
+                    if (a.length != 3) return "PUSHPULL3D — TOP/BOTTOM and Distance required; Example: PUSHPULL3D TOP 10";
                     boolean top = "TOP".equalsIgnoreCase(a[1]);
                     boolean bottom = "BOTTOM".equalsIgnoreCase(a[1]);
-                    if (!top && !bottom) return "Face باید TOP یا BOTTOM باشد";
+                    if (!top && !bottom) return "Face should be TOP or BOTTOM";
                     try { return applyAxialFaceOffset(top, parseLengthMm(a[2])); }
-                    catch (Exception e) { return "فاصله Push/Pull درست نیست"; }
+                    catch (Exception e) { return "Distance Push/Pull is invalid"; }
                 }
                 if (fillet || chamfer) {
-                    if (a.length != 2) return op + " — یک اندازه بر حسب mm لازم است؛ مثال: " + op + " 5";
+                    if (a.length != 2) return op + " — text Dimension text text mm text text; text: " + op + " 5";
                     try {
                         float mm = parseLengthMm(a[1]);
                         return fillet ? applyAllFillet(mm) : applyAllChamfer(mm);
                     } catch (Exception e) {
-                        return "اندازه Fillet/Chamfer درست نیست";
+                        return "Dimension Fillet/Chamfer is invalid";
                     }
                 }
             }
@@ -334,16 +334,16 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
 
     private String recordAndApply(Object body, DirectOp op) {
         SolidCSG current = bodyCsg(body);
-        if (current == null || current.isEmpty()) return "Body معتبر نیست";
+        if (current == null || current.isEmpty()) return "Body text text";
         if (!directBaseByBody.containsKey(body)) directBaseByBody.put(body, current.copy());
         List<DirectOp> ops = directOpsByBody.get(body);
         if (ops == null) { ops = new ArrayList<>(); directOpsByBody.put(body, ops); }
         if (op.kind == EditKind.SHELL) {
-            for (DirectOp x : ops) if (x.kind == EditKind.SHELL) return "برای این Body قبلاً Shell ثبت شده";
+            for (DirectOp x : ops) if (x.kind == EditKind.SHELL) return "text text Body text Shell text text";
         }
         ops.add(op);
         String result = rebuildDirect(body);
-        if (result.startsWith("خطا")) {
+        if (result.startsWith("Error")) {
             ops.remove(ops.size()-1);
             rebuildDirect(body);
             return result;
@@ -353,22 +353,22 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         setSelectedFace(null);
         ensure3D();
         invalidate();
-        return op.label() + " اعمال شد";
+        return op.label() + " Apply text";
     }
 
     public void showDirectHistory() {
         Object body = selectedBody();
-        if (body == null) { toast("اول یک Body را انتخاب کن"); return; }
+        if (body == null) { toast("Select a body first"); return; }
         List<DirectOp> ops = directOpsByBody.get(body);
-        if (ops == null || ops.isEmpty()) { toast("Direct Edit History خالی است"); return; }
+        if (ops == null || ops.isEmpty()) { toast("Direct Edit History is empty"); return; }
         String[] rows = new String[ops.size()];
         for (int i=0;i<ops.size();i++) rows[i] = (i+1) + ". " + ops.get(i).label();
         new AlertDialog.Builder(getContext())
                 .setTitle("Direct Edit History • " + bodyName(body))
-                .setMessage("Feature را لمس کن تا مقدارش را عوض یا حذف کنی.")
+                .setMessage("Feature text touch text until text text change text Delete text.")
                 .setItems(rows, (d,w) -> editDirectOp(body,w))
-                .setNeutralButton("بازسازی", (d,w) -> toast(rebuildDirect(body)))
-                .setNegativeButton("بستن", null)
+                .setNeutralButton("Rebuild", (d,w) -> toast(rebuildDirect(body)))
+                .setNegativeButton("Close", null)
                 .show();
     }
 
@@ -382,13 +382,13 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         input.setText(num(op.valueMm) + "mm");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("ویرایش " + op.label())
+                .setTitle("text " + op.label())
                 .setView(input)
-                .setPositiveButton("اعمال", (d,w) -> {
+                .setPositiveButton("Apply", (d,w) -> {
                     try { op.valueMm = parseLengthMm(input.getText().toString()); toast(rebuildDirect(body)); }
-                    catch (Exception e) { toast("اندازه درست وارد نشده"); }
+                    catch (Exception e) { toast("Dimension was entered incorrectly"); }
                 })
-                .setNeutralButton("حذف Feature", (d,w) -> {
+                .setNeutralButton("Delete Feature", (d,w) -> {
                     ops.remove(index);
                     if (ops.isEmpty()) {
                         restoreDirectBase(body);
@@ -397,13 +397,13 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
                     } else toast(rebuildDirect(body));
                     invalidate();
                 })
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private String clearDirectEdits() {
         Object body = selectedBody();
-        if (body == null) return "اول یک Body را انتخاب کن";
+        if (body == null) return "Select a body first";
         restoreDirectBase(body);
         directOpsByBody.remove(body);
         directBaseByBody.remove(body);
@@ -411,7 +411,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         selectedEdgeBody = null;
         setSelectedFace(null);
         invalidate();
-        return "Direct Editهای Body پاک شدند";
+        return "Direct Edittext Body text became";
     }
 
     private void restoreDirectBase(Object body) {
@@ -421,47 +421,47 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
 
     private String rebuildDirect(Object body) {
         SolidCSG base = directBaseByBody.get(body);
-        if (base == null) return "خطا: پایه Direct Edit پیدا نشد";
+        if (base == null) return "Error: Direct Edit base was not found";
         List<DirectOp> ops = directOpsByBody.get(body);
-        if (ops == null || ops.isEmpty()) { setBodyCsg(body, base.copy()); return "Direct Edit خالی است"; }
+        if (ops == null || ops.isEmpty()) { setBodyCsg(body, base.copy()); return "Direct Edit is empty"; }
         SolidCSG result = base.copy();
         for (DirectOp op : ops) {
             PrismData p = analyzePrism(result);
-            if (p == null) return "خطا: این Direct Edit فعلاً به Body Prism/Extrude نیاز دارد";
+            if (p == null) return "Error: text Direct Edit text text Body Prism/Extrude text text";
             if (op.kind == EditKind.EDGE_FILLET) {
                 int corner = nearestCorner(p, op.anchor);
                 List<PointF> q = filletOne(p.profile, corner, op.valueMm);
-                if (q == null) return "خطا: شعاع Fillet برای Edge انتخابی بزرگ یا نامعتبر است";
+                if (q == null) return "Error: Radius Fillet for Edge Selection is large or invalid";
                 result = SolidCSG.extrude(q, p.plane, p.heightMm);
             } else if (op.kind == EditKind.EDGE_CHAMFER) {
                 int corner = nearestCorner(p, op.anchor);
                 List<PointF> q = chamferOne(p.profile, corner, op.valueMm);
-                if (q == null) return "خطا: Chamfer برای Edge انتخابی بزرگ یا نامعتبر است";
+                if (q == null) return "Error: Chamfer text Edge Selectiontext text text invalid text";
                 result = SolidCSG.extrude(q, p.plane, p.heightMm);
             } else if (op.kind == EditKind.FACE_OFFSET) {
                 result = offsetFace(p, op);
-                if (result == null || result.isEmpty()) return "خطا: جابه‌جایی Face نامعتبر شد";
+                if (result == null || result.isEmpty()) return "Error: text Face invalid text";
             } else if (op.kind == EditKind.ALL_FILLET) {
                 List<PointF> q = filletAll(p.profile, op.valueMm);
-                if (q == null) return "خطا: شعاع Fillet برای این Body بزرگ است";
+                if (q == null) return "Error: Radius Fillet text text Body text text";
                 result = SolidCSG.extrude(q, p.plane, p.heightMm);
             } else if (op.kind == EditKind.ALL_CHAMFER) {
                 List<PointF> q = chamferAll(p.profile, op.valueMm);
-                if (q == null) return "خطا: Chamfer برای این Body بزرگ است";
+                if (q == null) return "Error: Chamfer text text Body text text";
                 result = SolidCSG.extrude(q, p.plane, p.heightMm);
             } else {
-                if (op.valueMm >= p.heightMm * 0.49f) return "خطا: ضخامت Shell از ارتفاع Body زیاد است";
+                if (op.valueMm >= p.heightMm * 0.49f) return "Error: Thickness Shell text Height Body text text";
                 List<PointF> inner = insetProfile(p.profile, op.valueMm);
-                if (inner == null) return "خطا: ضخامت Shell برای این پروفایل زیاد است";
+                if (inner == null) return "Error: Thickness Shell text text text text text";
                 Geometry3D.Plane3D innerPlane = p.plane.offset(op.valueMm, "Shell inner");
                 SolidCSG cut = SolidCSG.extrude(inner, innerPlane, p.heightMm + op.valueMm * 1.5f);
                 result = result.subtract(cut);
-                if (result.isEmpty()) return "خطا: Shell نامعتبر شد";
+                if (result.isEmpty()) return "Error: Shell invalid text";
             }
         }
         setBodyCsg(body, result);
         invalidate();
-        return "Direct Edit بازسازی شد • " + ops.size() + " Feature";
+        return "Direct Edit Rebuild text • " + ops.size() + " Feature";
     }
 
     /**
@@ -481,7 +481,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
             String old = before.get(body), now = csgSignature(after);
             if (old == null || !old.equals(now)) directBaseByBody.put(body, after.copy());
             String r = rebuildDirect(body);
-            if (!r.startsWith("خطا")) replayed++;
+            if (!r.startsWith("Error")) replayed++;
         }
         return parent + (replayed > 0 ? " • Direct " + replayed : "");
     }
@@ -516,7 +516,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
             if (pickNearestEdge(event.getX(), event.getY())) {
                 edgePickMode = false;
                 post(this::showEdgeQuickMenu);
-            } else toast("لبه‌ای نزدیک محل لمس پیدا نشد؛ کمی نزدیک‌تر روی خط بزن");
+            } else toast("Edgetext near place touch was not found; a little text Roy Line text");
             invalidate();
         }
         return handled;
@@ -551,19 +551,19 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         PrismData p = analyzePrism(bodyCsg(body));
         boolean editable = p != null && isVerticalEdge(p, selectedEdgeA, selectedEdgeB);
         String[] items = editable
-                ? new String[]{"⌒ Fillet همین Edge", "◩ Chamfer همین Edge", "✓ فقط انتخاب بماند"}
-                : new String[]{"✓ Edge انتخاب شد", "⌁ انتخاب Edge دیگر"};
+                ? new String[]{"⌒ Fillet text Edge", "◩ Chamfer text Edge", "✓ text Selection text"}
+                : new String[]{"✓ Edge selected", "⌁ Selection Edge text"};
         new AlertDialog.Builder(getContext())
-                .setTitle("Edge انتخاب شد")
+                .setTitle("Edge selected")
                 .setMessage(editable
-                        ? "این لبه در هسته فعلی قابل Fillet/Chamfer انتخابی است."
-                        : "انتخاب Edge واقعی انجام شد؛ این نوع لبه برای Blend دقیق به B-Rep نهایی نیاز دارد.")
+                        ? "text Edge text text text text Fillet/Chamfer Selectiontext text."
+                        : "Selection Edge text completed; text text Edge text Blend text text B-Rep text text text.")
                 .setItems(items, (d,w) -> {
                     if (editable && w == 0) askEdgeEdit(EditKind.EDGE_FILLET);
                     else if (editable && w == 1) askEdgeEdit(EditKind.EDGE_CHAMFER);
                     else if (!editable && w == 1) beginEdgePick();
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
@@ -913,7 +913,7 @@ public class DirectModelCadCanvasView extends AdvancedParametricSolidCadCanvasVi
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
         return Float.parseFloat(s);
     }
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}

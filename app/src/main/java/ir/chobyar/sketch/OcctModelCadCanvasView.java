@@ -195,29 +195,29 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         String selected=bodyName(selectedBody());
         NativeRecord r=nativeByBody.get(selectedBody());
         String state=!NativeBRepKernel.occtAvailable()
-                ?"OCCT روی این ABI فعال نیست"
-                :"OCCT synced: "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" منتظر مهاجرت/خطا":"");
+                ?"OCCT Roy text ABI text text"
+                :"OCCT synced: "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" text text/Error":"");
         if(r!=null)state+="\nSelected: "+selected+" • "+r.kind+" • "+r.triangleCount()+" triangles";
-        else if(selectedBody()!=null && hasDirectEdits(selectedBody()))state+="\nSelected: Direct Edit فعال دارد؛ شکل Native عمداً موقتاً غیرفعال است.";
+        else if(selectedBody()!=null && hasDirectEdits(selectedBody()))state+=" \n Selected: Direct Edit text text; text Native text text disabled text.";
 
         String[] items={
-                "▣ ابزارهای Solid / Native قبلی",
+                "▣ Toolstext Solid / Native text",
                 "↻ Sync Sketch/History → OCCT",
-                "◆ اطلاعات B-Rep انتخاب‌شده",
-                showNativeMesh?"△ مخفی‌کردن OCCT Mesh":"△ نمایش OCCT Mesh",
-                "✓ وضعیت مهاجرت Exact Model"
+                "◆ text B-Rep selected",
+                showNativeMesh?"△ Hidetext OCCT Mesh":"△ Show OCCT Mesh",
+                "✓ text text Exact Model"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • OCCT Model")
-                .setMessage(state+"\n\nExtrude • Revolve • Sweep • Loft • Boolean مستقیماً به TopoDS_Shape تبدیل می‌شوند.")
+                .setMessage(state+" \n  \n Extrude • Revolve • Sweep • Loft • Boolean text text TopoDS_Shape text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)OcctModelCadCanvasView.super.showSolidManager();
                     else if(w==1){lastHistorySignature="";syncNativeHistory(true);toast(nativeSyncSummary());invalidate();}
                     else if(w==2)showSelectedNativeInfo();
-                    else if(w==3){showNativeMesh=!showNativeMesh;invalidate();toast(showNativeMesh?"OCCT Mesh روشن":"OCCT Mesh مخفی");}
+                    else if(w==3){showNativeMesh=!showNativeMesh;invalidate();toast(showNativeMesh?"OCCT Mesh On":"OCCT Mesh Hide");}
                     else showMigrationStatus();
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     @Override
@@ -536,9 +536,9 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         syncNativeHistory(false);
         Object body=selectedBody();
         NativeRecord r=nativeByBody.get(body);
-        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){toast("Select a body first");return;}
         if(r==null){
-            toast(hasDirectEdits(body)?"این Body Direct Edit فعال دارد؛ مهاجرت Native آن مرحله بعد است":"این Body هنوز به OCCT مهاجرت نکرده");
+            toast(hasDirectEdits(body)?"text Body Direct Edit text text; text Native text text text text":"text Body text text OCCT text text");
             return;
         }
         double[] stats=NativeBRepKernel.occtShapeStats(r.handle);
@@ -554,28 +554,28 @@ public class OcctModelCadCanvasView extends NativeBRepCadCanvasView {
         }
         msg.append("\n\n").append(NativeBRepKernel.occtShapeSummary(r.handle));
         new AlertDialog.Builder(getContext()).setTitle("OCCT TopoDS_Shape")
-                .setMessage(msg.toString()).setPositiveButton("باشه",null).show();
+                .setMessage(msg.toString()).setPositiveButton("OK",null).show();
     }
 
     private void showMigrationStatus(){
-        String msg="✓ Sketch Plane → XYZ واقعی\n"
+        String msg="✓ Sketch Plane → XYZ text \n "
                 +"✓ Rectangle/Polygon/closed-lines Extrude → OCCT Prism\n"
                 +"✓ Circle Extrude → analytic OCCT Cylinder\n"
                 +"✓ Revolve → BRepPrimAPI_MakeRevol\n"
                 +"✓ Sweep → BRepOffsetAPI_MakePipe\n"
                 +"✓ Loft → BRepOffsetAPI_ThruSections\n"
-                +"✓ Circle profile در Formها → analytic OCCT Circle\n"
+                +"✓ Circle profile text Formtext → analytic OCCT Circle \n "
                 +"✓ History Union/Subtract/Intersect → BRepAlgoAPI\n"
-                +"✓ TopoDS_Shape → OCCT triangulation → نمایش در workspace\n"
-                +"✓ واحد داخلی و رابط کاربری: mm\n\n"
-                +"مرحله باقی‌مانده در این شاخه: Direct Editهای Face/Edge، Fillet/Chamfer/Shell و Transform باید از backend قدیمی به خود OCCT Shape History منتقل شوند.";
+                +"✓ TopoDS_Shape → OCCT triangulation → Show text workspace \n "
+                +"✓ text text text text text: mm \n  \n "
+                +"text text text text text: Direct Edittext Face/Edge, Fillet/Chamfer/Shell text Transform text text backend text text text OCCT Shape History text text.";
         new AlertDialog.Builder(getContext()).setTitle("Exact Model Migration")
-                .setMessage(msg).setPositiveButton("باشه",null).show();
+                .setMessage(msg).setPositiveButton("OK",null).show();
     }
 
     private String nativeSyncSummary(){
-        if(!NativeBRepKernel.occtAvailable())return"OCCT فعال نیست";
-        return "OCCT Sync • "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" منتظر/خطا":"");
+        if(!NativeBRepKernel.occtAvailable())return"OCCT text text";
+        return "OCCT Sync • "+nativeFeatureCount+" Feature"+(nativeFailureCount>0?" • "+nativeFailureCount+" text/Error":"");
     }
 
     private void releaseNativeRecords(){

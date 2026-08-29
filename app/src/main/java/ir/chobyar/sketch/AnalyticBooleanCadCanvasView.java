@@ -98,23 +98,23 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         Object body = selectedBody();
         BooleanNode node = booleanByBody.get(body);
         List<CurvedSurface> surfaces = body == null ? Collections.emptyList() : curvedSurfaces(body);
-        String bodyLine = body == null ? "Body انتخاب نشده" : bodyName(body);
+        String bodyLine = body == null ? "No body selected" : bodyName(body);
         if (node != null) bodyLine += " • " + friendlyOp(node.operation);
-        if (!surfaces.isEmpty()) bodyLine += " • " + surfaces.size() + " سطح منحنی دقیق";
+        if (!surfaces.isEmpty()) bodyLine += " • " + surfaces.size() + " Face text text";
 
         String[] items = {
-                "▣ Solid / Primitiveهای دقیق / ابزارهای معمولی",
-                "∪−∩ Boolean تحلیلی / حفظ Surface دقیق",
+                "▣ Solid / Primitivetext text / Toolstext text",
+                "∪−∩ Boolean text / text Surface text",
                 "∿ Analytic Boundary Inspector",
-                "◎ گزارش سوراخ و سطوح منحنی",
-                "↻ همگام‌سازی با History",
-                is3DOverview() ? "□ برگشت به Sketch 2D" : "◇ نمایش 3D"
+                "◎ text text text text text",
+                "↻ text text History",
+                is3DOverview() ? "□ text text Sketch 2D" : "◇ Show 3D"
         };
 
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Analytic B-Rep")
                 .setMessage(bodyLine
-                        + "\n\nدر Boolean تحلیلی، هندسه فعلی با CSG بریده می‌شود اما هویت ریاضی Cylinder/Cone/Sphere در History باقی می‌ماند.")
+                        + " \n  \n text Boolean text, Geometry text text CSG text text text text text Cylinder/Cone/Sphere text History text text.")
                 .setItems(items, (d,w) -> {
                     if (w == 0) AnalyticBooleanCadCanvasView.super.showSolidManager();
                     else if (w == 1) showAnalyticBooleanChooser();
@@ -122,28 +122,28 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
                     else if (w == 3) showCurvedSurfaceReport();
                     else if (w == 4) {
                         syncBooleanHistory();
-                        toast("Analytic Boolean با History همگام شد");
+                        toast("Analytic Boolean text History text text");
                     } else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
     private void showAnalyticBooleanChooser() {
         if (bodies().size() < 2) {
-            toast("برای Boolean حداقل دو Body لازم است");
+            toast("text Boolean text text Body text text");
             return;
         }
         String[] ops = {
-                "∪ Union / یکی‌کردن",
-                "− Subtract / کم‌کردن و حفظ سطح برش",
-                "∩ Intersect / اشتراک"
+                "∪ Union / text",
+                "− Subtract / text text text Face text",
+                "∩ Intersect / text"
         };
         new AlertDialog.Builder(getContext())
-                .setTitle("Boolean تحلیلی")
-                .setMessage("عملیات را انتخاب کن. اگر Body اصلی از قبل انتخاب شده باشد همان استفاده می‌شود.")
+                .setTitle("Boolean text")
+                .setMessage("text text Selection text. text Body text text text selected text text text text.")
                 .setItems(ops, (d,w) -> choosePrimary(w == 0 ? "UNION" : w == 1 ? "SUBTRACT" : "INTERSECT"))
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -157,9 +157,9 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         String[] names = new String[bs.size()];
         for (int i=0;i<bs.size();i++) names[i] = bodyName(bs.get(i));
         new AlertDialog.Builder(getContext())
-                .setTitle("Body اصلی")
+                .setTitle("Body text")
                 .setItems(names, (d,w) -> chooseTool(operation, bs.get(w)))
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -167,24 +167,24 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         List<Object> options = new ArrayList<>();
         for (Object b : bodies()) if (b != primary) options.add(b);
         if (options.isEmpty()) {
-            toast("Body دوم وجود ندارد");
+            toast("Body text text text");
             return;
         }
         String[] names = new String[options.size()];
         for (int i=0;i<options.size();i++) names[i] = bodyName(options.get(i));
         new AlertDialog.Builder(getContext())
-                .setTitle(friendlyOp(operation) + " — Body دوم")
-                .setMessage("Body اصلی: " + bodyName(primary)
+                .setTitle(friendlyOp(operation) + " — Body text")
+                .setMessage("Body text: " + bodyName(primary)
                         + ("SUBTRACT".equals(operation)
-                        ? "\nاگر Body دوم Cylinder/Cone/Sphere باشد، Surface برش با پارامتر دقیق حفظ می‌شود."
-                        : "\nسطوح منحنی هر دو ورودی در درخت B-Rep تحلیلی حفظ می‌شوند."))
+                        ? " \n text Body text Cylinder/Cone/Sphere text, Surface text text text text text text."
+                        : " \n text text text text text text text B-Rep text text text."))
                 .setItems(names, (d,w) -> toast(applyAnalyticBoolean(operation, primary, options.get(w))))
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private String applyAnalyticBoolean(String operation, Object left, Object right) {
-        if (applyHistoryBooleanMethod == null) return "Boolean پارامتریک آماده نیست";
+        if (applyHistoryBooleanMethod == null) return "Boolean Parametric is not ready";
         try {
             setSelectedBody(left);
             String result = String.valueOf(applyHistoryBooleanMethod.invoke(this, operation, left, right));
@@ -199,11 +199,11 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
             List<CurvedSurface> surfaces = curvedSurfaces(out);
             int cutters = 0;
             for (CurvedSurface s : surfaces) if (s.role.startsWith("CUT")) cutters++;
-            String suffix = surfaces.isEmpty() ? "" : " • " + surfaces.size() + " Surface تحلیلی حفظ شد";
-            if (cutters > 0) suffix += " • " + cutters + " سطح برش دقیق";
+            String suffix = surfaces.isEmpty() ? "" : " • " + surfaces.size() + " Surface text text text";
+            if (cutters > 0) suffix += " • " + cutters + " Face text text";
             return result + suffix;
         } catch (Exception e) {
-            return "Boolean تحلیلی انجام نشد";
+            return "Boolean text Done text";
         }
     }
 
@@ -274,7 +274,7 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         Object body = selectedBody();
         if (body == null) {
             ensure3D();
-            toast("اول روی یک Body بزن");
+            toast("Select a body first");
             return;
         }
         BooleanNode node = booleanByBody.get(body);
@@ -283,11 +283,11 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
             if (primitive != null) {
                 new AlertDialog.Builder(getContext())
                         .setTitle("Analytic Boundary • " + bodyName(body))
-                        .setMessage("Primitive مستقل\n" + primitiveDetail(primitive)
-                                + "\n\nاین Body هنوز Boolean ترکیبی نیست.")
-                        .setPositiveButton("باشه", null).show();
+                        .setMessage("Primitive text \n " + primitiveDetail(primitive)
+                                + " \n  \n text Body text Boolean text text.")
+                        .setPositiveButton("OK", null).show();
             } else {
-                toast("این Body هنوز سطح منحنی تحلیلی ثبت‌شده ندارد");
+                toast("text Body text Face text text text text");
             }
             return;
         }
@@ -305,12 +305,12 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
                     .append(" • ").append(s.source).append("\n")
                     .append(primitiveDetail(s.primitive));
         }
-        msg.append("\n\nپارامترهای Radius/Axis از مدل ریاضی می‌آیند؛ Polygon فقط Trim/Preview فعلی را انجام می‌دهد.");
+        msg.append(" \n  \n text Radius/Axis text Model text text; Polygon text Trim/Preview text text Done text.");
 
         new AlertDialog.Builder(getContext())
                 .setTitle("Analytic B-Rep • " + bodyName(body))
                 .setMessage(msg.toString())
-                .setPositiveButton("باشه", null).show();
+                .setPositiveButton("OK", null).show();
     }
 
     public void showCurvedSurfaceReport() {
@@ -318,12 +318,12 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         Object body = selectedBody();
         if (body == null) {
             ensure3D();
-            toast("اول یک Body را انتخاب کن");
+            toast("Select a body first");
             return;
         }
         List<CurvedSurface> surfaces = curvedSurfaces(body);
         if (surfaces.isEmpty()) {
-            toast("سطح Cylinder/Cone/Sphere تحلیلی برای این Body ثبت نشده");
+            toast("Face Cylinder/Cone/Sphere text text text Body not registered");
             return;
         }
         StringBuilder msg = new StringBuilder();
@@ -331,7 +331,7 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         for (CurvedSurface s : surfaces) {
             if (s.role.startsWith("CUT") && s.primitive instanceof AnalyticSolidKernel.Cylinder) holes++;
         }
-        if (holes > 0) msg.append("سوراخ/برش استوانه‌ای دقیق: ").append(holes).append("\n\n");
+        if (holes > 0) msg.append("text/text text text: ").append(holes).append("\n\n");
         for (int i=0;i<surfaces.size();i++) {
             CurvedSurface s = surfaces.get(i);
             msg.append(i+1).append(") ").append(s.role).append(" — ").append(typeName(s.primitive)).append("\n");
@@ -341,7 +341,7 @@ public class AnalyticBooleanCadCanvasView extends AnalyticCadCanvasView {
         new AlertDialog.Builder(getContext())
                 .setTitle("Curved Surface Report")
                 .setMessage(msg.toString().trim())
-                .setPositiveButton("باشه", null).show();
+                .setPositiveButton("OK", null).show();
     }
 
     private List<CurvedSurface> curvedSurfaces(Object body) {

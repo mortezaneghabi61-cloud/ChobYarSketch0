@@ -100,44 +100,44 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
 
     @Override
     public String applySelectedDimension(String raw) {
-        if (raw == null || raw.trim().isEmpty()) return "عدد وارد نشده";
+        if (raw == null || raw.trim().isEmpty()) return "text text text";
         try {
             return super.applySelectedDimension(raw);
         } catch (Exception e) {
-            return "اندازه را به میلی‌متر درست وارد کن";
+            return "Dimension text text mm text text text";
         }
     }
 
     public String exactDimensionTitle() {
         Object e = singleSelected();
-        if (e == null) return "اندازه دقیق — میلی‌متر";
+        if (e == null) return "Exact Dimension — mm";
         String type = e.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "طول خط — mm";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع مستطیل — mm";
-        if ("CircleEntity".equals(type)) return "قطر دایره — mm";
-        if ("ArcEntity".equals(type)) return "شعاع قوس — mm";
-        if ("PolygonEntity".equals(type)) return "شعاع چندضلعی — mm";
-        return "اندازه دقیق — mm";
+        if ("LineEntity".equals(type)) return "Length Line — mm";
+        if ("RectEntity".equals(type)) return "Rectangle Width and Height — mm";
+        if ("CircleEntity".equals(type)) return "Diameter Circle — mm";
+        if ("ArcEntity".equals(type)) return "Radius Arc — mm";
+        if ("PolygonEntity".equals(type)) return "Radius Polygon — mm";
+        return "Exact Dimension — mm";
     }
 
     public String exactDimensionHint() {
         Object e = singleSelected();
-        if (e == null) return "اول فقط یک شکل را انتخاب کن";
+        if (e == null) return "First, select only one shape";
         String type = e.getClass().getSimpleName();
-        if ("LineEntity".equals(type)) return "فقط طول خط؛ مثال: 800";
-        if ("RectEntity".equals(type)) return "عرض و ارتفاع؛ مثال: 600 400";
-        if ("CircleEntity".equals(type)) return "فقط قطر دایره؛ مثال: 80";
-        if ("ArcEntity".equals(type)) return "فقط شعاع قوس؛ مثال: 50";
-        if ("PolygonEntity".equals(type)) return "فقط شعاع چندضلعی؛ مثال: 80";
-        return "برای این شکل ویرایش عددی تعریف نشده";
+        if ("LineEntity".equals(type)) return "Only Length Line; Example: 800";
+        if ("RectEntity".equals(type)) return "Width and Height; Example: 600 400";
+        if ("CircleEntity".equals(type)) return "text Diameter Circle; text: 80";
+        if ("ArcEntity".equals(type)) return "Radius Arc only; Example: 50";
+        if ("PolygonEntity".equals(type)) return "text Radius Polygon; text: 80";
+        return "No numerical editing is defined for this figure";
     }
 
     public String exactDimensionMessage() {
         Object e = singleSelected();
         if (e == null) {
             return selectionCount() > 1
-                    ? "برای اندازه دقیق فقط یک شکل را انتخاب کن."
-                    : "اول یک شکل را انتخاب کن.";
+                    ? "text Exact Dimension text text text text Selection text."
+                    : "Select geometry first.";
         }
         return selectedInfo() + "\n\n" + exactDimensionHint() + " mm";
     }
@@ -190,7 +190,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         try {
             return super.executeCommand(s);
         } catch (Exception e) {
-            return "فرمت عدد درست نیست";
+            return "Number format is invalid";
         }
     }
 
@@ -240,7 +240,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
                     if(!pts.isEmpty()){
                         PointF c=centroid(pts);
                         PointF s=worldToScreen(c.x,c.y);
-                        label(canvas,pts.size()+" ضلع | R "+mmLabel(dist(c,pts.get(0))),s.x,s.y);
+                        label(canvas,pts.size()+" side | R "+mmLabel(dist(c,pts.get(0))),s.x,s.y);
                     }
                 } else if ("PointEntity".equals(type)) {
                     // Coordinates belong in the Measure inspector, not as a
@@ -309,9 +309,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         StringBuilder b=new StringBuilder(s.length());
         for(int i=0;i<s.length();i++){
             char c=s.charAt(i);
-            if(c>='۰'&&c<='۹')b.append((char)('0'+(c-'۰')));
-            else if(c>='٠'&&c<='٩')b.append((char)('0'+(c-'٠')));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

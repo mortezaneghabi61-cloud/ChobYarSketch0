@@ -148,8 +148,8 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                     invalidate();
                 })
                 .setNeutralButton("3D Guidepoints", (d, w) -> Toast.makeText(getContext(),
-                        "3D Guidepoints و Distant Edges در مرحله بعد با Projection از OCCT اضافه می‌شوند", Toast.LENGTH_LONG).show())
-                .setPositiveButton("بستن", null)
+                        "3D Guidepoints text Distant Edges text text text text Projection text OCCT text text", Toast.LENGTH_LONG).show())
+                .setPositiveButton("Close", null)
                 .show();
     }
 
@@ -164,7 +164,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                     saveSettings();
                 })
                 .setNeutralButton("Constraints", (d, w) -> showSmartConstraintMenu())
-                .setPositiveButton("بستن", null)
+                .setPositiveButton("Close", null)
                 .show();
     }
 
@@ -316,7 +316,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                 for (PointF p : xs) {
                     float d = screenDistance(raw, p);
                     if (d <= POINT_HIT_PX * density()) {
-                        best = better(best, new SnapCandidate(p, "Intersection • تقاطع", 9, d));
+                        best = better(best, new SnapCandidate(p, "Intersection • Intersection", 9, d));
                     }
                 }
             }
@@ -333,12 +333,12 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
         if (dx <= limit) {
             PointF p = new PointF(gestureStart.x, raw.y);
             activeGuides.add(GuideLine.vertical(gestureStart.x));
-            best = new SnapCandidate(p, "Vertical • عمودی", 5, dx);
+            best = new SnapCandidate(p, "Vertical • Vertical", 5, dx);
         }
         if (dy <= limit) {
             PointF p = new PointF(raw.x, gestureStart.y);
             activeGuides.add(GuideLine.horizontal(gestureStart.y));
-            SnapCandidate h = new SnapCandidate(p, "Horizontal • افقی", 5, dy);
+            SnapCandidate h = new SnapCandidate(p, "Horizontal • Horizontal", 5, dy);
             best = better(best, h);
         }
         return best;
@@ -411,7 +411,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                     if (d <= limit) {
                         activeGuides.add(GuideLine.infinite(gestureStart,
                                 new PointF(gestureStart.x + nx, gestureStart.y + ny)));
-                        best = better(best, new SnapCandidate(q, "Perpendicular • عمود", 6, d));
+                        best = better(best, new SnapCandidate(q, "Perpendicular • Perpendicular", 6, d));
                     }
                 }
             }
@@ -441,7 +441,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
                     float dd = screenDistance(raw, t);
                     if (dd <= TANGENT_HIT_PX * density()) {
                         activeGuides.add(new GuideLine(gestureStart, t, false, false));
-                        best = better(best, new SnapCandidate(t, "Tangent • مماس", 8, dd));
+                        best = better(best, new SnapCandidate(t, "Tangent • Tangent", 8, dd));
                     }
                 }
             }
@@ -583,7 +583,7 @@ public class ShaprSnappingCadCanvasView extends ShaprArcCadCanvasView {
 
     private void addUnique(List<PointF> list,PointF p){for(PointF q:list)if(distance(p,q)<0.03f)return;list.add(p);}
 
-    private String normalizePointLabel(String s){if(s==null)s="";String l=s.toLowerCase(Locale.ROOT);if(l.contains("تقاطع")||l.contains("intersection"))return"Intersection • تقاطع";if(l.contains("میانه")||l.contains("وسط")||l.contains("mid"))return"Midpoint • میانه";if(l.contains("مرکز")||l.contains("center")||l.contains("centre"))return"Center • مرکز";if(l.contains("ابتدا")||l.contains("انتها")||l.contains("endpoint")||l.contains("start")||l.contains("end"))return"Endpoint • انتها";if(l.contains("ربع")||l.contains("quadrant"))return"Quadrant";return s.isEmpty()?"Guidepoint":s;}
+    private String normalizePointLabel(String s){if(s==null)s="";String l=s.toLowerCase(Locale.ROOT);if(l.contains("Intersection")||l.contains("intersection"))return"Intersection • Intersection";if(l.contains("Midpoint")||l.contains("Midpoint")||l.contains("mid"))return"Midpoint • Midpoint";if(l.contains("Center")||l.contains("center")||l.contains("centre"))return"Center • Center";if(l.contains("Start point")||l.contains("Endpoint")||l.contains("endpoint")||l.contains("start")||l.contains("end"))return"Endpoint • Endpoint";if(l.contains("text")||l.contains("quadrant"))return"Quadrant";return s.isEmpty()?"Guidepoint":s;}
 
     private void clearTransientSnap(){gestureStart=null;lastCandidate=null;activeGuides.clear();invalidate();}
 

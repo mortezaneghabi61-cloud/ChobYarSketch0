@@ -202,7 +202,7 @@ public class CadCanvasView extends View {
     }
 
     public String selectedInfo() {
-        return selected == null ? "هیچ شکلی انتخاب نشده" : selected.describe();
+        return selected == null ? "None text not selected" : selected.describe();
     }
 
     public void clearAll() {
@@ -259,9 +259,9 @@ public class CadCanvasView extends View {
     }
 
     public String offsetSelected(float distance) {
-        if (selected == null) return "اول شکل را انتخاب کن";
+        if (selected == null) return "Select geometry first";
         Entity o = selected.offsetCopy(distance);
-        if (o == null) return "Offset برای این نوع شکل هنوز فعال نیست";
+        if (o == null) return "Offset text text text text text text text";
         saveUndo();
         copyMeta(selected, o);
         o.regenerateStableId();
@@ -272,17 +272,17 @@ public class CadCanvasView extends View {
     }
 
     public String rotateSelected(float deg) {
-        if (selected == null) return "اول شکل را انتخاب کن";
+        if (selected == null) return "Select geometry first";
         saveUndo();
         PointF c = selected.center();
         selected.rotate(c.x, c.y, deg);
         invalidate();
-        return "چرخش " + fmt(deg) + "°";
+        return "text " + fmt(deg) + "°";
     }
 
     public String scaleSelected(float factor) {
-        if (selected == null) return "اول شکل را انتخاب کن";
-        if (factor <= 0f) return "Scale باید بزرگ‌تر از صفر باشد";
+        if (selected == null) return "Select geometry first";
+        if (factor <= 0f) return "Scale text text text text text";
         saveUndo();
         PointF c = selected.center();
         selected.scale(c.x, c.y, factor);
@@ -291,17 +291,17 @@ public class CadCanvasView extends View {
     }
 
     public String mirrorSelected(boolean acrossXAxis, float axisValue) {
-        if (selected == null) return "اول شکل را انتخاب کن";
+        if (selected == null) return "Select geometry first";
         saveUndo();
         if (acrossXAxis) selected.mirrorHorizontal(axisValue);
         else selected.mirrorVertical(axisValue);
         invalidate();
-        return acrossXAxis ? "قرینه نسبت به محور X" : "قرینه نسبت به محور Y";
+        return acrossXAxis ? "text text text Axis X" : "text text text Axis Y";
     }
 
     public String arraySelected(int count, float dx, float dy) {
-        if (selected == null) return "اول شکل را انتخاب کن";
-        if (count < 2 || count > 200) return "تعداد Array باید بین 2 و 200 باشد";
+        if (selected == null) return "Select geometry first";
+        if (count < 2 || count > 200) return "text Array text text 2 text 200 text";
         saveUndo();
         Entity seed = selected.copy();
         for (int i = 1; i < count; i++) {
@@ -312,12 +312,12 @@ public class CadCanvasView extends View {
             selected = c;
         }
         invalidate();
-        return "Array: " + count + " عدد";
+        return "Array: " + count + " text";
     }
 
     public String applySelectedDimension(String raw) {
-        if (selected == null) return "اول شکل را انتخاب کن";
-        if (raw == null || raw.trim().isEmpty()) return "عدد وارد نشده";
+        if (selected == null) return "Select geometry first";
+        if (raw == null || raw.trim().isEmpty()) return "text text text";
         String[] a = raw.trim().replace('×', ' ').replace(',', ' ').split("\\s+");
         try {
             if (selected instanceof LineEntity) {
@@ -325,66 +325,66 @@ public class CadCanvasView extends View {
                 saveUndo();
                 ((LineEntity) selected).setLength(v);
                 invalidate();
-                return "طول = " + mm(v);
+                return "Length = " + mm(v);
             }
             if (selected instanceof RectEntity) {
-                if (a.length < 2) return "برای مستطیل دو عدد وارد کن؛ مثال: 600 400";
+                if (a.length < 2) return "text Rectangle text text text text; text: 600 400";
                 float w = Math.abs(Float.parseFloat(a[0]));
                 float h = Math.abs(Float.parseFloat(a[1]));
                 saveUndo();
                 ((RectEntity) selected).setSize(w, h);
                 invalidate();
-                return "اندازه = " + mm(w) + " × " + mm(h);
+                return "Dimension = " + mm(w) + " × " + mm(h);
             }
             if (selected instanceof CircleEntity) {
                 float d = Math.abs(Float.parseFloat(a[0]));
                 saveUndo();
                 ((CircleEntity) selected).r = d / 2f;
                 invalidate();
-                return "قطر = " + mm(d);
+                return "Diameter = " + mm(d);
             }
             if (selected instanceof ArcEntity) {
                 float r = Math.abs(Float.parseFloat(a[0]));
                 saveUndo();
                 ((ArcEntity) selected).r = r;
                 invalidate();
-                return "شعاع = " + mm(r);
+                return "Radius = " + mm(r);
             }
             if (selected instanceof PolygonEntity) {
                 float r = Math.abs(Float.parseFloat(a[0]));
                 saveUndo();
                 ((PolygonEntity) selected).setRadius(r);
                 invalidate();
-                return "شعاع چندضلعی = " + mm(r);
+                return "Radius Polygon = " + mm(r);
             }
-            return "ویرایش عددی برای این نوع شکل تعریف نشده";
+            return "text text text text text text text text";
         } catch (Exception ex) {
-            return "فرمت عدد درست نیست";
+            return "Number format is invalid";
         }
     }
 
     public String setLayer(String name) {
-        if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
+        if (name == null || name.trim().isEmpty()) return "text text is empty";
         currentLayer = name.trim();
         layers.put(currentLayer, true);
-        return "لایه جاری: " + currentLayer;
+        return "text text: " + currentLayer;
     }
 
     public String assignSelectedLayer(String name) {
-        if (selected == null) return "اول شکل را انتخاب کن";
-        if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
+        if (selected == null) return "Select geometry first";
+        if (name == null || name.trim().isEmpty()) return "text text is empty";
         layers.put(name.trim(), true);
         selected.setLayer(name.trim());
         invalidate();
-        return "شکل به لایه " + name.trim() + " منتقل شد";
+        return "text text text " + name.trim() + " text text";
     }
 
     public String setLayerVisible(String name, boolean visible) {
-        if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
+        if (name == null || name.trim().isEmpty()) return "text text is empty";
         layers.put(name.trim(), visible);
         if (!visible && selected != null && name.trim().equals(selected.getLayer())) selected = null;
         invalidate();
-        return "لایه " + name.trim() + (visible ? " روشن شد" : " مخفی شد");
+        return "text " + name.trim() + (visible ? " On text" : " Hide text");
     }
 
     public String setMaterial(String material) {
@@ -392,10 +392,10 @@ public class CadCanvasView extends View {
         if (selected != null) {
             selected.setColor(color);
             invalidate();
-            return "متریال شکل: " + material;
+            return "Material text: " + material;
         }
         currentColor = color;
-        return "متریال ترسیم جدید: " + material;
+        return "Material text text: " + material;
     }
 
     public void fitAll() {
@@ -711,7 +711,7 @@ public class CadCanvasView extends View {
             PointF near=e.nearestPoint(x,y);
             if(near!=null){
                 float d=dist(x,y,near.x,near.y);
-                if(d<=radius*.72f&&(best==null||d<best.d))best=new SnapCandidate(near.x,near.y,d,"روی شیء");
+                if(d<=radius*.72f&&(best==null||d<best.d))best=new SnapCandidate(near.x,near.y,d,"Roy text");
             }
         }
 
@@ -722,7 +722,7 @@ public class CadCanvasView extends View {
                 PointF ip=lineIntersection((LineEntity)entities.get(i),(LineEntity)entities.get(j));
                 if(ip!=null){
                     float d=dist(x,y,ip.x,ip.y);
-                    if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(ip.x,ip.y,d,"تقاطع");
+                    if(d<=radius&&(best==null||d<best.d))best=new SnapCandidate(ip.x,ip.y,d,"Intersection");
                 }
             }
         }
@@ -734,7 +734,7 @@ public class CadCanvasView extends View {
                 float gx=g.vertical?g.value:x;
                 float gy=g.vertical?y:g.value;
                 float d=dist(x,y,gx,gy);
-                if(d<=radius*.7f&&(best==null||d<best.d))best=new SnapCandidate(gx,gy,d,"راهنما");
+                if(d<=radius*.7f&&(best==null||d<best.d))best=new SnapCandidate(gx,gy,d,"Guide");
             }
         }
 
@@ -844,56 +844,56 @@ public class CadCanvasView extends View {
         String cmd=a[0].toUpperCase(Locale.US);
         try{
             switch(cmd){
-                case"L":case"LINE":require(a,5);saveUndo();selected=new LineEntity(f(a,1),f(a,2),f(a,3),f(a,4));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"خط ساخته و انتخاب شد";
-                case"REC":case"RECT":case"RECTANG":require(a,5);saveUndo();float rx=f(a,1),ry=f(a,2),rw=f(a,3),rh=f(a,4);selected=new RectEntity(rx,ry,rx+rw,ry+rh);addPrepared(selected);tool=TOOL_SELECT;invalidate();return"مستطیل ساخته و انتخاب شد";
-                case"C":case"CIRCLE":require(a,4);saveUndo();selected=new CircleEntity(f(a,1),f(a,2),Math.abs(f(a,3)));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"دایره ساخته و انتخاب شد";
-                case"PO":case"POINT":require(a,3);saveUndo();selected=new PointEntity(f(a,1),f(a,2));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"نقطه ساخته شد";
-                case"A":case"ARC":require(a,6);saveUndo();selected=new ArcEntity(f(a,1),f(a,2),Math.abs(f(a,3)),f(a,4),f(a,5));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"قوس ساخته و انتخاب شد";
-                case"POL":case"POLYGON":require(a,5);int sides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));saveUndo();selected=PolygonEntity.regular(sides,f(a,2),f(a,3),Math.abs(f(a,4)));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"چندضلعی ساخته و انتخاب شد";
-                case"POLYSIDES":require(a,2);polygonSides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));return"تعداد ضلع: "+polygonSides;
-                case"M":case"MOVE":require(a,3);if(selected==null)return"اول شکل را انتخاب کن";moveSelected(f(a,1),f(a,2));return"جابه‌جا شد";
-                case"CO":case"COPY":require(a,3);if(selected==null)return"اول شکل را انتخاب کن";copySelected(f(a,1),f(a,2));return"کپی شد";
+                case"L":case"LINE":require(a,5);saveUndo();selected=new LineEntity(f(a,1),f(a,2),f(a,3),f(a,4));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Line created text selected";
+                case"REC":case"RECT":case"RECTANG":require(a,5);saveUndo();float rx=f(a,1),ry=f(a,2),rw=f(a,3),rh=f(a,4);selected=new RectEntity(rx,ry,rx+rw,ry+rh);addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Rectangle created text selected";
+                case"C":case"CIRCLE":require(a,4);saveUndo();selected=new CircleEntity(f(a,1),f(a,2),Math.abs(f(a,3)));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Circle created text selected";
+                case"PO":case"POINT":require(a,3);saveUndo();selected=new PointEntity(f(a,1),f(a,2));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Point created";
+                case"A":case"ARC":require(a,6);saveUndo();selected=new ArcEntity(f(a,1),f(a,2),Math.abs(f(a,3)),f(a,4),f(a,5));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Arc created text selected";
+                case"POL":case"POLYGON":require(a,5);int sides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));saveUndo();selected=PolygonEntity.regular(sides,f(a,2),f(a,3),Math.abs(f(a,4)));addPrepared(selected);tool=TOOL_SELECT;invalidate();return"Polygon created text selected";
+                case"POLYSIDES":require(a,2);polygonSides=Math.max(3,Math.min(64,Integer.parseInt(a[1])));return"text side: "+polygonSides;
+                case"M":case"MOVE":require(a,3);if(selected==null)return"Select geometry first";moveSelected(f(a,1),f(a,2));return"text text";
+                case"CO":case"COPY":require(a,3);if(selected==null)return"Select geometry first";copySelected(f(a,1),f(a,2));return"text text";
                 case"O":case"OFFSET":require(a,2);return offsetSelected(f(a,1));
                 case"RO":case"ROTATE":require(a,2);return rotateSelected(f(a,1));
                 case"SC":case"SCALE":require(a,2);return scaleSelected(f(a,1));
-                case"MI":case"MIRROR":require(a,2);if("X".equalsIgnoreCase(a[1]))return mirrorSelected(true,a.length>2?f(a,2):0);if("Y".equalsIgnoreCase(a[1]))return mirrorSelected(false,a.length>2?f(a,2):0);return"MIRROR X 0 یا MIRROR Y 0";
+                case"MI":case"MIRROR":require(a,2);if("X".equalsIgnoreCase(a[1]))return mirrorSelected(true,a.length>2?f(a,2):0);if("Y".equalsIgnoreCase(a[1]))return mirrorSelected(false,a.length>2?f(a,2):0);return"MIRROR X 0 text MIRROR Y 0";
                 case"AR":case"ARRAY":require(a,4);return arraySelected(Integer.parseInt(a[1]),f(a,2),f(a,3));
                 case"LENGTH":require(a,2);return applySelectedDimension(a[1]);
                 case"SIZE":require(a,3);return applySelectedDimension(a[1]+" "+a[2]);
-                case"RADIUS":require(a,2);if(selected instanceof CircleEntity){saveUndo();((CircleEntity)selected).r=Math.abs(f(a,1));invalidate();return"شعاع تغییر کرد";}if(selected instanceof ArcEntity){saveUndo();((ArcEntity)selected).r=Math.abs(f(a,1));invalidate();return"شعاع تغییر کرد";}return"دایره یا قوس را انتخاب کن";
-                case"DIAMETER":require(a,2);if(selected instanceof CircleEntity)return applySelectedDimension(a[1]);return"دایره را انتخاب کن";
-                case"GUIDE":require(a,3);saveUndo();if("X".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(true,f(a,2)));else if("Y".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(false,f(a,2)));else return"GUIDE X 50 یا GUIDE Y 50";invalidate();return"Guide ساخته شد";
-                case"TAPE":case"DIST":require(a,5);saveUndo();addPrepared(new MeasureEntity(f(a,1),f(a,2),f(a,3),f(a,4)));invalidate();return"فاصله = "+mm(dist(f(a,1),f(a,2),f(a,3),f(a,4)));
-                case"ANGLE":case"PROTRACTOR":require(a,7);saveUndo();addPrepared(new AngleEntity(f(a,1),f(a,2),f(a,3),f(a,4),f(a,5),f(a,6)));invalidate();return"زاویه ساخته شد";
+                case"RADIUS":require(a,2);if(selected instanceof CircleEntity){saveUndo();((CircleEntity)selected).r=Math.abs(f(a,1));invalidate();return"Radius Transform text";}if(selected instanceof ArcEntity){saveUndo();((ArcEntity)selected).r=Math.abs(f(a,1));invalidate();return"Radius Transform text";}return"Circle text Arc text Selection text";
+                case"DIAMETER":require(a,2);if(selected instanceof CircleEntity)return applySelectedDimension(a[1]);return"Circle text Selection text";
+                case"GUIDE":require(a,3);saveUndo();if("X".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(true,f(a,2)));else if("Y".equalsIgnoreCase(a[1]))addPrepared(new GuideEntity(false,f(a,2)));else return"GUIDE X 50 text GUIDE Y 50";invalidate();return"Guide created";
+                case"TAPE":case"DIST":require(a,5);saveUndo();addPrepared(new MeasureEntity(f(a,1),f(a,2),f(a,3),f(a,4)));invalidate();return"Distance = "+mm(dist(f(a,1),f(a,2),f(a,3),f(a,4)));
+                case"ANGLE":case"PROTRACTOR":require(a,7);saveUndo();addPrepared(new AngleEntity(f(a,1),f(a,2),f(a,3),f(a,4),f(a,5),f(a,6)));invalidate();return"Angle created";
                 case"LAYER":require(a,2);return setLayer(a[1]);
                 case"ASSIGNLAYER":require(a,2);return assignSelectedLayer(a[1]);
                 case"LAYERHIDE":require(a,2);return setLayerVisible(a[1],false);
                 case"LAYERSHOW":require(a,2);return setLayerVisible(a[1],true);
                 case"MATERIAL":require(a,2);return setMaterial(a[1]);
-                case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene ذخیره شد";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene پیدا نشد";viewScale=clamp(sc.scale,MIN_VIEW_SCALE,MAX_VIEW_SCALE);offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene بارگذاری شد";}return"SCENE SAVE name یا SCENE LOAD name";
-                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"اول سطح بسته را انتخاب کن";if(selected.isConstruction())return"Construction قابل Extrude نیست";if(!selected.canExtrude())return"این شکل قابل اکسترود نیست";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
-                case"CONSTRUCTION":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(true);invalidate();return"Construction روشن شد";
-                case"NORMAL":case"REGULAR":if(selected==null)return"اول Sketch را انتخاب کن";saveUndo();selected.setConstruction(false);invalidate();return"Construction خاموش شد";
-                case"ERASE":case"DELETE":if(selected==null)return"اول شکل را انتخاب کن";deleteSelected();return"حذف شد";
+                case"SCENE":require(a,3);if("SAVE".equalsIgnoreCase(a[1])){scenes.put(a[2],new Scene(viewScale,offsetX,offsetY,showGrid,showAxes));return"Scene Save text";}if("LOAD".equalsIgnoreCase(a[1])){Scene sc=scenes.get(a[2]);if(sc==null)return"Scene was not found";viewScale=clamp(sc.scale,MIN_VIEW_SCALE,MAX_VIEW_SCALE);offsetX=sc.x;offsetY=sc.y;showGrid=sc.grid;showAxes=sc.axes;invalidate();return"Scene text text";}return"SCENE SAVE name text SCENE LOAD name";
+                case"P":case"PUSHPULL":case"EXTRUDE":require(a,2);if(selected==null)return"First Face text text Selection text";if(selected.isConstruction())return"Construction cannot be Extrude";if(!selected.canExtrude())return"text text text text text";saveUndo();selected.setExtrusion(Math.abs(f(a,1)));invalidate();return"Push/Pull = "+mm(Math.abs(f(a,1)))+" (2.5D)";
+                case"CONSTRUCTION":if(selected==null)return"Select a sketch first";saveUndo();selected.setConstruction(true);invalidate();return"Construction On text";
+                case"NORMAL":case"REGULAR":if(selected==null)return"Select a sketch first";saveUndo();selected.setConstruction(false);invalidate();return"Construction Off text";
+                case"ERASE":case"DELETE":if(selected==null)return"Select geometry first";deleteSelected();return"Delete text";
                 case"U":case"UNDO":undo();return"Undo";
                 case"ZOOMIN":case"ZIN":zoomBy(1.8f);return"Zoom In";
                 case"ZOOMOUT":case"ZOUT":zoomBy(0.55f);return"Zoom Out";
-                case"Z":case"ZOOM":case"FIT":fitAll();return"Fit شد";
-                case"AXIS":toggleAxes();return showAxes?"محورها روشن":"محورها خاموش";
-                case"GRID":toggleGrid();return showGrid?"Grid روشن":"Grid خاموش";
-                case"GUIDES":toggleGuides();return showGuides?"Guide روشن":"Guide خاموش";
-                case"DIMS":case"DIMENSIONS":toggleDimensions();return showDimensions?"ابعاد روشن":"ابعاد خاموش";
-                case"SNAP":toggleSnap();return snapEnabled?"Snap روشن":"Snap خاموش";
-                case"ORTHO":toggleOrtho();return orthoEnabled?"Ortho روشن":"Ortho خاموش";
-                case"CLEAR":clearAll();return"صفحه پاک شد";
-                case"SELECT":setTool(TOOL_SELECT);return"حالت انتخاب";
-                case"DIM":setTool(TOOL_MEASURE);return"حالت اندازه‌گذاری";
-                case"FREE":setTool(TOOL_FREE);return"حالت Freehand";
-                case"GROUP":case"COMPONENT":return"انتخاب چندگانه در مرحله بعد";
-                case"FOLLOWME":case"REVOLVE":case"LOFT":case"SWEEP":case"SHELL":case"UNION":case"SUBTRACT":case"INTERSECT":case"PROJECT":return"این فرمان به هسته Solid 3D نیاز دارد";
-                default:return"فرمان ناشناخته: "+cmd;
+                case"Z":case"ZOOM":case"FIT":fitAll();return"Fit text";
+                case"AXIS":toggleAxes();return showAxes?"Axes On":"Axes Off";
+                case"GRID":toggleGrid();return showGrid?"Grid On":"Grid Off";
+                case"GUIDES":toggleGuides();return showGuides?"Guide On":"Guide Off";
+                case"DIMS":case"DIMENSIONS":toggleDimensions();return showDimensions?"text On":"text Off";
+                case"SNAP":toggleSnap();return snapEnabled?"Snap On":"Snap Off";
+                case"ORTHO":toggleOrtho();return orthoEnabled?"Ortho On":"Ortho Off";
+                case"CLEAR":clearAll();return"Plane text text";
+                case"SELECT":setTool(TOOL_SELECT);return"text Selection";
+                case"DIM":setTool(TOOL_MEASURE);return"text Dimensiontext";
+                case"FREE":setTool(TOOL_FREE);return"text Freehand";
+                case"GROUP":case"COMPONENT":return"Selection text text text text";
+                case"FOLLOWME":case"REVOLVE":case"LOFT":case"SWEEP":case"SHELL":case"UNION":case"SUBTRACT":case"INTERSECT":case"PROJECT":return"This command requires the Solid 3D core";
+                default:return"text text: "+cmd;
             }
-        }catch(Exception ex){return"فرمت فرمان درست نیست";}
+        }catch(Exception ex){return"text text is invalid";}
     }
 
     public String buildDxf(){
@@ -965,8 +965,8 @@ public class CadCanvasView extends View {
             showDimensions=parsed.showDimensions;snapEnabled=parsed.snapEnabled;orthoEnabled=parsed.orthoEnabled;
             selected=null;tool=TOOL_SELECT;drawing=false;draggingSelection=false;activeHandle=-1;snapVisible=false;
             undoStack.clear();redoStack.clear();scenes.clear();freePoints.clear();invalidate();
-            return "پروژه Sketch باز شد • "+entities.size()+" آیتم";
-        }catch(Exception e){return "بازکردن پروژه انجام نشد • فایل نامعتبر است";}
+            return "Project Sketch text text • "+entities.size()+" text";
+        }catch(Exception e){return "text Project Done text • text invalid text";}
     }
 
     private static final class ParsedSketchProject{
@@ -1146,7 +1146,7 @@ public class CadCanvasView extends View {
         PointEntity(float x,float y){this.x=x;this.y=y;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawCircle(x,y,4f*px,p);if(dims)c.drawText("("+fmt(x)+", "+fmt(y)+")",x+18f*px,y-8f*px,t);}
         public float selectionDistance(float a,float b){return dist(a,b,x,y);}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"نقطه"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"Point"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(x,y));return q;}
         public void moveControlPoint(int i,float a,float b){x=a;y=b;}
         public PointF nearestPoint(float a,float b){return new PointF(x,y);}
@@ -1160,7 +1160,7 @@ public class CadCanvasView extends View {
         public PointF center(){return new PointF(x,y);}
         public Entity offsetCopy(float d){return null;}
         public String describe(){return"Point ("+fmt(x)+", "+fmt(y)+") | Layer "+layer;}
-        public String shortName(){return"نقطه";}
+        public String shortName(){return"Point";}
         public void appendDxf(StringBuilder d){d.append("0\nPOINT\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n");}
     }
 
@@ -1170,7 +1170,7 @@ public class CadCanvasView extends View {
         void setLength(float len){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f){x2=x1+len;y2=y1;}else{x2=x1+dx/l*len;y2=y1+dy/l*len;}}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawLine(x1,y1,x2,y2,p);if(dims)drawLength(c,x1,y1,x2,y2,t,px);}
         public float selectionDistance(float x,float y){return pointSeg(x,y,x1,y1,x2,y2);}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x1,y1,"ابتدا"));q.add(new SnapPoint(x2,y2,"انتها"));q.add(new SnapPoint((x1+x2)/2f,(y1+y2)/2f,"وسط"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x1,y1,"Start point"));q.add(new SnapPoint(x2,y2,"Endpoint"));q.add(new SnapPoint((x1+x2)/2f,(y1+y2)/2f,"Midpoint"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(x1,y1));q.add(new ControlPoint(x2,y2));return q;}
         public void moveControlPoint(int i,float a,float b){if(i==0){x1=a;y1=b;}else{x2=a;y2=b;}}
         public PointF nearestPoint(float x,float y){return projectSeg(x,y,x1,y1,x2,y2);}
@@ -1184,7 +1184,7 @@ public class CadCanvasView extends View {
         public PointF center(){return new PointF((x1+x2)/2f,(y1+y2)/2f);}
         public Entity offsetCopy(float d){float dx=x2-x1,dy=y2-y1,l=(float)Math.hypot(dx,dy);if(l<1e-6f)return null;LineEntity e=new LineEntity(x1-dy/l*d,y1+dx/l*d,x2-dy/l*d,y2+dx/l*d);meta(e);return e;}
         public String describe(){return"Line | L="+mm(dist(x1,y1,x2,y2))+" | Layer "+layer;}
-        public String shortName(){return"خط";}
+        public String shortName(){return"Line";}
         public void appendDxf(StringBuilder d){d.append("0\nLINE\n8\n").append(layer).append("\n10\n").append(x1).append("\n20\n").append(-y1).append("\n30\n0\n11\n").append(x2).append("\n21\n").append(-y2).append("\n31\n0\n");}
     }
 
@@ -1210,7 +1210,7 @@ public class CadCanvasView extends View {
         public PointF center(){return centroid(p);}
         public Entity offsetCopy(float d){PointF c=center();float w=dist(p[0].x,p[0].y,p[1].x,p[1].y),h=dist(p[0].x,p[0].y,p[3].x,p[3].y);if(w+2*d<=0||h+2*d<=0)return null;RectEntity e=(RectEntity)copy();float nw=(w+2*d)/w,nh=(h+2*d)/h;PointF u=unit(p[1].x-p[0].x,p[1].y-p[0].y),v=unit(p[3].x-p[0].x,p[3].y-p[0].y);for(PointF q:e.p){float dx=q.x-c.x,dy=q.y-c.y;float a=dot(dx,dy,u.x,u.y)*nw,b=dot(dx,dy,v.x,v.y)*nh;q.set(c.x+u.x*a+v.x*b,c.y+u.y*a+v.y*b);}return e;}
         public String describe(){return"Rectangle | "+mm(dist(p[0].x,p[0].y,p[1].x,p[1].y))+" × "+mm(dist(p[1].x,p[1].y,p[2].x,p[2].y))+(extrusion>0?" × H "+mm(extrusion):"")+" | Layer "+layer;}
-        public String shortName(){return"مستطیل";}
+        public String shortName(){return"Rectangle";}
         public void appendDxf(StringBuilder d){appendPolylineDxf(d,p,true,layer);}
     }
 
@@ -1220,7 +1220,7 @@ public class CadCanvasView extends View {
         public boolean canExtrude(){return true;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawCircle(x,y,r,p);float s=6f*px;c.drawLine(x-s,y,x+s,y,p);c.drawLine(x,y-s,x,y+s,p);if(extrusion>0.01f){float sx=-extrusion*.28f,sy=-extrusion*.18f;c.drawCircle(x+sx,y+sy,r,p);c.drawLine(x+r,y,x+r+sx,y+sy,p);c.drawLine(x-r,y,x-r+sx,y+sy,p);}if(dims)c.drawText("Ø "+mm(r*2),x,y-r-6f*px,t);}
         public float selectionDistance(float a,float b){float d=dist(a,b,x,y);return d<=r?0f:d-r;}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"مرکز"));q.add(new SnapPoint(x+r,y,"ربع"));q.add(new SnapPoint(x-r,y,"ربع"));q.add(new SnapPoint(x,y+r,"ربع"));q.add(new SnapPoint(x,y-r,"ربع"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"Center"));q.add(new SnapPoint(x+r,y,"text"));q.add(new SnapPoint(x-r,y,"text"));q.add(new SnapPoint(x,y+r,"text"));q.add(new SnapPoint(x,y-r,"text"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(x,y));q.add(new ControlPoint(x+r,y));return q;}
         public void moveControlPoint(int i,float a,float b){if(i==0){float dx=a-x,dy=b-y;translate(dx,dy);}else r=Math.max(.1f,dist(x,y,a,b));}
         public PointF nearestPoint(float a,float b){float dx=a-x,dy=b-y,l=(float)Math.hypot(dx,dy);if(l<1e-6f)return new PointF(x+r,y);return new PointF(x+dx/l*r,y+dy/l*r);}
@@ -1233,8 +1233,8 @@ public class CadCanvasView extends View {
         public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}
         public PointF center(){return new PointF(x,y);}
         public Entity offsetCopy(float d){if(r+d<=0)return null;CircleEntity e=new CircleEntity(x,y,r+d);meta(e);return e;}
-        public String describe(){return"Circle | مرکز ("+fmt(x)+", "+fmt(y)+") | Ø "+mm(r*2)+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}
-        public String shortName(){return"دایره";}
+        public String describe(){return"Circle | Center ("+fmt(x)+", "+fmt(y)+") | Ø "+mm(r*2)+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}
+        public String shortName(){return"Circle";}
         public void appendDxf(StringBuilder d){d.append("0\nCIRCLE\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r).append("\n");}
     }
 
@@ -1243,7 +1243,7 @@ public class CadCanvasView extends View {
         ArcEntity(float x,float y,float r,float s,float w){this.x=x;this.y=y;this.r=r;start=s;sweep=w;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawArc(new RectF(x-r,y-r,x+r,y+r),start,sweep,false,p);float z=5f*px;c.drawLine(x-z,y,x+z,y,p);c.drawLine(x,y-z,x,y+z,p);if(dims)c.drawText("R "+mm(r),x,y-r-5f*px,t);}
         public float selectionDistance(float a,float b){return Math.abs(dist(a,b,x,y)-r);}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"مرکز"));PointF s=arcPoint(start);PointF e=arcPoint(start+sweep);q.add(new SnapPoint(s.x,s.y,"ابتدا"));q.add(new SnapPoint(e.x,e.y,"انتها"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x,y,"Center"));PointF s=arcPoint(start);PointF e=arcPoint(start+sweep);q.add(new SnapPoint(s.x,s.y,"Start point"));q.add(new SnapPoint(e.x,e.y,"Endpoint"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(x,y));PointF s=arcPoint(start),e=arcPoint(start+sweep);q.add(new ControlPoint(s.x,s.y));q.add(new ControlPoint(e.x,e.y));return q;}
         private PointF arcPoint(float deg){double a=Math.toRadians(deg);return new PointF(x+(float)Math.cos(a)*r,y+(float)Math.sin(a)*r);}
         public void moveControlPoint(int i,float a,float b){if(i==0){translate(a-x,b-y);return;}float angle=(float)Math.toDegrees(Math.atan2(b-y,a-x));if(i==1){float end=start+sweep;r=Math.max(.1f,dist(x,y,a,b));start=angle;sweep=normalizeSweep(end-start);}else{r=Math.max(.1f,dist(x,y,a,b));sweep=normalizeSweep(angle-start);}}
@@ -1257,8 +1257,8 @@ public class CadCanvasView extends View {
         public RectF bounds(){return new RectF(x-r,y-r,x+r,y+r);}
         public PointF center(){return new PointF(x,y);}
         public Entity offsetCopy(float d){if(r+d<=0)return null;ArcEntity e=new ArcEntity(x,y,r+d,start,sweep);meta(e);return e;}
-        public String describe(){return"Arc | مرکز ("+fmt(x)+", "+fmt(y)+") | R "+mm(r)+" | Layer "+layer;}
-        public String shortName(){return"قوس";}
+        public String describe(){return"Arc | Center ("+fmt(x)+", "+fmt(y)+") | R "+mm(r)+" | Layer "+layer;}
+        public String shortName(){return"Arc";}
         public void appendDxf(StringBuilder d){d.append("0\nARC\n8\n").append(layer).append("\n10\n").append(x).append("\n20\n").append(-y).append("\n30\n0\n40\n").append(r).append("\n50\n").append(start).append("\n51\n").append(start+sweep).append("\n");}
     }
 
@@ -1284,7 +1284,7 @@ public class CadCanvasView extends View {
         public PointF center(){return centroid(points.toArray(new PointF[0]));}
         public Entity offsetCopy(float d){PointF c=center();if(points.isEmpty())return null;float r=dist(c.x,c.y,points.get(0).x,points.get(0).y);if(r+d<=0)return null;PolygonEntity e=(PolygonEntity)copy();e.scale(c.x,c.y,(r+d)/r);return e;}
         public String describe(){return"Polygon "+points.size()+" sides"+(extrusion>0?" | H "+mm(extrusion):"")+" | Layer "+layer;}
-        public String shortName(){return"چندضلعی";}
+        public String shortName(){return"Polygon";}
         public void appendDxf(StringBuilder d){appendPolylineDxf(d,points.toArray(new PointF[0]),true,layer);}
     }
 
@@ -1293,7 +1293,7 @@ public class CadCanvasView extends View {
         PolylineEntity(List<PointF>pts,boolean closed){for(PointF p:pts)points.add(new PointF(p.x,p.y));this.closed=closed;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){if(points.size()<2)return;Path path=new Path();path.moveTo(points.get(0).x,points.get(0).y);for(int i=1;i<points.size();i++)path.lineTo(points.get(i).x,points.get(i).y);if(closed)path.close();c.drawPath(path,p);}
         public float selectionDistance(float x,float y){if(closed&&pointInPolygon(x,y,points.toArray(new PointF[0])))return 0f;float b=Float.MAX_VALUE;for(int i=0;i<points.size()-1;i++)b=Math.min(b,pointSeg(x,y,points.get(i).x,points.get(i).y,points.get(i+1).x,points.get(i+1).y));return b;}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();for(PointF p:points)q.add(new SnapPoint(p.x,p.y,"نقطه"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();for(PointF p:points)q.add(new SnapPoint(p.x,p.y,"Point"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();int step=Math.max(1,points.size()/20);for(int i=0;i<points.size();i+=step)q.add(new ControlPoint(points.get(i).x,points.get(i).y));return q;}
         public void moveControlPoint(int i,float x,float y){if(points.isEmpty())return;int step=Math.max(1,points.size()/20);int idx=Math.min(points.size()-1,i*step);points.get(idx).set(x,y);}
         public PointF nearestPoint(float x,float y){PointF best=null;float bd=Float.MAX_VALUE;for(int i=0;i<points.size()-1;i++){PointF q=projectSeg(x,y,points.get(i).x,points.get(i).y,points.get(i+1).x,points.get(i+1).y);float d=dist(x,y,q.x,q.y);if(d<bd){bd=d;best=q;}}return best;}
@@ -1307,7 +1307,7 @@ public class CadCanvasView extends View {
         public PointF center(){return centroid(points.toArray(new PointF[0]));}
         public Entity offsetCopy(float d){return null;}
         public String describe(){return(closed?"Polyline":"Freehand")+" | "+points.size()+" points | Layer "+layer;}
-        public String shortName(){return"خط آزاد";}
+        public String shortName(){return"Line Unlocked";}
         public void appendDxf(StringBuilder d){appendPolylineDxf(d,points.toArray(new PointF[0]),closed,layer);}
     }
 
@@ -1316,7 +1316,7 @@ public class CadCanvasView extends View {
         MeasureEntity(float a,float b,float c,float d){x1=a;y1=b;x2=c;y2=d;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawLine(x1,y1,x2,y2,m);drawArrow(c,x1,y1,x2,y2,m,px);if(dims)drawLength(c,x1,y1,x2,y2,t,px);}
         public float selectionDistance(float x,float y){return pointSeg(x,y,x1,y1,x2,y2);}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x1,y1,"ابتدا"));q.add(new SnapPoint(x2,y2,"انتها"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(x1,y1,"Start point"));q.add(new SnapPoint(x2,y2,"Endpoint"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(x1,y1));q.add(new ControlPoint(x2,y2));return q;}
         public void moveControlPoint(int i,float x,float y){if(i==0){x1=x;y1=y;}else{x2=x;y2=y;}}
         public PointF nearestPoint(float x,float y){return projectSeg(x,y,x1,y1,x2,y2);}
@@ -1330,7 +1330,7 @@ public class CadCanvasView extends View {
         public PointF center(){return new PointF((x1+x2)/2f,(y1+y2)/2f);}
         public Entity offsetCopy(float d){return null;}
         public String describe(){return"Dimension | "+mm(dist(x1,y1,x2,y2));}
-        public String shortName(){return"اندازه";}
+        public String shortName(){return"Dimension";}
         public void appendDxf(StringBuilder d){}
     }
 
@@ -1339,7 +1339,7 @@ public class CadCanvasView extends View {
         AngleEntity(float ax,float ay,float cx,float cy,float bx,float by){this.ax=ax;this.ay=ay;this.cx=cx;this.cy=cy;this.bx=bx;this.by=by;}
         public void draw(Canvas c,Paint p,Paint t,Paint m,float px,boolean dims){c.drawLine(cx,cy,ax,ay,m);c.drawLine(cx,cy,bx,by,m);if(dims)c.drawText(fmt(angleAt(ax,ay,cx,cy,bx,by))+"°",cx+15f*px,cy-10f*px,t);}
         public float selectionDistance(float x,float y){return Math.min(pointSeg(x,y,cx,cy,ax,ay),pointSeg(x,y,cx,cy,bx,by));}
-        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(ax,ay,"اول"));q.add(new SnapPoint(cx,cy,"راس"));q.add(new SnapPoint(bx,by,"دوم"));return q;}
+        public List<SnapPoint> snapPoints(){List<SnapPoint>q=new ArrayList<>();q.add(new SnapPoint(ax,ay,"First"));q.add(new SnapPoint(cx,cy,"text"));q.add(new SnapPoint(bx,by,"text"));return q;}
         public List<ControlPoint> controlPoints(){List<ControlPoint>q=new ArrayList<>();q.add(new ControlPoint(ax,ay));q.add(new ControlPoint(cx,cy));q.add(new ControlPoint(bx,by));return q;}
         public void moveControlPoint(int i,float x,float y){if(i==0){ax=x;ay=y;}else if(i==1){cx=x;cy=y;}else{bx=x;by=y;}}
         public PointF nearestPoint(float x,float y){PointF a=projectSeg(x,y,cx,cy,ax,ay),b=projectSeg(x,y,cx,cy,bx,by);return dist(x,y,a.x,a.y)<dist(x,y,b.x,b.y)?a:b;}
@@ -1353,7 +1353,7 @@ public class CadCanvasView extends View {
         public PointF center(){return new PointF(cx,cy);}
         public Entity offsetCopy(float d){return null;}
         public String describe(){return"Angle | "+fmt(angleAt(ax,ay,cx,cy,bx,by))+"°";}
-        public String shortName(){return"زاویه";}
+        public String shortName(){return"Angle";}
         public void appendDxf(StringBuilder d){}
     }
 
@@ -1377,7 +1377,7 @@ public class CadCanvasView extends View {
         public PointF center(){return vertical?new PointF(value,0):new PointF(0,value);}
         public Entity offsetCopy(float d){GuideEntity e=new GuideEntity(vertical,value+d);meta(e);return e;}
         public String describe(){return"Guide "+(vertical?"X ":"Y ")+mm(value);}
-        public String shortName(){return"راهنما";}
+        public String shortName(){return"Guide";}
         public void appendDxf(StringBuilder d){}
     }
 
@@ -1412,9 +1412,9 @@ public class CadCanvasView extends View {
     private static PointF unit(float x,float y){float l=(float)Math.hypot(x,y);if(l<1e-6f)return new PointF(1,0);return new PointF(x/l,y/l);}
     private static float normalizeSweep(float d){while(d>360)d-=360;while(d<-360)d+=360;return d;}
 
-    private static String toolName(int t){switch(t){case TOOL_SELECT:return"انتخاب";case TOOL_POINT:return"نقطه";case TOOL_LINE:return"خط";case TOOL_RECT:return"مستطیل";case TOOL_CIRCLE:return"دایره";case TOOL_MEASURE:return"اندازه";case TOOL_ARC:return"قوس";case TOOL_POLYGON:return"چندضلعی";case TOOL_FREE:return"آزاد";case TOOL_GUIDE:return"راهنما";default:return"";}}
+    private static String toolName(int t){switch(t){case TOOL_SELECT:return"Selection";case TOOL_POINT:return"Point";case TOOL_LINE:return"Line";case TOOL_RECT:return"Rectangle";case TOOL_CIRCLE:return"Circle";case TOOL_MEASURE:return"Dimension";case TOOL_ARC:return"Arc";case TOOL_POLYGON:return"Polygon";case TOOL_FREE:return"Unlocked";case TOOL_GUIDE:return"Guide";default:return"";}}
 
-    private static int materialColor(String m){if(m==null)return Color.rgb(25,25,25);String s=m.trim().toUpperCase(Locale.US);if("WOOD".equals(s)||"CHOB".equals(s)||"چوب".equals(m))return Color.rgb(125,85,45);if("MDF".equals(s))return Color.rgb(145,110,70);if("METAL".equals(s)||"فلز".equals(m))return Color.rgb(90,100,110);if("GLASS".equals(s)||"شیشه".equals(m))return Color.rgb(80,150,175);return Color.rgb(25,25,25);}
+    private static int materialColor(String m){if(m==null)return Color.rgb(25,25,25);String s=m.trim().toUpperCase(Locale.US);if("WOOD".equals(s)||"CHOB".equals(s)||"Wood".equals(m))return Color.rgb(125,85,45);if("MDF".equals(s))return Color.rgb(145,110,70);if("METAL".equals(s)||"Metal".equals(m))return Color.rgb(90,100,110);if("GLASS".equals(s)||"Glass".equals(m))return Color.rgb(80,150,175);return Color.rgb(25,25,25);}
 
     private static void drawLength(Canvas c,float x1,float y1,float x2,float y2,Paint t,float px){c.drawText(mm(dist(x1,y1,x2,y2)),(x1+x2)/2f,(y1+y2)/2f-4f*px,t);}
 
@@ -1430,7 +1430,7 @@ public class CadCanvasView extends View {
 
     private static boolean pointInPolygon(float x,float y,PointF[]p){boolean inside=false;for(int i=0,j=p.length-1;i<p.length;j=i++){float xi=p[i].x,yi=p[i].y,xj=p[j].x,yj=p[j].y;boolean hit=((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi+1e-12f)+xi);if(hit)inside=!inside;}return inside;}
 
-    private static List<SnapPoint> polygonSnaps(PointF[]p){List<SnapPoint>q=new ArrayList<>();for(int i=0;i<p.length;i++){PointF a=p[i],b=p[(i+1)%p.length];q.add(new SnapPoint(a.x,a.y,"گوشه"));q.add(new SnapPoint((a.x+b.x)/2f,(a.y+b.y)/2f,"وسط"));}PointF c=centroid(p);q.add(new SnapPoint(c.x,c.y,"مرکز"));return q;}
+    private static List<SnapPoint> polygonSnaps(PointF[]p){List<SnapPoint>q=new ArrayList<>();for(int i=0;i<p.length;i++){PointF a=p[i],b=p[(i+1)%p.length];q.add(new SnapPoint(a.x,a.y,"text"));q.add(new SnapPoint((a.x+b.x)/2f,(a.y+b.y)/2f,"Midpoint"));}PointF c=centroid(p);q.add(new SnapPoint(c.x,c.y,"Center"));return q;}
 
     private static RectF boundsOf(PointF[]p){if(p.length==0)return new RectF();float l=p[0].x,r=p[0].x,t=p[0].y,b=p[0].y;for(PointF q:p){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);}return new RectF(l,t,r,b);}
     private static PointF centroid(PointF[]p){if(p.length==0)return new PointF();float x=0,y=0;for(PointF q:p){x+=q.x;y+=q.y;}return new PointF(x/p.length,y/p.length);}

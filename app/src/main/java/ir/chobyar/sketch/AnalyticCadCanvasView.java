@@ -74,19 +74,19 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     public void showSolidManager(){
         Object body=selectedBody();
         AnalyticSolidKernel.Primitive primitive=currentPrimitive(body);
-        String selected=body==null?"Body انتخاب نشده":bodyName(body)+(primitive==null?"":" • "+primitive.kind);
+        String selected=body==null?"No body selected":bodyName(body)+(primitive==null?"":" • "+primitive.kind);
         String[] items={
-                "▣ ابزارهای Solid/Form معمولی — Extrude, Boolean, Revolve, Sweep, Loft",
-                "◎ Cylinder دقیق / استوانه",
-                "△ Cone/Frustum دقیق / مخروط",
-                "● Sphere دقیق / کره",
-                "∿ Analytic Inspector / هندسه منحنی دقیق",
-                "↻ بازسازی نمایش از مدل تحلیلی",
-                is3DOverview()?"□ برگشت به Sketch 2D":"◇ نمایش 3D"
+                "▣ Toolstext Solid/Form text — Extrude, Boolean, Revolve, Sweep, Loft",
+                "◎ Cylinder text / text",
+                "△ Cone/Frustum text / text",
+                "● Sphere text / text",
+                "∿ Analytic Inspector / Geometry text text",
+                "↻ Rebuild Show text Model text",
+                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Analytic")
-                .setMessage(selected+"\n\nدایره، استوانه، مخروط و کره در این لایه با پارامتر ریاضی نگه‌داری می‌شوند؛ چندضلعی فقط برای نمایش/CSG فعلی ساخته می‌شود.")
+                .setMessage(selected+" \n  \n Circle, text, text text text text text text text text text text text; Polygon text text Show/CSG text created text.")
                 .setItems(items,(d,w)->{
                     if(w==0)AnalyticCadCanvasView.super.showSolidManager();
                     else if(w==1)showCylinderDialog();
@@ -96,7 +96,7 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
                     else if(w==5)toast(rebuildSelectedAnalytic());
                     else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     @Override
@@ -104,7 +104,7 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         CircleSeed seed=circleSeedFromSelection(heightCm*10f);
         String result=super.extrudeSelectedBody(heightCm);
         Object body=selectedBody();
-        if(body!=null&&seed!=null&&!result.contains("ممکن نشد")&&!result.contains("انتخاب کن")){
+        if(body!=null&&seed!=null&&!result.contains("text text")&&!result.contains("Selection text")){
             Geometry3D.Vec3 axis=seed.axis;
             float h=seed.heightMm;
             if(h<0){h=-h;axis=axis.mul(-1f);}
@@ -143,22 +143,22 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private void showCylinderDialog(){
         LinearLayout box=form();
-        EditText diameter=input(box,"قطر / Diameter (mm)","40");
-        EditText height=input(box,"ارتفاع / Height (mm)","60");
+        EditText diameter=input(box,"Diameter / Diameter (mm)","40");
+        EditText height=input(box,"Height / Height (mm)","60");
         new AlertDialog.Builder(getContext())
-                .setTitle("Cylinder دقیق")
-                .setMessage("مرکز استوانه روی Origin صفحه Sketch فعال ساخته می‌شود. پارامتر اصلی دقیق می‌ماند.")
+                .setTitle("Cylinder text")
+                .setMessage("Center text Roy Origin Plane Sketch text created text. text text text text.")
                 .setView(box)
-                .setPositiveButton("ساخت",(d,w)->{
+                .setPositiveButton("Create",(d,w)->{
                     try{
                         float dia=parseLengthMm(diameter.getText().toString()),h=parseLengthMm(height.getText().toString());
                         toast(createCylinder(dia,h));
-                    }catch(Exception e){toast("قطر یا ارتفاع درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Diameter text Height was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private String createCylinder(float diameterMm,float signedHeightMm){
-        if(diameterMm<=0||Math.abs(signedHeightMm)<1e-5f)return"قطر و ارتفاع باید معتبر باشند";
+        if(diameterMm<=0||Math.abs(signedHeightMm)<1e-5f)return"Diameter text Height text text text";
         Geometry3D.Plane3D p=activePlane();Geometry3D.Vec3 axis=p.normal;float h=signedHeightMm;
         if(h<0){h=-h;axis=axis.mul(-1f);}
         AnalyticSolidKernel.Cylinder exact=new AnalyticSolidKernel.Cylinder(p.origin,axis,diameterMm*0.5f,h);
@@ -167,21 +167,21 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     private void showConeDialog(){
         LinearLayout box=form();
-        EditText d1=input(box,"قطر پایین / Base diameter", "50mm");
-        EditText d2=input(box,"قطر بالا / Top diameter — صفر = نوک", "0mm");
-        EditText h=input(box,"ارتفاع / Height", "70mm");
+        EditText d1=input(box,"Diameter text / Base diameter", "50mm");
+        EditText d2=input(box,"Diameter Top / Top diameter — text = text", "0mm");
+        EditText h=input(box,"Height / Height", "70mm");
         new AlertDialog.Builder(getContext())
-                .setTitle("Cone / Frustum دقیق")
-                .setMessage("برای مخروط کامل قطر بالا را صفر بگذار؛ برای مخروط ناقص هر دو قطر را بده.")
+                .setTitle("Cone / Frustum text")
+                .setMessage("text text text Diameter Top text text text; text text text text text Diameter text text.")
                 .setView(box)
-                .setPositiveButton("ساخت",(d,w)->{
+                .setPositiveButton("Create",(d,w)->{
                     try{toast(createCone(parseLengthMm(d1.getText().toString()),parseLengthMm(d2.getText().toString()),parseLengthMm(h.getText().toString())));}
-                    catch(Exception e){toast("ابعاد مخروط درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("text text was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private String createCone(float baseDiameterMm,float topDiameterMm,float signedHeightMm){
-        if(baseDiameterMm<0||topDiameterMm<0||(baseDiameterMm<=0&&topDiameterMm<=0)||Math.abs(signedHeightMm)<1e-5f)return"ابعاد مخروط معتبر نیست";
+        if(baseDiameterMm<0||topDiameterMm<0||(baseDiameterMm<=0&&topDiameterMm<=0)||Math.abs(signedHeightMm)<1e-5f)return"text text text text";
         Geometry3D.Plane3D p=activePlane();Geometry3D.Vec3 axis=p.normal;float h=signedHeightMm;
         float r0=baseDiameterMm*0.5f,r1=topDiameterMm*0.5f;
         if(h<0){h=-h;axis=axis.mul(-1f);float t=r0;r0=r1;r1=t;}
@@ -190,14 +190,14 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
 
     public void showSphereDialog(){
         LinearLayout box=form();
-        EditText d=input(box,"قطر / Diameter (mm)","50");
-        EditText centerX=input(box,"مرکز X (mm)",num(activePlane().origin.x));
-        EditText centerY=input(box,"مرکز Y (mm)",num(activePlane().origin.y));
-        EditText centerZ=input(box,"مرکز Z (mm)",num(activePlane().origin.z));
-        new AlertDialog.Builder(getContext()).setTitle("Sphere دقیق")
-                .setMessage("قطر و جای دقیق مرکز کره را وارد کن. بعداً نیز با انتخاب Body و «ابعاد دقیق» قابل ویرایش است.")
+        EditText d=input(box,"Diameter / Diameter (mm)","50");
+        EditText centerX=input(box,"Center X (mm)",num(activePlane().origin.x));
+        EditText centerY=input(box,"Center Y (mm)",num(activePlane().origin.y));
+        EditText centerZ=input(box,"Center Z (mm)",num(activePlane().origin.z));
+        new AlertDialog.Builder(getContext()).setTitle("Sphere text")
+                .setMessage("Diameter text text text Center text text text text. text text text Selection Body text «Exact Dimensions» text text text.")
                 .setView(box)
-                .setPositiveButton("ساخت",(x,w)->{
+                .setPositiveButton("Create",(x,w)->{
                     try{
                         float dia=parseLengthMm(d.getText().toString());
                         Geometry3D.Vec3 center=new Geometry3D.Vec3(
@@ -205,36 +205,36 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
                                 parseLengthMm(centerY.getText().toString()),
                                 parseLengthMm(centerZ.getText().toString()));
                         toast(createProjectSphere(center,dia));
-                    }catch(Exception e){toast("قطر یا مختصات درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Diameter text text was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private String createSphere(float diameterMm){
-        if(diameterMm<=0)return"قطر باید بزرگ‌تر از صفر باشد";
+        if(diameterMm<=0)return"Diameter text text text text text";
         return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(activePlane().origin,diameterMm*0.5f));
     }
 
     /** Deterministic primitive bridge for bundled editable projects and model restore. */
     final String createProjectSphere(Geometry3D.Vec3 center,float diameterMm){
-        if(center==null||diameterMm<=0f)return"Sphere پروژه معتبر نیست";
+        if(center==null||diameterMm<=0f)return"Sphere Project text text";
         return addAnalyticBody("Sphere",new AnalyticSolidKernel.Sphere(center,diameterMm*.5f));
     }
 
     /** User-facing parameter editor for the exact primitive selected on canvas. */
     public void showSelectedAnalyticEditor(){
         Object body=selectedBody();
-        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){toast("Select a body first");return;}
         AnalyticSolidKernel.Primitive primitive=currentPrimitive(body);
         if(!(primitive instanceof AnalyticSolidKernel.Sphere)){showAnalyticInspector();return;}
         AnalyticSolidKernel.Sphere sphere=(AnalyticSolidKernel.Sphere)primitive;
         LinearLayout box=form();
-        EditText diameter=input(box,"قطر / Diameter (mm)",num(sphere.radiusMm*2f));
-        EditText centerX=input(box,"مرکز X (mm)",num(sphere.center.x));
-        EditText centerY=input(box,"مرکز Y (mm)",num(sphere.center.y));
-        EditText centerZ=input(box,"مرکز Z (mm)",num(sphere.center.z));
-        new AlertDialog.Builder(getContext()).setTitle("ویرایش دقیق • "+bodyName(body))
-                .setMessage("قطر یا محل کره را تغییر بده؛ مدل و History ذخیره‌شده با هم به‌روز می‌شوند.")
-                .setView(box).setPositiveButton("اعمال",(dialog,which)->{
+        EditText diameter=input(box,"Diameter / Diameter (mm)",num(sphere.radiusMm*2f));
+        EditText centerX=input(box,"Center X (mm)",num(sphere.center.x));
+        EditText centerY=input(box,"Center Y (mm)",num(sphere.center.y));
+        EditText centerZ=input(box,"Center Z (mm)",num(sphere.center.z));
+        new AlertDialog.Builder(getContext()).setTitle("text text • "+bodyName(body))
+                .setMessage("Diameter text place text text Transform text; Model text History Savetext text text text text.")
+                .setView(box).setPositiveButton("Apply",(dialog,which)->{
                     try{
                         float dia=parseLengthMm(diameter.getText().toString());if(dia<=0f)throw new IllegalArgumentException();
                         Geometry3D.Vec3 center=new Geometry3D.Vec3(
@@ -242,31 +242,31 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
                                 parseLengthMm(centerY.getText().toString()),
                                 parseLengthMm(centerZ.getText().toString()));
                         toast(updateSelectedProjectSphere(center,dia));
-                    }catch(Exception e){toast("قطر یا مختصات معتبر نیست");}
-                }).setNegativeButton("لغو",null).show();
+                    }catch(Exception e){toast("Diameter text text text text");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     /** Shared production path used by the exact editor and its persistence test. */
     final String updateSelectedProjectSphere(Geometry3D.Vec3 center,float diameterMm){
-        Object body=selectedBody();if(body==null)return"اول یک Body را انتخاب کن";
-        if(!(currentPrimitive(body) instanceof AnalyticSolidKernel.Sphere))return"Body انتخاب‌شده کرهٔ دقیق نیست";
-        if(center==null||diameterMm<=0f)return"قطر یا مختصات معتبر نیست";
+        Object body=selectedBody();if(body==null)return"Select a body first";
+        if(!(currentPrimitive(body) instanceof AnalyticSolidKernel.Sphere))return"Body selected text text text";
+        if(center==null||diameterMm<=0f)return"Diameter text text text text";
         AnalyticSolidKernel.Sphere edited=new AnalyticSolidKernel.Sphere(center,diameterMm*.5f);
         analyticByBody.put(body,edited);setBodyCsg(body,edited.tessellate(PREVIEW_SEGMENTS));
-        clearFace();ensure3D();invalidate();return"قطر و مختصات کره به‌روز شد";
+        clearFace();ensure3D();invalidate();return"Diameter text text text text text";
     }
 
     private String addAnalyticBody(String prefix,AnalyticSolidKernel.Primitive exact){
-        if(bodyConstructor==null||bodiesField==null||bodySerialField==null)return"ساخت Body تحلیلی آماده نیست";
-        SolidCSG mesh=exact.tessellate(PREVIEW_SEGMENTS);if(mesh==null||mesh.isEmpty())return"هندسه تحلیلی Body نساخت";
+        if(bodyConstructor==null||bodiesField==null||bodySerialField==null)return"Create Body text is not ready";
+        SolidCSG mesh=exact.tessellate(PREVIEW_SEGMENTS);if(mesh==null||mesh.isEmpty())return"Geometry text Body textCreate";
         try{
             int id=bodySerialField.getInt(this);
             Object body=bodyConstructor.newInstance(id,prefix+" "+id,mesh);
             bodies().add(body);bodySerialField.setInt(this,id+1);
             selectedBodyField.set(this,body);if(selectedFaceField!=null)selectedFaceField.set(this,null);
             analyticByBody.put(body,exact);ensure3D();invalidate();
-            return prefix+" دقیق ساخته شد • "+shortInfo(exact);
-        }catch(Exception e){return"ساخت Body تحلیلی انجام نشد";}
+            return prefix+" text created • "+shortInfo(exact);
+        }catch(Exception e){return"Create Body text Done text";}
     }
 
     // ------------------------------------------------------------------
@@ -274,22 +274,22 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     // ------------------------------------------------------------------
 
     public void showAnalyticInspector(){
-        Object body=selectedBody();if(body==null){ensure3D();toast("اول روی یک Body بزن");return;}
+        Object body=selectedBody();if(body==null){ensure3D();toast("Select a body first");return;}
         AnalyticSolidKernel.Primitive p=currentPrimitive(body);
         if(p==null){
             new AlertDialog.Builder(getContext()).setTitle("Analytic Inspector")
-                    .setMessage("این Body در حال حاضر به یک Primitive تحلیلی ساده تبدیل نمی‌شود.\n\nBoolean/Loft/Sweep پیچیده هنوز از B-Rep توپولوژی + CSG استفاده می‌کند؛ مرحله بعدی انتقال سطوح تحلیلی از میان Booleanهاست.")
-                    .setPositiveButton("باشه",null).show();return;
+                    .setMessage("text Body text text text text text Primitive text text text text. \n  \n Boolean/Loft/Sweep text text text B-Rep text + CSG text text; text text text text text text text Booleantext.")
+                    .setPositiveButton("OK",null).show();return;
         }
-        String msg=analyticDescription(p)+"\n\nSurface area: "+areaDual(p.areaMm2())+"\nVolume: "+volumeDual(p.volumeMm3())+"\n\nپارامترها مستقل از تعداد Polygonهای نمایش هستند.";
-        new AlertDialog.Builder(getContext()).setTitle("Analytic • "+bodyName(body)).setMessage(msg).setPositiveButton("باشه",null).show();
+        String msg=analyticDescription(p)+"\n\nSurface area: "+areaDual(p.areaMm2())+"\nVolume: "+volumeDual(p.volumeMm3())+" \n  \n text text text text Polygontext Show text.";
+        new AlertDialog.Builder(getContext()).setTitle("Analytic • "+bodyName(body)).setMessage(msg).setPositiveButton("OK",null).show();
     }
 
     private String rebuildSelectedAnalytic(){
-        Object body=selectedBody();if(body==null)return"اول یک Body را انتخاب کن";
-        AnalyticSolidKernel.Primitive p=currentPrimitive(body);if(p==null)return"برای این Body مدل تحلیلی ساده پیدا نشد";
+        Object body=selectedBody();if(body==null)return"Select a body first";
+        AnalyticSolidKernel.Primitive p=currentPrimitive(body);if(p==null)return"text text Body Model text text was not found";
         setBodyCsg(body,p.tessellate(PREVIEW_SEGMENTS));clearFace();ensure3D();invalidate();
-        return"نمای Polygonal از مدل تحلیلی دوباره ساخته شد • "+p.kind;
+        return"Viewtext Polygonal text Model text text created • "+p.kind;
     }
 
     private AnalyticSolidKernel.Primitive currentPrimitive(Object body){
@@ -318,14 +318,14 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     private static String analyticDescription(AnalyticSolidKernel.Primitive p){
         if(p instanceof AnalyticSolidKernel.Cylinder){
             AnalyticSolidKernel.Cylinder c=(AnalyticSolidKernel.Cylinder)p;
-            return"Cylinder / استوانه\nDiameter: "+dual(c.radiusMm*2f)+"\nRadius: "+dual(c.radiusMm)+"\nHeight: "+dual(c.heightMm)+"\nSurface: Plane + Cylinder";
+            return"Cylinder / text \n Diameter: "+dual(c.radiusMm*2f)+"\nRadius: "+dual(c.radiusMm)+"\nHeight: "+dual(c.heightMm)+"\nSurface: Plane + Cylinder";
         }
         if(p instanceof AnalyticSolidKernel.Cone){
             AnalyticSolidKernel.Cone c=(AnalyticSolidKernel.Cone)p;
             return"Cone / Frustum\nBase diameter: "+dual(c.baseRadiusMm*2f)+"\nTop diameter: "+dual(c.topRadiusMm*2f)+"\nHeight: "+dual(c.heightMm)+"\nSurface: Plane + Cone";
         }
         AnalyticSolidKernel.Sphere s=(AnalyticSolidKernel.Sphere)p;
-        return"Sphere / کره\nDiameter: "+dual(s.radiusMm*2f)+"\nRadius: "+dual(s.radiusMm)+"\nSurface: Sphere";
+        return"Sphere / text \n Diameter: "+dual(s.radiusMm*2f)+"\nRadius: "+dual(s.radiusMm)+"\nSurface: Sphere";
     }
 
     // ------------------------------------------------------------------
@@ -390,7 +390,7 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 
     private static float parseLengthMm(String raw){String s=normalizeDigits(raw).trim().toLowerCase(Locale.US).replace(" ","");if(s.isEmpty())return 0f;if(s.endsWith("mm"))return Float.parseFloat(s.substring(0,s.length()-2));if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;return Float.parseFloat(s);}
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String num(double v){String s=String.format(Locale.US,"%.3f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String dual(double mm){return num(mm)+" mm";}
     private static String areaDual(double mm2){return num(mm2)+" mm²";}

@@ -18,15 +18,15 @@ final class FurnitureSampleProjectFactory {
         Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
         try{
             cad.applyProjectSketchPlane("Top",new Geometry3D.Plane3D(new Geometry3D.Vec3(0f,0f,585f),
-                    new Geometry3D.Vec3(1f,0f,0f),new Geometry3D.Vec3(0f,1f,0f),"XY • صفحه"));
+                    new Geometry3D.Vec3(1f,0f,0f),new Geometry3D.Vec3(0f,1f,0f),"XY • Plane"));
             List<ProfileRow> rows=new ArrayList<>();
             rows.add(circle("Top",0f,0f,380f));
             importRows(cad,rows);
 
-            sphere(cad,new Geometry3D.Vec3(0f,0f,205f),410f,"گوی پایین • Ø410");
-            sphere(cad,new Geometry3D.Vec3(145f,0f,385f),270f,"گوی میانی • Ø270 • X+145");
-            sphere(cad,new Geometry3D.Vec3(-35f,0f,500f),260f,"گوی زیر صفحه • Ø260 • X-35");
-            extrude(cad,0,45f,"صفحه گرد • Ø760 × 45",0f,0f,0f);
+            sphere(cad,new Geometry3D.Vec3(0f,0f,205f),410f,"text text • Ø410");
+            sphere(cad,new Geometry3D.Vec3(145f,0f,385f),270f,"text text • Ø270 • X+145");
+            sphere(cad,new Geometry3D.Vec3(-35f,0f,500f),260f,"text text Plane • Ø260 • X-35");
+            extrude(cad,0,45f,"Plane text • Ø760 × 45",0f,0f,0f);
             cad.setStandardView("ISO");cad.fitAll();cad.clearWorkspaceSelection();
             return CadProjectPersistenceController.encode(cad);
         }finally{cad.clearAll();}
@@ -35,14 +35,14 @@ final class FurnitureSampleProjectFactory {
     static String createHourglassTable(Context context){
         Shapr3DGuideCadCanvasView cad=new Shapr3DGuideCadCanvasView(context);
         try{
-            cad.applyProjectSketchPlane("0",depthPlane(250f,"XZ • پایه"));
-            cad.applyProjectSketchPlane("Top",depthPlane(450f,"XZ • صفحه"));
+            cad.applyProjectSketchPlane("0",depthPlane(250f,"XZ • text"));
+            cad.applyProjectSketchPlane("Top",depthPlane(450f,"XZ • Plane"));
             List<ProfileRow> rows=new ArrayList<>();
             rows.add(polyline(hourglassProfile(1120f,725f,320f,24)));
             rows.add(rect("Top",-1000f,725f,1000f,765f));
             importRows(cad,rows);
-            extrude(cad,0,500f,"پایه ساعت‌شنی • 1120×500×725",0f,0f,0f);
-            extrude(cad,1,900f,"صفحه • 2000×900×40",0f,0f,0f);
+            extrude(cad,0,500f,"text text • 1120×500×725",0f,0f,0f);
+            extrude(cad,1,900f,"Plane • 2000×900×40",0f,0f,0f);
             cad.setStandardView("ISO");cad.fitAll();cad.clearWorkspaceSelection();
             return CadProjectPersistenceController.encode(cad);
         }finally{cad.clearAll();}
@@ -80,7 +80,7 @@ final class FurnitureSampleProjectFactory {
             root.put("layers",new JSONArray().put(new JSONObject().put("name","0").put("visible",true))
                     .put(new JSONObject().put("name","Top").put("visible",true)));
             JSONArray entities=new JSONArray();for(ProfileRow row:rows)entities.put(row.json);root.put("entities",entities);
-            String status=cad.importSketchProjectState(root.toString());if(!status.contains("باز شد"))throw new IllegalStateException(status);
+            String status=cad.importSketchProjectState(root.toString());if(!status.contains("text text"))throw new IllegalStateException(status);
         }catch(Exception e){throw new IllegalStateException("Sample Sketch could not be built",e);}
     }
 

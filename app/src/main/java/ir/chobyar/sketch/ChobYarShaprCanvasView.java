@@ -140,13 +140,13 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
 
     /** The transform gizmo is contextual: selection alone must not cover geometry. */
     public String showTransformGizmo() {
-        if (selectionObjects().isEmpty()) return "اول یک شکل یا پروفایل را انتخاب کن";
+        if (selectionObjects().isEmpty()) return "First text text text text text Selection text";
         super.setTool(TOOL_SELECT);
         gizmoVisible = true;
         gizmoMode = GIZMO_NONE;
         gizmoSessionUndoSteps = 0;
         invalidate();
-        return "Move / Rotate فعال شد";
+        return "Move / Rotate activated";
     }
 
     public void hideTransformGizmo() {
@@ -343,7 +343,7 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     /** Apply a persistent H/V relationship to the currently selected line(s). */
     public String applyHorizontalVerticalConstraint() {
         List<Object> lines = selectedLines();
-        if (lines.isEmpty()) return "برای H/V یک یا چند خط را انتخاب کن";
+        if (lines.isEmpty()) return "text H/V text text text Line text Selection text";
         coreSaveUndo();
         for (Object line : lines) {
             alignLineToNearestAxis(line);
@@ -354,31 +354,31 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
         }
         enforceConstraints();
         invalidate();
-        return lines.size() + " خط با قید H/V قفل شد";
+        return lines.size() + " Line text text H/V Lock text";
     }
 
     /** Apply a persistent perpendicular relationship between exactly two lines. */
     public String applyPerpendicularConstraint() {
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "برای Perpendicular دقیقاً دو خط را انتخاب کن";
+        if (lines.size() != 2) return "text Perpendicular text text Line text Selection text";
         coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), false);
         addRelation(lines.get(0), lines.get(1), false);
         enforceConstraints();
         invalidate();
-        return "قید عمود ⊥ اعمال شد";
+        return "text Perpendicular ⊥ Apply text";
     }
 
     /** Apply a persistent parallel relationship between exactly two lines. */
     public String applyParallelConstraint() {
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "برای Parallel دقیقاً دو خط را انتخاب کن";
+        if (lines.size() != 2) return "text Parallel text text Line text Selection text";
         coreSaveUndo();
         normalizeRelation(lines.get(0), lines.get(1), true);
         addRelation(lines.get(0), lines.get(1), true);
         enforceConstraints();
         invalidate();
-        return "قید موازی ∥ اعمال شد";
+        return "text Parallel ∥ Apply text";
     }
 
     private void alignLineToNearestAxis(Object line) {

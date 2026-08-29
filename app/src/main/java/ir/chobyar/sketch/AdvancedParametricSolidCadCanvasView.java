@@ -61,8 +61,8 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             sourceEntities.add(profile);if(axis!=null)sourceEntities.add(axis);
         }
         @Override String detail(){
-            String thread=Math.abs(heightMm)<1e-5f?"":" • H "+fmt(heightMm)+" mm • "+fmt(Math.abs(angleDeg)/360f)+" دور • Pitch "+fmt(pitchMm())+" mm";
-            return "Revolve • "+fmt(angleDeg)+"°"+thread+(axisEntity!=null?" • محور خط":" • محور "+(xAxis?"X":"Y"))+(broken?" • ⚠":"");
+            String thread=Math.abs(heightMm)<1e-5f?"":" • H "+fmt(heightMm)+" mm • "+fmt(Math.abs(angleDeg)/360f)+" text • Pitch "+fmt(pitchMm())+" mm";
+            return "Revolve • "+fmt(angleDeg)+"°"+thread+(axisEntity!=null?" • Axis Line":" • Axis "+(xAxis?"X":"Y"))+(broken?" • ⚠":"");
         }
         float pitchMm(){float turns=Math.abs(angleDeg)/360f;return turns<1e-5f?0f:Math.abs(heightMm)/turns;}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
@@ -77,7 +77,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object profileEntity;
         final Object pathEntity;
         SweepFeature(int id,Object profile,Object path){super(id,"Sweep");profileEntity=profile;pathEntity=path;sourceEntities.add(profile);sourceEntities.add(path);}
-        @Override String detail(){return "Sweep • پروفایل + مسیر"+(broken?" • ⚠":"");}
+        @Override String detail(){return "Sweep • text + text"+(broken?" • ⚠":"");}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile p=o.profile(profileEntity);if(p==null)return null;
             List<Geometry3D.Vec3> path=o.path3D(pathEntity);if(path.size()<2)return null;
@@ -89,7 +89,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object first;
         final Object second;
         LoftFeature(int id,Object a,Object b){super(id,"Loft");first=a;second=b;sourceEntities.add(a);sourceEntities.add(b);}
-        @Override String detail(){return "Loft • دو پروفایل"+(broken?" • ⚠":"");}
+        @Override String detail(){return "Loft • text text"+(broken?" • ⚠":"");}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile a=o.profile(first),b=o.profile(second);if(a==null||b==null)return null;
             return SolidCSG.loft(a.points,a.plane,b.points,b.plane,64);
@@ -188,16 +188,16 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public void showSolidManager(){
         String[] items={
                 "⬆ Extrude / Boolean / Bodies / Face",
-                "⟳ Revolve / دوران پروفایل",
-                "➜ Sweep / حرکت پروفایل روی مسیر",
-                "≋ Loft / اتصال دو پروفایل",
-                "⏱ History کامل",
-                "↻ بازسازی همه Featureها",
-                is3DOverview()?"□ برگشت به Sketch 2D":"◇ نمایش 3D"
+                "⟳ Revolve / text text",
+                "➜ Sweep / text text Roy text",
+                "≋ Loft / text text text",
+                "⏱ History text",
+                "↻ Rebuild All Featuretext",
+                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Form")
-                .setMessage("ابزار حرفه‌ای، مسیر ساده:\nRevolve: پروفایل بسته + در صورت نیاز یک خط محور\nSweep: پروفایل بسته + Line/Polyline مسیر\nLoft: دو پروفایل بسته روی Sketch/Planeهای مختلف")
+                .setMessage("Tools text, text text: \n Revolve: text text + text text text text Line Axis \n Sweep: text text + Line/Polyline text \n Loft: text text text Roy Sketch/Planetext text")
                 .setItems(items,(d,w)->{
                     if(w==0)super.showSolidManager();
                     else if(w==1)startRevolve();
@@ -207,7 +207,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
                     else if(w==5)toast(rebuildHistory());
                     else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     private void startRevolve(){
@@ -221,14 +221,14 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             AutoProfile auto=autoProfile(s,true);
             if(auto!=null){profile=auto.profile;axis=auto.axis;}
         }
-        if(profile==null){toast("مقطع بسته پیدا نشد؛ یک خط از محیط مقطع را انتخاب کن و دوباره Revolve را بزن");return;}
+        if(profile==null){toast("text text was not found; text Line text text text text Selection text text text Revolve text text");return;}
         Object finalProfile=profile,finalAxis=axis;
         if(axis!=null){showRevolveAngle(finalProfile,finalAxis,false);return;}
-        String[] axes={"محور Y همان Sketch — پیشنهاد معمول","محور X همان Sketch"};
-        new AlertDialog.Builder(getContext()).setTitle("Revolve • محور")
-                .setMessage("اگر خط محور را همراه پروفایل انتخاب کنی، همان خط محور دوران می‌شود.")
+        String[] axes={"Axis Y text Sketch — text text","Axis X text Sketch"};
+        new AlertDialog.Builder(getContext()).setTitle("Revolve • Axis")
+                .setMessage("text Line Axis text companion text Selection text, text Line Axis text text.")
                 .setItems(axes,(d,w)->showRevolveAngle(finalProfile,null,w==1))
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     public void showRevolveTool(){startRevolve();}
@@ -245,18 +245,18 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             AutoProfile auto=autoProfile(selected,true);
             if(auto!=null){profile=auto.profile;axis=auto.axis;}
         }
-        if(profile==null)return "پروفایل بسته پیدا نشد؛ داخل مقطع یا یک خط از محیطش را انتخاب کن";
+        if(profile==null)return "Package profile was not found; Select inside the section or a line from its environment";
         interactiveRevolveProfile=profile;interactiveRevolveAxis=axis;interactiveRevolveXAxis=false;
         interactiveRevolveAngle=360f;interactiveRevolveHeightMm=0f;interactiveRevolveActive=true;showModelOverview();
-        if(!refreshInteractiveRevolve(true)){clearInteractiveRevolve();return "Revolve نتوانست پیش‌نمایش بسازد؛ محور نباید از داخل پروفایل بگذرد";}
+        if(!refreshInteractiveRevolve(true)){clearInteractiveRevolve();return "Revolve text Preview text; Axis text text text text text";}
         dispatchWorkspaceState();
-        return "Revolve • 360° • Height 0 mm • برای رزوه Height و چند دور را وارد کن";
+        return "Revolve • 360° • Height 0 mm • text text Height text text text text text text";
     }
 
     public boolean isInteractiveRevolveActive(){return interactiveRevolveActive;}
 
     public String commitInteractiveRevolve(){
-        if(!interactiveRevolveActive)return "Revolve فعال نیست";
+        if(!interactiveRevolveActive)return "Revolve text text";
         Object profile=interactiveRevolveProfile,axis=interactiveRevolveAxis;boolean xAxis=interactiveRevolveXAxis;
         float angle=interactiveRevolveAngle,height=interactiveRevolveHeightMm;clearInteractiveRevolve();
         String result=createRevolve(profile,axis,xAxis,angle,height);dispatchWorkspaceState();return result;
@@ -269,15 +269,15 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         LinearLayout box=revolveInputs(interactiveRevolveAngle,interactiveRevolveHeightMm);
         EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
         new AlertDialog.Builder(getContext()).setTitle("Revolve • Angle + Height")
-                .setMessage("Height=0 دوران عادی است. برای رزوه: Angle=360×تعداد دور و Height=گام×تعداد دور.")
-                .setView(box).setPositiveButton("اعمال",(d,w)->{
+                .setMessage("Height=0 is normal time. For thread: Angle=360×number of rounds and Height=step×number of rounds.")
+                .setView(box).setPositiveButton("Apply",(d,w)->{
                     try{
                         float value=parseAngle(angle),lead=parseMillimeters(height);
                         validateRevolve(value,lead);
                         interactiveRevolveAngle=value;interactiveRevolveHeightMm=lead;
-                        if(!refreshInteractiveRevolve(true))toast("این زاویه برای پروفایل فعلی معتبر نیست");
-                    }catch(Exception e){toast("زاویه/ارتفاع درست نیست • مثال رزوه 10 دور: 3600° و 25.2 mm");}
-                }).setNegativeButton("لغو",null).show();
+                        if(!refreshInteractiveRevolve(true))toast("text Angle text text text text text");
+                    }catch(Exception e){toast("Angle/Height is invalid • Thread example 10 text: 3600° text 25.2 mm");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     public String interactiveRevolveSummary(){
@@ -329,12 +329,12 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private void showRevolveAngle(Object profile,Object axis,boolean xAxis){
         LinearLayout box=revolveInputs(360f,0f);EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
         new AlertDialog.Builder(getContext()).setTitle("Revolve • Angle + Height")
-                .setMessage("Height صفر: دوران معمولی. Height غیرصفر: دوران مارپیچی برای رزوه.")
+                .setMessage("Height text: text text. Height text: text text text text.")
                 .setView(box)
-                .setPositiveButton("ساخت Body",(d,w)->{
+                .setPositiveButton("Create Body",(d,w)->{
                     try{float a=parseAngle(angle),h=parseMillimeters(height);validateRevolve(a,h);toast(createRevolve(profile,axis,xAxis,a,h));}
-                    catch(Exception e){toast("زاویه یا Height درست وارد نشده");}
-                }).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("Angle text Height was entered incorrectly");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg){
@@ -342,24 +342,24 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     }
 
     public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg,float heightMm){
-        try{validateRevolve(angleDeg,heightMm);}catch(Exception e){return"زاویه Revolve باید 0.01 تا 36000 درجه و Height معتبر باشد";}
-        Profile p=profile(profileEntity);if(p==null)return"پروفایل بسته معتبر نیست";
-        Axis3D axis=axisFor(axisEntity,p.plane,xAxis);if(axis==null)return"محور Revolve معتبر نیست";
+        try{validateRevolve(angleDeg,heightMm);}catch(Exception e){return"Angle Revolve text 0.01 until 36000 degrees text Height text text";}
+        Profile p=profile(profileEntity);if(p==null)return"text text text text";
+        Axis3D axis=axisFor(axisEntity,p.plane,xAxis);if(axis==null)return"Axis Revolve text text";
         RevolveFeature f=new RevolveFeature(formSerial++,profileEntity,p.plane,axisEntity,xAxis,angleDeg,heightMm);
-        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Revolve نتوانست Body بسازد؛ پروفایل و محور را بررسی کن";
-        Object body=addBody("Revolve "+f.id,csg);if(body==null)return"ساخت Body انجام نشد";
+        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Revolve text Body text; text text Axis text text text";
+        Object body=addBody("Revolve "+f.id,csg);if(body==null)return"Create Body Done text";
         f.outputBody=body;formHistory.add(f);setOverview3D();invalidate();
-        if(Math.abs(heightMm)<1e-5f)return "Revolve ساخته شد • "+fmt(angleDeg)+"°";
-        return "رزوه ساخته شد • "+fmt(Math.abs(angleDeg)/360f)+" دور • Height "+fmt(heightMm)+" mm • Pitch "+fmt(f.pitchMm())+" mm";
+        if(Math.abs(heightMm)<1e-5f)return "Revolve created • "+fmt(angleDeg)+"°";
+        return "text created • "+fmt(Math.abs(angleDeg)/360f)+"Round • Height"+fmt(heightMm)+" mm • Pitch "+fmt(f.pitchMm())+" mm";
     }
 
     private LinearLayout revolveInputs(float angleDeg,float heightMm){
         LinearLayout box=new LinearLayout(getContext());box.setOrientation(LinearLayout.VERTICAL);
         int pad=(int)(16f*getResources().getDisplayMetrics().density);box.setPadding(pad,0,pad,0);
-        TextView angleLabel=new TextView(getContext());angleLabel.setText("Angle • درجه (360 × تعداد دور)");box.addView(angleLabel);
+        TextView angleLabel=new TextView(getContext());angleLabel.setText("Angle • degrees (360 × text text)");box.addView(angleLabel);
         EditText angle=new EditText(getContext());angle.setSingleLine(true);angle.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         angle.setText(fmt(angleDeg));angle.setSelectAllOnFocus(true);box.addView(angle);
-        TextView heightLabel=new TextView(getContext());heightLabel.setText("Height • پیشروی کل روی محور (mm)");box.addView(heightLabel);
+        TextView heightLabel=new TextView(getContext());heightLabel.setText("Height • text text Roy Axis (mm)");box.addView(heightLabel);
         EditText height=new EditText(getContext());height.setSingleLine(true);height.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         height.setText(fmt(heightMm)+" mm");height.setSelectAllOnFocus(true);box.addView(height);
         return box;
@@ -512,8 +512,8 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public String createSweepByEntityIndex(int profileNumber,int pathNumber){
         List<Object> all=entities();
         if(profileNumber<1||pathNumber<1||profileNumber>all.size()||pathNumber>all.size())
-            return "شماره Entity باید بین 1 تا "+all.size()+" باشد";
-        if(profileNumber==pathNumber)return "پروفایل و مسیر Sweep باید متفاوت باشند";
+            return "text Entity text text 1 until "+all.size()+" text";
+        if(profileNumber==pathNumber)return "text text text Sweep text text text";
         return createSweep(all.get(profileNumber-1),all.get(pathNumber-1));
     }
 
@@ -524,14 +524,14 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             if(!s.isEmpty()){
                 String[] a=s.split("\\s+");
                 if("SWEEP3D".equalsIgnoreCase(a[0])){
-                    if(a.length!=3)return "SWEEP3D — شماره پروفایل و مسیر لازم است؛ مثال: SWEEP3D 1 2";
+                    if(a.length!=3)return "SWEEP3D — profile number and path required; Example: SWEEP3D 1 2";
                     try{return createSweepByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
-                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                    catch(NumberFormatException e){return "text Entity text text text text";}
                 }
                 if("LOFT3D".equalsIgnoreCase(a[0])){
-                    if(a.length!=3)return "LOFT3D — شماره دو پروفایل لازم است؛ مثال: LOFT3D 1 2";
+                    if(a.length!=3)return "LOFT3D — Two profile numbers are required; text: LOFT3D 1 2";
                     try{return createLoftByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
-                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                    catch(NumberFormatException e){return "text Entity text text text text";}
                 }
             }
         }
@@ -541,44 +541,44 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private void startSweep(){
         List<Object>s=selection();Object profile=null,path=null;
         for(Object e:s){if(isClosedProfile(e)&&profile==null)profile=e;else if(isPath(e)&&path==null)path=e;}
-        if(profile==null||path==null){toast("برای Sweep دو چیز انتخاب کن: یک پروفایل بسته + یک Line یا Polyline مسیر");return;}
+        if(profile==null||path==null){toast("text Sweep text text Selection text: A closed profile + text Line text Polyline text");return;}
         toast(createSweep(profile,path));
     }
 
     public String createSweep(Object profileEntity,Object pathEntity){
         Profile p=profile(profileEntity);List<Geometry3D.Vec3> path=path3D(pathEntity);
-        if(p==null)return"پروفایل Sweep معتبر نیست";
-        if(path.size()<2)return"مسیر Sweep معتبر نیست";
+        if(p==null)return"text Sweep text text";
+        if(path.size()<2)return"text Sweep text text";
         SweepFeature f=new SweepFeature(formSerial++,profileEntity,pathEntity);
-        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Sweep نتوانست Body بسازد";
-        Object body=addBody("Sweep "+f.id,csg);if(body==null)return"ساخت Body انجام نشد";
+        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Sweep text Body text";
+        Object body=addBody("Sweep "+f.id,csg);if(body==null)return"Create Body Done text";
         f.outputBody=body;formHistory.add(f);setOverview3D();invalidate();
-        return "Sweep ساخته شد • پروفایل روی مسیر حرکت کرد";
+        return "Sweep created • The profile moved on the path";
     }
 
     /** Deterministic non-modal Loft entry using 1-based sketch entity numbers. */
     public String createLoftByEntityIndex(int firstNumber,int secondNumber){
         List<Object> all=entities();
         if(firstNumber<1||secondNumber<1||firstNumber>all.size()||secondNumber>all.size())
-            return "شماره Entity باید بین 1 تا "+all.size()+" باشد";
-        if(firstNumber==secondNumber)return "دو پروفایل Loft باید متفاوت باشند";
+            return "text Entity text text 1 until "+all.size()+" text";
+        if(firstNumber==secondNumber)return "text text Loft text text text";
         return createLoft(all.get(firstNumber-1),all.get(secondNumber-1));
     }
 
     private void startLoft(){
         List<Object> profiles=new ArrayList<>();for(Object e:selection())if(isClosedProfile(e))profiles.add(e);
-        if(profiles.size()!=2){toast("برای Loft دقیقاً دو پروفایل بسته را انتخاب کن؛ بهتر است روی دو Plane/Face متفاوت باشند");return;}
+        if(profiles.size()!=2){toast("text Loft text text text text text Selection text; text text Roy text Plane/Face text text");return;}
         toast(createLoft(profiles.get(0),profiles.get(1)));
     }
 
     public String createLoft(Object first,Object second){
-        Profile a=profile(first),b=profile(second);if(a==null||b==null)return"دو پروفایل Loft معتبر نیستند";
-        if(a.layer.equals(b.layer))return"برای Loft بهتر است دو پروفایل روی دو Sketch/Plane متفاوت باشند";
+        Profile a=profile(first),b=profile(second);if(a==null||b==null)return"text text Loft text text";
+        if(a.layer.equals(b.layer))return"text Loft text text text text Roy text Sketch/Plane text text";
         LoftFeature f=new LoftFeature(formSerial++,first,second);
-        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Loft نتوانست Body بسازد";
-        Object body=addBody("Loft "+f.id,csg);if(body==null)return"ساخت Body انجام نشد";
+        SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Loft text Body text";
+        Object body=addBody("Loft "+f.id,csg);if(body==null)return"Create Body Done text";
         f.outputBody=body;formHistory.add(f);setOverview3D();invalidate();
-        return "Loft ساخته شد • دو پروفایل به هم متصل شدند";
+        return "Loft created • Two profiles were connected";
     }
 
     // ------------------------------------------------------------------
@@ -591,14 +591,14 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         rebuildingForms=true;int ok=0,broken=0;
         try{
             for(FormFeature f:formHistory){
-                if(!sourcesStillExist(f.sourceEntities)){f.broken=true;f.warning="Sketch/مسیر منبع حذف شده";broken++;continue;}
+                if(!sourcesStillExist(f.sourceEntities)){f.broken=true;f.warning="Sketch/text text Delete text";broken++;continue;}
                 SolidCSG c=f.build(this);
-                if(c==null||c.isEmpty()){f.broken=true;f.warning="هندسه Feature نامعتبر شد";broken++;continue;}
+                if(c==null||c.isEmpty()){f.broken=true;f.warning="Geometry Feature invalid text";broken++;continue;}
                 setBodyCsg(f.outputBody,c);f.broken=false;f.warning="";ok++;
             }
         }finally{rebuildingForms=false;}
         String base=super.rebuildHistory();
-        return base+" • Form "+ok+(broken>0?" • "+broken+" Form خطا":"");
+        return base+" • Form "+ok+(broken>0?" • "+broken+" Form Error":"");
     }
 
     @Override
@@ -610,26 +610,26 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             FormFeature f=formHistory.get(i);
             rows[i+1]=(i+1)+". "+f.detail()+(f.broken&&!f.warning.isEmpty()?" — "+f.warning:"");
         }
-        new AlertDialog.Builder(getContext()).setTitle("History • همه Featureها")
-                .setMessage("Featureهای Form هم به Sketchهای منبع وابسته‌اند و بعد از تغییر Sketch دوباره محاسبه می‌شوند.")
+        new AlertDialog.Builder(getContext()).setTitle("History • All Featuretext")
+                .setMessage("Form Features are also dependent on source Sketchs and are recalculated after Transform Sketch.")
                 .setItems(rows,(d,w)->{if(w==0)super.showHistoryManager();else editFormFeature(formHistory.get(w-1));})
-                .setNeutralButton("بازسازی همه",(d,w)->toast(rebuildHistory()))
-                .setNegativeButton("بستن",null).show();
+                .setNeutralButton("Rebuild All",(d,w)->toast(rebuildHistory()))
+                .setNegativeButton("Close",null).show();
     }
 
     private void editFormFeature(FormFeature f){
         if(f instanceof RevolveFeature){
             RevolveFeature r=(RevolveFeature)f;LinearLayout box=revolveInputs(r.angleDeg,r.heightMm);
             EditText angle=(EditText)box.getChildAt(1),height=(EditText)box.getChildAt(3);
-            new AlertDialog.Builder(getContext()).setTitle("ویرایش "+r.detail())
-                    .setMessage("Angle و Height را عوض کن؛ Body و عملیات وابسته دوباره محاسبه می‌شوند.")
-                    .setView(box).setPositiveButton("اعمال",(d,w)->{try{float a=parseAngle(angle),h=parseMillimeters(height);validateRevolve(a,h);r.angleDeg=a;r.heightMm=h;toast(rebuildHistory());}catch(Exception e){toast("زاویه یا Height درست نیست");}})
-                    .setNegativeButton("بستن",null).show();
+            new AlertDialog.Builder(getContext()).setTitle("text "+r.detail())
+                    .setMessage("Angle text Height text change text; Body text text text text text text.")
+                    .setView(box).setPositiveButton("Apply",(d,w)->{try{float a=parseAngle(angle),h=parseMillimeters(height);validateRevolve(a,h);r.angleDeg=a;r.heightMm=h;toast(rebuildHistory());}catch(Exception e){toast("Angle text Height is invalid");}})
+                    .setNegativeButton("Close",null).show();
             return;
         }
         new AlertDialog.Builder(getContext()).setTitle(f.detail())
-                .setMessage(f instanceof SweepFeature?"Sweep به پروفایل و مسیر انتخاب‌شده وابسته است. مسیر یا پروفایل را ویرایش کن تا Body خودکار بازسازی شود.":"Loft به هر دو پروفایل منبع وابسته است. هر کدام را ویرایش کنی Body دوباره ساخته می‌شود.")
-                .setPositiveButton("بازسازی",(d,w)->toast(rebuildHistory())).setNegativeButton("بستن",null).show();
+                .setMessage(f instanceof SweepFeature?"Sweep text text text text selected text text. text text text text text text until Body text Rebuild text.":"Loft text text text text text text text. text text text text text Body text created text.")
+                .setPositiveButton("Rebuild",(d,w)->toast(rebuildHistory())).setNegativeButton("Close",null).show();
     }
 
     @Override
@@ -859,7 +859,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private static PointF[] pointArray(Object o,String n){try{Field f=findField(o.getClass(),n);Object v=f==null?null:f.get(o);return v instanceof PointF[]?(PointF[])v:null;}catch(Exception e){return null;}}
     @SuppressWarnings("unchecked") private static List<PointF>points(Object o){try{Field f=findField(o.getClass(),"points");Object v=f==null?null:f.get(o);if(v instanceof List){List<PointF>out=new ArrayList<>();for(PointF p:(List<PointF>)v)out.add(new PointF(p.x,p.y));return out;}}catch(Exception ignored){}return new ArrayList<>();}
 
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString().trim();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString().trim();}
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

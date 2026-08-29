@@ -54,14 +54,14 @@ public final class Geometry3D {
     }
 
     public static Plane3D xy() {
-        return new Plane3D(new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,1,0), "XY • بالا");
+        return new Plane3D(new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,1,0), "XY • Top");
     }
 
     public static Plane3D xz() {
-        return new Plane3D(new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,0,1), "XZ • روبرو");
+        return new Plane3D(new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,0,1), "XZ • Front");
     }
 
     public static Plane3D yz() {
-        return new Plane3D(new Vec3(0,0,0), new Vec3(0,1,0), new Vec3(0,0,1), "YZ • بغل");
+        return new Plane3D(new Vec3(0,0,0), new Vec3(0,1,0), new Vec3(0,0,1), "YZ • text");
     }
 }

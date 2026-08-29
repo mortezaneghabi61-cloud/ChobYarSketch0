@@ -120,7 +120,7 @@ public class ShaprSketchStateCadCanvasView extends OcctShaprPenCadCanvasView {
         return "Fully-defined: " + full + "\n"
                 + "Under-defined: " + under + "\n"
                 + "Errors: " + error + "\n\n"
-                + "سبز = Fully-defined\nآبی روشن = Under-defined\nآبی پررنگ = Selected\nقرمز = Error";
+                + "text = Fully-defined \n text On = Under-defined \n text textPaint = Selected \n text = Error";
     }
 
     private void drawSketchStates(Canvas c) {

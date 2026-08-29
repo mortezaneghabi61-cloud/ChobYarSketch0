@@ -212,55 +212,55 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
         final List<Runnable> actions=new ArrayList<>();
 
         if(s.isEmpty()){
-            toast("اول خط، دایره یا قوس را انتخاب کن");
+            toast("First Line, Circle text Arc text Selection text");
             return;
         }else{
-            if(!lines.isEmpty()) add(labels,actions,"H/V — افقی / عمودی",()->toast(applyHorizontalVerticalConstraint()));
+            if(!lines.isEmpty()) add(labels,actions,"H/V — Horizontal / Vertical",()->toast(applyHorizontalVerticalConstraint()));
             if(lines.size()==2&&s.size()==2){
-                add(labels,actions,"Parallel — موازی",()->toast(applyParallelConstraint()));
-                add(labels,actions,"Perpendicular — عمود",()->toast(applyPerpendicularConstraint()));
-                add(labels,actions,"Coincident — اتصال",()->toast(invokePrivateString(ParametricSketchCanvasView.class,"applyManualCoincident")));
-                add(labels,actions,"Midpoint — اتصال به وسط",()->toast(applyMidpointConstraint()));
+                add(labels,actions,"Parallel — Parallel",()->toast(applyParallelConstraint()));
+                add(labels,actions,"Perpendicular — Perpendicular",()->toast(applyPerpendicularConstraint()));
+                add(labels,actions,"Coincident — text",()->toast(invokePrivateString(ParametricSketchCanvasView.class,"applyManualCoincident")));
+                add(labels,actions,"Midpoint — text text Midpoint",()->toast(applyMidpointConstraint()));
             }
             if(curves.size()==2&&s.size()==2){
-                add(labels,actions,"Concentric — هم‌مرکز",()->toast(applyConcentricConstraint()));
-                add(labels,actions,"Equal — شعاع برابر",()->toast(applyEqualConstraint()));
+                add(labels,actions,"Concentric — Concentric",()->toast(applyConcentricConstraint()));
+                add(labels,actions,"Equal — Radius text",()->toast(applyEqualConstraint()));
             }else if(lines.size()>=2&&lines.size()==s.size()){
-                add(labels,actions,"Equal — طول برابر",()->toast(applyEqualConstraint()));
+                add(labels,actions,"Equal — Length text",()->toast(applyEqualConstraint()));
             }
             if(s.size()==2&&lines.size()==1&&curves.size()==1)
-                add(labels,actions,"Tangent — مماس",()->toast(applyTangentConstraint()));
+                add(labels,actions,"Tangent — Tangent",()->toast(applyTangentConstraint()));
             if(lines.size()==3&&s.size()==3)
-                add(labels,actions,"Symmetry — تقارن",()->toast(applySymmetryConstraint()));
+                add(labels,actions,"Symmetry — Symmetry",()->toast(applySymmetryConstraint()));
             if(hasDisconnectableConnection(s))
-                add(labels,actions,"Disconnect — قطع اتصال نقطه",()->toast(disconnectSelectedConnections()));
-            add(labels,actions,isLocked(s)?"Unlock — باز کردن":"Lock — قفل",()->toast(toggleSelectedLock()));
+                add(labels,actions,"Disconnect — text text Point",()->toast(disconnectSelectedConnections()));
+            add(labels,actions,isLocked(s)?"Unlock — text text":"Lock — Lock",()->toast(toggleSelectedLock()));
             add(labels,actions,"Make Construction",()->toast(invokePrivateString(OcctShaprCadCanvasView.class,"toggleConstruction")));
         }
 
         new AlertDialog.Builder(getContext()).setTitle("Constraints")
                 .setItems(labels.toArray(new String[0]),(d,w)->actions.get(w).run())
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     private static void add(List<String> labels,List<Runnable> actions,String label,Runnable action){labels.add(label);actions.add(action);}
 
     public String applyConcentricConstraint(){
         List<Object> c=selectedCurves();
-        if(c.size()!=2)return"برای Concentric دو Circle/Arc را انتخاب کن";
+        if(c.size()!=2)return"text Concentric text Circle/Arc text Selection text";
         saveUndo();Object a=c.get(0),b=c.get(1);setFloat(b,"x",num(a,"x"));setFloat(b,"y",num(a,"y"));
-        for(ConcentricDrive d:concentricDrives)if((d.anchor==a&&d.moving==b)||(d.anchor==b&&d.moving==a)){solveNow(3);return"Concentric از قبل فعال است";}
-        concentricDrives.add(new ConcentricDrive(a,b));solveNow(4);invalidate();dispatchWorkspaceState();return"Concentric اعمال شد";
+        for(ConcentricDrive d:concentricDrives)if((d.anchor==a&&d.moving==b)||(d.anchor==b&&d.moving==a)){solveNow(3);return"Concentric text text text text";}
+        concentricDrives.add(new ConcentricDrive(a,b));solveNow(4);invalidate();dispatchWorkspaceState();return"Concentric Apply text";
     }
 
     public String disconnectSelectedConnections(){
-        List<Object>s=selection();if(s.isEmpty())return"اول نقطه/المان متصل را انتخاب کن";
+        List<Object>s=selection();if(s.isEmpty())return"First Point/Elman text text Selection text";
         saveUndo();int removed=0;
         removed+=removeRelations(coincidenceLinksField,s,"a","b");
         removed+=removePointOnLineRelations(s);
         removed+=removeMidpointRelations(s);
         solveNow(3);invalidate();dispatchWorkspaceState();
-        return removed==0?"اتصال Coincident/Midpoint پیدا نشد":removed+" اتصال Coincident/Midpoint قطع شد";
+        return removed==0?"text Coincident/Midpoint was not found":removed+" text Coincident/Midpoint It was cut off";
     }
 
     private int removeRelations(Field listField,List<Object>s,String...endpointFields){
@@ -501,7 +501,7 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
     private static Object obj(Object o,String n){try{Field f=findField(o==null?null:o.getClass(),n);return f==null?null:f.get(o);}catch(Exception e){return null;}}
     private static int intField(Object o,String n,int fallback){try{Field f=findField(o==null?null:o.getClass(),n);return f==null?fallback:f.getInt(o);}catch(Exception e){return fallback;}}
     private static Field findField(Class<?> c,String n){for(Class<?>x=c;x!=null;x=x.getSuperclass())try{Field f=x.getDeclaredField(n);f.setAccessible(true);return f;}catch(Exception ignored){}return null;}
-    private String invokePrivateString(Class<?>owner,String name){try{Method m=owner.getDeclaredMethod(name);m.setAccessible(true);Object r=m.invoke(this);return r==null?"":String.valueOf(r);}catch(Exception e){return"این Constraint برای انتخاب فعلی قابل اجرا نیست";}}
+    private String invokePrivateString(Class<?>owner,String name){try{Method m=owner.getDeclaredMethod(name);m.setAccessible(true);Object r=m.invoke(this);return r==null?"":String.valueOf(r);}catch(Exception e){return"This Constraint is not applicable for the current Selection";}}
     private void toast(String s){Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 
     private boolean hasDisconnectableConnection(List<Object>s){

@@ -115,8 +115,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         anchorMoveState = 0;
         invalidate();
         return multiSelectMode
-                ? "چندانتخاب روشن: روی شکل‌ها بزن تا اضافه/کم شوند؛ روی فضای خالی بکش تا کادر انتخاب شود"
-                : "چندانتخاب خاموش: انتخاب عادی";
+                ? "textSelection On: Roy text text until text/text text; Roy text text text until text Selection text"
+                : "textSelection Off: Selection text";
     }
 
     public boolean isMultiSelectMode() {
@@ -125,29 +125,29 @@ public class SmartCadCanvasView extends CadCanvasView {
 
     public String beginAnchorMove() {
         syncFromBaseIfNeeded();
-        if (selectedObjects.isEmpty()) return "اول یک یا چند شکل را انتخاب کن";
+        if (selectedObjects.isEmpty()) return "First text text text text text Selection text";
         anchorMoveState = 1;
         anchorSource = null;
-        notifyStatus("جابجایی Snap: نقطه مبدا را روی شکل انتخاب‌شده بزن");
+        notifyStatus("text Snap: Point text text Roy text selected text");
         invalidate();
-        return "نقطه مبدا را روی شکل انتخاب‌شده بزن";
+        return "Point text text Roy text selected text";
     }
 
     public String groupSelected() {
         syncFromBaseIfNeeded();
-        if (selectedObjects.size() < 2) return "برای گروه حداقل دو شکل انتخاب کن";
+        if (selectedObjects.size() < 2) return "text text text text text Selection text";
         pruneGroups();
         for (List<Object> g : groups) {
-            if (sameIdentitySet(g, selectedObjects)) return "این شکل‌ها همین حالا یک گروه هستند";
+            if (sameIdentitySet(g, selectedObjects)) return "text text text text text text text";
         }
         groups.add(new ArrayList<>(selectedObjects));
         invalidate();
-        return selectedObjects.size() + " شکل گروه شدند";
+        return selectedObjects.size() + " text text became";
     }
 
     public String ungroupSelected() {
         syncFromBaseIfNeeded();
-        if (selectedObjects.isEmpty()) return "اول یک شکل از گروه را انتخاب کن";
+        if (selectedObjects.isEmpty()) return "First text text text text text Selection text";
         int removed = 0;
         Iterator<List<Object>> it = groups.iterator();
         while (it.hasNext()) {
@@ -158,7 +158,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             }
         }
         invalidate();
-        return removed == 0 ? "گروهی برای این انتخاب پیدا نشد" : "گروه باز شد";
+        return removed == 0 ? "text text text Selection was not found" : "text text text";
     }
 
     public void clearSmartSelection() {
@@ -183,7 +183,7 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String selectedInfo() {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() > 1) {
-            return selectedObjects.size() + " شکل انتخاب شده";
+            return selectedObjects.size() + " text selected";
         }
         return super.selectedInfo();
     }
@@ -270,10 +270,10 @@ public class SmartCadCanvasView extends CadCanvasView {
                 copies.add(c);
             }
         }
-        if (copies.isEmpty()) return "Offset برای شکل‌های انتخاب‌شده قابل اجرا نیست";
+        if (copies.isEmpty()) return "Offset text text selected text text text";
         setSelection(copies);
         invalidate();
-        return "Offset روی " + copies.size() + " شکل اعمال شد";
+        return "Offset Roy " + copies.size() + " text Apply text";
     }
 
     @Override
@@ -284,19 +284,19 @@ public class SmartCadCanvasView extends CadCanvasView {
         coreSaveUndo();
         for (Object e : selectedObjects) entityRotate(e, c.x, c.y, deg);
         invalidate();
-        return "چرخش " + format(deg) + "° روی " + selectedObjects.size() + " شکل";
+        return "text " + format(deg) + "° Roy " + selectedObjects.size() + " text";
     }
 
     @Override
     public String scaleSelected(float factor) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.scaleSelected(factor);
-        if (factor <= 0f) return "Scale باید بزرگ‌تر از صفر باشد";
+        if (factor <= 0f) return "Scale text text text text text";
         PointF c = selectionCenter();
         coreSaveUndo();
         for (Object e : selectedObjects) entityScale(e, c.x, c.y, factor);
         invalidate();
-        return "Scale × " + format(factor) + " روی انتخاب";
+        return "Scale × " + format(factor) + " Roy Selection";
     }
 
     @Override
@@ -309,14 +309,14 @@ public class SmartCadCanvasView extends CadCanvasView {
             else entityMirrorVertical(e, axisValue);
         }
         invalidate();
-        return acrossXAxis ? "قرینه گروه نسبت به محور X" : "قرینه گروه نسبت به محور Y";
+        return acrossXAxis ? "text text text text Axis X" : "text text text text Axis Y";
     }
 
     @Override
     public String arraySelected(int count, float dx, float dy) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.arraySelected(count, dx, dy);
-        if (count < 2 || count > 200) return "تعداد Array باید بین 2 و 200 باشد";
+        if (count < 2 || count > 200) return "text Array text text 2 text 200 text";
         coreSaveUndo();
         List<Object> seed = new ArrayList<>(selectedObjects);
         List<Object> lastCopies = new ArrayList<>();
@@ -333,13 +333,13 @@ public class SmartCadCanvasView extends CadCanvasView {
         }
         if (!lastCopies.isEmpty()) setSelection(new ArrayList<>(lastCopies));
         invalidate();
-        return "Array گروه: " + count + " ردیف";
+        return "Array text: " + count + " text";
     }
 
     @Override
     public String applySelectedDimension(String raw) {
         syncFromBaseIfNeeded();
-        if (selectedObjects.size() > 1) return "برای اندازه دقیق فقط یک شکل را انتخاب کن";
+        if (selectedObjects.size() > 1) return "text Exact Dimension text text text text Selection text";
         return super.applySelectedDimension(raw);
     }
 
@@ -347,11 +347,11 @@ public class SmartCadCanvasView extends CadCanvasView {
     public String assignSelectedLayer(String name) {
         syncFromBaseIfNeeded();
         if (selectedObjects.size() <= 1) return super.assignSelectedLayer(name);
-        if (name == null || name.trim().isEmpty()) return "نام لایه خالی است";
+        if (name == null || name.trim().isEmpty()) return "text text is empty";
         coreSaveUndo();
         for (Object e : selectedObjects) entitySetLayer(e, name.trim());
         invalidate();
-        return selectedObjects.size() + " شکل به لایه " + name.trim() + " منتقل شد";
+        return selectedObjects.size() + " text text text " + name.trim() + " text text";
     }
 
     @Override
@@ -362,7 +362,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         coreSaveUndo();
         for (Object e : selectedObjects) entitySetColor(e, color);
         invalidate();
-        return "متریال روی " + selectedObjects.size() + " شکل اعمال شد";
+        return "Material Roy " + selectedObjects.size() + " text Apply text";
     }
 
     @Override
@@ -382,39 +382,39 @@ public class SmartCadCanvasView extends CadCanvasView {
         try {
             switch (cmd) {
                 case "M": case "MOVE":
-                    if (a.length < 3) return "دو مقدار dx و dy وارد کن";
+                    if (a.length < 3) return "text text dx text dy text text";
                     moveSelected(Float.parseFloat(a[1]), Float.parseFloat(a[2]));
-                    return "جابه‌جا شد";
+                    return "text text";
                 case "CO": case "COPY":
-                    if (a.length < 3) return "دو مقدار dx و dy وارد کن";
+                    if (a.length < 3) return "text text dx text dy text text";
                     copySelected(Float.parseFloat(a[1]), Float.parseFloat(a[2]));
-                    return "کپی شد";
+                    return "text text";
                 case "O": case "OFFSET":
-                    if (a.length < 2) return "فاصله Offset را وارد کن";
+                    if (a.length < 2) return "Distance Offset text text text";
                     return offsetSelected(Float.parseFloat(a[1]));
                 case "RO": case "ROTATE":
-                    if (a.length < 2) return "زاویه را وارد کن";
+                    if (a.length < 2) return "Angle text text text";
                     return rotateSelected(Float.parseFloat(a[1]));
                 case "SC": case "SCALE":
-                    if (a.length < 2) return "ضریب Scale را وارد کن";
+                    if (a.length < 2) return "text Scale text text text";
                     return scaleSelected(Float.parseFloat(a[1]));
                 case "MI": case "MIRROR":
-                    if (a.length < 2) return "MIRROR X یا MIRROR Y";
+                    if (a.length < 2) return "MIRROR X text MIRROR Y";
                     float axis = a.length > 2 ? Float.parseFloat(a[2]) : 0f;
                     if ("X".equalsIgnoreCase(a[1])) return mirrorSelected(true, axis);
                     if ("Y".equalsIgnoreCase(a[1])) return mirrorSelected(false, axis);
-                    return "MIRROR X یا MIRROR Y";
+                    return "MIRROR X text MIRROR Y";
                 case "AR": case "ARRAY":
-                    if (a.length < 4) return "count dx dy را وارد کن";
+                    if (a.length < 4) return "count dx dy text text text";
                     return arraySelected(Integer.parseInt(a[1]), Float.parseFloat(a[2]), Float.parseFloat(a[3]));
                 case "ERASE": case "DELETE":
                     deleteSelected();
-                    return "حذف شد";
+                    return "Delete text";
                 case "ASSIGNLAYER":
-                    if (a.length < 2) return "نام لایه را وارد کن";
+                    if (a.length < 2) return "text text text text text";
                     return assignSelectedLayer(a[1]);
                 case "MATERIAL":
-                    if (a.length < 2) return "نام متریال را وارد کن";
+                    if (a.length < 2) return "text Material text text text";
                     return setMaterial(a[1]);
                 case "GROUP":
                     return groupSelected();
@@ -437,7 +437,7 @@ public class SmartCadCanvasView extends CadCanvasView {
                     return result;
             }
         } catch (Exception e) {
-            return "فرمت عدد درست نیست";
+            return "Number format is invalid";
         }
     }
 
@@ -475,7 +475,7 @@ public class SmartCadCanvasView extends CadCanvasView {
                 float top = clamp(s.y - 82f, 8f, Math.max(8f, getHeight() - h - 42f));
                 dimensionChip.set(left, top, left + w, top + h);
                 canvas.drawRoundRect(dimensionChip, 20f, 20f, chipPaint);
-                canvas.drawText("✎ اندازه دقیق", dimensionChip.centerX(),
+                canvas.drawText("✎ Exact Dimension", dimensionChip.centerX(),
                         dimensionChip.centerY() + 10f, chipTextPaint);
             }
         }
@@ -484,8 +484,8 @@ public class SmartCadCanvasView extends CadCanvasView {
             chipTextPaint.setTextSize(25f);
             chipTextPaint.setColor(Color.rgb(210, 90, 15));
             String message = anchorMoveState == 1
-                    ? "مبدا جابجایی را روی انتخاب بزن"
-                    : "حالا مقصد Snap را بزن";
+                    ? "text text text Roy Selection text"
+                    : "text text Snap text text";
             canvas.drawText(message, getWidth() / 2f, 36f, chipTextPaint);
             chipTextPaint.setColor(Color.WHITE);
             chipTextPaint.setTextSize(28f);
@@ -698,7 +698,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             if (p == null) p = selectionCenter();
             anchorSource = p;
             anchorMoveState = 2;
-            notifyStatus("مبدا انتخاب شد؛ حالا مقصد را روی گوشه/مرکز/انتهای شکل دیگر بزن");
+            notifyStatus("text selected; text text text Roy text/Center/Endpointtext text text text");
             invalidate();
             return;
         }
@@ -711,7 +711,7 @@ public class SmartCadCanvasView extends CadCanvasView {
             for (Object e : selectedObjects) translate(e, dx, dy);
             anchorMoveState = 0;
             anchorSource = null;
-            notifyStatus("جابجایی Snap انجام شد");
+            notifyStatus("text Snap completed");
             invalidate();
         }
     }
@@ -743,8 +743,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         addIdentityUnique(selectedObjects, found);
         syncBaseSelectionWithSmart();
         notifyStatus(selectedObjects.isEmpty()
-                ? "چیزی داخل کادر انتخاب نبود"
-                : selectedObjects.size() + " شکل انتخاب شد");
+                ? "text text text Selection text"
+                : selectedObjects.size() + " text selected");
     }
 
     private void toggleObjectOrGroup(Object hit) {
@@ -760,8 +760,8 @@ public class SmartCadCanvasView extends CadCanvasView {
         }
         syncBaseSelectionWithSmart();
         notifyStatus(selectedObjects.isEmpty()
-                ? "انتخاب خالی"
-                : selectedObjects.size() + " شکل انتخاب شده");
+                ? "Selection text"
+                : selectedObjects.size() + " text selected");
     }
 
     private void syncSelectionFromBase() {
@@ -1069,10 +1069,10 @@ public class SmartCadCanvasView extends CadCanvasView {
     private static int materialColorLocal(String m) {
         if (m == null) return Color.rgb(25,25,25);
         String s = m.trim().toUpperCase(Locale.US);
-        if ("WOOD".equals(s) || "CHOB".equals(s) || "چوب".equals(m)) return Color.rgb(125,85,45);
+        if ("WOOD".equals(s) || "CHOB".equals(s) || "Wood".equals(m)) return Color.rgb(125,85,45);
         if ("MDF".equals(s)) return Color.rgb(145,110,70);
-        if ("METAL".equals(s) || "فلز".equals(m)) return Color.rgb(90,100,110);
-        if ("GLASS".equals(s) || "شیشه".equals(m)) return Color.rgb(80,150,175);
+        if ("METAL".equals(s) || "Metal".equals(m)) return Color.rgb(90,100,110);
+        if ("GLASS".equals(s) || "Glass".equals(m)) return Color.rgb(80,150,175);
         return Color.rgb(25,25,25);
     }
 
@@ -1081,9 +1081,7 @@ public class SmartCadCanvasView extends CadCanvasView {
         StringBuilder b = new StringBuilder(s.length());
         for (int i=0;i<s.length();i++) {
             char c=s.charAt(i);
-            if (c>='۰'&&c<='۹') b.append((char)('0'+(c-'۰')));
-            else if (c>='٠'&&c<='٩') b.append((char)('0'+(c-'٠')));
-            else b.append(c);
+            b.append(c);
         }
         return b.toString();
     }

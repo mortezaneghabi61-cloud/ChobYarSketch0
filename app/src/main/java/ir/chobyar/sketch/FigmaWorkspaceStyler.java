@@ -32,20 +32,20 @@ final class FigmaWorkspaceStyler {
 
     private static final Map<String,String> LABELS = new HashMap<>();
     static {
-        LABELS.put("⌕\nSearch","⌕\nجستجو");
-        LABELS.put("✎\nSketch","✎\nاسکچ");
-        LABELS.put("＋\nAdd","＋\nافزودن");
-        LABELS.put("↗\nTransform","↗\nتبدیل");
-        LABELS.put("⌁\nTools","⌁\nابزار");
-        LABELS.put("mm\nUnits","mm\nواحد");
-        LABELS.put("×\nClose","×\nبستن");
-        LABELS.put("×\nDeselect All","×\nلغو انتخاب");
-        LABELS.put("◉\nMaterial","◉\nمتریال");
-        LABELS.put("◫\nSection","◫\nبرش");
-        LABELS.put("⌨\nMeasure","⌨\nاندازه");
-        LABELS.put("⌖\nMeasure","⌖\nاندازه");
-        LABELS.put("⌫\nDelete","⌫\nحذف");
-        LABELS.put("▧\nImage","▧\nتصویر");
+        LABELS.put("⌕\nSearch","⌕ \n Search");
+        LABELS.put("✎\nSketch","✎ \n Sketch");
+        LABELS.put("＋\nAdd","＋ \n Add");
+        LABELS.put("↗\nTransform","↗ \n text");
+        LABELS.put("⌁\nTools","⌁ \n Tools");
+        LABELS.put("mm\nUnits","mm \n text");
+        LABELS.put("×\nClose","× \n Close");
+        LABELS.put("×\nDeselect All","× \n Cancel Selection");
+        LABELS.put("◉\nMaterial","◉ \n Material");
+        LABELS.put("◫\nSection","◫ \n text");
+        LABELS.put("⌨\nMeasure","⌨ \n Dimension");
+        LABELS.put("⌖\nMeasure","⌖ \n Dimension");
+        LABELS.put("⌫\nDelete","⌫ \n Delete");
+        LABELS.put("▧\nImage","▧ \n text");
         LABELS.put("▱\nHistory","▱\nHistory");
     }
 
@@ -73,15 +73,15 @@ final class FigmaWorkspaceStyler {
             if (!(child instanceof LinearLayout) && !(child instanceof TextView)) continue;
             String all = descendantText(child);
 
-            if (contains(all, "چوب‌یار 3D") && contains(all, "⌂")) {
+            if (contains(all, "ChobYar 3D") && contains(all, "⌂")) {
                 styleTopBar(child);
-            } else if (contains(all, "Search") || contains(all, "جستجو")) {
+            } else if (contains(all, "Search") || contains(all, "Search")) {
                 styleRail(child, Gravity.START | Gravity.CENTER_VERTICAL, 12, 0, 0, 0);
-            } else if (contains(all, "Fit") && (contains(all, "Snap") || contains(all, "واحد") || contains(all, "Units"))) {
+            } else if (contains(all, "Fit") && (contains(all, "Snap") || contains(all, "text") || contains(all, "Units"))) {
                 styleRail(child, Gravity.END | Gravity.CENTER_VERTICAL, 0, 0, 12, 0);
             } else if (contains(all, "H/V") && contains(all, "Constraints")) {
                 styleRail(child, Gravity.END | Gravity.CENTER_VERTICAL, 0, 0, 78, 0);
-            } else if (contains(all, "لغو") && contains(all, "انجام")) {
+            } else if (contains(all, "Cancel") && contains(all, "Done")) {
                 styleSessionBar(child);
             } else if (child instanceof LinearLayout) {
                 styleToolContainer((LinearLayout) child);
@@ -108,7 +108,7 @@ final class FigmaWorkspaceStyler {
         styleToolContainer(bar);
         forEachText(bar, tv -> {
             String text = String.valueOf(tv.getText());
-            if (text.contains("چوب‌یار 3D") || text.startsWith("Sketch") || text.contains("انتخاب شد")) {
+            if (text.contains("ChobYar 3D") || text.startsWith("Sketch") || text.contains("selected")) {
                 tv.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
                 tv.setTextSize(13f);
                 tv.setTypeface(null, Typeface.BOLD);
@@ -146,10 +146,10 @@ final class FigmaWorkspaceStyler {
         }
         styleToolContainer(bar);
         forEachText(bar, tv -> {
-            if ("انجام".contentEquals(tv.getText())) {
+            if ("Done".contentEquals(tv.getText())) {
                 tv.setTextColor(Color.rgb(22,118,74));
                 tv.setTypeface(null, Typeface.BOLD);
-            } else if ("لغو".contentEquals(tv.getText())) {
+            } else if ("Cancel".contentEquals(tv.getText())) {
                 tv.setTextColor(Color.rgb(165,54,54));
             }
         });
@@ -223,13 +223,13 @@ final class FigmaWorkspaceStyler {
         bar.setBackground(panel(bar,Color.argb(250,246,243,248),Color.rgb(202,196,208),0));
         bar.setElevation(dp(bar,4));
 
-        bar.addView(statusText(activity,TAG_SNAP,"اسنپ: روشن",Color.rgb(50,113,215)));
+        bar.addView(statusText(activity,TAG_SNAP,"Snap: On",Color.rgb(50,113,215)));
         bar.addView(statusText(activity,TAG_ZOOM,"Zoom 100%",Color.rgb(73,69,79)));
-        bar.addView(statusText(activity,TAG_SELECTION,"انتخاب: هیچ‌کدام",Color.rgb(73,69,79)));
+        bar.addView(statusText(activity,TAG_SELECTION,"Selection: None",Color.rgb(73,69,79)));
         View spacer=new View(activity);
         bar.addView(spacer,new LinearLayout.LayoutParams(0,1,1f));
-        bar.addView(statusText(activity,TAG_PLANE,"XY • بالا • mm",Color.rgb(73,69,79)));
-        bar.addView(statusText(activity,View.NO_ID,"آماده",Color.rgb(50,113,215)));
+        bar.addView(statusText(activity,TAG_PLANE,"XY • Top • mm",Color.rgb(73,69,79)));
+        bar.addView(statusText(activity,View.NO_ID,"Ready",Color.rgb(50,113,215)));
 
         FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(bar,40),Gravity.BOTTOM);
         root.addView(bar,p);
@@ -240,10 +240,10 @@ final class FigmaWorkspaceStyler {
         if (!(tagged instanceof LinearLayout)) return;
         Shapr3DGuideCadCanvasView cad=findCad(root);
         if(cad==null)return;
-        setStatus(root,TAG_SNAP,cad.isSnapEnabled()?"اسنپ: روشن":"اسنپ: خاموش");
+        setStatus(root,TAG_SNAP,cad.isSnapEnabled()?"Snap: On":"Snap: Off");
         setStatus(root,TAG_ZOOM,"Zoom "+cad.viewportZoomPercent()+"%");
-        String selection=cad.hasWorkspaceSelection()?cad.selectionKind():"هیچ‌کدام";
-        setStatus(root,TAG_SELECTION,"انتخاب: "+selection);
+        String selection=cad.hasWorkspaceSelection()?cad.selectionKind():"None";
+        setStatus(root,TAG_SELECTION,"Selection: "+selection);
         setStatus(root,TAG_PLANE,(cad.is3DOverview()?"ISO":cad.activePlaneLabel())+" • mm");
     }
 

@@ -69,21 +69,21 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
         Object body=selectedBody();
         BooleanFeatureRef feature=findBooleanFeature(body);
         List<ExactEdgeRecord> exact=body==null?Collections.emptyList():exactEdges(body);
-        String summary=body==null?"Body انتخاب نشده":bodyName(body);
+        String summary=body==null?"No body selected":bodyName(body);
         if(feature!=null)summary+=" • "+friendly(feature.operation);
         if(!exact.isEmpty())summary+=" • "+exact.size()+" Exact Edge";
 
         String[] items={
-                "▣ Solid / Boolean / Primitiveهای دقیق",
-                "⌁ Exact Intersection Edges / لبه‌های تقاطع ریاضی",
-                "◎ Exact Hole Loops / قطر و محور سوراخ",
+                "▣ Solid / Boolean / Primitivetext text",
+                "⌁ Exact Intersection Edges / Edgetext Intersection text",
+                "◎ Exact Hole Loops / Diameter text Axis text",
                 "∿ Analytic Boundary Inspector",
-                "✓ وضعیت Exact Kernel",
-                is3DOverview()?"□ برگشت به Sketch 2D":"◇ نمایش 3D"
+                "✓ text Exact Kernel",
+                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Exact Edge")
-                .setMessage(summary+"\n\nCircle/Ellipse تقاطع از معادله سطح محاسبه می‌شود، نه از Polygonهای نمایش.")
+                .setMessage(summary+" \n  \n Circle/Ellipse Intersection text text Face text text, text text Polygontext Show.")
                 .setItems(items,(d,w)->{
                     if(w==0)ExactBooleanCadCanvasView.super.showSolidManager();
                     else if(w==1)showExactIntersectionReport();
@@ -92,7 +92,7 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
                     else if(w==4)showExactKernelStatus();
                     else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن",null).show();
+                .setNegativeButton("Close",null).show();
     }
 
     @Override
@@ -106,9 +106,9 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
 
     public void showExactIntersectionReport(){
         Object body=selectedBody();
-        if(body==null){ensure3D();toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){ensure3D();toast("Select a body first");return;}
         BooleanFeatureRef feature=findBooleanFeature(body);
-        if(feature==null){toast("این Body هنوز نتیجه Boolean نیست");return;}
+        if(feature==null){toast("text Body text text Boolean text");return;}
         List<ExactEdgeRecord> edges=exactEdges(body);
         StringBuilder msg=new StringBuilder();
         msg.append("Operation: ").append(friendly(feature.operation));
@@ -116,7 +116,7 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
         msg.append("\nRight: ").append(bodyName(feature.right));
         msg.append("\n\nExact intersection edges: ").append(edges.size());
         if(edges.isEmpty()){
-            msg.append("\n\nبرای این ترکیب هنوز Curve بسته قابل Trim پیدا نشد. سطح‌های تحلیلی همچنان در History حفظ می‌شوند؛ curved/curved عمومی مرحله Native B-Rep است.");
+            msg.append(" \n  \n text text text text Curve text text Trim was not found. Facetext text text text History text text; curved/curved text text Native B-Rep text.");
         }else{
             for(int i=0;i<edges.size();i++){
                 ExactEdgeRecord e=edges.get(i);
@@ -124,20 +124,20 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
                         .append(" • ").append(e.source).append("\n")
                         .append(e.section.detail());
             }
-            msg.append("\n\nاین پارامترها مستقل از تعداد Segmentهای Preview هستند.");
+            msg.append(" \n  \n text text text text text Segmenttext Preview text.");
         }
         new AlertDialog.Builder(getContext()).setTitle("Exact Intersection • "+bodyName(body))
-                .setMessage(msg.toString()).setPositiveButton("باشه",null).show();
+                .setMessage(msg.toString()).setPositiveButton("OK",null).show();
     }
 
     public void showExactHoleLoops(){
         Object body=selectedBody();
-        if(body==null){ensure3D();toast("اول Body را انتخاب کن");return;}
+        if(body==null){ensure3D();toast("Select a body first");return;}
         BooleanFeatureRef f=findBooleanFeature(body);
-        if(f==null||!"SUBTRACT".equals(f.operation)){toast("برای گزارش سوراخ، نتیجه Subtract را انتخاب کن");return;}
+        if(f==null||!"SUBTRACT".equals(f.operation)){toast("text text text, text Subtract text Selection text");return;}
         List<ExactEdgeRecord> all=exactEdges(body),loops=new ArrayList<>();
         for(ExactEdgeRecord e:all)if(e.section.type==ExactIntersectionKernel.CurveType.CIRCLE||e.section.type==ExactIntersectionKernel.CurveType.ELLIPSE)loops.add(e);
-        if(loops.isEmpty()){toast("Loop بسته دقیق برای این Subtract پیدا نشد");return;}
+        if(loops.isEmpty()){toast("Loop text text text text Subtract was not found");return;}
         StringBuilder msg=new StringBuilder();
         for(int i=0;i<loops.size();i++){
             ExactIntersectionKernel.PlaneSection s=loops.get(i).section;
@@ -152,7 +152,7 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
             msg.append("\nNormal: ").append(vec(s.planeNormal)).append("\n\n");
         }
         new AlertDialog.Builder(getContext()).setTitle("Exact Hole Loops • mm")
-                .setMessage(msg.toString().trim()).setPositiveButton("باشه",null).show();
+                .setMessage(msg.toString().trim()).setPositiveButton("OK",null).show();
     }
 
     private void showExactKernelStatus(){
@@ -164,9 +164,9 @@ public class ExactBooleanCadCanvasView extends AnalyticBooleanCadCanvasView {
                 +"✓ Circle/Ellipse edge dimensions: exact mm\n"
                 +"✓ Sphere ↔ Sphere intersection circle: exact\n"
                 +"\nSelected Body exact edges: "+edges.size()
-                +"\n\nهنوز Polygonal: حجم نهایی Union/Subtract/Intersect و Trim عمومی curved↔curved. قدم بعدی جایگزینی همین بخش با Native B-Rep است.";
+                +" \n  \n text Polygonal: text text Union/Subtract/Intersect text Trim text curved↔curved. text text text text text text Native B-Rep text.";
         new AlertDialog.Builder(getContext()).setTitle("Exact Kernel Status")
-                .setMessage(msg).setPositiveButton("باشه",null).show();
+                .setMessage(msg).setPositiveButton("OK",null).show();
     }
 
     private List<ExactEdgeRecord> exactEdges(Object output){

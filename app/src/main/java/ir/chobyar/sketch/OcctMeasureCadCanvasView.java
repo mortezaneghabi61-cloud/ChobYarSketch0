@@ -64,10 +64,10 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
         }
         Metric m = inspect(selected);
         new AlertDialog.Builder(getContext())
-                .setTitle("Measure • اندازه‌گیری Sketch")
+                .setTitle("Measure • Measure Sketch")
                 .setMessage(m.details)
-                .setPositiveButton("بستن", null)
-                .setNeutralButton("اندازه‌گیری نقطه‌به‌نقطه", (d,w) -> OcctMeasureCadCanvasView.super.setTool(TOOL_MEASURE))
+                .setPositiveButton("Close", null)
+                .setNeutralButton("Measure PointtextPoint", (d,w) -> OcctMeasureCadCanvasView.super.setTool(TOOL_MEASURE))
                 .show();
     }
 
@@ -78,11 +78,11 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             double bx = num(b,"x2")-num(b,"x1"), by = num(b,"y2")-num(b,"y1");
             double la = Math.hypot(ax,ay), lb = Math.hypot(bx,by);
             double angle = angleBetween(ax,ay,bx,by);
-            String details = "دو خط انتخاب شده\n\n"
-                    + "خط 1: " + dualLength(la) + "\n"
-                    + "خط 2: " + dualLength(lb) + "\n"
-                    + "زاویه بین دو خط: " + fmt(angle) + "°";
-            return new Metric("زاویه " + fmt(angle) + "°", details);
+            String details = "text Line selected \n  \n "
+                    + "Line 1: " + dualLength(la) + "\n"
+                    + "Line 2: " + dualLength(lb) + "\n"
+                    + "Angle text text Line: " + fmt(angle) + "°";
+            return new Metric("Angle " + fmt(angle) + "°", details);
         }
 
         if (selected.size() == 1) return inspectOne(selected.get(0));
@@ -97,16 +97,16 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             totalLength += m.perimeterOrLength;
             if (m.area >= 0d) { totalArea += m.area; areaCount++; }
         }
-        StringBuilder head = new StringBuilder("چند انتخاب: ").append(selected.size()).append("\n");
-        if (totalLength > 0) head.append("مجموع طول/محیط: ").append(dualLength(totalLength)).append("\n");
-        if (areaCount > 0) head.append("مجموع مساحت بسته‌ها: ").append(dualArea(totalArea)).append("\n");
+        StringBuilder head = new StringBuilder("text Selection: ").append(selected.size()).append("\n");
+        if (totalLength > 0) head.append("text Length/text: ").append(dualLength(totalLength)).append("\n");
+        if (areaCount > 0) head.append("text text text: ").append(dualArea(totalArea)).append("\n");
         head.append("\n").append(rows);
         String shortText = totalLength > 0 ? "Σ " + dualLength(totalLength) : "Measure";
         return new Metric(shortText, head.toString(), totalLength, areaCount>0?totalArea:-1d);
     }
 
     private Metric inspectOne(Object e) {
-        if (e == null) return new Metric("", "شکل معتبری انتخاب نشده");
+        if (e == null) return new Metric("", "text text not selected");
         String type = e.getClass().getSimpleName();
 
         if ("LineEntity".equals(type)) {
@@ -115,64 +115,64 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             double angle=Math.toDegrees(Math.atan2(dy,dx));
             if(angle<0) angle+=180d;
             if(angle>=180d) angle-=180d;
-            String d="خط\nطول: "+dualLength(len)+"\nزاویه نسبت به X: "+fmt(angle)+"°";
+            String d="Line \n Length: "+dualLength(len)+" \n Angle text text X: "+fmt(angle)+"°";
             return new Metric(dualLength(len)+" • "+fmt(angle)+"°", d, len, -1d);
         }
 
         if ("RectEntity".equals(type)) {
             List<PointF> p=pointArray(e,"p");
-            return polygonMetric("مستطیل",p,true);
+            return polygonMetric("Rectangle",p,true);
         }
 
         if ("CircleEntity".equals(type)) {
             double r=Math.abs(num(e,"r"));
             double perimeter=2d*Math.PI*r, area=Math.PI*r*r;
-            String d="دایره\nشعاع: "+dualLength(r)
-                    +"\nقطر: "+dualLength(2d*r)
-                    +"\nمحیط: "+dualLength(perimeter)
-                    +"\nمساحت: "+dualArea(area)
-                    +"\nزاویه کامل: 360°";
-            return new Metric("محیط "+dualLength(perimeter)+" • مساحت "+dualArea(area),d,perimeter,area);
+            String d="Circle \n Radius: "+dualLength(r)
+                    +" \n Diameter: "+dualLength(2d*r)
+                    +" \n text: "+dualLength(perimeter)
+                    +" \n text: "+dualArea(area)
+                    +" \n Angle text: 360°";
+            return new Metric("text "+dualLength(perimeter)+" • text "+dualArea(area),d,perimeter,area);
         }
 
         if ("ArcEntity".equals(type)) {
             double r=Math.abs(num(e,"r")), sweep=Math.abs(num(e,"sweep"));
             double arcLength=Math.toRadians(sweep)*r;
             double chord=2d*r*Math.sin(Math.toRadians(sweep)/2d);
-            String d="کمان\nشعاع: "+dualLength(r)
-                    +"\nزاویه کمان: "+fmt(sweep)+"°"
-                    +"\nطول کمان: "+dualLength(arcLength)
-                    +"\nوتر: "+dualLength(Math.abs(chord));
-            return new Metric("کمان "+dualLength(arcLength)+" • "+fmt(sweep)+"°",d,arcLength,-1d);
+            String d="text \n Radius: "+dualLength(r)
+                    +" \n Angle text: "+fmt(sweep)+"°"
+                    +" \n Length text: "+dualLength(arcLength)
+                    +" \n text: "+dualLength(Math.abs(chord));
+            return new Metric("text "+dualLength(arcLength)+" • "+fmt(sweep)+"°",d,arcLength,-1d);
         }
 
         if ("PolygonEntity".equals(type)) {
-            return polygonMetric("چندضلعی",points(e,"points"),true);
+            return polygonMetric("Polygon",points(e,"points"),true);
         }
 
         if ("PolylineEntity".equals(type)) {
             List<PointF> p=points(e,"points");
             boolean closed=bool(e,"closed");
-            if(closed) return polygonMetric("Polyline بسته",p,true);
+            if(closed) return polygonMetric("Polyline text",p,true);
             double len=pathLength(p,false);
             String angles=vertexAngles(p,false);
-            String d="Polyline باز\nطول مسیر: "+dualLength(len)+(angles.isEmpty()?"":"\nزاویه شکست‌ها: "+angles);
-            return new Metric("طول "+dualLength(len),d,len,-1d);
+            String d="Polyline text \n Length text: "+dualLength(len)+(angles.isEmpty()?"":" \n Angle text: "+angles);
+            return new Metric("Length "+dualLength(len),d,len,-1d);
         }
 
-        return new Metric("", "برای این نوع شکل هنوز گزارش هندسی تعریف نشده:\n"+type);
+        return new Metric("", "text text text text text text text text text: \n "+type);
     }
 
     private Metric polygonMetric(String label,List<PointF> p,boolean closed) {
-        if(p==null||p.size()<2) return new Metric("",label+" نامعتبر است");
+        if(p==null||p.size()<2) return new Metric("",label+" invalid text");
         double perimeter=pathLength(p,closed);
         double area=closed&&p.size()>=3?Math.abs(shoelace(p)):-1d;
         String angles=closed&&p.size()>=3?vertexAngles(p,true):"";
         StringBuilder d=new StringBuilder(label)
-                .append("\nمحیط: ").append(dualLength(perimeter));
-        if(area>=0)d.append("\nمساحت: ").append(dualArea(area));
-        if(!angles.isEmpty())d.append("\nزاویه گوشه‌ها: ").append(angles);
-        String shortText="محیط "+dualLength(perimeter)+(area>=0?" • مساحت "+dualArea(area):"");
+                .append(" \n text: ").append(dualLength(perimeter));
+        if(area>=0)d.append(" \n text: ").append(dualArea(area));
+        if(!angles.isEmpty())d.append(" \n Angle text: ").append(angles);
+        String shortText="text "+dualLength(perimeter)+(area>=0?" • text "+dualArea(area):"");
         return new Metric(shortText,d.toString(),perimeter,area);
     }
 
@@ -203,7 +203,7 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             PointF next=p.get((i+1)%p.size());
             double ax=prev.x-cur.x,ay=prev.y-cur.y,bx=next.x-cur.x,by=next.y-cur.y;
             double a=angleBetween(ax,ay,bx,by);
-            if(shown++>0)out.append("، ");
+            if(shown++>0)out.append(", ");
             out.append(fmt(a)).append("°");
             if(shown>=8 && end-start>8){out.append(" …");break;}
         }

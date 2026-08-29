@@ -43,7 +43,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             rewireShaprButtons(parent,upgraded);
             upgraded.dispatchWorkspaceState();
         }catch(Exception e){
-            Toast.makeText(this,"OCCT Sketch workspace فعال نشد؛ محیط قبلی حفظ شد",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"OCCT Sketch workspace text text; text text text text",Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -67,7 +67,7 @@ public class OcctEasyMainActivity extends EasyMainActivity {
                 "⌁ Snaps / Guides",
                 "〰 Ellipse / Spline edit",
                 "▣ 3D Modeling tools",
-                "⌖ Measure انتخاب",
+                "⌖ Measure Selection",
                 "⌁ Constraints",
                 "⚙ Constraint Settings",
                 "● Sketch State / DOF",
@@ -85,9 +85,9 @@ public class OcctEasyMainActivity extends EasyMainActivity {
             else if(w==7)new AlertDialog.Builder(this)
                     .setTitle("Sketch State / DOF")
                     .setMessage(cad.sketchStateSummary())
-                    .setPositiveButton("بستن",null).show();
+                    .setPositiveButton("Close",null).show();
             else if(w==8)cad.showPlaneManager();
             else cad.showHistoryManager();
-        }).setNegativeButton("بستن",null).show();
+        }).setNegativeButton("Close",null).show();
     }
 }

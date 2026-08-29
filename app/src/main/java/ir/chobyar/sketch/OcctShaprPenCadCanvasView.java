@@ -81,13 +81,13 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
                 return;
             }
             stopAutomatic();
-            if (w == 1) activateBase(TOOL_LINE, "Line فعال شد");
-            else if (w == 2) activateBase(TOOL_ARC, "Arc فعال شد");
+            if (w == 1) activateBase(TOOL_LINE, "Line activated");
+            else if (w == 2) activateBase(TOOL_ARC, "Arc activated");
             else if (w == 3) invokeParentVoid("startSpline");
-            else if (w == 4) activateBase(TOOL_RECT, "Rectangle فعال شد");
-            else if (w == 5) activateBase(TOOL_CIRCLE, "Circle فعال شد");
+            else if (w == 4) activateBase(TOOL_RECT, "Rectangle activated");
+            else if (w == 5) activateBase(TOOL_CIRCLE, "Circle activated");
             else if (w == 6) invokeParentVoid("startEllipse");
-            else if (w == 7) activateBase(TOOL_POLYGON, "Polygon فعال شد");
+            else if (w == 7) activateBase(TOOL_POLYGON, "Polygon activated");
             else if (w == 8) invokeParentVoid("offsetDialog");
             else if (w == 9) invokeParentVoid("transformDialog");
             else if (w == 10) invokeParentVoid("patternMenu");
@@ -98,7 +98,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             else if (w == 15) toast(toggleSelectedLock());
             else if (w == 16) toast(invokeParentString("toggleConstruction"));
             else { deleteSelected(); dispatchWorkspaceState(); }
-        }).setNegativeButton("بستن", null).show();
+        }).setNegativeButton("Close", null).show();
     }
 
     private void startAutomaticLineArc() {
@@ -109,7 +109,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
         autoStroke.clear();
         lastEnd = null;
         chainStart = null;
-        toast("Automatic Line/Arc فعال • با S Pen بکش؛ Wiggle نوع Line/Arc را عوض می‌کند");
+        toast("Automatic Line/Arc text • text S Pen text; Wiggle text Line/Arc text change text");
     }
 
     private void stopAutomatic() {
@@ -243,7 +243,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             addEntity(e);
             return e;
         } catch (Exception ex) {
-            toast("Line ساخته نشد");
+            toast("Line created text");
             return null;
         }
     }
@@ -308,7 +308,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             Method m = OcctShaprCadCanvasView.class.getDeclaredMethod(name);
             m.setAccessible(true);
             m.invoke(this);
-        } catch (Exception e) { toast("این ابزار فعلاً در دسترس نیست"); }
+        } catch (Exception e) { toast("text Tools text is unavailable"); }
     }
 
     private String invokeParentString(String name) {
@@ -317,7 +317,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             m.setAccessible(true);
             Object r = m.invoke(this);
             return r == null ? "" : String.valueOf(r);
-        } catch (Exception e) { return "این ابزار فعلاً در دسترس نیست"; }
+        } catch (Exception e) { return "text Tools text is unavailable"; }
     }
 
     private static Method findMethod(Class<?> c, String name, Class<?>... types) {

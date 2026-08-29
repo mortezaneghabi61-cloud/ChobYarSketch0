@@ -66,17 +66,17 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
 
     public void showFinishManager() {
         Object body=selectedBody();
-        String bodyText=body==null?"اول در نمای 3D یک Body را انتخاب کن":"Body انتخاب‌شده: "+bodyName(body);
+        String bodyText=body==null?"First text 3D View text Body text Selection text":"Body selected: "+bodyName(body);
         String[] items={
-                "⌒ Fillet 3D / گردکردن لبه‌های عمودی",
-                "◩ Chamfer 3D / پخ گوشه‌های عمودی",
-                "▱ Shell / توخالی با دهانه باز",
-                "⏱ Finish History / ویرایش عملیات",
-                "↺ حذف Finishهای Body"
+                "⌒ Fillet 3D / Vertical Edge rounding",
+                "◩ Chamfer 3D / chamfering vertical corners",
+                "▱ Shell / hollow with open opening",
+                "⏱ Finish History / editing operations",
+                "↺ Delete finishes of Body"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Finish 3D")
-                .setMessage(bodyText+"\n\nدر هسته فعلی این ابزارها روی Bodyهای Extrude/Prism اعمال می‌شوند. مقدار طول را به mm وارد کن.")
+                .setMessage(bodyText+" \n  \n In the current core of this Toolstext Roy Bodytext Extrude/Prism Apply text. text Length text text mm text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)askFinish(Kind.FILLET);
                     else if(w==1)askFinish(Kind.CHAMFER);
@@ -84,19 +84,19 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
                     else if(w==3)showFinishHistory();
                     else toast(clearFinishes());
                 })
-                .setNegativeButton("بستن",null)
+                .setNegativeButton("Close",null)
                 .show();
     }
 
     private void askFinish(Kind kind) {
-        if(selectedBody()==null){toast("اول یک Body را انتخاب کن");return;}
+        if(selectedBody()==null){toast("Select a body first");return;}
         List<FinishOp> ops=finishByBody.get(selectedBody());
         if(ops!=null && !ops.isEmpty() && ops.get(ops.size()-1).kind==Kind.SHELL && kind!=Kind.SHELL){
-            toast("بعد از Shell فعلاً Finish دیگری اضافه نمی‌شود؛ اول Shell را حذف کن");
+            toast("text text Shell text Finish the other text text; First Shell text Delete text");
             return;
         }
-        String title=kind==Kind.FILLET?"Fillet 3D — شعاع":kind==Kind.CHAMFER?"Chamfer 3D — فاصله":"Shell — ضخامت دیواره";
-        String hint=kind==Kind.SHELL?"مثال: 18mm یا 1.8cm":"مثال: 5mm یا 0.5cm";
+        String title=kind==Kind.FILLET?"Fillet 3D — Radius":kind==Kind.CHAMFER?"Chamfer 3D — Distance":"Shell — Thickness text";
+        String hint=kind==Kind.SHELL?"Example: 18mm or 1.8cm":"text: 5mm text 0.5cm";
         EditText input=new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
@@ -106,63 +106,63 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         new AlertDialog.Builder(getContext())
                 .setTitle(title+" • mm")
                 .setMessage(kind==Kind.FILLET
-                        ?"گوشه‌های عمودی Body گرد می‌شوند. شعاع نباید از ضلع‌های پروفایل بزرگ‌تر باشد."
+                        ?"Vertical Body corners are rounded. Radius should not be greater than the sides of the profile."
                         :kind==Kind.CHAMFER
-                        ?"گوشه‌های عمودی Body به اندازه واردشده پخ می‌شوند."
-                        :"داخل Body خالی می‌شود، کف باقی می‌ماند و سطح بالا باز می‌شود.")
+                        ?"text Vertical Body text Dimension text text text."
+                        :"Inside Body is emptied, bottom remains and Face Top opens.")
                 .setView(input)
-                .setPositiveButton("اعمال",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{toast(applyFinish(kind,parseLengthMm(input.getText().toString())));}
-                    catch(Exception e){toast("اندازه درست وارد نشده");}
+                    catch(Exception e){toast("Dimension was entered incorrectly");}
                 })
-                .setNegativeButton("لغو",null)
+                .setNegativeButton("Cancel",null)
                 .show();
     }
 
     private String applyFinish(Kind kind,float valueMm) {
         Object body=selectedBody();
-        if(body==null)return"اول یک Body را انتخاب کن";
-        if(!(valueMm>0f))return"مقدار باید بزرگ‌تر از صفر باشد";
+        if(body==null)return"Select a body first";
+        if(!(valueMm>0f))return"text text text text text text";
         SolidCSG current=bodyCsg(body);
-        if(current==null||current.isEmpty())return"Body معتبر نیست";
+        if(current==null||current.isEmpty())return"Body text text";
 
         if(!baseByBody.containsKey(body)){
             PrismData p=analyzePrism(current);
-            if(p==null)return"این Finish فعلاً برای Bodyهای Extrude/Prism است";
+            if(p==null)return"This Finish is currently for Bodys Extrude/Prism";
             baseByBody.put(body,current.copy());
         }
 
         List<FinishOp> ops=finishByBody.get(body);
         if(ops==null){ops=new ArrayList<>();finishByBody.put(body,ops);}
         if(kind==Kind.SHELL){
-            for(FinishOp op:ops)if(op.kind==Kind.SHELL)return"برای این Body قبلاً Shell ثبت شده";
+            for(FinishOp op:ops)if(op.kind==Kind.SHELL)return"text text Body text Shell text text";
         }
         FinishOp op=new FinishOp(kind,valueMm);
         ops.add(op);
         String result=rebuildFinishes(body);
-        if(result.startsWith("خطا")){
+        if(result.startsWith("Error")){
             ops.remove(ops.size()-1);
             rebuildFinishes(body);
             return result;
         }
         setOverview(true);
         invalidate();
-        return op.label()+" اعمال شد";
+        return op.label()+" Apply text";
     }
 
     public void showFinishHistory() {
         Object body=selectedBody();
-        if(body==null){toast("اول یک Body را انتخاب کن");return;}
+        if(body==null){toast("Select a body first");return;}
         List<FinishOp> ops=finishByBody.get(body);
-        if(ops==null||ops.isEmpty()){toast("برای این Body هنوز Finish ثبت نشده");return;}
+        if(ops==null||ops.isEmpty()){toast("Finish has not been registered for this Body yet");return;}
         String[] rows=new String[ops.size()];
         for(int i=0;i<ops.size();i++)rows[i]=(i+1)+". "+ops.get(i).label();
         new AlertDialog.Builder(getContext())
                 .setTitle("Finish History • "+bodyName(body))
-                .setMessage("هر عملیات را لمس کن تا مقدارش را ویرایش یا همان Feature را حذف کنی.")
+                .setMessage("Touch each operation to edit its value or delete Feature.")
                 .setItems(rows,(d,w)->editFinish(body,w))
-                .setNeutralButton("بازسازی",(d,w)->toast(rebuildFinishes(body)))
-                .setNegativeButton("بستن",null)
+                .setNeutralButton("Rebuild",(d,w)->toast(rebuildFinishes(body)))
+                .setNegativeButton("Close",null)
                 .show();
     }
 
@@ -175,30 +175,30 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText(num(op.valueMm)+"mm"); input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("ویرایش "+op.label())
+                .setTitle("text "+op.label())
                 .setView(input)
-                .setPositiveButton("اعمال",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{op.valueMm=parseLengthMm(input.getText().toString());toast(rebuildFinishes(body));}
-                    catch(Exception e){toast("اندازه درست وارد نشده");}
+                    catch(Exception e){toast("Dimension was entered incorrectly");}
                 })
-                .setNeutralButton("حذف Feature",(d,w)->{
+                .setNeutralButton("Delete Feature",(d,w)->{
                     ops.remove(index);
                     if(ops.isEmpty()){finishByBody.remove(body);restoreBase(body);}
                     else toast(rebuildFinishes(body));
                     invalidate();
                 })
-                .setNegativeButton("لغو",null)
+                .setNegativeButton("Cancel",null)
                 .show();
     }
 
     private String clearFinishes() {
         Object body=selectedBody();
-        if(body==null)return"اول یک Body را انتخاب کن";
+        if(body==null)return"Select a body first";
         finishByBody.remove(body);
         restoreBase(body);
         baseByBody.remove(body);
         invalidate();
-        return"Finishهای Body حذف شدند";
+        return"Finishtext Body Delete became";
     }
 
     private void restoreBase(Object body) {
@@ -208,36 +208,36 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
 
     private String rebuildFinishes(Object body) {
         SolidCSG base=baseByBody.get(body);
-        if(base==null)return"خطا: پایه Body پیدا نشد";
+        if(base==null)return"Error: text Body was not found";
         List<FinishOp> ops=finishByBody.get(body);
-        if(ops==null||ops.isEmpty()){setBodyCsg(body,base.copy());return"Finish خالی است";}
+        if(ops==null||ops.isEmpty()){setBodyCsg(body,base.copy());return"Finish is empty";}
         SolidCSG result=base.copy();
         for(FinishOp op:ops){
             PrismData p=analyzePrism(result);
-            if(p==null)return"خطا: این ترتیب Finish روی شکل فعلی قابل محاسبه نیست";
+            if(p==null)return"Error: text text Finish Roy text text text text text";
             if(op.kind==Kind.FILLET){
                 List<PointF> rounded=roundProfile(p.profile,op.valueMm);
-                if(rounded==null||rounded.size()<3)return"خطا: شعاع Fillet برای این Body بزرگ است";
+                if(rounded==null||rounded.size()<3)return"Error: Radius Fillet text text Body text text";
                 result=SolidCSG.extrude(rounded,p.plane,p.heightMm);
             }else if(op.kind==Kind.CHAMFER){
                 List<PointF> cut=chamferProfile(p.profile,op.valueMm);
-                if(cut==null||cut.size()<3)return"خطا: اندازه Chamfer برای این Body بزرگ است";
+                if(cut==null||cut.size()<3)return"Error: Dimension Chamfer text text Body text text";
                 result=SolidCSG.extrude(cut,p.plane,p.heightMm);
             }else{
-                if(op.valueMm>=p.heightMm*0.49f)return"خطا: ضخامت Shell از ارتفاع Body زیاد است";
+                if(op.valueMm>=p.heightMm*0.49f)return"Error: Thickness Shell text Height Body text text";
                 List<PointF> innerProfile=insetProfile(p.profile,op.valueMm);
-                if(innerProfile==null||innerProfile.size()<3)return"خطا: ضخامت Shell برای این پروفایل زیاد است";
+                if(innerProfile==null||innerProfile.size()<3)return"Error: Thickness Shell text text text text text";
                 Geometry3D.Plane3D innerPlane=p.plane.offset(op.valueMm,"Shell inner");
                 SolidCSG inner=SolidCSG.extrude(innerProfile,innerPlane,p.heightMm+op.valueMm*1.5f);
                 SolidCSG hollow=result.subtract(inner);
-                if(hollow.isEmpty())return"خطا: Shell نامعتبر شد";
+                if(hollow.isEmpty())return"Error: Shell invalid text";
                 result=hollow;
             }
-            if(result==null||result.isEmpty())return"خطا: Finish Body نامعتبر ساخت";
+            if(result==null||result.isEmpty())return"Error: Finish Body invalid Create";
         }
         setBodyCsg(body,result);
         invalidate();
-        return"Finish بازسازی شد • "+ops.size()+" Feature";
+        return"Finish Rebuild text • "+ops.size()+" Feature";
     }
 
     /**
@@ -444,7 +444,7 @@ public class FinishSolidCadCanvasView extends ParametricHistorySolidCadCanvasVie
         if(s.endsWith("cm"))return Float.parseFloat(s.substring(0,s.length()-2))*10f;
         return Float.parseFloat(s);
     }
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private static String num(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
     private static String dual(float mm){return num(mm)+" mm";}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}

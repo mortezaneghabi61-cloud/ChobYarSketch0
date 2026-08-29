@@ -197,22 +197,22 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     // ------------------------------------------------------------------
 
     public void showSolidManager() {
-        String selected = selectedBody == null ? "هیچ Body انتخاب نشده" : selectedBody.name;
-        String face = selectedFace == null ? "Face انتخاب نشده" : "Face انتخاب شده — آماده Sketch";
+        String selected = selectedBody == null ? "No body selected" : selectedBody.name;
+        String face = selectedFace == null ? "No face selected" : "Face selected — Ready Sketch";
         String[] items = {
-                "⬆ Extrude / تبدیل Sketch بسته به Body",
+                "⬆ Extrude / text Sketch text text Body",
                 "▣ Bodies ("+bodies.size()+")",
-                "▱ Sketch روی Face انتخاب‌شده",
-                "∪ Union / یکی‌کردن",
-                "− Subtract / کم‌کردن",
-                "∩ Intersect / اشتراک",
-                "⌫ حذف Body انتخاب‌شده",
-                "↶ Undo عملیات Solid",
-                is3DOverview()?"□ برگشت به Sketch 2D":"◇ نمایش 3D"
+                "▱ Sketch Roy Face selected",
+                "∪ Union / text",
+                "− Subtract / text",
+                "∩ Intersect / text",
+                "⌫ Delete Body selected",
+                "↶ Undo text Solid",
+                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D")
-                .setMessage(selected+"\n"+face+"\n\nبرای انتخاب Body یا Face در نمای 3D روی آن بزن.")
+                .setMessage(selected+"\n"+face+" \n  \n text Selection Body text Face text 3D View Roy text text.")
                 .setItems(items,(d,w)->{
                     if(w==0)showExtrudeDialog();
                     else if(w==1)showBodiesDialog();
@@ -224,18 +224,18 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
                     else if(w==7)toast(undoSolid());
                     else toast(toggle3DOverview());
                 })
-                .setNegativeButton("بستن",null)
+                .setNegativeButton("Close",null)
                 .show();
     }
 
     public String extrudeSelectedBody(float heightCm) {
-        if (Math.abs(heightCm) < 0.0001f) return "ارتفاع Extrude نباید صفر باشد";
+        if (Math.abs(heightCm) < 0.0001f) return "Height Extrude text text text";
         ProfileData profile = profileFromSelection();
         if (profile == null || profile.points.size() < 3)
-            return "یک سطح بسته انتخاب کن؛ مستطیل، دایره، چندضلعی یا حلقه خطوط متصل";
+            return "text Face text Selection text; Rectangle, Circle, Polygon text text Linetext text";
         Geometry3D.Plane3D plane = planeForLayer(profile.layer);
         SolidCSG solid = SolidCSG.extrude(profile.points, plane, heightCm*10f);
-        if (solid.isEmpty()) return "ساخت Body ممکن نشد";
+        if (solid.isEmpty()) return "Create Body text text";
         saveSolidUndo();
         SolidBody body = new SolidBody(bodySerial,"Body "+bodySerial,solid);
         bodySerial++;
@@ -250,7 +250,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         // evaluated against the real body and the final viewport size.
         post(this::fitAll);
         invalidate();
-        return body.name+" ساخته شد | Extrude = "+fmt(heightCm*10f)+" mm";
+        return body.name+" created | Extrude = "+fmt(heightCm*10f)+" mm";
     }
 
     /** Selection-first Boolean entry used by the production adaptive toolbar. */
@@ -267,7 +267,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     public String beginInteractiveExtrudeSession(){
         ProfileData profile=profileFromSelection();
-        if(profile==null||profile.points.size()<3)return "اول داخل یک پروفایل بسته را انتخاب کن";
+        if(profile==null||profile.points.size()<3)return "First text text text text text Selection text";
         Geometry3D.Plane3D plane=planeForLayer(profile.layer);
         float cx=0f,cy=0f;for(PointF p:profile.points){cx+=p.x;cy+=p.y;}
         cx/=profile.points.size();cy/=profile.points.size();
@@ -275,7 +275,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         extrudeSessionActive=true;extrudeDragging=false;extrudePreviewHeightMm=20f;
         setOverview(true);
         rebuildExtrudePreview(true);dispatchWorkspaceState();
-        return "Extrude فعال شد • فلش آبی را بکش یا روی آن بزن";
+        return "Extrude activated • text text text text text Roy text text";
     }
 
     public boolean isInteractiveExtrudeActive(){return extrudeSessionActive;}
@@ -300,7 +300,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     public void showInteractiveExtrudeHeightEditor(){promptInteractiveExtrudeValue();}
 
     public String commitInteractiveExtrude(){
-        if(!extrudeSessionActive)return "Extrude فعال نیست";
+        if(!extrudeSessionActive)return "Extrude text text";
         float mm=extrudePreviewHeightMm;clearExtrudeSession();
         String result=extrudeSelectedBody(mm/10f);dispatchWorkspaceState();return result;
     }
@@ -321,14 +321,14 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         EditText exact=new EditText(getContext());exact.setSingleLine();exact.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         exact.setText(fmt(extrudePreviewHeightMm)+"mm");exact.setSelectAllOnFocus(true);box.addView(exact);
         new AlertDialog.Builder(getContext()).setTitle("Extrude • mm")
-                .setMessage("مقدار منفی جهت حجم را برعکس می‌کند.")
-                .setView(box).setPositiveButton("اعمال",(d,w)->{
+                .setMessage("text text text text text text text.")
+                .setView(box).setPositiveButton("Apply",(d,w)->{
                     try{
                         if(!setInteractiveExtrudeHeightMm(parseLengthInput(exact.getText().toString())))
-                            toast("پیش‌نمایش Extrude فعال نیست");
+                            toast("Preview Extrude text text");
                     }
-                    catch(Exception e){toast("اندازه درست نیست • مثال: 20 mm");}
-                }).setNegativeButton("لغو",null).show();
+                    catch(Exception e){toast("Dimension is invalid • text: 20 mm");}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private float parseLengthInput(String raw){
@@ -374,15 +374,15 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     }
 
     public String sketchOnSelectedFace() {
-        if (selectedBody == null || selectedFace == null) return "در نمای 3D اول یک Face را لمس کن";
-        if (selectedFace.vertices.size() < 3) return "Face معتبر نیست";
+        if (selectedBody == null || selectedFace == null) return "text 3D View First text Face text touch text";
+        if (selectedFace.vertices.size() < 3) return "Face text text";
         Geometry3D.Vec3 origin = selectedFace.vertices.get(0).pos;
         Geometry3D.Vec3 u = null;
         for(int i=1;i<selectedFace.vertices.size();i++){
             Geometry3D.Vec3 edge=selectedFace.vertices.get(i).pos.sub(origin);
             if(edge.length()>1e-4f){u=edge.normalized();break;}
         }
-        if(u==null)return "جهت Face پیدا نشد";
+        if(u==null)return "text Face was not found";
         Geometry3D.Vec3 n=selectedFace.plane.normal.normalized();
         Geometry3D.Vec3 v=n.cross(u).normalized();
         Geometry3D.Plane3D facePlane=new Geometry3D.Plane3D(origin,u,v,"Face • "+selectedBody.name);
@@ -393,19 +393,19 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
             selectedFace=null;
             invalidate();
             return result;
-        } catch(Exception e){return "ساخت Sketch روی Face انجام نشد";}
+        } catch(Exception e){return "Create Sketch Roy Face Done text";}
     }
 
     public String deleteSelectedBody() {
-        if(selectedBody==null)return "اول یک Body را انتخاب کن";
+        if(selectedBody==null)return "Select a body first";
         saveSolidUndo();
         bodies.remove(selectedBody);
         selectedBody=null;selectedFace=null;invalidate();
-        return "Body حذف شد";
+        return "Body Delete text";
     }
 
     public String undoSolid() {
-        if(solidUndo.isEmpty())return "Undo سه‌بعدی خالی است";
+        if(solidUndo.isEmpty())return "Undo text is empty";
         bodies.clear();
         List<SolidBody> snap=solidUndo.removeLast();
         for(SolidBody b:snap)bodies.add(b.copy());
@@ -426,23 +426,23 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     }
 
     public String selectItem(int index){
-        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        if(index<0||index>=bodies.size())return "Body was not found";
         selectedBody=bodies.get(index);selectedFace=null;clearSubSelection();setOverview(true);invalidate();
-        return selectedBody.name+" انتخاب شد";
+        return selectedBody.name+" selected";
     }
 
     public String toggleItemVisibility(int index){
-        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        if(index<0||index>=bodies.size())return "Body was not found";
         SolidBody b=bodies.get(index);b.visible=!b.visible;
         if(!b.visible&&selectedBody==b){selectedBody=null;selectedFace=null;}
-        invalidate();return b.name+(b.visible?" نمایش داده شد":" مخفی شد");
+        invalidate();return b.name+(b.visible?" Show text text":" Hide text");
     }
 
     public String renameItem(int index,String newName){
-        if(index<0||index>=bodies.size())return "Body پیدا نشد";
+        if(index<0||index>=bodies.size())return "Body was not found";
         String clean=newName==null?"":newName.trim();
-        if(clean.isEmpty())return "نام نمی‌تواند خالی باشد";
-        bodies.get(index).name=clean;invalidate();return "نام به «"+clean+"» تغییر کرد";
+        if(clean.isEmpty())return "text text text text";
+        bodies.get(index).name=clean;invalidate();return "text text «"+clean+"» Transform text";
     }
 
     @Override
@@ -471,17 +471,17 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         String cmd=a[0].toUpperCase(Locale.US);
         try{
             if("P".equals(cmd)||"PUSHPULL".equals(cmd)||"EXTRUDE".equals(cmd)){
-                if(a.length<2)return"ارتفاع Extrude را به mm وارد کن";
+                if(a.length<2)return"Height Extrude text text mm text text";
                 return extrudeSelectedBody(Float.parseFloat(a[1])/10f);
             }
             if("UNION".equals(cmd)||"SUBTRACT".equals(cmd)||"INTERSECT".equals(cmd)){
                 startBoolean(cmd);
-                return cmd+" — Body دوم را انتخاب کن";
+                return cmd+" — Body text text Selection text";
             }
             if("PROJECT".equals(cmd))return sketchOnSelectedFace();
             if("BODIES".equals(cmd)){showBodiesDialog();return"Bodies";}
             if("SOLID".equals(cmd)){showSolidManager();return"Solid 3D";}
-        }catch(Exception e){return"فرمت فرمان سه‌بعدی درست نیست";}
+        }catch(Exception e){return"text text text is invalid";}
         return super.executeCommand(raw);
     }
 
@@ -528,35 +528,35 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         input.setText("20");input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("Extrude — ارتفاع mm")
-                .setMessage("سطح بسته را انتخاب کن. عدد منفی Extrude را به سمت دیگر Plane می‌برد.")
+                .setTitle("Extrude — Height mm")
+                .setMessage("Face text text Selection text. text text Extrude to the other side Plane takes.")
                 .setView(input)
-                .setPositiveButton("ساخت Body",(d,w)->{
+                .setPositiveButton("Create Body",(d,w)->{
                     try{toast(extrudeSelectedBody(Float.parseFloat(normalizeDigits(input.getText().toString().trim()))/10f));}
-                    catch(Exception e){toast("ارتفاع درست وارد نشده");}
+                    catch(Exception e){toast("Height was entered incorrectly");}
                 })
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private void showBodiesDialog() {
-        if(bodies.isEmpty()){toast("هنوز Body ساخته نشده");return;}
+        if(bodies.isEmpty()){toast("text Body created text");return;}
         String[] names=new String[bodies.size()];
         for(int i=0;i<bodies.size();i++){
             SolidBody b=bodies.get(i);
-            names[i]=(b==selectedBody?"● ":"○ ")+b.name+"  •  "+b.csg.polygons().size()+" faces"+(b.visible?"":"  مخفی");
+            names[i]=(b==selectedBody?"● ":"○ ")+b.name+"  •  "+b.csg.polygons().size()+" faces"+(b.visible?"":"  Hide");
         }
         new AlertDialog.Builder(getContext())
                 .setTitle("Bodies")
-                .setItems(names,(d,w)->{selectedBody=bodies.get(w);selectedFace=null;setOverview(true);invalidate();toast(selectedBody.name+" انتخاب شد");})
-                .setNegativeButton("بستن",null).show();
+                .setItems(names,(d,w)->{selectedBody=bodies.get(w);selectedFace=null;setOverview(true);invalidate();toast(selectedBody.name+" selected");})
+                .setNegativeButton("Close",null).show();
     }
 
     private void startBoolean(String op) {
-        if(bodies.size()<2){toast("برای Boolean حداقل دو Body لازم است");return;}
+        if(bodies.size()<2){toast("text Boolean text text Body text text");return;}
         if(selectedBody==null){
             String[] names=bodyNames(null);
-            new AlertDialog.Builder(getContext()).setTitle("Body اصلی را انتخاب کن")
-                    .setItems(names,(d,w)->{selectedBody=bodies.get(w);chooseBooleanTool(op);}).setNegativeButton("لغو",null).show();
+            new AlertDialog.Builder(getContext()).setTitle("Body text text Selection text")
+                    .setItems(names,(d,w)->{selectedBody=bodies.get(w);chooseBooleanTool(op);}).setNegativeButton("Cancel",null).show();
             return;
         }
         chooseBooleanTool(op);
@@ -565,14 +565,14 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     private void chooseBooleanTool(String op) {
         List<SolidBody> options=new ArrayList<>();
         for(SolidBody b:bodies)if(b!=selectedBody)options.add(b);
-        if(options.isEmpty()){toast("Body دوم وجود ندارد");return;}
+        if(options.isEmpty()){toast("Body text text text");return;}
         String[] names=new String[options.size()];
         for(int i=0;i<options.size();i++)names[i]=options.get(i).name;
         new AlertDialog.Builder(getContext())
-                .setTitle(op+" — Body دوم")
-                .setMessage("Body اصلی: "+selectedBody.name)
+                .setTitle(op+" — Body text")
+                .setMessage("Body text: "+selectedBody.name)
                 .setItems(names,(d,w)->toast(applyBoolean(op,selectedBody,options.get(w))))
-                .setNegativeButton("لغو",null).show();
+                .setNegativeButton("Cancel",null).show();
     }
 
     private String[] bodyNames(SolidBody exclude) {
@@ -580,7 +580,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     }
 
     private String applyBoolean(String op,SolidBody a,SolidBody b) {
-        if(a==null||b==null||a==b)return"دو Body متفاوت لازم است";
+        if(a==null||b==null||a==b)return"text Body text text text";
         saveSolidUndo();
         SolidCSG result;
         if("UNION".equals(op))result=a.csg.union(b.csg);
@@ -588,14 +588,14 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         else result=a.csg.intersect(b.csg);
         if(result.isEmpty()){
             if(!solidUndo.isEmpty())solidUndo.removeLast();
-            return "نتیجه "+op+" خالی شد؛ Bodyها تغییر نکردند";
+            return "text "+op+" text text; Bodytext Transform text";
         }
         bodies.remove(a);bodies.remove(b);
         String label="UNION".equals(op)?"Union":"SUBTRACT".equals(op)?"Subtract":"Intersect";
         SolidBody out=new SolidBody(bodySerial,label+" "+bodySerial,result);bodySerial++;
         bodies.add(out);selectedBody=out;selectedFace=null;setOverview(true);invalidate();
         post(this::fitAll);
-        return label+" انجام شد | "+result.polygons().size()+" Face";
+        return label+" completed | "+result.polygons().size()+" Face";
     }
 
     // ------------------------------------------------------------------
@@ -623,7 +623,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         }
         canvas.restore();
         drawTopologySelection(canvas);
-        if(selectedBody!=null)canvas.drawText(selectedBody.name+(selectedFace!=null?" • Face انتخاب شد":" • Body انتخاب شد"),card.centerX(),card.top+58f,bodyText);
+        if(selectedBody!=null)canvas.drawText(selectedBody.name+(selectedFace!=null?" • Face selected":" • Body selected"),card.centerX(),card.top+58f,bodyText);
     }
 
     private void drawExtrudePreview(Canvas canvas){
@@ -696,7 +696,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         if(cleanBodyEdges)drawCleanBodyEdges(canvas);
         canvas.restore();
         if(selectedBody!=null){
-            String t=selectedBody.name+(selectedFace!=null?" • Face انتخاب شد — Solid > Sketch on Face":" • برای Face روی سطح بزن");
+            String t=selectedBody.name+(selectedFace!=null?" • Face selected — Solid > Sketch on Face":" • text Face Roy Face text");
             canvas.drawText(t,card.centerX(),card.top+58f,bodyText);
         }
         drawTopologySelection(canvas);
@@ -861,7 +861,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
                 :selectedFace!=null?selectedFace.centroid():null;
         onTopologyPicked(selectedBody,selectionKind(),anchor,selectedEdgeA,selectedEdgeB);
         invalidate();dispatchWorkspaceState();
-        if(hitBody!=null)toast(hitBody.name+" • "+selectionKind()+" انتخاب شد");
+        if(hitBody!=null)toast(hitBody.name+" • "+selectionKind()+" selected");
     }
 
     /** Exact-kernel layers override this to bind the visual hit to B-Rep topology. */
@@ -1012,6 +1012,6 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
     public void clearAll(){super.clearAll();bodies.clear();solidUndo.clear();selectedBody=null;selectedFace=null;bodySerial=1;invalidate();}
 
     private static String fmt(float v){String s=String.format(Locale.US,"%.2f",v);while(s.contains(".")&&(s.endsWith("0")||s.endsWith(".")))s=s.substring(0,s.length()-1);return s;}
-    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);if(c>='۰'&&c<='۹')b.append((char)('0'+c-'۰'));else if(c>='٠'&&c<='٩')b.append((char)('0'+c-'٠'));else b.append(c);}return b.toString();}
+    private static String normalizeDigits(String s){if(s==null)return"";StringBuilder b=new StringBuilder();for(int i=0;i<s.length();i++){char c=s.charAt(i);b.append(c);}return b.toString();}
     private void toast(String s){if(s!=null&&!s.trim().isEmpty())Toast.makeText(getContext(),s,Toast.LENGTH_SHORT).show();}
 }

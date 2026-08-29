@@ -58,7 +58,7 @@ final class SectionViewController {
     }
 
     String summary() {
-        if (!enabled) return "Section View • خاموش";
+        if (!enabled) return "Section View • Off";
         return String.format(Locale.US, "Section %s • %.1f mm%s", axis.name(), offsetMm, flipped ? " • Flip" : "");
     }
 

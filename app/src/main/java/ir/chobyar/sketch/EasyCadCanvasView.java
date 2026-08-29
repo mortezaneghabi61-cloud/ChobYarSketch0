@@ -56,43 +56,43 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
         List<Runnable> actions = new ArrayList<>();
 
         if (selection.isEmpty()) {
-            labels.add("✎ اول شکل‌ها را انتخاب کن");
+            labels.add("✎ First text text Selection text");
             actions.add(this::showSelectionHelp);
         } else {
             if (!lines.isEmpty()) {
-                labels.add("↔ افقی / عمودی");
+                labels.add("↔ Horizontal / Vertical");
                 actions.add(() -> runParentString("applyHorizontalVerticalConstraint"));
             }
 
             if (lines.size() == 1) {
-                labels.add("∠ زاویه دقیق خط");
+                labels.add("∠ Angle text Line");
                 actions.add(() -> runParentVoid("showAngleEditor"));
             }
 
             if (lines.size() == 2 && selection.size() == 2) {
-                labels.add("⊥ عمود 90°");
+                labels.add("⊥ Perpendicular 90°");
                 actions.add(() -> runParentString("applyPerpendicularConstraint"));
 
-                labels.add("∥ موازی");
+                labels.add("∥ Parallel");
                 actions.add(() -> runParentString("applyParallelConstraint"));
 
-                labels.add("● اتصال دو خط");
+                labels.add("● text text Line");
                 actions.add(() -> runParentString("applyManualCoincident"));
 
-                labels.add("M اتصال به وسط خط");
+                labels.add("M text text Midpoint Line");
                 actions.add(this::applyEasyMidpoint);
 
-                labels.add("= برابر کردن طول");
+                labels.add("= text text Length");
                 actions.add(this::applyEqualEasy);
 
-                labels.add("∠ زاویه بین دو خط");
+                labels.add("∠ Angle text text Line");
                 actions.add(() -> runParentVoid("showAngleEditor"));
             }
 
             if (selection.size() >= 2 && allSameEqualFamily(selection)) {
                 String equalLabel = lines.size() == selection.size()
-                        ? "= برابر کردن طول همه خطوط"
-                        : "= برابر کردن شعاع دایره/قوس";
+                        ? "= text text Length All Linetext"
+                        : "= text text Radius Circle/Arc";
                 if (!labels.contains(equalLabel)) {
                     labels.add(equalLabel);
                     actions.add(this::applyEqualEasy);
@@ -100,64 +100,64 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             }
 
             if (selection.size() == 2 && lines.size() == 1 && curves == 1) {
-                labels.add("T مماس خط و دایره/قوس");
+                labels.add("T Tangent Line text Circle/Arc");
                 actions.add(this::applyTangentEasy);
             }
 
             if (selection.size() == 3 && lines.size() == 3) {
-                labels.add("S تقارن — محور را خودکار تشخیص بده");
+                labels.add("S Symmetry — Axis text text text text");
                 actions.add(this::applyEasySymmetry);
             }
 
-            labels.add("🔒 قفل / باز کردن انتخاب");
+            labels.add("🔒 Lock / text text Selection");
             actions.add(() -> toast(toggleSelectedLock()));
         }
 
         labels.add(isAutoConstraintsEnabled()
-                ? "⚙ Auto Constraints روشن — خاموشش کن"
-                : "⚙ Auto Constraints خاموش — روشنش کن");
+                ? "⚙ Auto Constraints On — Offtext text"
+                : "⚙ Auto Constraints Off — Ontext text");
         actions.add(this::toggleAutoConstraintsEasy);
 
-        labels.add("☷ مدیریت Sketchها");
+        labels.add("☷ text Sketchtext");
         actions.add(() -> runParentVoid("showSketchManager"));
 
-        labels.add("؟ راهنمای خیلی کوتاه");
+        labels.add("? Guidetext text text");
         actions.add(this::showSelectionHelp);
 
         String[] items = labels.toArray(new String[0]);
         new AlertDialog.Builder(getContext())
-                .setTitle("روابط هوشمند")
+                .setTitle("Constraints smart")
                 .setMessage(smartSelectionHint())
                 .setItems(items, (d, which) -> actions.get(which).run())
-                .setNegativeButton("بستن", null)
+                .setNegativeButton("Close", null)
                 .show();
     }
 
     public String smartSelectionHint() {
         List<Object> s = selectionObjects();
-        if (s.isEmpty()) return "چیزی انتخاب نشده. اول یک یا چند خط/دایره را انتخاب کن؛ فقط ابزارهای مناسب همان انتخاب نشان داده می‌شوند.";
+        if (s.isEmpty()) return "text not selected. First text text text Line/Circle text Selection text; text Toolstext text text Selection text text text.";
 
         List<Object> l = lines(s);
         int curves = countCurves(s);
-        if (s.size() == 1 && l.size() == 1) return "۱ خط انتخاب شده: زاویه، افقی/عمودی و قفل در دسترس است.";
-        if (s.size() == 2 && l.size() == 2) return "۲ خط انتخاب شده: عمود، موازی، اتصال، وسط، Equal و زاویه بین خطوط در دسترس است.";
-        if (s.size() == 2 && l.size() == 1 && curves == 1) return "۱ خط + ۱ دایره/قوس: می‌توانی Tangent / مماس را اعمال کنی.";
-        if (s.size() == 3 && l.size() == 3) return "۳ خط انتخاب شده: برنامه خط وسط را به‌عنوان محور تقارن حدس می‌زند و Symmetry را اعمال می‌کند.";
-        if (allSameEqualFamily(s) && s.size() >= 2) return s.size() + " شکل مشابه انتخاب شده: Equal برای برابر کردن اندازه‌ها آماده است.";
-        return s.size() + " مورد انتخاب شده. فقط روابط قابل استفاده در لیست نمایش داده می‌شوند.";
+        if (s.size() == 1 && l.size() == 1) return "1 Line selected: Angle, Horizontal/Vertical text Lock text text text.";
+        if (s.size() == 2 && l.size() == 2) return "2 Line selected: Perpendicular, Parallel, text, Midpoint, Equal text Angle text Linetext text text text.";
+        if (s.size() == 2 && l.size() == 1 && curves == 1) return "1 Line + 1 Circle/Arc: text Tangent / Tangent text Apply text.";
+        if (s.size() == 3 && l.size() == 3) return "3 Line selected: text Line Midpoint text text Axis Symmetry text text text Symmetry text Apply text.";
+        if (allSameEqualFamily(s) && s.size() >= 2) return s.size() + " text text selected: Equal text text text Dimensiontext Ready text.";
+        return s.size() + " text selected. text Constraints text text text text Show text text.";
     }
 
     private void showSelectionHelp() {
         new AlertDialog.Builder(getContext())
-                .setTitle("کار با روابط — ساده")
+                .setTitle("text text Constraints — text")
                 .setMessage(
-                        "۱ خط: زاویه یا افقی/عمودی\n\n" +
-                        "۲ خط: عمود، موازی، اتصال، زاویه یا اتصال به وسط\n\n" +
-                        "۱ خط + ۱ دایره/قوس: مماس\n\n" +
-                        "۲ یا چند خط/دایره مشابه: Equal\n\n" +
-                        "۳ خط: دو طرف + یک محور = تقارن\n\n" +
-                        "لازم نیست اسم فرمان‌ها را حفظ کنی؛ برنامه بر اساس انتخاب، گزینه‌های درست را نشان می‌دهد.")
-                .setPositiveButton("فهمیدم", null)
+                        "1 Line: Angle text Horizontal/Vertical \n  \n " +
+                        "2 Line: Perpendicular, Parallel, text, Angle text text text Midpoint \n  \n " +
+                        "1 Line + 1 Circle/Arc: Tangent \n  \n " +
+                        "2 text text Line/Circle text: Equal \n  \n " +
+                        "3 Line: text text + text Axis = Symmetry \n  \n " +
+                        "text text text text text text text; text text text Selection, text text text text text.")
+                .setPositiveButton("Got it", null)
                 .show();
     }
 
@@ -176,7 +176,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
     private void applyEasyMidpoint() {
         List<Object> l = lines(selectionObjects());
         if (l.size() != 2) {
-            toast("برای وسط، دو خط را انتخاب کن");
+            toast("text Midpoint, text Line text Selection text");
             return;
         }
         Object a = l.get(0), b = l.get(1);
@@ -193,7 +193,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
     private void applyEasySymmetry() {
         List<Object> l = lines(selectionObjects());
         if (l.size() != 3) {
-            toast("برای تقارن، سه خط را انتخاب کن");
+            toast("text Symmetry, text Line text Selection text");
             return;
         }
         Object axis = bestAxis(l.get(0), l.get(1), l.get(2));
@@ -225,9 +225,9 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             boolean next = !autoConstraintsField.getBoolean(this);
             autoConstraintsField.setBoolean(this, next);
             invalidate();
-            toast(next ? "Auto Constraints روشن شد" : "Auto Constraints خاموش شد");
+            toast(next ? "Auto Constraints On text" : "Auto Constraints Off text");
         } catch (Exception e) {
-            toast("تنظیم Auto Constraints در دسترس نیست");
+            toast("text Auto Constraints is unavailable");
         }
     }
 
@@ -243,7 +243,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             Object r = m.invoke(this);
             if (r != null) toast(String.valueOf(r));
         } catch (Exception e) {
-            toast("این رابطه فعلاً برای انتخاب فعلی قابل اجرا نیست");
+            toast("text text text text Selection text text text text");
         }
     }
 
@@ -253,7 +253,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             m.setAccessible(true);
             m.invoke(this);
         } catch (Exception e) {
-            toast("این ابزار فعلاً در دسترس نیست");
+            toast("text Tools text is unavailable");
         }
     }
 

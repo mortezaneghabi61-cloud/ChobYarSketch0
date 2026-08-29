@@ -173,14 +173,14 @@ final class BRepTopology {
     String summary() {
         return "B-Rep Topology\n"
                 +"Vertex: "+vertices.size()+"   Edge: "+edges.size()+"   Face: "+faces.size()+"\n"
-                +"سطوح هم‌صفحه: "+coplanarFaceGroups.size()+"   Edge تیز: "+sharpEdgeCount+"\n"
+                +"text textPlane: "+coplanarFaceGroups.size()+"   Edge text: "+sharpEdgeCount+"\n"
                 +"Surface: "+dualArea(surfaceAreaMm2)+"\n"
                 +"Volume: "+dualVolume(volumeMm3)+"\n"
-                +(isClosedManifold()?"✓ Solid بسته و Manifold":"⚠ Boundary="+boundaryEdgeCount+" • Non-manifold="+nonManifoldEdgeCount);
+                +(isClosedManifold()?"✓ Solid text text Manifold":"⚠ Boundary="+boundaryEdgeCount+" • Non-manifold="+nonManifoldEdgeCount);
     }
 
     static String faceInfo(TopoFace f) {
-        if(f==null)return"Face انتخاب نشده";
+        if(f==null)return"No face selected";
         return f.id+"\nArea: "+dualArea(f.areaMm2)+"\nPerimeter: "+dualLength(f.perimeterMm)
                 +"\nNormal: ("+num(f.normal.x)+", "+num(f.normal.y)+", "+num(f.normal.z)+")";
     }

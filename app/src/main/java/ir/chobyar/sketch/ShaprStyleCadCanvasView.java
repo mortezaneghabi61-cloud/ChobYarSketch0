@@ -213,15 +213,15 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
         String current = exactDimensionCurrentValue();
         if (current == null || current.trim().isEmpty()) return null;
 
-        if (title.startsWith("طول خط")) return "✎ " + current + " mm";
-        if (title.startsWith("عرض و ارتفاع")) {
+        if (title.startsWith("Length Line")) return "✎ " + current + " mm";
+        if (title.startsWith("Width text Height")) {
             String[] a = current.trim().split("\\s+");
             if (a.length >= 2) return "✎ " + a[0] + " × " + a[1] + " mm";
             return "✎ " + current + " mm";
         }
-        if (title.startsWith("قطر دایره")) return "✎ Ø " + current + " mm";
-        if (title.startsWith("شعاع قوس")) return "✎ R " + current + " mm";
-        if (title.startsWith("شعاع چندضلعی")) return "✎ R " + current + " mm";
+        if (title.startsWith("Diameter Circle")) return "✎ Ø " + current + " mm";
+        if (title.startsWith("Radius Arc")) return "✎ R " + current + " mm";
+        if (title.startsWith("Radius Polygon")) return "✎ R " + current + " mm";
         return "✎ " + current + " mm";
     }
 
@@ -339,7 +339,7 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
                 && canEditExactDimension() && !firstDrawHintShown) {
             firstDrawHintShown = true;
             Toast.makeText(getContext(),
-                    "کادر اندازه: لمس = ویرایش عدد • بکش = جابه‌جایی کادر بدون حرکت شکل",
+                    "text Dimension: touch = text text • text = text text text text text",
                     Toast.LENGTH_LONG).show();
         }
         return handled;
@@ -395,14 +395,14 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
         new AlertDialog.Builder(getContext())
                 .setTitle(exactDimensionTitle())
-                .setMessage(exactDimensionHint() + "\nمقدار را به میلی‌متر وارد کن.")
+                .setMessage(exactDimensionHint() + " \n text text text mm text text.")
                 .setView(input)
-                .setPositiveButton("اعمال", (d, w) -> {
+                .setPositiveButton("Apply", (d, w) -> {
                     String result = applySelectedDimension(input.getText().toString());
                     Toast.makeText(getContext(), result, Toast.LENGTH_SHORT).show();
                     invalidate();
                 })
-                .setNegativeButton("لغو", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 

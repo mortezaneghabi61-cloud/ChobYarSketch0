@@ -107,11 +107,11 @@ final class ExactIntersectionKernel {
         String compact() {
             if(type==CurveType.CIRCLE)return "Circle • Ø "+dual(radiusA*2f);
             if(type==CurveType.ELLIPSE)return "Ellipse • 2a "+dual(radiusA*2f)+" • 2b "+dual(radiusB*2f);
-            if(type==CurveType.PARALLEL_LINES)return "2 خط تقاطع دقیق";
-            if(type==CurveType.TANGENT_LINE)return "خط مماس دقیق";
-            if(type==CurveType.POINT)return "نقطه تماس دقیق";
-            if(type==CurveType.HYPERBOLA)return "Hyperbola • معادله تحلیلی";
-            if(type==CurveType.PARABOLA)return "Parabola • معادله تحلیلی";
+            if(type==CurveType.PARALLEL_LINES)return "2 Line Intersection text";
+            if(type==CurveType.TANGENT_LINE)return "Line Tangent text";
+            if(type==CurveType.POINT)return "Point text text";
+            if(type==CurveType.HYPERBOLA)return "Hyperbola • text text";
+            if(type==CurveType.PARABOLA)return "Parabola • text text";
             return type.name();
         }
 

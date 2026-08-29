@@ -100,7 +100,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
                     else setBase(baseHintsField,on);
                     saveAllSettings();invalidate();
                 })
-                .setPositiveButton("بستن",null).show();
+                .setPositiveButton("Close",null).show();
     }
 
     private boolean baseBool(Field f,boolean fallback){try{return f==null?fallback:f.getBoolean(this);}catch(Exception e){return fallback;}}
@@ -125,14 +125,14 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     public String projectExactBodyEdges(){
         List<Long> handles=projectSourceHandles();
         if(handles.isEmpty())return hasSelectedSolidBody()
-                ?"Project 3D • Body انتخاب‌شده Shape دقیق OCCT ندارد"
-                :"Project 3D • اول یک Body را انتخاب کن";
+                ?"Project 3D • Body selected Shape text OCCT text"
+                :"Project 3D • Select a body first";
         List<double[]> batches=new ArrayList<>();
         for(long handle:handles){
             double[] d=exactProjectDescriptors(handle);
             if(d!=null&&d.length>=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)batches.add(d);
         }
-        if(batches.isEmpty())return "Project 3D • لبه دقیق قابل Project پیدا نشد";
+        if(batches.isEmpty())return "Project 3D • Edge text text Project was not found";
         return projectDescriptorBatches(batches);
     }
 
@@ -157,7 +157,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     private String projectDescriptorBatches(List<double[]> batches){
         Geometry3D.Plane3D plane=activePlane();
-        if(plane==null)return "Project 3D • Sketch Plane فعال نیست";
+        if(plane==null)return "Project 3D • Sketch Plane text text";
         Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
         int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;
         boolean undoSaved=false;
@@ -203,11 +203,11 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     /** Creates typed associative Construction geometry from the selected exact Body. */
     public String projectSelectedBodyReference(){
-        if(!hasSelectedSolidBody())return "Project Reference • اول Body را انتخاب کن";
+        if(!hasSelectedSolidBody())return "Project Reference • Select a body first";
         int bodyId=selectedExactBodyId();long handle=selectedExactNativeHandle();
-        if(bodyId<0||handle==0L)return "Project Reference • Shape دقیق Body انتخاب‌شده آماده نیست";
+        if(bodyId<0||handle==0L)return "Project Reference • Shape text Body selected is not ready";
         double[] d=exactProjectDescriptors(handle);
-        if(d==null||d.length<NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)return "Project Reference • لبه دقیق قابل Project پیدا نشد";
+        if(d==null||d.length<NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)return "Project Reference • Edge text text Project was not found";
         return projectReferenceDescriptors(bodyId,d,activePlane(),true);
     }
 
@@ -216,7 +216,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     }
 
     private String projectReferenceDescriptors(int bodyId,double[] d,Geometry3D.Plane3D plane,boolean saveUndo){
-        if(bodyId<0||plane==null||d==null)return "Project Reference • منبع نامعتبر";
+        if(bodyId<0||plane==null||d==null)return "Project Reference • text invalid";
         Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
         int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;boolean undoSaved=false;
         final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
@@ -379,10 +379,10 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
                 PointF local=toLocal(plane,n.p);float d=screenDistance(raw,local);
                 if(d>POINT_HIT_PX*density())continue;
                 String label;int priority;
-                if(n.kind==OcctSnapTopology.HOLE_CENTER){label="Hole Center • مرکز سوراخ";priority=11;}
-                else if(n.kind==OcctSnapTopology.VERTEX){label="3D Vertex • رأس";priority=10;}
-                else if(n.kind==OcctSnapTopology.EDGE_MIDPOINT){label="3D Edge Midpoint • میانه لبه";priority=9;}
-                else{label="Face Center • مرکز سطح";priority=8;}
+                if(n.kind==OcctSnapTopology.HOLE_CENTER){label="Hole Center • Center text";priority=11;}
+                else if(n.kind==OcctSnapTopology.VERTEX){label="3D Vertex • text";priority=10;}
+                else if(n.kind==OcctSnapTopology.EDGE_MIDPOINT){label="3D Edge Midpoint • Midpoint Edge";priority=9;}
+                else{label="Face Center • Center Face";priority=8;}
                 best=better(best,new ExternalCandidate(local,label,priority,d));
             }
         }
@@ -401,7 +401,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
                     PointF la=toLocal(plane,a),lb=toLocal(plane,b);
                     if(screenDistance(la,lb)<2f)continue;
                     PointF q=nearestOnSegment(raw,la,lb);float d=screenDistance(raw,q);
-                    if(d<=EDGE_HIT_PX*density())best=better(best,new ExternalCandidate(q,"Distant Edge • لبه خارج صفحه",7,d));
+                    if(d<=EDGE_HIT_PX*density())best=better(best,new ExternalCandidate(q,"Distant Edge • Edge text Plane",7,d));
                 }
             }
         }

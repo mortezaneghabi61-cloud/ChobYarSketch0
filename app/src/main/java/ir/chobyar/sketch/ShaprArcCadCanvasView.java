@@ -222,14 +222,14 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
             }
         }
         if (bulgeIndex < 0 || sag < MIN_ARC_SAG_MM) {
-            toast("برای Arc کمی انحنا بده");
+            toast("text Arc a little text text");
             return null;
         }
 
         PointF b = stroke.get(bulgeIndex);
         CircleFit fit = circleThrough(a, b, c);
         if (fit == null || fit.r < 0.05f || fit.r > 100000f) {
-            toast("قوس معتبر ساخته نشد");
+            toast("Arc text created text");
             return null;
         }
 
@@ -238,7 +238,7 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
         float end = angle(fit.cx, fit.cy, c);
         float sweep = sweepThrough(start, mid, end);
         if (Math.abs(sweep) < 1f || Math.abs(sweep) > 359f) {
-            toast("زاویه Arc معتبر نیست");
+            toast("Angle Arc text text");
             return null;
         }
 
@@ -251,7 +251,7 @@ public class ShaprArcCadCanvasView extends ShaprSplineEditingCadCanvasView {
             selectOne(arc);
             return arc;
         } catch (Exception e) {
-            toast("Arc ساخته نشد");
+            toast("Arc created text");
             return null;
         }
     }
