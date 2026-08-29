@@ -81,20 +81,41 @@ jobs:
         with:
           name: ChobYar3D-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
 
       - name: Upload signed release-candidate APK
         uses: actions/upload-artifact@v4
         with:
           name: ChobYar3D-release-candidate
           path: app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
+          retention-days: 7
 
-      - name: Publish installable APK prerelease
+      - name: Publish installable APK prerelease on demand
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           cp app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk ChobYar3D.apk
           gh release create "android-${{ github.run_number }}" ChobYar3D.apk \
             --target "${{ github.sha }}" \
             --title "ChobYar 3D Android ${{ env.CHOBYAR_VERSION_NAME }}" \
             --notes "Signed release-candidate Android CAD build from commit ${{ github.sha }} with monotonic versionCode $CHOBYAR_VERSION_CODE. This is intentionally signed with the reproducible development identity; production release signing requires CHOBYAR_RELEASE_* credentials." \
             --prerelease
+
+      - name: Prune obsolete Android prereleases
+        if: success() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t TAGS < <(
+            gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+              --json tagName,isPrerelease \
+              --jq '.[] | select(.isPrerelease) | select(.tagName | startswith("android-")) | .tagName'
+          )
+          echo "android_prerelease_count=${#TAGS[@]}"
+          for ((i=2; i<${#TAGS[@]}; i++)); do
+            echo "Deleting obsolete prerelease ${TAGS[$i]}"
+            gh release delete "${TAGS[$i]}" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
