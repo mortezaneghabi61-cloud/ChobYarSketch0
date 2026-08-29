@@ -34,7 +34,7 @@ public class K34TransactionalAuthorityInstrumentationTest {
             cad.requireSketchMirrorParity();
             assertTrue(cad.sketchAuthorityHistoryActive());
             assertTrue(cad.sketchAuthorityCanUndo());
-            assertEquals(syncBefore+1,cad.sketchMirrorSyncCount()); // one authority-chain hydration only
+            assertEquals(syncBefore+1,cad.sketchMirrorSyncCount());
             assertEquals(10.0,lineX1(cad.exportSketchProjectState()),1.0e-6);
 
             cad.undo();
@@ -70,21 +70,71 @@ public class K34TransactionalAuthorityInstrumentationTest {
         });
     }
 
-    @Test public void unsupportedCopyFallsBackAndInvalidatesTransactionalHistory() throws Exception {
+    @Test public void copyUndoRedoUsesAuthorityChosenFreshStableId() throws Exception {
         onMain(() -> {
             Context context=ApplicationProvider.getApplicationContext();
             K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
             cad.importSketchProjectState(fixture());
+            Set<String> before=ids(cad.exportSketchProjectState());
+            long syncBefore=cad.sketchMirrorSyncCount();
+
             cad.selected=cad.entities.get(0);
-            cad.moveSelected(4f,0f);
+            cad.copySelected(20f,5f);
+            cad.requireSketchMirrorParity();
+            String copied=cad.exportSketchProjectState();
+            Set<String> after=ids(copied);
+            assertEquals(3,after.size());
+            assertTrue(after.containsAll(before));
+            LinkedHashSet<String> fresh=new LinkedHashSet<>(after);
+            fresh.removeAll(before);
+            assertEquals(1,fresh.size());
+            String newId=fresh.iterator().next();
+            assertFalse(newId.trim().isEmpty());
             assertTrue(cad.sketchAuthorityHistoryActive());
             assertTrue(cad.sketchAuthorityCanUndo());
+            assertEquals(syncBefore+1,cad.sketchMirrorSyncCount());
+            assertEquals(20.0,lineX1ById(copied,newId),1.0e-6);
 
-            cad.copySelected(20f,0f);
+            cad.undo();
             cad.requireSketchMirrorParity();
-            assertFalse(cad.sketchAuthorityHistoryActive());
-            assertFalse(cad.sketchAuthorityCanUndo());
-            assertEquals(3,entityCount(cad.exportSketchProjectState()));
+            assertEquals(before,ids(cad.exportSketchProjectState()));
+            assertTrue(cad.sketchAuthorityCanRedo());
+
+            assertTrue(cad.redoSketch());
+            cad.requireSketchMirrorParity();
+            assertEquals(after,ids(cad.exportSketchProjectState()));
+            assertEquals(20.0,lineX1ById(cad.exportSketchProjectState(),newId),1.0e-6);
+            return true;
+        });
+    }
+
+    @Test public void copySaveReopenPreservesAuthorityChosenStableId() throws Exception {
+        final String[] copiedId=new String[1];
+        String saved=onMain(() -> {
+            Context context=ApplicationProvider.getApplicationContext();
+            K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
+            cad.importSketchProjectState(fixture());
+            Set<String> before=ids(cad.exportSketchProjectState());
+            cad.selected=cad.entities.get(0);
+            cad.copySelected(30f,0f);
+            cad.requireSketchMirrorParity();
+            String out=cad.exportSketchProjectState();
+            LinkedHashSet<String> fresh=new LinkedHashSet<>(ids(out));
+            fresh.removeAll(before);
+            assertEquals(1,fresh.size());
+            copiedId[0]=fresh.iterator().next();
+            assertEquals(30.0,lineX1ById(out,copiedId[0]),1.0e-6);
+            return out;
+        });
+
+        onMain(() -> {
+            Context context=ApplicationProvider.getApplicationContext();
+            K33MirroredCadCanvasView reopened=new K33MirroredCadCanvasView(context);
+            reopened.importSketchProjectState(saved);
+            reopened.requireSketchMirrorParity();
+            assertTrue(ids(reopened.exportSketchProjectState()).contains(copiedId[0]));
+            assertEquals(30.0,lineX1ById(reopened.exportSketchProjectState(),copiedId[0]),1.0e-6);
+            assertFalse(reopened.sketchAuthorityHistoryActive());
             return true;
         });
     }
@@ -210,12 +260,16 @@ public class K34TransactionalAuthorityInstrumentationTest {
     }
 
     private static double lineX1(String raw) throws Exception {
+        return lineX1ById(raw,"line-authority");
+    }
+
+    private static double lineX1ById(String raw,String id) throws Exception {
         JSONArray rows=new JSONObject(raw).getJSONArray("entities");
         for(int i=0;i<rows.length();i++){
             JSONObject row=rows.getJSONObject(i);
-            if("line-authority".equals(row.optString("id"))) return row.getDouble("x1");
+            if(id.equals(row.optString("id")) && "LINE".equals(row.optString("type"))) return row.getDouble("x1");
         }
-        throw new AssertionError("line-authority missing");
+        throw new AssertionError(id+" line missing");
     }
 
     private static double firstLineX1(String raw) throws Exception {
