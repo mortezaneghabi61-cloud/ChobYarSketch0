@@ -5,8 +5,11 @@ import time
 
 from deep_translator import GoogleTranslator
 
-ROOT = Path("app/src/main")
-EXTENSIONS = {".java", ".kt", ".xml", ".gradle", ".properties", ".json", ".txt"}
+ROOT = Path("app/src")
+EXTENSIONS = {
+    ".java", ".kt", ".kts", ".xml", ".gradle", ".properties", ".json", ".txt",
+    ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx",
+}
 ARABIC = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
 ARABIC_RUN = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u200c\u200d]+(?:[ \t]+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u200c\u200d]+)*")
 STRING = re.compile(r'"(?:\\.|[^"\\])*"')
