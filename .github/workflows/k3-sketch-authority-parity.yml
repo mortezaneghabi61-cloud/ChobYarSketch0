@@ -8,6 +8,7 @@ on:
       - 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/core/**'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K33SketchMirrorInstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K34TransactionalAuthorityInstrumentationTest.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
 
 concurrency:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   parity:
-    name: Stable-ID mirror parity on API 35
+    name: Stable-ID and transactional authority on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -55,7 +56,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run K3.3 stable-ID and parity regression
+      - name: Run K3.3 and K3.4 authority regressions
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -68,10 +69,12 @@ jobs:
             mkdir -p test-artifacts
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w -e class ir.chobyar.sketch.K33SketchMirrorInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-sketch-authority.txt
-            grep -q 'OK (3 tests)' test-artifacts/k3-sketch-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K33SketchMirrorInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-sketch-mirror.txt
+            grep -q 'OK (3 tests)' test-artifacts/k3-sketch-mirror.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K34TransactionalAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-transactional-authority.txt
+            grep -q 'OK (3 tests)' test-artifacts/k3-transactional-authority.txt
 
-      - name: Upload K3 parity evidence
+      - name: Upload K3 authority evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
