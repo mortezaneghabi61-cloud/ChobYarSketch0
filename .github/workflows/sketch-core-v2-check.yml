@@ -5,6 +5,8 @@ on:
     branches:
       - sketch-core-v2-foundation
     paths:
+      - app/src/main/java/ir/chobyar/sketch/core/**
+      - app/src/test/java/ir/chobyar/sketch/core/**
       - .github/workflows/sketch-core-v2-check.yml
 
 permissions:
