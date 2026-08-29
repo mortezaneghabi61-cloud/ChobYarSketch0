@@ -45,7 +45,7 @@ public class Project3DSelectedBodyInstrumentationTest {
 
         String result=runProject(c);
         assertTrue(c.requested.isEmpty());
-        assertTrue(result,result.contains("Selection"));
+        assertTrue(result,result.contains("Select a body"));
         android.util.Log.i("Manual26100Project3D","PROJECT3D_NO_SELECTION_RESULT requested=0 guarded=true");
     }
 
