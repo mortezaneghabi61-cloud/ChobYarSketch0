@@ -1,0 +1,83 @@
+name: Code Ontology Companion Analysis
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  analyze:
+    name: Map ChobYar Java architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout ChobYar
+        uses: actions/checkout@v4
+        with:
+          path: target
+          fetch-depth: 1
+
+      - name: Checkout Code Ontology Companion (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: battle-doll/code-ontology-companion
+          ref: 356808216896a2024eee5329e026836b9f8e14bf
+          path: companion
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Doctor and preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/ontology-evidence"
+          python3 companion/skills/manage-code-ontology/scripts/companion.py \
+            doctor --repo "$GITHUB_WORKSPACE/target" \
+            | tee "$GITHUB_WORKSPACE/ontology-evidence/doctor.txt"
+          python3 companion/skills/manage-code-ontology/scripts/companion.py \
+            preflight --repo "$GITHUB_WORKSPACE/target" \
+            | tee "$GITHUB_WORKSPACE/ontology-evidence/preflight.txt"
+
+      - name: Build ontology snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT="$RUNNER_TEMP/chobyar-ontology-parent"
+          WORKSPACE="$PARENT/chobyar"
+          mkdir -p "$PARENT"
+          python3 companion/skills/manage-code-ontology/scripts/companion.py \
+            init \
+            --repo "$GITHUB_WORKSPACE/target" \
+            --workspace "$WORKSPACE" \
+            --authorized \
+            | tee "$GITHUB_WORKSPACE/ontology-evidence/init.txt"
+
+          # Export only portable analysis outputs. Private manifests, local paths,
+          # fingerprints and append-only private lineage are intentionally omitted.
+          for name in report.md ontology.json ontology.ttl graph.html snapshot.json lineage.ttl; do
+            found="$(find "$WORKSPACE" -type f -name "$name" -print -quit)"
+            if [ -n "$found" ]; then
+              cp "$found" "$GITHUB_WORKSPACE/ontology-evidence/$name"
+            fi
+          done
+
+          echo "Portable files collected:"
+          ls -lah "$GITHUB_WORKSPACE/ontology-evidence"
+
+      - name: Upload ontology evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chobyar-code-ontology
+          path: ontology-evidence/**
+          if-no-files-found: warn
+          retention-days: 7
