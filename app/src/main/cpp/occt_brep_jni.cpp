@@ -12,6 +12,7 @@
 #include <vector>
 
 #ifdef CHOBYAR_WITH_OCCT
+#include "shape_store.h"
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
 #include <TopoDS.hxx>
@@ -81,24 +82,14 @@ constexpr jint PROFILE_POLYGON = 0;
 constexpr jint PROFILE_CIRCLE = 1;
 constexpr double PI = 3.14159265358979323846;
 
-std::mutex gShapeMutex;
-std::unordered_map<jlong, TopoDS_Shape> gShapes;
-std::atomic<jlong> gNextHandle{1};
+chobyar::cad::ShapeStore gShapeStore;
 
 jlong storeShape(const TopoDS_Shape& shape) {
-    if (shape.IsNull()) return 0;
-    const jlong h = gNextHandle.fetch_add(1);
-    std::lock_guard<std::mutex> lock(gShapeMutex);
-    gShapes[h] = shape;
-    return h;
+    return static_cast<jlong>(gShapeStore.store(shape));
 }
 
 bool loadShape(jlong handle, TopoDS_Shape& out) {
-    std::lock_guard<std::mutex> lock(gShapeMutex);
-    auto it = gShapes.find(handle);
-    if (it == gShapes.end()) return false;
-    out = it->second;
-    return !out.IsNull();
+    return gShapeStore.load(static_cast<chobyar::cad::ShapeStore::Handle>(handle), out);
 }
 
 int countSubShapes(const TopoDS_Shape& shape, TopAbs_ShapeEnum kind) {
@@ -794,7 +785,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctShapeSummary(JNIEnv* env, jcla
 extern "C" JNIEXPORT void JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctRelease(JNIEnv*, jclass, jlong handle) {
 #ifdef CHOBYAR_WITH_OCCT
-    std::lock_guard<std::mutex> lock(gShapeMutex);gShapes.erase(handle);
+    gShapeStore.erase(static_cast<chobyar::cad::ShapeStore::Handle>(handle));
 #else
     (void)handle;
 #endif
@@ -803,7 +794,7 @@ Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctRelease(JNIEnv*, jclass, jlong
 extern "C" JNIEXPORT void JNICALL
 Java_ir_chobyar_sketch_NativeBRepKernel_nativeOcctClear(JNIEnv*, jclass) {
 #ifdef CHOBYAR_WITH_OCCT
-    std::lock_guard<std::mutex> lock(gShapeMutex);gShapes.clear();
+    gShapeStore.clear();
 #endif
 }
 
