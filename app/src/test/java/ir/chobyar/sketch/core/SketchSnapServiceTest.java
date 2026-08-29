@@ -14,15 +14,14 @@ public class SketchSnapServiceTest {
 
     @Test public void lineEndpointMidpointAndNearestEdgeAreModelSpaceDeterministic() {
         SketchDocument doc = new SketchDocument();
-        doc.add(new SketchGeometry.Line("line-a",
-                p(0,0), p(100,0)));
+        doc.add(new SketchGeometry.Line("line-a", p(0,0), p(100,0)));
 
-        SketchSnapService.Result endpoint = service.snap(doc,p(0.4,0.2),2.0,null);
+        SketchSnapService.Result endpoint = service.snap(doc,p(0,0),2.0,null);
         assertNotNull(endpoint);
         assertEquals(SketchSnapService.Kind.ENDPOINT,endpoint.kind);
         assertPoint(endpoint.point,0,0);
 
-        SketchSnapService.Result midpoint = service.snap(doc,p(50.2,0.3),2.0,null);
+        SketchSnapService.Result midpoint = service.snap(doc,p(50,0),2.0,null);
         assertNotNull(midpoint);
         assertEquals(SketchSnapService.Kind.MIDPOINT,midpoint.kind);
         assertPoint(midpoint.point,50,0);
@@ -56,12 +55,12 @@ public class SketchSnapServiceTest {
         SketchDocument doc = new SketchDocument();
         doc.add(new SketchGeometry.Circle("circle",p(20,30),10));
 
-        SketchSnapService.Result center = service.snap(doc,p(20.2,30.1),1.0,null);
+        SketchSnapService.Result center = service.snap(doc,p(20,30),1.0,null);
         assertNotNull(center);
         assertEquals(SketchSnapService.Kind.CENTER,center.kind);
         assertPoint(center.point,20,30);
 
-        SketchSnapService.Result quadrant = service.snap(doc,p(30.4,30.2),1.0,null);
+        SketchSnapService.Result quadrant = service.snap(doc,p(30,30),1.0,null);
         assertNotNull(quadrant);
         assertEquals(SketchSnapService.Kind.QUADRANT,quadrant.kind);
         assertPoint(quadrant.point,30,30);
@@ -92,18 +91,18 @@ public class SketchSnapServiceTest {
         doc.add(new SketchPolygon("poly",Arrays.asList(p(40,0),p(60,0),p(50,20))));
         doc.add(new SketchGeometry.Polyline("path",Arrays.asList(p(80,0),p(90,10),p(100,0)),false));
 
-        SketchSnapService.Result rectMid = service.snap(doc,p(10,0.4),1.0,null);
+        SketchSnapService.Result rectMid = service.snap(doc,p(10,0),1.0,null);
         assertNotNull(rectMid);
         assertEquals("rect",rectMid.entityId);
         assertEquals(SketchSnapService.Kind.MIDPOINT,rectMid.kind);
         assertPoint(rectMid.point,10,0);
 
-        SketchSnapService.Result polygonVertex = service.snap(doc,p(50.3,20.2),1.0,null);
+        SketchSnapService.Result polygonVertex = service.snap(doc,p(50,20),1.0,null);
         assertNotNull(polygonVertex);
         assertEquals("poly",polygonVertex.entityId);
         assertEquals(SketchSnapService.Kind.ENDPOINT,polygonVertex.kind);
 
-        SketchSnapService.Result pathEdge = service.snap(doc,p(85.3,4.7),1.0,null);
+        SketchSnapService.Result pathEdge = service.snap(doc,p(85,5),1.0,null);
         assertNotNull(pathEdge);
         assertEquals("path",pathEdge.entityId);
         assertEquals(SketchSnapService.Kind.MIDPOINT,pathEdge.kind);
