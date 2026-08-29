@@ -8,7 +8,7 @@ spatial = SPATIAL.read_text(encoding='utf-8')
 spatial_anchor = '''    private void showOffsetPlaneDialog() {\n'''
 spatial_block = r'''    /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
     public String createOffsetSketchSpace(float offsetMm, String requestedName) {
-        if (!Float.isFinite(offsetMm)) return "فاصله Plane معتبر نیست";
+        if (!Float.isFinite(offsetMm)) return "Plane distance is invalid";
         Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
         String label = base.label + " + " + fmt(offsetMm) + " mm";
         pendingPlane = base.offset(offsetMm, label);
@@ -36,8 +36,8 @@ loft_block = r'''    /** Deterministic non-modal Loft entry using 1-based sketch
     public String createLoftByEntityIndex(int firstNumber,int secondNumber){
         List<Object> all=entities();
         if(firstNumber<1||secondNumber<1||firstNumber>all.size()||secondNumber>all.size())
-            return "شماره Entity باید بین 1 تا "+all.size()+" باشد";
-        if(firstNumber==secondNumber)return "دو پروفایل Loft باید متفاوت باشند";
+            return "Entity number must be between 1 and "+all.size();
+        if(firstNumber==secondNumber)return "Loft profiles must be different";
         return createLoft(all.get(firstNumber-1),all.get(secondNumber-1));
     }
 
@@ -49,15 +49,15 @@ if 'createLoftByEntityIndex(' not in advanced:
 
 if '"LOFT3D".equalsIgnoreCase(a[0])' not in advanced:
     sweep_block = r'''                if("SWEEP3D".equalsIgnoreCase(a[0])){
-                    if(a.length!=3)return "SWEEP3D — شماره پروفایل و مسیر لازم است؛ مثال: SWEEP3D 1 2";
+                    if(a.length!=3)return "SWEEP3D — profile number and path are required; example: SWEEP3D 1 2";
                     try{return createSweepByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
-                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                    catch(NumberFormatException e){return "Entity number must be an integer";}
                 }
 '''
     loft_command = r'''                if("LOFT3D".equalsIgnoreCase(a[0])){
-                    if(a.length!=3)return "LOFT3D — شماره دو پروفایل لازم است؛ مثال: LOFT3D 1 2";
+                    if(a.length!=3)return "LOFT3D — two profile numbers are required; example: LOFT3D 1 2";
                     try{return createLoftByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
-                    catch(NumberFormatException e){return "شماره Entity باید عدد صحیح باشد";}
+                    catch(NumberFormatException e){return "Entity number must be an integer";}
                 }
 '''
     if sweep_block not in advanced:
@@ -102,17 +102,17 @@ public final class LoftCommandInstrumentationTest {
                 c.clearAll();
 
                 String lower=c.executeCommand("RECT 0 0 20 10");
-                assertTrue("Lower Loft RECT rejected: "+lower,lower.contains("مستطیل"));
+                assertTrue("Lower Loft RECT rejected: "+lower,lower.contains("Rectangle created"));
 
                 String plane=c.createOffsetSketchSpace(60f,"Loft Upper");
                 assertTrue("Offset Sketch plane was not created: "+plane,plane.contains("Loft Upper")||plane.contains("Sketch"));
                 assertTrue("Offset plane label must expose 60 mm: "+c.activePlaneLabel(),c.activePlaneLabel().contains("60"));
 
                 String upper=c.executeCommand("RECT 0 0 40 20");
-                assertTrue("Upper Loft RECT rejected: "+upper,upper.contains("مستطیل"));
+                assertTrue("Upper Loft RECT rejected: "+upper,upper.contains("Rectangle created"));
 
                 String result=c.executeCommand("LOFT3D 1 2");
-                assertTrue("LOFT3D rejected: "+result,result.contains("Loft ساخته شد"));
+                assertTrue("LOFT3D rejected: "+result,result.contains("Loft created"));
                 assertEquals("Loft must create one Body",1,c.bodyCount());
                 assertTrue("Loft must switch to 3D overview",c.is3DOverview());
 
@@ -129,7 +129,8 @@ public final class LoftCommandInstrumentationTest {
                 assertEquals("64-sample Loft should have 64 side faces plus two caps",66,loft.polygons().size());
 
                 String rebuilt=c.rebuildHistory();
-                assertTrue("Loft History rebuild failed: "+rebuilt,rebuilt.contains("Form 1")&&!rebuilt.contains("Form خطا"));
+                assertTrue("Loft History rebuild failed: "+rebuilt,
+                        rebuilt.contains("Form 1")&&!rebuilt.toLowerCase(java.util.Locale.US).contains("error"));
                 SolidCSG replay=selectedCsg(c);
                 near("Loft volume after History rebuild",(float)actual,(float)volume(replay),.5f);
                 assertEquals("Loft face count changed after rebuild",loft.polygons().size(),replay.polygons().size());

@@ -245,8 +245,8 @@ def main():
     edit_x = max(24, moved_x - 90)
     print(f"Tapping unobscured moved dimension label at ({edit_x},{moved_y})", flush=True)
     shell("input", "tap", str(edit_x), str(moved_y))
-    editor = wait_for_contains("عرض و ارتفاع", "05-dimension-editor", timeout=10)
-    if editor is None or find_contains(editor, "عرض و ارتفاع")[0] is None:
+    editor = wait_for_contains("Width and Height", "05-dimension-editor", timeout=10)
+    if editor is None or find_contains(editor, "Width and Height")[0] is None:
         raise AssertionError("Moved rectangle dimension label did not open its numeric editor")
     screenshot("05-moved-dimension-editor")
     shell("input", "keyevent", "KEYCODE_BACK")
