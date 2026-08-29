@@ -31,14 +31,16 @@ public final class BooleanCommandInstrumentationTest {
   inst.waitForIdleSync();
   scenario.onActivity(activity->{
       Shapr3DGuideCadCanvasView c=canvas(activity);makeOverlappingBodies(c);
-      String result=c.executeCommand("UNION 1 2");
-      assertTrue("UNION command rejected: "+result,result.contains("completed"));
+      c.executeCommand("UNION 1 2");
       assertEquals("UNION must replace two bodies with one",1,c.bodyCount());
       Bounds b=bounds(selectedCsg(c));float[] e=sorted3(b.dx(),b.dy(),b.dz());
       assertNear("UNION thickness",20f,e[0]);assertNear("UNION width",100f,e[1]);assertNear("UNION length",150f,e[2]);
-      String rebuilt=c.rebuildHistory();assertTrue("UNION History rebuild failed: "+rebuilt,!rebuilt.contains("Error"));
-      String undo=c.undoLastFeature();assertTrue("UNION undo did not target Boolean: "+undo,undo.contains("UNION"));assertEquals(2,c.bodyCount());
-      String redo=c.redoLastFeature();assertTrue("UNION redo failed: "+redo,redo.contains("UNION"));assertEquals(1,c.bodyCount());
+      c.rebuildHistory();
+      assertEquals("UNION rebuild must preserve one body",1,c.bodyCount());
+      Bounds rebuilt=bounds(selectedCsg(c));float[] re=sorted3(rebuilt.dx(),rebuilt.dy(),rebuilt.dz());
+      assertNear("UNION rebuilt thickness",20f,re[0]);assertNear("UNION rebuilt width",100f,re[1]);assertNear("UNION rebuilt length",150f,re[2]);
+      c.undoLastFeature();assertEquals("UNION undo must restore both source bodies",2,c.bodyCount());
+      c.redoLastFeature();assertEquals("UNION redo must recreate one result body",1,c.bodyCount());
       Bounds redone=bounds(selectedCsg(c));float[] r=sorted3(redone.dx(),redone.dy(),redone.dz());
       assertNear("UNION redo thickness",20f,r[0]);assertNear("UNION redo width",100f,r[1]);assertNear("UNION redo length",150f,r[2]);
       Log.i(TAG,"BOOLEAN_UNION_RESULT bodyCount=1 extents=20x100x150 history=true undo=true redo=true faces="+selectedCsg(c).polygons().size());
@@ -53,11 +55,11 @@ public final class BooleanCommandInstrumentationTest {
   inst.waitForIdleSync();
   scenario.onActivity(activity->{
       Shapr3DGuideCadCanvasView c=canvas(activity);makeOverlappingBodies(c);
-      String result=c.executeCommand("SUBTRACT 1 2");
-      assertTrue("SUBTRACT command rejected: "+result,result.contains("completed"));
+      c.executeCommand("SUBTRACT 1 2");
       assertEquals(1,c.bodyCount());Bounds b=bounds(selectedCsg(c));float[] e=sorted3(b.dx(),b.dy(),b.dz());
       assertNear("SUBTRACT thickness",20f,e[0]);assertNear("SUBTRACT remaining length",50f,e[1]);assertNear("SUBTRACT width",100f,e[2]);
-      String rebuilt=c.rebuildHistory();assertTrue("SUBTRACT History rebuild failed: "+rebuilt,!rebuilt.contains("Error"));
+      c.rebuildHistory();
+      assertEquals("SUBTRACT rebuild must preserve one body",1,c.bodyCount());
       Bounds p=bounds(selectedCsg(c));float[] pe=sorted3(p.dx(),p.dy(),p.dz());
       assertNear("SUBTRACT rebuilt thickness",20f,pe[0]);assertNear("SUBTRACT rebuilt length",50f,pe[1]);assertNear("SUBTRACT rebuilt width",100f,pe[2]);
       Log.i(TAG,"BOOLEAN_SUBTRACT_RESULT bodyCount=1 extents=20x50x100 history=true faces="+selectedCsg(c).polygons().size());
@@ -72,11 +74,11 @@ public final class BooleanCommandInstrumentationTest {
   inst.waitForIdleSync();
   scenario.onActivity(activity->{
       Shapr3DGuideCadCanvasView c=canvas(activity);makeOverlappingBodies(c);
-      String result=c.executeCommand("INTERSECT 1 2");
-      assertTrue("INTERSECT command rejected: "+result,result.contains("completed"));
+      c.executeCommand("INTERSECT 1 2");
       assertEquals(1,c.bodyCount());Bounds b=bounds(selectedCsg(c));float[] e=sorted3(b.dx(),b.dy(),b.dz());
       assertNear("INTERSECT thickness",20f,e[0]);assertNear("INTERSECT overlap length",50f,e[1]);assertNear("INTERSECT width",100f,e[2]);
-      String rebuilt=c.rebuildHistory();assertTrue("INTERSECT History rebuild failed: "+rebuilt,!rebuilt.contains("Error"));
+      c.rebuildHistory();
+      assertEquals("INTERSECT rebuild must preserve one body",1,c.bodyCount());
       Bounds p=bounds(selectedCsg(c));float[] pe=sorted3(p.dx(),p.dy(),p.dz());
       assertNear("INTERSECT rebuilt thickness",20f,pe[0]);assertNear("INTERSECT rebuilt length",50f,pe[1]);assertNear("INTERSECT rebuilt width",100f,pe[2]);
       Log.i(TAG,"BOOLEAN_INTERSECT_RESULT bodyCount=1 extents=20x50x100 history=true faces="+selectedCsg(c).polygons().size());
@@ -86,11 +88,10 @@ public final class BooleanCommandInstrumentationTest {
 
     private static void makeOverlappingBodies(Shapr3DGuideCadCanvasView c){
         c.clearAll();
-        String a=c.executeCommand("RECT 0 0 100 100");assertTrue("First RECT rejected: "+a,a.contains("Rectangle"));CadCanvasView.Entity first=c.selected;assertNotNull(first);
-        String b=c.executeCommand("RECT 50 0 100 100");assertTrue("Second RECT rejected: "+b,b.contains("Rectangle"));CadCanvasView.Entity second=c.selected;assertNotNull(second);
-        selectSketch(c,first);String e1=c.executeCommand("EXTRUDE 20");assertTrue("First EXTRUDE rejected: "+e1,e1.contains("created"));
-        selectSketch(c,second);String e2=c.executeCommand("EXTRUDE 20");assertTrue("Second EXTRUDE rejected: "+e2,e2.contains("created"));
-        assertEquals("Fixture must contain exactly two bodies",2,c.bodyCount());
+        c.executeCommand("RECT 0 0 100 100");CadCanvasView.Entity first=c.selected;assertNotNull("First rectangle must become selected",first);
+        c.executeCommand("RECT 50 0 100 100");CadCanvasView.Entity second=c.selected;assertNotNull("Second rectangle must become selected",second);
+        selectSketch(c,first);c.executeCommand("EXTRUDE 20");assertEquals("First extrusion must create one body",1,c.bodyCount());
+        selectSketch(c,second);c.executeCommand("EXTRUDE 20");assertEquals("Second extrusion must create a second body",2,c.bodyCount());
     }
 
     private static void selectSketch(Shapr3DGuideCadCanvasView c,CadCanvasView.Entity e){
