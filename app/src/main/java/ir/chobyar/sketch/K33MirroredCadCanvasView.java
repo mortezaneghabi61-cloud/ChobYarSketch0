@@ -12,10 +12,10 @@ import ir.chobyar.sketch.core.SketchEntity;
 /**
  * K3.3 migration canvas.
  *
- * The legacy view remains authoritative for user interaction, snapping and
- * constraints, while every committed sketch mutation is mirrored into the pure
- * {@link SketchDocument}. This gives the next migration step a measurable
- * parity seam without prematurely moving solver/snapping ownership.
+ * The legacy view remains authoritative for user interaction, snapping,
+ * constraints and annotations. Supported committed geometry mutations are
+ * mirrored into the pure {@link SketchDocument} so the next authority move has
+ * a measurable parity seam without prematurely moving solver/snapping state.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private final SketchDocument sketchDocument = new SketchDocument();
@@ -80,7 +80,28 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
     @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) { String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out; }
     @Override public String arraySelected(int count,float dx,float dy) { String out=super.arraySelected(count,dx,dy); syncMirror("array"); return out; }
+
+    // Advanced 2D editing can mutate entities without passing through the base mutators.
+    @Override public String trimSelectedLines() { String out=super.trimSelectedLines(); syncMirror("trim"); return out; }
+    @Override public String extendSelectedLines() { String out=super.extendSelectedLines(); syncMirror("extend"); return out; }
+    @Override public String chamferSelectedLines(float setback) { String out=super.chamferSelectedLines(setback); syncMirror("sketch-chamfer"); return out; }
+    @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
+    @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
+
+    // Driving dimensions and constraint application can reposition geometry immediately.
     @Override public String applySelectedDimension(String raw) { String out=super.applySelectedDimension(raw); syncMirror("dimension"); return out; }
+    @Override public String setSelectedLineAngle(float degrees) { String out=super.setSelectedLineAngle(degrees); syncMirror("line-angle"); return out; }
+    @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
+    @Override public String applyHorizontalVerticalConstraint() { String out=super.applyHorizontalVerticalConstraint(); syncMirror("constraint-hv"); return out; }
+    @Override public String applyPerpendicularConstraint() { String out=super.applyPerpendicularConstraint(); syncMirror("constraint-perpendicular"); return out; }
+    @Override public String applyParallelConstraint() { String out=super.applyParallelConstraint(); syncMirror("constraint-parallel"); return out; }
+    @Override public String applyEqualConstraint() { String out=super.applyEqualConstraint(); syncMirror("constraint-equal"); return out; }
+    @Override public String applySymmetryConstraint() { String out=super.applySymmetryConstraint(); syncMirror("constraint-symmetry"); return out; }
+    @Override public String applyMidpointConstraint() { String out=super.applyMidpointConstraint(); syncMirror("constraint-midpoint"); return out; }
+    @Override public String applyTangentConstraint() { String out=super.applyTangentConstraint(); syncMirror("constraint-tangent"); return out; }
+    @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
+    @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
+
     @Override public String importSketchProjectState(String raw) { String out=super.importSketchProjectState(raw); syncMirror("project-open"); return out; }
 
     @Override public String executeCommand(String raw) {
