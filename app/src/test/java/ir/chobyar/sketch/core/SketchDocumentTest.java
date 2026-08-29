@@ -111,4 +111,36 @@ public class SketchDocumentTest {
             // expected
         }
     }
+
+    @Test
+    public void pointIsAFirstClassEntityAndTranslatesByStableId() {
+        SketchDocument doc = new SketchDocument();
+        doc.add(new SketchPoint("point-1", new SketchGeometry.Point(12.5, -3.0)));
+        doc.selectOnly("point-1");
+        assertTrue(doc.translateSelection(7.5, 3.0));
+        SketchPoint moved = (SketchPoint) doc.entity("point-1");
+        assertEquals(SketchEntity.Kind.POINT, moved.kind());
+        assertEquals(20.0, moved.position.xMm, 1.0e-9);
+        assertEquals(0.0, moved.position.yMm, 1.0e-9);
+    }
+
+    @Test
+    public void regularPolygonIsValidImmutableAndRejectsDegenerateArea() {
+        SketchPolygon polygon = SketchPolygon.regular("hex-1", 6, 50.0, 60.0, 25.0, -90.0);
+        assertTrue(polygon.isValid());
+        assertEquals(SketchEntity.Kind.POLYGON, polygon.kind());
+        assertEquals(6, polygon.vertices().size());
+        try {
+            polygon.vertices().add(new SketchGeometry.Point(1.0, 1.0));
+            throw new AssertionError("Expected immutable polygon vertices");
+        } catch (UnsupportedOperationException expected) {
+            // expected
+        }
+
+        SketchPolygon flat = new SketchPolygon("flat", Arrays.asList(
+                new SketchGeometry.Point(0.0, 0.0),
+                new SketchGeometry.Point(10.0, 0.0),
+                new SketchGeometry.Point(20.0, 0.0)));
+        assertFalse(flat.isValid());
+    }
 }
