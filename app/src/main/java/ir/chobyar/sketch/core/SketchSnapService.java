@@ -16,6 +16,15 @@ import java.util.List;
 public final class SketchSnapService {
     private static final double EPS = 1.0e-9;
 
+    /**
+     * Professional CAD sketchers make discrete semantic targets feel magnetic:
+     * an endpoint/midpoint/intersection/center near the pointer should not lose
+     * to an almost-identical generic projection on the same edge. The lock band
+     * is deliberately small (25% of the caller's snap radius); outside it,
+     * geometric distance remains authoritative.
+     */
+    private static final double DISCRETE_LOCK_RATIO = 0.25d;
+
     public enum Kind {
         POINT,
         ENDPOINT,
@@ -53,10 +62,11 @@ public final class SketchSnapService {
     /**
      * Finds the best geometric snap candidate inside radiusMm.
      *
-     * Distance is the primary ordering. Equal-distance ties are resolved by a
-     * stable semantic priority (point/endpoint, intersection, midpoint/center,
-     * then on-edge) and finally by entity id, so results do not depend on object
-     * identity or hash iteration order.
+     * Normally distance is the primary ordering. A discrete semantic target
+     * inside the small magnetic lock band wins over generic ON_EDGE projection;
+     * this preserves predictable endpoint/midpoint/intersection behavior while
+     * still allowing ordinary edge snapping away from those targets. Remaining
+     * equal-distance ties are resolved by semantic priority and stable entity id.
      */
     public Result snap(Collection<? extends SketchEntity> values,
                        SketchGeometry.Point query, double radiusMm,
@@ -291,6 +301,10 @@ public final class SketchSnapService {
         return value.isEmpty() ? null : value;
     }
 
+    private static boolean isDiscrete(Kind kind) {
+        return kind != null && kind != Kind.ON_EDGE;
+    }
+
     private static int priority(Kind kind) {
         switch (kind) {
             case POINT:
@@ -322,8 +336,18 @@ public final class SketchSnapService {
             if (better(candidate, result)) result = candidate;
         }
 
-        private static boolean better(Result a, Result b) {
+        private boolean better(Result a, Result b) {
             if (b == null) return true;
+
+            boolean aDiscrete = isDiscrete(a.kind);
+            boolean bDiscrete = isDiscrete(b.kind);
+            if (aDiscrete != bDiscrete) {
+                Result discrete = aDiscrete ? a : b;
+                if (discrete.distanceMm <= radius * DISCRETE_LOCK_RATIO + EPS) {
+                    return aDiscrete;
+                }
+            }
+
             if (a.distanceMm < b.distanceMm - EPS) return true;
             if (a.distanceMm > b.distanceMm + EPS) return false;
             int pa = priority(a.kind), pb = priority(b.kind);
