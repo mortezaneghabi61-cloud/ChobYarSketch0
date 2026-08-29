@@ -1,6 +1,7 @@
 name: English-only source migration
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths:
