@@ -13,16 +13,18 @@ import ir.chobyar.sketch.core.LegacySketchStateBridge;
 import ir.chobyar.sketch.core.SketchDocument;
 import ir.chobyar.sketch.core.SketchEntities;
 import ir.chobyar.sketch.core.SketchEntity;
+import ir.chobyar.sketch.core.SketchGeometry;
+import ir.chobyar.sketch.core.SketchPoint;
 
 /**
  * K3 sketch authority migration canvas.
  *
  * K3.3 established a geometry/stable-id mirror while the legacy view remained
  * authoritative. K3.4 flips authority in deliberately small slices: exact
- * Move/Delete/Copy plus their Undo/Redo history are validated and committed in
- * {@link SketchDocument}, then replayed through the legacy adapter for
- * rendering/interaction compatibility. Unsupported operations still use the
- * K3.3 full-state mirror and explicitly invalidate transactional history.
+ * Create/Move/Delete/Copy plus their Undo/Redo history are validated and
+ * committed in {@link SketchDocument}, then replayed through the legacy adapter
+ * for rendering/interaction compatibility. Unsupported operations still use
+ * the K3.3 full-state mirror and explicitly invalidate transactional history.
  *
  * Snapping, constraints, dimensions and annotations remain legacy-owned here.
  */
@@ -84,6 +86,27 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     /**
+     * Starts or resumes one model-authority history chain without changing the
+     * user's selection. A full bridge restore is allowed only at the boundary
+     * from legacy-owned state into transactional authority.
+     */
+    private boolean prepareTransactionalDocument(String source) {
+        try {
+            if (!authorityHistoryValid) {
+                String raw = exportSketchProjectState();
+                LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
+                mirrorSyncCount++;
+                authorityHistoryValid = true;
+            }
+            return true;
+        } catch (RuntimeException e) {
+            authorityHistoryValid = false;
+            lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Locks and sketch-locks still belong to the legacy constraint layer in
      * K3.4. Query that precondition before mutating SketchDocument. This small
      * reflective seam is intentionally isolated here and can disappear when
@@ -104,10 +127,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     /**
-     * Temporary K3.4 compatibility seam: legacy Copy currently creates its own
-     * UUID internally. Authority must choose the new stable id first, so replace
-     * that generated id before parity is checked. This reflection disappears
-     * when legacy entity construction is replaced by a model-backed renderer.
+     * Temporary K3.4 compatibility seam: legacy Copy/Create currently creates
+     * its own UUID internally. Authority must choose the new stable id first,
+     * so replace that generated id before parity is checked. This reflection
+     * disappears when legacy entity construction is replaced by a model-backed
+     * renderer.
      */
     private boolean restoreLegacySelectedStableId(String stableId) {
         Object value = selected;
@@ -139,13 +163,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             // Constraint/lock semantics have not moved yet. Never pre-mutate the
             // new model when the legacy owner is expected to reject the edit.
             if (legacySelectionLocked()) return false;
-
-            if (!authorityHistoryValid) {
-                String raw = exportSketchProjectState();
-                LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
-                mirrorSyncCount++;
-                authorityHistoryValid = true;
-            }
+            if (!prepareTransactionalDocument(source)) return false;
 
             Set<String> ids = new LinkedHashSet<>();
             for (Object value : smartSelectionSnapshot()) {
@@ -202,7 +220,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public boolean onTouchEvent(MotionEvent event) {
         boolean handled = super.onTouchEvent(event);
         int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
-        // Freehand/drag previews are still legacy-owned in this K3.4 slice.
+        // Gesture/freehand Create remains legacy-owned until K3.4c-b. Exact
+        // command Create is already transactional and does not pass this path.
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) syncMirror("touch-commit");
         return handled;
     }
@@ -298,8 +317,68 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    // Create still needs model-first primitive construction from gesture/tool
-    // commits. Other unsupported operations deliberately keep the K3.3 fallback.
+    /**
+     * K3.4c-a exact Create authority. Parse and validate the same deterministic
+     * primitive grammar used by CadCanvasView, create the model entity first,
+     * then let the legacy view replay only for rendering/history compatibility.
+     * Polygon and gesture/freehand creation remain on the fallback path until
+     * their exact vertex/snap semantics are migrated.
+     */
+    private SketchEntity exactCreateEntity(String raw, String id) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return null;
+        String[] a = s.replace(',', ' ').trim().split("\\s+");
+        String cmd = a[0].toUpperCase(java.util.Locale.US);
+        try {
+            if (("L".equals(cmd) || "LINE".equals(cmd)) && a.length >= 5) {
+                return new SketchGeometry.Line(id,
+                        new SketchGeometry.Point(Float.parseFloat(a[1]), Float.parseFloat(a[2])),
+                        new SketchGeometry.Point(Float.parseFloat(a[3]), Float.parseFloat(a[4])));
+            }
+            if (("REC".equals(cmd) || "RECT".equals(cmd) || "RECTANG".equals(cmd)) && a.length >= 5) {
+                double x=Float.parseFloat(a[1]), y=Float.parseFloat(a[2]);
+                double w=Float.parseFloat(a[3]), h=Float.parseFloat(a[4]);
+                return new SketchGeometry.Rect(id,
+                        new SketchGeometry.Point(x,y),
+                        new SketchGeometry.Vector(w,0),
+                        new SketchGeometry.Vector(0,h));
+            }
+            if (("C".equals(cmd) || "CIRCLE".equals(cmd)) && a.length >= 4) {
+                return new SketchGeometry.Circle(id,
+                        new SketchGeometry.Point(Float.parseFloat(a[1]), Float.parseFloat(a[2])),
+                        Math.abs(Float.parseFloat(a[3])));
+            }
+            if (("PO".equals(cmd) || "POINT".equals(cmd)) && a.length >= 3) {
+                return new SketchPoint(id,
+                        new SketchGeometry.Point(Float.parseFloat(a[1]), Float.parseFloat(a[2])));
+            }
+            if (("A".equals(cmd) || "ARC".equals(cmd)) && a.length >= 6) {
+                return new SketchGeometry.Arc(id,
+                        new SketchGeometry.Point(Float.parseFloat(a[1]), Float.parseFloat(a[2])),
+                        Math.abs(Float.parseFloat(a[3])),
+                        Float.parseFloat(a[4]), Float.parseFloat(a[5]));
+            }
+        } catch (RuntimeException ignored) {
+            // Preserve the legacy command parser's user-facing error behavior.
+        }
+        return null;
+    }
+
+    private boolean prepareTransactionalCreate(SketchEntity entity, String source) {
+        if (entity == null || !entity.isValid()) return false;
+        if (!prepareTransactionalDocument(source)) return false;
+        try {
+            sketchDocument.add(entity); // one Create == one model Undo entry
+            sketchDocument.selectOnly(entity.id());
+            return true;
+        } catch (RuntimeException e) {
+            lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return false;
+        }
+    }
+
+    // Other unsupported operations deliberately keep the K3.3 fallback.
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
     @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
     @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
@@ -330,6 +409,30 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String importSketchProjectState(String raw) { String out=super.importSketchProjectState(raw); syncMirror("project-open"); return out; }
 
     @Override public String executeCommand(String raw) {
+        String newId = UUID.randomUUID().toString();
+        SketchEntity planned = exactCreateEntity(raw, newId);
+        if (planned != null && prepareTransactionalCreate(planned, "create-command-prepare")) {
+            int legacyCountBefore = entities.size();
+            String out = super.executeCommand(raw);
+            boolean legacyCreated = entities.size() == legacyCountBefore + 1 && selected != null;
+            if (!legacyCreated) {
+                try { if (sketchDocument.canUndo()) sketchDocument.undo(); } catch (RuntimeException ignored) {}
+                syncMirror("create-command-rejected");
+                return out;
+            }
+
+            boolean injected = restoreLegacySelectedStableId(newId);
+            boolean committed = injected && finishTransactionalMutation("create-command");
+            if (committed) return out;
+            if (!injected) finishTransactionalMutation("create-command-id-injection");
+
+            // Fail-safe UX: parity failure rolls both sides back; replay the
+            // proven legacy command once and re-enter K3.3 mirror mode.
+            String fallback = super.executeCommand(raw);
+            syncMirror("create-command-fallback");
+            return fallback;
+        }
+
         long before = authorityTransitionCount;
         String out = super.executeCommand(raw);
         // Dynamic dispatch lets supported K3.4 commands use transactional
