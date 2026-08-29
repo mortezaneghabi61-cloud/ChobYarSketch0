@@ -3,8 +3,11 @@ from pathlib import Path
 import re
 import sys
 
-ROOTS = [Path("app/src/main")]
-EXTENSIONS = {".java", ".kt", ".xml", ".gradle", ".properties", ".json", ".txt"}
+ROOTS = [Path("app/src")]
+EXTENSIONS = {
+    ".java", ".kt", ".kts", ".xml", ".gradle", ".properties", ".json", ".txt",
+    ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"
+}
 ARABIC = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
 
 violations = []
@@ -23,10 +26,10 @@ for root in ROOTS:
                 violations.append((str(path), line_no, line.strip()))
 
 if violations:
-    print("English-only UI gate failed: Arabic/Persian script remains in production source.\n")
+    print("English-only source gate failed: Arabic/Persian script remains in app source code.\n")
     for path, line_no, line in violations:
         print(f"{path}:{line_no}: {line}")
     print(f"\nTotal violations: {len(violations)}")
     sys.exit(1)
 
-print("English-only UI gate passed: no Arabic/Persian script found in app/src/main.")
+print("English-only source gate passed: no Arabic/Persian script found anywhere under app/src.")
