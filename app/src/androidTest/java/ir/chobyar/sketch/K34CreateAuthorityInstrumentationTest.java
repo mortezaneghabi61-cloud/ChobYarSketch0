@@ -30,11 +30,12 @@ public class K34CreateAuthorityInstrumentationTest {
             K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
             long syncBefore=cad.sketchMirrorSyncCount();
 
-            assertTrue(cad.executeCommand("LINE 10 20 50 20").contains("خط"));
+            cad.executeCommand("LINE 10 20 50 20");
             cad.requireSketchMirrorParity();
             String created=cad.exportSketchProjectState();
             assertEquals(1,entityCount(created));
             String id=onlyId(created);
+            assertEquals("LINE",typeById(created,id));
             assertEquals(10.0,lineX1ById(created,id),1.0e-6);
             assertTrue(cad.sketchAuthorityHistoryActive());
             assertTrue(cad.sketchAuthorityCanUndo());
