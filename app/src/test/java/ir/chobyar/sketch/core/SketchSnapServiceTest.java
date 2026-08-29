@@ -32,6 +32,24 @@ public class SketchSnapServiceTest {
         assertPoint(edge.point,72,0);
     }
 
+    @Test public void midpointIsMagneticAgainstSlightlyCloserGenericEdgeButNotFarAway() {
+        SketchDocument doc = new SketchDocument();
+        doc.add(new SketchGeometry.Line("production-line",p(100,100),p(220,100)));
+
+        // Mirrors the production stylus contract: generic edge projection is
+        // slightly closer, but midpoint is within the discrete magnetic band.
+        SketchSnapService.Result magnetic = service.snap(doc,p(159.1,101.3),10.0,null);
+        assertNotNull(magnetic);
+        assertEquals(SketchSnapService.Kind.MIDPOINT,magnetic.kind);
+        assertPoint(magnetic.point,160,100);
+
+        // Away from the midpoint lock band, ordinary edge projection must win.
+        SketchSnapService.Result ordinary = service.snap(doc,p(172,101.3),10.0,null);
+        assertNotNull(ordinary);
+        assertEquals(SketchSnapService.Kind.ON_EDGE,ordinary.kind);
+        assertPoint(ordinary.point,172,100);
+    }
+
     @Test public void lineIntersectionIsStableAndCanExcludeEditedEntity() {
         SketchDocument doc = new SketchDocument();
         doc.add(new SketchGeometry.Line("horizontal",p(0,20),p(100,20)));
