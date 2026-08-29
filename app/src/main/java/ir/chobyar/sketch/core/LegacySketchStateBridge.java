@@ -201,6 +201,9 @@ public final class LegacySketchStateBridge {
         return true;
     }
     private static boolean same(SketchGeometry.Point a,SketchGeometry.Point b){return near(a.xMm,b.xMm)&&near(a.yMm,b.yMm);}
-    private static boolean near(double a,double b){return Math.abs(a-b)<=EPS;}
+    private static boolean near(double a,double b){
+        double floatUlp=Math.max(Math.ulp((float)a),Math.ulp((float)b));
+        return Math.abs(a-b)<=Math.max(EPS,floatUlp);
+    }
     private static boolean finite(double v){return !Double.isNaN(v)&&!Double.isInfinite(v)&&Math.abs(v)<=1.0e9;}
 }
