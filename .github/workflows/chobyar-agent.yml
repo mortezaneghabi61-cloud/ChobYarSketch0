@@ -6,6 +6,8 @@ on:
       - "agent_runtime/**"
       - ".github/workflows/chobyar-agent.yml"
       - ".gitignore"
+  issues:
+    types: [opened]
   workflow_dispatch:
     inputs:
       task:
@@ -19,8 +21,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   runtime-tests:
@@ -44,14 +45,21 @@ jobs:
         run: pytest -q agent_runtime/tests
 
   agent:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' &&
+       github.actor == 'mortezaneghabi61-cloud' &&
+       startsWith(github.event.issue.title, '[agent]'))
     needs: runtime-tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CHOBYAR_AGENT_MODEL: gpt-5.6
-      TASK: ${{ inputs.task }}
+      DISPATCH_TASK: ${{ inputs.task }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -69,13 +77,23 @@ jobs:
       - name: Install agent runtime
         run: python -m pip install -e agent_runtime pytest
 
+      - name: Build supervised task
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            printf '%s' "$DISPATCH_TASK" > .agent-task.txt
+          else
+            jq -r '.issue.title + "\n\n" + (.issue.body // "")' "$GITHUB_EVENT_PATH" > .agent-task.txt
+          fi
+
       - name: Run professor engineering agent
+        shell: bash
         run: |
           args=()
-          if [[ "${{ inputs.apply_changes }}" == "true" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "${{ inputs.apply_changes }}" == "true" ]]; then
             args+=(--apply)
           fi
-          chobyar-agent --task "$TASK" "${args[@]}"
+          chobyar-agent --task "$(cat .agent-task.txt)" "${args[@]}"
 
       - name: Upload agent report
         if: always()
@@ -87,7 +105,7 @@ jobs:
           retention-days: 14
 
       - name: Open candidate pull request
-        if: ${{ inputs.apply_changes }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_changes }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
