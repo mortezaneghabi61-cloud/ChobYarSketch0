@@ -13,3 +13,7 @@ __pycache__/
 agent_runtime/private_refs/
 .env
 .env.*
+
+# Installation artifacts belong in GitHub Releases/Actions, not source history.
+/releases/*.apk
+/releases/*.apk.sha256
