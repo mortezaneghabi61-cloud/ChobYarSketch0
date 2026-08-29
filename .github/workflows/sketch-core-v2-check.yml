@@ -1,0 +1,30 @@
+name: Sketch Core V2 Focused Gate
+
+on:
+  push:
+    branches:
+      - sketch-core-v2-foundation
+    paths:
+      - .github/workflows/sketch-core-v2-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sketch-core-jvm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+      - name: Run pure Sketch core tests
+        run: gradle :app:testDebugUnitTest --tests 'ir.chobyar.sketch.core.*' --stacktrace
