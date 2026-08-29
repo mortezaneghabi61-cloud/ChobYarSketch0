@@ -1,6 +1,10 @@
 package ir.chobyar.sketch;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PointF;
 import android.view.MotionEvent;
 
 import java.lang.reflect.Method;
@@ -15,28 +19,45 @@ import ir.chobyar.sketch.core.SketchEntities;
 import ir.chobyar.sketch.core.SketchEntity;
 import ir.chobyar.sketch.core.SketchGeometry;
 import ir.chobyar.sketch.core.SketchPoint;
+import ir.chobyar.sketch.core.SketchSnapService;
 
 /**
- * K3 sketch authority migration canvas.
+ * Sketch authority migration canvas.
  *
- * K3.3 established a geometry/stable-id mirror while the legacy view remained
- * authoritative. K3.4 flips authority in deliberately small slices: exact and
- * gesture Create/Move/Delete/Copy plus their Undo/Redo history are validated and
- * committed in {@link SketchDocument}, then replayed through the legacy adapter
- * for rendering/interaction compatibility. Unsupported operations still use
- * the K3.3 full-state mirror and explicitly invalidate transactional history.
- *
- * Snapping, constraints, dimensions and annotations remain legacy-owned here.
+ * K3.4 owns exact/gesture Create, Move, Delete, Copy and transactional history
+ * in SketchDocument. K3.5 starts moving geometric snapping out of the legacy
+ * View hierarchy. Constraints, dimensions, annotations and selection-handle
+ * snapping remain legacy-owned until their dedicated authority slices.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
+    private static final float LEGACY_SNAP_RADIUS_PX = 30f;
+    private static final double GUIDE_RADIUS_FACTOR = 0.70d;
+    private static final double GRID_RADIUS_FACTOR = 0.58d;
+    private static final double GRID_MM = 10.0d;
+
     private final SketchDocument sketchDocument = new SketchDocument();
+    private final SketchSnapService sketchSnapService = new SketchSnapService();
+    private final Paint routedSnapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint routedSnapTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     private long mirrorSyncCount;
     private long authorityTransitionCount;
+    private long modelSnapCount;
     private boolean authorityHistoryValid;
     private String lastMirrorError = "";
+    private String lastModelSnapKind = "";
+    private boolean routedSnapVisible;
+    private float routedSnapScreenX;
+    private float routedSnapScreenY;
+    private String routedSnapLabel = "";
 
     public K33MirroredCadCanvasView(Context context) {
         super(context);
+        routedSnapPaint.setColor(Color.rgb(245, 135, 15));
+        routedSnapPaint.setStyle(Paint.Style.STROKE);
+        routedSnapPaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
+        routedSnapTextPaint.setColor(Color.rgb(35, 85, 180));
+        routedSnapTextPaint.setTextSize(13f * getResources().getDisplayMetrics().scaledDensity);
         syncMirror("constructor");
     }
 
@@ -47,8 +68,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     public boolean sketchAuthorityCanUndo() { return authorityHistoryValid && sketchDocument.canUndo(); }
     public boolean sketchAuthorityCanRedo() { return authorityHistoryValid && sketchDocument.canRedo(); }
     public long sketchAuthorityTransitionCount() { return authorityTransitionCount; }
+    public long sketchModelSnapCount() { return modelSnapCount; }
+    public String sketchLastModelSnapKind() { return lastModelSnapKind; }
 
-    /** Non-throwing status used by production telemetry/UI. */
     public boolean assertSketchMirrorParity() {
         try {
             boolean ok = LegacySketchStateBridge.hasParity(sketchDocument, exportSketchProjectState());
@@ -60,15 +82,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /** Strict QA hook. Never use this as a user-facing crash path. */
     public void requireSketchMirrorParity() {
         if (!assertSketchMirrorParity()) throw new IllegalStateException(lastMirrorError);
     }
 
-    /**
-     * K3.3 compatibility path. Re-hydration intentionally resets the document's
-     * undo/redo history, so every fallback marks transactional authority stale.
-     */
     private void syncMirror(String source) {
         try {
             String raw = exportSketchProjectState();
@@ -85,19 +102,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * Starts or resumes one model-authority history chain without changing the
-     * user's selection. A full bridge restore is allowed only at the boundary
-     * from legacy-owned state into transactional authority.
-     *
-     * Constraints/Solver are intentionally still legacy-owned. They can mutate
-     * geometry through paths that do not pass a K3.4 transactional override
-     * (for example persistent coincident enforcement). Before opening the next
-     * model transaction, detect that out-of-band drift and rebase the document
-     * onto the settled legacy geometry. This drops only the Document history
-     * that is no longer truthful; importantly it does not call legacy Undo,
-     * which would discard identity-based constraint links.
-     */
     private boolean prepareTransactionalDocument(String source) {
         try {
             String raw = exportSketchProjectState();
@@ -114,15 +118,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * Locks and sketch-locks still belong to the legacy constraint layer in
-     * K3.4. Query that precondition before mutating SketchDocument. This small
-     * reflective seam is intentionally isolated here and can disappear when
-     * lock/ConstraintGraph authority moves out of the View hierarchy.
-     *
-     * Fail closed: if the legacy guard cannot be queried, do not start a model
-     * authority transaction; let the proven legacy path decide the edit.
-     */
     private boolean legacySelectionLocked() {
         try {
             Method m = ParametricSketchCanvasView.class.getDeclaredMethod("isSelectionLocked");
@@ -134,13 +129,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * Temporary K3.4 compatibility seam: legacy Copy/Create currently creates
-     * its own UUID internally. Authority must choose the new stable id first,
-     * so replace that generated id before parity is checked. This reflection
-     * disappears when legacy entity construction is replaced by a model-backed
-     * renderer.
-     */
     private boolean restoreLegacySelectedStableId(String stableId) {
         Object value = selected;
         if (!(value instanceof Entity)) return false;
@@ -162,14 +150,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
-    /**
-     * Starts a fresh transactional authority chain from the current compatible
-     * legacy state and mirrors the stable-id selection into SketchDocument.
-     */
     private boolean prepareTransactionalSelection(String source) {
         try {
-            // Constraint/lock semantics have not moved yet. Never pre-mutate the
-            // new model when the legacy owner is expected to reject the edit.
             if (legacySelectionLocked()) return false;
             if (!prepareTransactionalDocument(source)) return false;
 
@@ -187,11 +169,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * Verifies that the legacy adapter produced exactly the model state already
-     * accepted by SketchDocument. A mismatch fails closed by undoing both sides
-     * and returning to the proven K3.3 mirror seam.
-     */
     private boolean finishTransactionalMutation(String source) {
         try {
             String raw = exportSketchProjectState();
@@ -200,9 +177,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 lastMirrorError = "";
                 return true;
             }
-        } catch (RuntimeException ignored) {
-            // Roll back below using each side's already-created history entry.
-        }
+        } catch (RuntimeException ignored) {}
 
         String reason = "Transactional parity failed after " + source;
         try { if (sketchDocument.canUndo()) sketchDocument.undo(); } catch (RuntimeException ignored) {}
@@ -237,11 +212,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return action == MotionEvent.ACTION_UP && drawingBefore;
     }
 
-    /**
-     * Gesture Create cannot be replayed after a parity failure. Preserve the
-     * user's settled legacy geometry and fall back to the K3.3 mirror instead of
-     * destructively undoing a pen/touch stroke that cannot be reconstructed.
-     */
     private boolean finishTransactionalGesture(String source) {
         try {
             String raw = exportSketchProjectState();
@@ -257,11 +227,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
-    /**
-     * Adopt the final snap/ortho/constraint-settled candidate produced by the
-     * legacy touch engine. The model chooses stable identity before the legacy
-     * commit; the legacy engine remains only the candidate geometry calculator.
-     */
     private boolean adoptLegacyGestureCandidate(String stableId, String source) {
         try {
             if (!restoreLegacySelectedStableId(stableId)) {
@@ -276,9 +241,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 return false;
             }
 
-            // Legacy-owned constraint enforcement may settle existing geometry
-            // during the same gesture. Rebase only the existing entities, then
-            // add the newly created candidate as the one Document transaction.
             if (!LegacySketchStateBridge.hasParityExcluding(sketchDocument, raw, stableId)) {
                 LegacySketchStateBridge.restoreDocumentExcluding(sketchDocument, raw, stableId);
                 mirrorSyncCount++;
@@ -295,16 +257,147 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * A selection tap, zoom or cancelled gesture must not destroy model history.
-     * Only real legacy-owned geometry drift should force a K3.3 re-hydration.
-     */
     private void reconcileLegacyTouchIfNeeded(String source) {
         try {
             String raw = exportSketchProjectState();
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
         } catch (RuntimeException e) {
             syncMirror(source + "-error");
+        }
+    }
+
+    private boolean usesModelCreateSnap(int tool) {
+        return tool == TOOL_POINT || tool == TOOL_LINE || tool == TOOL_RECT
+                || tool == TOOL_CIRCLE || tool == TOOL_ARC || tool == TOOL_POLYGON;
+    }
+
+    private static final class RoutedSnap {
+        final double xMm;
+        final double yMm;
+        final double distanceMm;
+        final String label;
+        final SketchSnapService.Kind modelKind;
+
+        RoutedSnap(double xMm, double yMm, double distanceMm, String label,
+                   SketchSnapService.Kind modelKind) {
+            this.xMm = xMm;
+            this.yMm = yMm;
+            this.distanceMm = distanceMm;
+            this.label = label == null ? "" : label;
+            this.modelKind = modelKind;
+        }
+    }
+
+    private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
+        RoutedSnap best = null;
+        try {
+            SketchSnapService.Result model = sketchSnapService.snap(
+                    sketchDocument,
+                    new SketchGeometry.Point(rawX, rawY),
+                    radiusMm,
+                    null);
+            if (model != null) {
+                best = new RoutedSnap(model.point.xMm, model.point.yMm, model.distanceMm,
+                        snapLabel(model.kind), model.kind);
+            }
+        } catch (RuntimeException e) {
+            lastMirrorError = "model-snap: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        }
+
+        if (isShowGuides()) {
+            for (Entity entity : entities) {
+                if (entity == null || !coreIsVisible(entity)) continue;
+                String description = entity.describe();
+                if (description == null || !description.startsWith("Guide ")) continue;
+                PointF p = entity.nearestPoint(rawX, rawY);
+                if (p == null) continue;
+                double d = Math.hypot(p.x - rawX, p.y - rawY);
+                if (d <= radiusMm * GUIDE_RADIUS_FACTOR
+                        && (best == null || d < best.distanceMm)) {
+                    best = new RoutedSnap(p.x, p.y, d, "راهنما", null);
+                }
+            }
+        }
+
+        if (best == null) {
+            double gx = Math.rint(rawX / GRID_MM) * GRID_MM;
+            double gy = Math.rint(rawY / GRID_MM) * GRID_MM;
+            double d = Math.hypot(gx - rawX, gy - rawY);
+            if (d <= radiusMm * GRID_RADIUS_FACTOR) {
+                best = new RoutedSnap(gx, gy, d, "Grid", null);
+            }
+        }
+        return best;
+    }
+
+    private String snapLabel(SketchSnapService.Kind kind) {
+        if (kind == null) return "";
+        switch (kind) {
+            case POINT: return "نقطه";
+            case ENDPOINT: return "انتها";
+            case INTERSECTION: return "تقاطع";
+            case MIDPOINT: return "وسط";
+            case CENTER: return "مرکز";
+            case QUADRANT: return "ربع";
+            case ON_EDGE:
+            default: return "روی شیء";
+        }
+    }
+
+    /**
+     * K3.5b touch routing. Geometry is chosen by SketchSnapService, while guide
+     * and grid remain interaction-layer concerns. Legacy geometric snap is
+     * disabled only while the routed Create event is replayed, preventing it
+     * from overriding model semantics (notably phantom full-circle Arc snaps).
+     */
+    private MotionEvent routeCreateSnap(MotionEvent event, int tool) {
+        routedSnapVisible = false;
+        routedSnapLabel = "";
+        lastModelSnapKind = "";
+        if (event == null || event.getPointerCount() != 1 || !isSnapEnabled()
+                || !usesModelCreateSnap(tool)) return event;
+        int action = event.getActionMasked();
+        if (action != MotionEvent.ACTION_DOWN && action != MotionEvent.ACTION_MOVE
+                && action != MotionEvent.ACTION_UP) return event;
+
+        float rawX = coreScreenToWorldX(event.getX());
+        float rawY = coreScreenToWorldY(event.getY());
+        float radiusMm = Math.abs(coreScreenToWorldX(event.getX() + LEGACY_SNAP_RADIUS_PX) - rawX);
+        if (!(radiusMm > 0f) || Float.isInfinite(radiusMm) || Float.isNaN(radiusMm)) return event;
+
+        RoutedSnap snap = modelGuideGridSnap(rawX, rawY, radiusMm);
+        if (snap == null) return event;
+
+        float worldPerPixelX = coreScreenToWorldX(event.getX() + 1f) - rawX;
+        float worldPerPixelY = coreScreenToWorldY(event.getY() + 1f) - rawY;
+        if (Math.abs(worldPerPixelX) < 1.0e-9f || Math.abs(worldPerPixelY) < 1.0e-9f) return event;
+
+        float screenX = event.getX() + (float)((snap.xMm - rawX) / worldPerPixelX);
+        float screenY = event.getY() + (float)((snap.yMm - rawY) / worldPerPixelY);
+        MotionEvent routed = MotionEvent.obtain(event);
+        routed.setLocation(screenX, screenY);
+
+        routedSnapVisible = action != MotionEvent.ACTION_UP;
+        routedSnapScreenX = screenX;
+        routedSnapScreenY = screenY;
+        routedSnapLabel = snap.label;
+        if (snap.modelKind != null) {
+            modelSnapCount++;
+            lastModelSnapKind = snap.modelKind.name();
+        }
+        return routed;
+    }
+
+    @Override protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        if (!routedSnapVisible) return;
+        float density = getResources().getDisplayMetrics().density;
+        float s = 8f * density;
+        canvas.drawRect(routedSnapScreenX - s, routedSnapScreenY - s,
+                routedSnapScreenX + s, routedSnapScreenY + s, routedSnapPaint);
+        if (!routedSnapLabel.isEmpty()) {
+            canvas.drawText(routedSnapLabel, routedSnapScreenX + 11f * density,
+                    routedSnapScreenY - 9f * density, routedSnapTextPaint);
         }
     }
 
@@ -320,21 +413,30 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         String authorityId = commitAttempt ? UUID.randomUUID().toString() : null;
         boolean prepared = commitAttempt && prepareTransactionalDocument("gesture-create-prepare");
 
-        boolean handled = super.onTouchEvent(event);
+        boolean routedCreateSnap = event.getPointerCount() == 1 && isSnapEnabled() && usesModelCreateSnap(toolBefore);
+        MotionEvent routedEvent = routedCreateSnap ? routeCreateSnap(event, toolBefore) : event;
+        if (routedCreateSnap) toggleSnap();
+        boolean handled;
+        try {
+            handled = super.onTouchEvent(routedEvent);
+        } finally {
+            if (routedCreateSnap) toggleSnap();
+            if (routedEvent != event) routedEvent.recycle();
+        }
 
         if (commitAttempt && prepared) {
             boolean legacyCreated = entities.size() == legacyCountBefore + 1 && selected != null;
             if (legacyCreated) {
                 adoptLegacyGestureCandidate(authorityId, "gesture-create");
+                routedSnapVisible = false;
                 return handled;
             }
-            // Tiny/cancelled gestures may reach ACTION_UP without creating
-            // geometry. No model mutation occurred, so keep truthful history.
         }
 
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
                 || (toolBefore == TOOL_POINT && action == MotionEvent.ACTION_DOWN)) {
             reconcileLegacyTouchIfNeeded("touch-legacy-mutation");
+            routedSnapVisible = false;
         }
         return handled;
     }
@@ -413,10 +515,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
             String newId = UUID.randomUUID().toString();
             SketchEntity duplicate = SketchEntities.duplicateAs(source, newId).translated(dx, dy);
-            sketchDocument.add(duplicate); // one model transaction / one Undo entry
+            sketchDocument.add(duplicate);
             sketchDocument.selectOnly(newId);
 
-            super.copySelected(dx,dy); // legacy rendering/history replay
+            super.copySelected(dx,dy);
             if (!restoreLegacySelectedStableId(newId)) {
                 finishTransactionalMutation("copy-id-injection");
                 return;
@@ -424,19 +526,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             finishTransactionalMutation("copy");
         } catch (RuntimeException e) {
             lastMirrorError = "copy-authority: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
-            // A validation failure before legacy replay leaves the current model
-            // and legacy state unchanged. A later parity failure is rolled back
-            // by finishTransactionalMutation above.
         }
     }
 
-    /**
-     * K3.4c-a exact Create authority. Parse and validate the same deterministic
-     * primitive grammar used by CadCanvasView, create the model entity first,
-     * then let the legacy view replay only for rendering/history compatibility.
-     * Polygon exact command creation remains on the fallback path; gesture
-     * Polygon/Polyline candidates are adopted in K3.4c-b above.
-     */
     private SketchEntity exactCreateEntity(String raw, String id) {
         if (raw == null) return null;
         String s = raw.trim();
@@ -472,9 +564,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                         Math.abs(Float.parseFloat(a[3])),
                         Float.parseFloat(a[4]), Float.parseFloat(a[5]));
             }
-        } catch (RuntimeException ignored) {
-            // Preserve the legacy command parser's user-facing error behavior.
-        }
+        } catch (RuntimeException ignored) {}
         return null;
     }
 
@@ -482,7 +572,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         if (entity == null || !entity.isValid()) return false;
         if (!prepareTransactionalDocument(source)) return false;
         try {
-            sketchDocument.add(entity); // one Create == one model Undo entry
+            sketchDocument.add(entity);
             sketchDocument.selectOnly(entity.id());
             return true;
         } catch (RuntimeException e) {
@@ -491,21 +581,18 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    // Other unsupported operations deliberately keep the K3.3 fallback.
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
     @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
     @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
     @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) { String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out; }
     @Override public String arraySelected(int count,float dx,float dy) { String out=super.arraySelected(count,dx,dy); syncMirror("array"); return out; }
 
-    // Advanced 2D editing can mutate entities without passing through the base mutators.
     @Override public String trimSelectedLines() { String out=super.trimSelectedLines(); syncMirror("trim"); return out; }
     @Override public String extendSelectedLines() { String out=super.extendSelectedLines(); syncMirror("extend"); return out; }
     @Override public String chamferSelectedLines(float setback) { String out=super.chamferSelectedLines(setback); syncMirror("sketch-chamfer"); return out; }
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
     @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
 
-    // Driving dimensions and constraints remain legacy-owned in this K3.4 slice.
     @Override public String applySelectedDimension(String raw) { String out=super.applySelectedDimension(raw); syncMirror("dimension"); return out; }
     @Override public String setSelectedLineAngle(float degrees) { String out=super.setSelectedLineAngle(degrees); syncMirror("line-angle"); return out; }
     @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
@@ -539,8 +626,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             if (committed) return out;
             if (!injected) finishTransactionalMutation("create-command-id-injection");
 
-            // Fail-safe UX: parity failure rolls both sides back; replay the
-            // proven legacy command once and re-enter K3.3 mirror mode.
             String fallback = super.executeCommand(raw);
             syncMirror("create-command-fallback");
             return fallback;
@@ -548,8 +633,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
         long before = authorityTransitionCount;
         String out = super.executeCommand(raw);
-        // Dynamic dispatch lets supported K3.4 commands use transactional
-        // authority. Unsupported commands still invalidate document history.
         if (authorityTransitionCount == before) syncMirror("command");
         return out;
     }
