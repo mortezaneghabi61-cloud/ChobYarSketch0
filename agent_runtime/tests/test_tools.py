@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -20,10 +19,24 @@ def test_resolve_rejects_secret_suffix(tmp_path: Path, monkeypatch: pytest.Monke
         tools._resolve_repo_path("release/signing-key.jks")
 
 
-def test_policy_files_cannot_be_read_or_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_variants_are_protected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tools, "ROOT", tmp_path.resolve())
     with pytest.raises(ValueError):
-        tools._resolve_repo_path("AGENTS.md")
+        tools._resolve_repo_path(".env.production")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "AGENTS.md",
+        "docs/SHAPR3D_PROFESSOR_AGENT.md",
+        "docs/CAD_KERNEL_REWRITE_V2.md",
+    ],
+)
+def test_policy_files_are_protected(path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tools, "ROOT", tmp_path.resolve())
+    with pytest.raises(ValueError):
+        tools._resolve_repo_path(path)
 
 
 def test_workflow_write_is_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
