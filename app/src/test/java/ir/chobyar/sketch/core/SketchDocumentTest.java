@@ -42,6 +42,34 @@ public class SketchDocumentTest {
     }
 
     @Test
+    public void failedTranslationDoesNotMutateGeometryRevisionOrRedoHistory() {
+        SketchDocument doc = new SketchDocument(8);
+        doc.add(new SketchGeometry.Line(
+                "line-1",
+                new SketchGeometry.Point(0.0, 0.0),
+                new SketchGeometry.Point(1.0, 0.0)));
+        doc.selectOnly("line-1");
+        assertTrue(doc.translateSelection(10.0, 0.0));
+        assertTrue(doc.undo());
+        assertTrue(doc.canRedo());
+        long revision = doc.revision();
+
+        try {
+            // Both x values round to the same huge double, making the candidate line degenerate.
+            doc.translateSelection(Double.MAX_VALUE, 0.0);
+            throw new AssertionError("Expected invalid translated geometry to be rejected");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+
+        SketchGeometry.Line line = (SketchGeometry.Line) doc.entity("line-1");
+        assertEquals(0.0, line.a.xMm, 1.0e-9);
+        assertEquals(1.0, line.b.xMm, 1.0e-9);
+        assertEquals(revision, doc.revision());
+        assertTrue("Failed edit must preserve redo branch", doc.canRedo());
+    }
+
+    @Test
     public void removingEntityCannotLeaveStaleSelection() {
         SketchDocument doc = new SketchDocument();
         doc.add(new SketchGeometry.Circle("c1", new SketchGeometry.Point(4.0, 5.0), 12.0));
@@ -142,5 +170,22 @@ public class SketchDocumentTest {
                 new SketchGeometry.Point(10.0, 0.0),
                 new SketchGeometry.Point(20.0, 0.0)));
         assertFalse(flat.isValid());
+    }
+
+    @Test
+    public void rectangleRequiresPerpendicularNonZeroBasisVectors() {
+        SketchGeometry.Rect valid = new SketchGeometry.Rect(
+                "rect",
+                new SketchGeometry.Point(10.0, 20.0),
+                new SketchGeometry.Vector(100.0, 0.0),
+                new SketchGeometry.Vector(0.0, 50.0));
+        assertTrue(valid.isValid());
+
+        SketchGeometry.Rect skewed = new SketchGeometry.Rect(
+                "skewed",
+                new SketchGeometry.Point(0.0, 0.0),
+                new SketchGeometry.Vector(100.0, 0.0),
+                new SketchGeometry.Vector(10.0, 50.0));
+        assertFalse(skewed.isValid());
     }
 }

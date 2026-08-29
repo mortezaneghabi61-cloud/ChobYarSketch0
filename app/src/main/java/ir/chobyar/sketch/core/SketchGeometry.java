@@ -8,6 +8,7 @@ import java.util.Objects;
 /** Immutable, millimeter-based sketch primitives owned by {@link SketchDocument}. */
 public final class SketchGeometry {
     private static final double EPS = 1.0e-9;
+    private static final double ORTHOGONAL_REL_TOL = 1.0e-8;
 
     private SketchGeometry() {}
 
@@ -26,6 +27,25 @@ public final class SketchGeometry {
 
         public boolean isFinite() {
             return finite(xMm) && finite(yMm);
+        }
+    }
+
+    /** Model-space direction/extent value; translation never applies to vectors. */
+    public static final class Vector {
+        public final double xMm;
+        public final double yMm;
+
+        public Vector(double xMm, double yMm) {
+            this.xMm = xMm;
+            this.yMm = yMm;
+        }
+
+        public boolean isFinite() {
+            return finite(xMm) && finite(yMm);
+        }
+
+        public double lengthSquared() {
+            return xMm * xMm + yMm * yMm;
         }
     }
 
@@ -112,13 +132,13 @@ public final class SketchGeometry {
         }
     }
 
-    /** Rectangle represented by an origin and two model-space basis vectors. */
+    /** Rectangle represented by an origin and two perpendicular model-space basis vectors. */
     public static final class Rect extends Base {
         public final Point origin;
-        public final Point u;
-        public final Point v;
+        public final Vector u;
+        public final Vector v;
 
-        public Rect(String id, Point origin, Point u, Point v) {
+        public Rect(String id, Point origin, Vector u, Vector v) {
             super(id);
             this.origin = Objects.requireNonNull(origin, "origin");
             this.u = Objects.requireNonNull(u, "u");
@@ -127,7 +147,8 @@ public final class SketchGeometry {
 
         @Override public Kind kind() { return Kind.RECT; }
         @Override public Rect copy() {
-            return new Rect(id(), new Point(origin.xMm, origin.yMm), new Point(u.xMm, u.yMm), new Point(v.xMm, v.yMm));
+            return new Rect(id(), new Point(origin.xMm, origin.yMm),
+                    new Vector(u.xMm, u.yMm), new Vector(v.xMm, v.yMm));
         }
         @Override public Rect translated(double dxMm, double dyMm) {
             if (!validDelta(dxMm, dyMm)) throw new IllegalArgumentException("Translation must be finite");
@@ -135,10 +156,12 @@ public final class SketchGeometry {
         }
         @Override public boolean isValid() {
             if (!origin.isFinite() || !u.isFinite() || !v.isFinite()) return false;
-            double u2 = u.xMm * u.xMm + u.yMm * u.yMm;
-            double v2 = v.xMm * v.xMm + v.yMm * v.yMm;
-            double cross = u.xMm * v.yMm - u.yMm * v.xMm;
-            return u2 > EPS * EPS && v2 > EPS * EPS && Math.abs(cross) > EPS;
+            double u2 = u.lengthSquared();
+            double v2 = v.lengthSquared();
+            if (u2 <= EPS * EPS || v2 <= EPS * EPS) return false;
+            double dot = u.xMm * v.xMm + u.yMm * v.yMm;
+            double scale = Math.sqrt(u2 * v2);
+            return Math.abs(dot) <= ORTHOGONAL_REL_TOL * scale;
         }
     }
 

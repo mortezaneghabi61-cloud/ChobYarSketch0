@@ -157,20 +157,30 @@ public final class SketchDocument {
         selection.clear();
     }
 
+    /**
+     * Translates all selected geometry as one transaction. Every candidate copy
+     * is validated before undo/redo or live model state changes, so a failed
+     * numeric operation cannot corrupt history or partially move a selection.
+     */
     public synchronized boolean translateSelection(double dxMm, double dyMm) {
         if (!SketchGeometry.finite(dxMm) || !SketchGeometry.finite(dyMm)) {
             throw new IllegalArgumentException("Translation must be finite");
         }
         if (selection.isEmpty() || (Math.abs(dxMm) < 1.0e-12 && Math.abs(dyMm) < 1.0e-12)) return false;
-        ArrayList<String> movable = new ArrayList<>();
-        for (String id : selection) if (entities.containsKey(id)) movable.add(id);
-        if (movable.isEmpty()) return false;
+
+        LinkedHashMap<String, SketchEntity> moved = new LinkedHashMap<>();
+        for (String id : selection) {
+            SketchEntity current = entities.get(id);
+            if (current == null) continue;
+            SketchEntity candidate = current.translated(dxMm, dyMm);
+            requireValid(candidate);
+            moved.put(id, candidate);
+        }
+        if (moved.isEmpty()) return false;
 
         pushUndo();
-        for (String id : movable) {
-            SketchEntity moved = entities.get(id).translated(dxMm, dyMm);
-            requireValid(moved);
-            entities.put(id, moved);
+        for (Map.Entry<String, SketchEntity> entry : moved.entrySet()) {
+            entities.put(entry.getKey(), entry.getValue());
         }
         changed();
         return true;
