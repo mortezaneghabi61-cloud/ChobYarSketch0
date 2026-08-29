@@ -213,7 +213,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private String modelConstraintFailure(String source, RuntimeException e) {
         lastMirrorError = source + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
-        return "Constraint حل نشد؛ هندسه بدون تغییر ماند";
+        return "Constraint could not be solved; geometry was left unchanged";
     }
 
     private boolean finishTransactionalMutation(String source) {
@@ -361,7 +361,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 double d = Math.hypot(p.x - rawX, p.y - rawY);
                 if (d <= radiusMm * GUIDE_RADIUS_FACTOR
                         && (best == null || d < best.distanceMm)) {
-                    best = new RoutedSnap(p.x, p.y, d, "راهنما", null);
+                    best = new RoutedSnap(p.x, p.y, d, "Guide", null);
                 }
             }
         }
@@ -380,14 +380,14 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private String snapLabel(SketchSnapService.Kind kind) {
         if (kind == null) return "";
         switch (kind) {
-            case POINT: return "نقطه";
-            case ENDPOINT: return "انتها";
-            case INTERSECTION: return "تقاطع";
-            case MIDPOINT: return "وسط";
-            case CENTER: return "مرکز";
-            case QUADRANT: return "ربع";
+            case POINT: return "Point";
+            case ENDPOINT: return "Endpoint";
+            case INTERSECTION: return "Intersection";
+            case MIDPOINT: return "Midpoint";
+            case CENTER: return "Center";
+            case QUADRANT: return "Quadrant";
             case ON_EDGE:
-            default: return "روی شیء";
+            default: return "On edge";
         }
     }
 
@@ -662,7 +662,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return out;
         }
         List<String> ids=selectedModelLineIds();
-        if (ids.isEmpty()) return "برای H/V یک یا چند خط را انتخاب کن";
+        if (ids.isEmpty()) return "Select one or more lines for H/V";
         ArrayList<SketchConstraint> incoming=new ArrayList<>();
         for (String id:ids) {
             SketchGeometry.Line line=(SketchGeometry.Line)sketchDocument.entity(id);
@@ -690,7 +690,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return out;
         }
         List<String> ids=selectedModelLineIds();
-        if (ids.size()!=2) return "برای Perpendicular دقیقاً دو خط را انتخاب کن";
+        if (ids.size()!=2) return "Select exactly two lines for Perpendicular";
         try {
             SketchConstraint c=SketchConstraint.perpendicular(UUID.randomUUID().toString(),ids.get(0),ids.get(1));
             sketchDocument.addConstraintsAndSolve(java.util.Collections.singletonList(c),sketchConstraintSolver);
@@ -710,7 +710,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return out;
         }
         List<String> ids=selectedModelLineIds();
-        if (ids.size()!=2) return "برای Parallel دقیقاً دو خط را انتخاب کن";
+        if (ids.size()!=2) return "Select exactly two lines for Parallel";
         try {
             SketchConstraint c=SketchConstraint.parallel(UUID.randomUUID().toString(),ids.get(0),ids.get(1));
             sketchDocument.addConstraintsAndSolve(java.util.Collections.singletonList(c),sketchConstraintSolver);
