@@ -138,7 +138,7 @@ public final class ReferenceImageContractInstrumentationTest {
                 assertTrue(canvas.hasReferenceImage());
                 assertNotNull(referenceImage(canvas));
                 String removed = canvas.removeReferenceImage();
-                assertTrue(removed.contains("Delete"));
+                assertEquals("The reference image was deleted", removed);
                 assertFalse(canvas.hasReferenceImage());
                 Log.i(TAG, "REFERENCE_IMAGE_ITEM_RESULT add=true remove=true remaining=false");
             });
