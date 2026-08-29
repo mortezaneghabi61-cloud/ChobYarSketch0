@@ -20,7 +20,7 @@ jobs:
           ref: k3-2-legacy-stable-id-bridge
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -34,7 +34,10 @@ jobs:
       - name: Focused Sketch Core tests
         run: ./gradlew :app:testDebugUnitTest --tests 'ir.chobyar.sketch.core.*' --no-daemon
 
-      - name: Compile debug APK
+      - name: Restore reproducible development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Compile signed debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Commit product changes
