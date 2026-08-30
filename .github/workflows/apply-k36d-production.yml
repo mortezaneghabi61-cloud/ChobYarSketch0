@@ -27,20 +27,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('.github/scripts/apply-k36d-production.py')
-          lines=p.read_text().splitlines()
-          out=[]
-          found=False
-          for line in lines:
-              if 'distanceTo(new SketchGeometry.Point(10,0))' in line:
-                  indent=line[:len(line)-len(line.lstrip())]
-                  out.append(indent+'SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("new");')
-                  out.append(indent+'assertEquals(10,solved.a.xMm,1e-9); assertEquals(0,solved.a.yMm,1e-9);')
-                  found=True
-              else:
-                  out.append(line)
-          if not found:
-              raise SystemExit('distanceTo assertion anchor missing')
-          p.write_text('\n'.join(out)+'\n')
+          s=p.read_text()
+          old='assertEquals(0,((SketchGeometry.Line)d.entity("new")).a.distanceTo(new SketchGeometry.Point(10,0)),1e-9);\\n'
+          new='SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("new");\\n        assertEquals(10,solved.a.xMm,1e-9); assertEquals(0,solved.a.yMm,1e-9);\\n'
+          if old not in s:
+              raise SystemExit('distanceTo assertion substring missing')
+          p.write_text(s.replace(old,new,1))
           Path('.github/scripts/fix-k36d-applicator.py').unlink(missing_ok=True)
           PY
       - name: Apply K3.6d model-authority slice
