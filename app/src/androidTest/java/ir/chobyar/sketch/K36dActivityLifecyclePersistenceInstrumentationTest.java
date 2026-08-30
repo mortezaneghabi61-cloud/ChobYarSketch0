@@ -187,7 +187,13 @@ public class K36dActivityLifecyclePersistenceInstrumentationTest {
 
     private static void finish(ChobYarActivity value) throws Exception {
         onMain(() -> { value.finish(); return true; });
+        long deadline=System.currentTimeMillis()+5000L;
+        while(!value.isDestroyed()&&System.currentTimeMillis()<deadline){
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            Thread.sleep(25L);
+        }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        assertTrue("Activity did not reach destroyed state",value.isDestroyed());
     }
 
     private static K33MirroredCadCanvasView canvas(ChobYarActivity value) throws Exception {
