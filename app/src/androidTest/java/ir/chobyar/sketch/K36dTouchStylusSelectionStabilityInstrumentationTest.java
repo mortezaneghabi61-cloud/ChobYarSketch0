@@ -71,7 +71,9 @@ public class K36dTouchStylusSelectionStabilityInstrumentationTest {
             assertEquals("constrained solve must not jump selection to the driven entity",
                     hostId, cad.selected.stableId());
             assertEquals(1, cad.selectedObjects.size());
-            assertEquals(hostId, cad.selectedObjects.iterator().next().stableId());
+            CadCanvasView.Entity selectedObject =
+                    (CadCanvasView.Entity) cad.selectedObjects.iterator().next();
+            assertEquals(hostId, selectedObject.stableId());
             assertEquals(1, cad.sketchConstraintCount());
             assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY, cad.sketchConstraints().get(0).kind);
             assertEquals(0, cad.legacyMigratedConstraintTruthCount());
