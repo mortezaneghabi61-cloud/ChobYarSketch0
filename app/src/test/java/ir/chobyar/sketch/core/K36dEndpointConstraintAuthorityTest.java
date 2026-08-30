@@ -5,6 +5,7 @@ import java.util.Collections;
 import static org.junit.Assert.*;
 
 public class K36dEndpointConstraintAuthorityTest {
+    // Exact-head CI retrigger marker: no behavioral change.
     private static SketchGeometry.Line line(String id,double x1,double y1,double x2,double y2) {
         return new SketchGeometry.Line(id,new SketchGeometry.Point(x1,y1),new SketchGeometry.Point(x2,y2));
     }
