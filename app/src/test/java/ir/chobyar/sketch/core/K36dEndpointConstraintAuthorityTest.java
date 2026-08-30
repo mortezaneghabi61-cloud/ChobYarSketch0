@@ -94,6 +94,28 @@ public class K36dEndpointConstraintAuthorityTest {
         assertEquals(1,d.constraintCount());
     }
 
+    @Test public void degenerateLineHostFailsClosedWithoutEnteringAuthority() {
+        SketchDocument d=new SketchDocument();
+        d.add(line("host",4,4,4,4));
+        d.add(line("owner",9,7,9,12));
+        long revisionBefore=d.revision();
+
+        try {
+            d.addConstraintsAndSolve(Collections.singletonList(
+                    SketchConstraint.pointOnEntity("p-degenerate","owner",0,"host")),
+                    new DeterministicSketchConstraintSolver());
+            fail("zero-length line host must be rejected rather than treated as a point");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("non-degenerate line host"));
+        }
+
+        assertEquals(revisionBefore,d.revision());
+        assertEquals(0,d.constraintCount());
+        SketchGeometry.Line owner=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(9.0,owner.a.xMm,1e-9);
+        assertEquals(7.0,owner.a.yMm,1e-9);
+    }
+
     @Test public void danglingCreateConstraintFailsBeforeMutationOrHistory() {
         SketchDocument d=new SketchDocument();
         d.add(line("host",0,0,20,0));
