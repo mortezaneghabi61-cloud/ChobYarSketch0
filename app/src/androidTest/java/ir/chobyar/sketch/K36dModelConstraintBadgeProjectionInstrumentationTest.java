@@ -8,9 +8,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
+
+import ir.chobyar.sketch.core.DeterministicSketchConstraintSolver;
+import ir.chobyar.sketch.core.SketchConstraint;
+import ir.chobyar.sketch.core.SketchDocument;
+import ir.chobyar.sketch.core.SketchGeometry;
 
 import static org.junit.Assert.*;
 
@@ -103,6 +109,38 @@ public class K36dModelConstraintBadgeProjectionInstrumentationTest {
             assertEquals(0, cad.legacyMigratedConstraintTruthCount());
             return true;
         });
+    }
+
+    @Test public void deletingHostRemovesProjectedBadgeAndUndoRestoresSameStableConstraint() {
+        SketchDocument document = new SketchDocument();
+        document.add(line("host", 0, 0, 20, 0));
+        document.add(line("owner", 6, 4, 6, 10));
+        document.addConstraintsAndSolve(
+                Collections.singletonList(SketchConstraint.pointOnEntity(
+                        "p-delete-badge", "owner", 0, "host")),
+                new DeterministicSketchConstraintSolver());
+
+        List<ModelConstraintBadgeProjection.Badge> applied = ModelConstraintBadgeProjection.project(document);
+        assertEquals(1, applied.size());
+        assertEquals("p-delete-badge", applied.get(0).constraintId);
+        assertEquals("host", applied.get(0).targetEntityId);
+
+        assertTrue(document.remove("host"));
+        assertTrue(ModelConstraintBadgeProjection.project(document).isEmpty());
+
+        assertTrue(document.undo());
+        List<ModelConstraintBadgeProjection.Badge> restored = ModelConstraintBadgeProjection.project(document);
+        assertEquals(1, restored.size());
+        assertEquals("p-delete-badge", restored.get(0).constraintId);
+        assertEquals("owner", restored.get(0).pointEntityId);
+        assertEquals(0, restored.get(0).pointIndex);
+        assertEquals("host", restored.get(0).targetEntityId);
+    }
+
+    private static SketchGeometry.Line line(String id, double x1, double y1, double x2, double y2) {
+        return new SketchGeometry.Line(id,
+                new SketchGeometry.Point(x1, y1),
+                new SketchGeometry.Point(x2, y2));
     }
 
     private static K33MirroredCadCanvasView canvas() {
