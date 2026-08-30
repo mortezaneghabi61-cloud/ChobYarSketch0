@@ -53,18 +53,41 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -euo pipefail
-            mkdir -p test-artifacts
+            set -uo pipefail
+            ARTIFACT_DIR="${GITHUB_WORKSPACE}/test-artifacts"
+            mkdir -p "$ARTIFACT_DIR"
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
+            failures=0
             run_class() {
               local cls="$1"
-              local out="test-artifacts/${cls##*.}.txt"
-              adb shell am instrument -w -e class "$cls" ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee "$out"
-              grep -q '^OK (' "$out"
+              local short="${cls##*.}"
+              local out="${ARTIFACT_DIR}/${short}.txt"
+
+              # Every interaction contract gets a clean persisted/session surface.
+              # This prevents a preceding lifecycle or relationship test from becoming
+              # anonymous state authority for the next semantic snap test.
+              adb shell pm clear ir.chobyar.sketch >/dev/null || true
+              adb shell pm clear ir.chobyar.sketch.test >/dev/null || true
+
+              echo "=== ${cls} ===" | tee "$out"
+              set +e
+              adb shell am instrument -w -r -e class "$cls" \
+                ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner \
+                2>&1 | tee -a "$out"
+              local instrument_status=${PIPESTATUS[0]}
+              set -e
+
+              if [[ $instrument_status -ne 0 ]] || ! grep -Eq '^OK \([0-9]+ tests?\)$' "$out"; then
+                echo "K3.6d FAILURE: ${cls} (instrument_status=${instrument_status})" | tee -a "$out"
+                failures=$((failures + 1))
+              else
+                echo "K3.6d PASS: ${cls}" | tee -a "$out"
+              fi
             }
 
+            set -e
             run_class ir.chobyar.sketch.K36dAutoConnectionPolicyInstrumentationTest
             run_class ir.chobyar.sketch.K36dMidpointAuthorityInstrumentationTest
             run_class ir.chobyar.sketch.K36dModelConstraintBadgeProjectionInstrumentationTest
@@ -74,11 +97,16 @@ jobs:
             run_class ir.chobyar.sketch.K36dProductionEndpointConstraintAuthorityInstrumentationTest
             run_class ir.chobyar.sketch.K36dActivityLifecyclePersistenceInstrumentationTest
 
+            if [[ $failures -ne 0 ]]; then
+              echo "K3.6d API35 regression failures: $failures"
+              exit 1
+            fi
+
       - name: Upload K3.6d API35 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: K3-6d-UX-API35-evidence
-          path: test-artifacts/**
-          if-no-files-found: warn
+          path: ${{ github.workspace }}/test-artifacts/**
+          if-no-files-found: error
           retention-days: 7
