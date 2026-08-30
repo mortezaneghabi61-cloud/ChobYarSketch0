@@ -43,6 +43,16 @@ jobs:
       - name: Compile production and instrumentation APKs
         run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
+      - name: Initialize API35 evidence
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/test-artifacts"
+          {
+            echo "head_sha=${GITHUB_SHA}"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "evidence_initialized_before_emulator=true"
+          } > "${GITHUB_WORKSPACE}/test-artifacts/runner-context.txt"
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -62,6 +72,12 @@ jobs:
             set -uo pipefail
             ARTIFACT_DIR="${GITHUB_WORKSPACE}/test-artifacts"
             mkdir -p "$ARTIFACT_DIR"
+            {
+              echo "emulator_script_started=true"
+              adb version
+              adb devices -l
+            } | tee "${ARTIFACT_DIR}/emulator-entry.txt"
+
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
