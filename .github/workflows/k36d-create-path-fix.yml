@@ -21,34 +21,84 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Remove legacy Coincident truth from model-authoritative create path
+      - name: Patch authority regressions without restoring View-owned truth
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
+          # Endpoint authority: the legacy View may render old relationships, but
+          # it must not create object-identity Coincident truth once K3.6d owns it.
           p=Path('app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java')
           s=p.read_text()
-          old='''                detectCoincidentLinks(created);\n'''
-          new='''                // K3.6d: when model endpoint authority is active, routed Create\n                // commits COINCIDENT/POINT_ON_ENTITY into SketchDocument. Do not\n                // create a second object-identity truth in the legacy View.\n                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n'''
+          if 'protected boolean isModelEndpointConstraintAuthorityEnabled()' not in s:
+              anchor='    public ChobYarShaprCanvasView(Context context) {\n'
+              hook='''    /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n\n'''
+              if anchor not in s: raise SystemExit('endpoint authority hook anchor missing')
+              s=s.replace(anchor,hook+anchor,1)
+          old='                detectCoincidentLinks(created);\n'
+          new='''                // K3.6d: routed Create commits endpoint relationships in SketchDocument.\n                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n'''
           if old not in s: raise SystemExit('legacy coincident create anchor missing')
           p.write_text(s.replace(old,new,1))
 
+          # The former ON_EDGE test target sat inside the semantic midpoint lock
+          # band. Move only the query point; snap priority/tolerances stay intact.
           t=Path('app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java')
           s=t.read_text()
           old='stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);'
           new='stroke(cad,screen(cad,20f,25f),screen(cad,30.0f,0.2f),true);'
           if old not in s: raise SystemExit('ON_EDGE test anchor missing')
           t.write_text(s.replace(old,new,1))
+
+          # K3.6c retired solve/mutation from onDraw. The old API35 regression
+          # deliberately corrupts a legacy Entity then waits for redraw; route
+          # that stale View mutation through the production model transaction
+          # boundary instead, keeping the same strict geometry assertions.
+          q=Path('app/src/androidTest/java/ir/chobyar/sketch/SketchConstraintSolverInstrumentationTest.java')
+          s=q.read_text()
+          replacements=[
+              ('h.moveControlPoint(1, hb.x, hb.y + 33f); // deliberately violate H\n                c.invalidate();',
+               'h.moveControlPoint(1, hb.x, hb.y + 33f); // deliberately violate legacy View geometry\n                reassertModelAuthority(c);'),
+              ('p1.moveControlPoint(1, p1b.x - 30f, p1b.y + 42f);\n                c.invalidate();',
+               'p1.moveControlPoint(1, p1b.x - 30f, p1b.y + 42f);\n                reassertModelAuthority(c);'),
+              ('q1.moveControlPoint(1, q1b.x + 55f, q1b.y - 28f);\n                c.invalidate();',
+               'q1.moveControlPoint(1, q1b.x + 55f, q1b.y - 28f);\n                reassertModelAuthority(c);')]
+          for old,new in replacements:
+              if old not in s: raise SystemExit('solver authority regression anchor missing: '+old[:48])
+              s=s.replace(old,new,1)
+          helper='''\n    private static void reassertModelAuthority(Shapr3DGuideCadCanvasView c) {\n        if (c instanceof K33MirroredCadCanvasView) {\n            // prepareTransactionalSelection() replays model-owned solved geometry\n            // before any edit and moveSelected() stays outside onDraw.\n            c.moveSelected(0f, 0f);\n        } else {\n            c.invalidate();\n        }\n    }\n'''
+          anchor='\n    private static Shapr3DGuideCadCanvasView canvas(ChobYarActivity activity) {'
+          if helper.strip() not in s:
+              if anchor not in s: raise SystemExit('solver helper anchor missing')
+              s=s.replace(anchor,helper+anchor,1)
+          q.write_text(s)
+
+          # Keep a focused K3.6 model-authority regression: after persistence
+          # reopen, force another model solve pass and retain perpendicularity.
+          k=Path('app/src/androidTest/java/ir/chobyar/sketch/K36ProductionConstraintAuthorityInstrumentationTest.java')
+          s=k.read_text()
+          old='''            assertEquals(1,reopened.sketchConstraintCount());\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            return true;\n'''
+          new='''            assertEquals(1,reopened.sketchConstraintCount());\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            select(reopened,reopened.entities.get(1));\n            reopened.moveSelected(7f,-4f);\n            reopened.requireSketchMirrorParity();\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            return true;\n'''
+          # Restrict replacement to the disconnected-perpendicular method area.
+          start=s.index('    @Test public void disconnectedPerpendicularKeepsCentersAndSurvivesEditUndoRedoAndReopen()')
+          end=s.index('    @Test public void perpendicularAnchorPolicyHonorsSelectionOrder()',start)
+          block=s[start:end]
+          if old not in block: raise SystemExit('perpendicular reopen regression anchor missing')
+          block=block.replace(old,new,1)
+          k.write_text(s[:start]+block+s[end:])
           PY
-      - name: Compile all K3.6d code and tests
+      - name: Compile all affected production and API35 tests
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
-      - name: Commit verified fix and remove temporary workflow
+      - name: Commit verified fixes and remove temporary workflow
         shell: bash
         run: |
           git config user.name chobyar-supervisor
           git config user.email actions@users.noreply.github.com
           git rm .github/workflows/k36d-create-path-fix.yml
-          git add app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
-          git commit -m 'K3.6d: keep create constraints model-authoritative'
+          git add app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java \
+                  app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java \
+                  app/src/androidTest/java/ir/chobyar/sketch/SketchConstraintSolverInstrumentationTest.java \
+                  app/src/androidTest/java/ir/chobyar/sketch/K36ProductionConstraintAuthorityInstrumentationTest.java
+          git commit -m 'K3.6d: fix endpoint authority and perpendicular regression contract'
           git pull --rebase origin k3-6d-coincident-point-authority
           git push origin HEAD:k3-6d-coincident-point-authority
