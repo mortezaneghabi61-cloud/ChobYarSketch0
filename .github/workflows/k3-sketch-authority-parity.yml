@@ -13,6 +13,7 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/K35SnapTouchAuthorityInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K36ProductionConstraintAuthorityInstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K36d*InstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K38*InstrumentationTest.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
 
 concurrency:
@@ -60,7 +61,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run K3.3 through K3.6d authority regressions
+      - name: Run K3.3 through K3.8 authority regressions
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -97,6 +98,8 @@ jobs:
             grep -q 'OK (1 test)' test-artifacts/k3-save-open-relationship-history.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dActivityLifecyclePersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-activity-lifecycle-persistence.txt
             grep -q 'OK (2 tests)' test-artifacts/k3-activity-lifecycle-persistence.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K38ProductionLockAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-production-lock-authority.txt
+            grep -q 'OK (1 test)' test-artifacts/k3-production-lock-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
