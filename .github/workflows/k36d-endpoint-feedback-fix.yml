@@ -1,0 +1,90 @@
+name: K3.6d endpoint feedback fix
+
+on:
+  push:
+    branches: [k3-6d-coincident-point-authority]
+    paths:
+      - '.github/workflows/k36d-endpoint-feedback-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: k3-6d-coincident-point-authority
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Patch model-owned endpoint feedback
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'anchor missing in {path}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          k33 = 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
+          replace_once(k33,
+              '    private final Paint modelConstraintTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n',
+              '    private final Paint modelConstraintTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n'
+              '    private final Paint modelConstraintPointPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n')
+          replace_once(k33,
+              '        modelConstraintTextPaint.setTextAlign(Paint.Align.CENTER);\n',
+              '        modelConstraintTextPaint.setTextAlign(Paint.Align.CENTER);\n'
+              '        modelConstraintPointPaint.setColor(Color.rgb(35, 105, 205));\n'
+              '        modelConstraintPointPaint.setStyle(Paint.Style.FILL);\n')
+          replace_once(k33,
+              '    public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }\n',
+              '    public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }\n'
+              '    /** Number of model-owned endpoint relationships that render point-state feedback. */\n'
+              '    public int modelEndpointConstraintFeedbackCount() {\n'
+              '        int count = 0;\n'
+              '        for (SketchConstraint c : sketchDocument.constraints()) {\n'
+              '            if (c.kind == SketchConstraint.Kind.COINCIDENT\n'
+              '                    || c.kind == SketchConstraint.Kind.POINT_ON_ENTITY) count++;\n'
+              '        }\n'
+              '        return count;\n'
+              '    }\n')
+          replace_once(k33,
+              '            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL\n',
+              '            } else if (constraint.kind == SketchConstraint.Kind.COINCIDENT\n'
+              '                    || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY) {\n'
+              '                if (constraint.primaryPointIndex < 0 || constraint.primaryPointIndex > 1) continue;\n'
+              '                SketchGeometry.Point point = constraint.primaryPointIndex == 0 ? a.a : a.b;\n'
+              '                float density = getResources().getDisplayMetrics().density;\n'
+              '                canvas.drawCircle(screenX(point.xMm), screenY(point.yMm),\n'
+              '                        4.0f * density, modelConstraintPointPaint);\n'
+              '            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL\n')
+
+          test = 'app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
+          replace_once(test,
+              '            assertEquals(SketchConstraint.Kind.COINCIDENT,c.kind);\n',
+              '            assertEquals(SketchConstraint.Kind.COINCIDENT,c.kind);\n'
+              '            assertEquals(1,cad.modelEndpointConstraintFeedbackCount());\n')
+          replace_once(test,
+              '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n',
+              '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n'
+              '            assertEquals(1,cad.modelEndpointConstraintFeedbackCount());\n')
+          PY
+      - name: Verify endpoint feedback compilation and JVM contracts
+        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Commit feedback fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name 'chobyar-supervisor'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/k36d-endpoint-feedback-fix.yml
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
+          git commit -m 'K3.6d: render model-owned endpoint constraint feedback'
+          git push origin HEAD:k3-6d-coincident-point-authority
