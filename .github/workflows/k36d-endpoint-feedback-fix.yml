@@ -1,4 +1,4 @@
-name: K3.6d endpoint feedback fix
+name: K3.6d endpoint feedback and auto-constraint fix
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Patch model-owned endpoint feedback
+      - name: Patch endpoint feedback and Shapr-style auto-constraint semantics
         shell: bash
         run: |
           python3 - <<'PY'
@@ -31,8 +31,19 @@ jobs:
               p = Path(path)
               text = p.read_text()
               if old not in text:
-                  raise SystemExit(f'anchor missing in {path}: {old[:100]!r}')
+                  raise SystemExit(f'anchor missing in {path}: {old[:120]!r}')
               p.write_text(text.replace(old, new, 1))
+
+          param = 'app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java'
+          replace_once(param,
+              '    private void initReflection() {\n',
+              '    /** Model-authority hook: endpoint connections stay automatic, while point-on-entity follows Auto Constraints. */\n'
+              '    protected boolean isAutoConstraintCreationEnabled() { return autoConstraints; }\n\n'
+              '    public void setAutoConstraintsEnabled(boolean enabled) {\n'
+              '        autoConstraints = enabled;\n'
+              '        invalidate();\n'
+              '    }\n\n'
+              '    private void initReflection() {\n')
 
           k33 = 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
           replace_once(k33,
@@ -57,6 +68,10 @@ jobs:
               '        return count;\n'
               '    }\n')
           replace_once(k33,
+              '                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n',
+              '                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n'
+              '                            && isAutoConstraintCreationEnabled()) {\n')
+          replace_once(k33,
               '            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL\n',
               '            } else if (constraint.kind == SketchConstraint.Kind.COINCIDENT\n'
               '                    || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY) {\n'
@@ -76,15 +91,61 @@ jobs:
               '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n',
               '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n'
               '            assertEquals(1,cad.modelEndpointConstraintFeedbackCount());\n')
+          replace_once(test,
+              '    @Test public void createSnappedToExistingEndpointCommitsCoincidentWithEntityAsOneUndo() throws Exception {\n'
+              '        onMain(() -> {\n'
+              '            K33MirroredCadCanvasView cad=canvas();\n',
+              '    @Test public void createSnappedToExistingEndpointCommitsCoincidentWithEntityAsOneUndo() throws Exception {\n'
+              '        onMain(() -> {\n'
+              '            K33MirroredCadCanvasView cad=canvas();\n'
+              '            cad.setAutoConstraintsEnabled(false); // connected endpoints remain automatic\n')
+
+          old = '''    @Test public void createSnappedToLineInteriorCommitsPointOnEntityWithEntityAsOneUndo() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad=canvas();
+            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();
+            Set<String> before=ids(cad.exportSketchProjectState());
+
+            cad.setTool(CadCanvasView.TOOL_LINE);
+            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);
+            cad.requireSketchMirrorParity();
+
+            String state=cad.exportSketchProjectState();
+'''
+          new = '''    @Test public void createSnappedToLineInteriorCommitsPointOnEntityWithEntityAsOneUndo() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad=canvas();
+            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();
+
+            // Shapr-style behavior: an interior Coincident is optional auto-constraining.
+            cad.setAutoConstraintsEnabled(false);
+            cad.setTool(CadCanvasView.TOOL_LINE);
+            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);
+            cad.requireSketchMirrorParity();
+            assertEquals("ON_EDGE",cad.sketchLastModelSnapKind());
+            assertEquals(0,cad.sketchConstraintCount());
+            cad.undo();
+            cad.requireSketchMirrorParity();
+            assertEquals(1,entityCount(cad.exportSketchProjectState()));
+
+            cad.setAutoConstraintsEnabled(true);
+            Set<String> before=ids(cad.exportSketchProjectState());
+            cad.setTool(CadCanvasView.TOOL_LINE);
+            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);
+            cad.requireSketchMirrorParity();
+
+            String state=cad.exportSketchProjectState();
+'''
+          replace_once(test, old, new)
           PY
-      - name: Verify endpoint feedback compilation and JVM contracts
+      - name: Verify compilation and JVM contracts
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
-      - name: Commit feedback fix and remove temporary workflow
+      - name: Commit fixes and remove temporary workflow
         shell: bash
         run: |
           git config user.name 'chobyar-supervisor'
           git config user.email 'actions@users.noreply.github.com'
           git rm .github/workflows/k36d-endpoint-feedback-fix.yml
-          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
-          git commit -m 'K3.6d: render model-owned endpoint constraint feedback'
+          git add app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
+          git commit -m 'K3.6d: align endpoint feedback and auto-constraint behavior'
           git push origin HEAD:k3-6d-coincident-point-authority
