@@ -1,0 +1,197 @@
+name: K3.6d production routing fix
+
+on:
+  push:
+    branches: [k3-6d-coincident-point-authority]
+    paths: ['.github/workflows/k36d-production-routing-fix.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: k3-6d-coincident-point-authority
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Apply model-owned midpoint and extension routing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'missing anchor: {label}')
+              return text.replace(old, new, 1)
+
+          p = Path('app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java')
+          s = p.read_text()
+          anchor = '''        super.setLayerVisible(first.layerName, true);
+              }
+          '''
+          replacement = '''        super.setLayerVisible(first.layerName, true);
+              }
+
+              /** Single source of truth for model-routed automatic constraint policy. */
+              protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }
+          '''
+          s = replace_once(s, anchor, replacement, 'auto-constraints accessor')
+          p.write_text(s)
+
+          p = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          s = p.read_text()
+
+          s = replace_once(s,
+              '''                case COINCIDENT:
+                          case POINT_ON_ENTITY: score += 100; break;
+              ''',
+              '''                case COINCIDENT:
+                          case POINT_ON_ENTITY:
+                          case MIDPOINT: score += 100; break;
+              ''',
+              'midpoint authority score')
+
+          s = replace_once(s,
+              '''                    && c.kind != SketchConstraint.Kind.COINCIDENT
+                          && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY) continue;
+              ''',
+              '''                    && c.kind != SketchConstraint.Kind.COINCIDENT
+                          && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
+                          && c.kind != SketchConstraint.Kind.MIDPOINT) continue;
+              ''',
+              'midpoint parity replay')
+
+          s = replace_once(s,
+              '''                    if (snap.modelKind == SketchSnapService.Kind.ENDPOINT && snap.targetPointIndex >= 0) {
+                                  generated.add(SketchConstraint.coincident(UUID.randomUUID().toString(),
+                                          stableId, drivenPoint, snap.targetEntityId, snap.targetPointIndex));
+                              } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {
+                                  generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
+                                          stableId, drivenPoint, snap.targetEntityId));
+                              }
+              ''',
+              '''                    if (snap.modelKind == SketchSnapService.Kind.ENDPOINT && snap.targetPointIndex >= 0) {
+                                  generated.add(SketchConstraint.coincident(UUID.randomUUID().toString(),
+                                          stableId, drivenPoint, snap.targetEntityId, snap.targetPointIndex));
+                              } else if (snap.modelKind == SketchSnapService.Kind.MIDPOINT) {
+                                  generated.add(SketchConstraint.midpoint(UUID.randomUUID().toString(),
+                                          stableId, drivenPoint, snap.targetEntityId));
+                              } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE
+                                      && modelAutoConstraintsEnabled()) {
+                                  generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
+                                          stableId, drivenPoint, snap.targetEntityId));
+                              }
+              ''',
+              'create relationship generation')
+
+          anchor = '''    private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
+          '''
+          helper = '''    private RoutedSnap modelLineExtensionGuideSnap(float rawX, float rawY, float radiusMm) {
+              if (!isShowGuides()) return null;
+              RoutedSnap best = null;
+              for (SketchEntity value : sketchDocument.entities()) {
+                  if (!(value instanceof SketchGeometry.Line)) continue;
+                  SketchGeometry.Line line = (SketchGeometry.Line) value;
+                  double dx = line.b.xMm - line.a.xMm;
+                  double dy = line.b.yMm - line.a.yMm;
+                  double length2 = dx * dx + dy * dy;
+                  if (length2 <= 1.0e-12) continue;
+                  double t = ((rawX - line.a.xMm) * dx + (rawY - line.a.yMm) * dy) / length2;
+                  if (t >= 0.0 && t <= 1.0) continue;
+                  double x = line.a.xMm + t * dx;
+                  double y = line.a.yMm + t * dy;
+                  double distance = Math.hypot(x - rawX, y - rawY);
+                  if (distance <= radiusMm * GUIDE_RADIUS_FACTOR
+                          && (best == null || distance < best.distanceMm)) {
+                      best = new RoutedSnap(x, y, distance, "Guide",
+                              SketchSnapService.Kind.ON_EDGE, line.id(), -1);
+                  }
+              }
+              return best;
+          }
+
+              private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
+          '''
+          s = replace_once(s, anchor, helper, 'model extension helper')
+
+          legacy_guide = '''        if (isShowGuides()) {
+                  for (Entity entity : entities) {
+                      if (entity == null || !coreIsVisible(entity)) continue;
+                      String description = entity.describe();
+                      if (description == null || !description.startsWith("Guide ")) continue;
+                      PointF p = entity.nearestPoint(rawX, rawY);
+                      if (p == null) continue;
+                      double d = Math.hypot(p.x - rawX, p.y - rawY);
+                      if (d <= radiusMm * GUIDE_RADIUS_FACTOR
+                              && (best == null || d < best.distanceMm)) {
+                          best = new RoutedSnap(p.x, p.y, d, "Guide", null, null, -1);
+                      }
+                  }
+              }
+
+              if (best == null) {
+          '''
+          model_guide = '''        RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
+              if (extension != null) {
+                  boolean magneticDiscrete = best != null
+                          && (best.modelKind == SketchSnapService.Kind.ENDPOINT
+                              || best.modelKind == SketchSnapService.Kind.MIDPOINT)
+                          && best.distanceMm <= radiusMm * 0.25d;
+                  if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {
+                      best = extension;
+                  }
+              }
+
+              if (best == null) {
+          '''
+          s = replace_once(s, legacy_guide, model_guide, 'source-aware model extension')
+
+          s = replace_once(s,
+              '''            if (action == MotionEvent.ACTION_UP
+                          && (snap.modelKind == SketchSnapService.Kind.ENDPOINT
+                              || snap.modelKind == SketchSnapService.Kind.ON_EDGE)
+                          && snap.targetEntityId != null) {
+                      committedCreateSnap = snap;
+                  }
+              ''',
+              '''            if (action == MotionEvent.ACTION_UP && snap.targetEntityId != null) {
+                      boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT
+                              || snap.modelKind == SketchSnapService.Kind.MIDPOINT;
+                      boolean policyAutomatic = snap.modelKind == SketchSnapService.Kind.ON_EDGE
+                              && modelAutoConstraintsEnabled();
+                      if (alwaysAutomatic || policyAutomatic) committedCreateSnap = snap;
+                  }
+              ''',
+              'route create durable policy')
+
+          s = replace_once(s,
+              '''            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";
+              ''',
+              '''            String glyph = (badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT
+                          || badge.kind == ModelConstraintBadgeProjection.BadgeKind.MIDPOINT) ? "●" : "◇";
+              ''',
+              'midpoint feedback glyph')
+
+          p.write_text(s)
+          PY
+      - name: Verify unit and Android test compilation
+        run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
+      - name: Commit verified source and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name chobyar-supervisor
+          git config user.email actions@users.noreply.github.com
+          git rm .github/workflows/k36d-production-routing-fix.yml
+          git add app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          git commit -m 'K3.6d: route midpoint and extension relationships from model truth'
+          git pull --rebase origin k3-6d-coincident-point-authority
+          git push origin HEAD:k3-6d-coincident-point-authority
