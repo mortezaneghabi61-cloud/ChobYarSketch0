@@ -2,7 +2,9 @@ package ir.chobyar.sketch;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import ir.chobyar.sketch.core.SketchConstraint;
@@ -66,15 +68,31 @@ public final class ModelConstraintBadgeProjection {
 
     public static List<Badge> project(SketchDocument document) {
         Objects.requireNonNull(document, "document");
+        return project(document.constraints(), document.entities());
+    }
+
+    /**
+     * Snapshot overload used by View/tests so presentation can consume already
+     * exposed model snapshots without gaining direct SketchDocument ownership.
+     */
+    public static List<Badge> project(List<SketchConstraint> constraints,
+                                      List<SketchEntity> entities) {
+        Objects.requireNonNull(constraints, "constraints");
+        Objects.requireNonNull(entities, "entities");
+        HashMap<String, SketchEntity> byId = new HashMap<>();
+        for (SketchEntity entity : entities) {
+            if (entity != null && entity.id() != null) byId.put(entity.id(), entity);
+        }
         ArrayList<Badge> out = new ArrayList<>();
-        for (SketchConstraint constraint : document.constraints()) {
-            Badge badge = projectOne(document, constraint);
+        for (SketchConstraint constraint : constraints) {
+            Badge badge = projectOne(byId, constraint);
             if (badge != null) out.add(badge);
         }
         return Collections.unmodifiableList(out);
     }
 
-    private static Badge projectOne(SketchDocument document, SketchConstraint constraint) {
+    private static Badge projectOne(Map<String, SketchEntity> entities,
+                                    SketchConstraint constraint) {
         if (constraint == null) return null;
         BadgeKind badgeKind;
         if (constraint.kind == SketchConstraint.Kind.COINCIDENT) {
@@ -85,7 +103,7 @@ public final class ModelConstraintBadgeProjection {
             return null;
         }
 
-        SketchGeometry.Point point = endpoint(document.entity(constraint.primaryEntityId),
+        SketchGeometry.Point point = endpoint(entities.get(constraint.primaryEntityId),
                 constraint.primaryPointIndex);
         if (point == null) return null;
 
@@ -93,10 +111,10 @@ public final class ModelConstraintBadgeProjection {
         // reaches the renderer. Persistence/model validation remains responsible
         // for rejecting invalid authority state; drawing must never repair it.
         if (constraint.secondaryEntityId == null
-                || document.entity(constraint.secondaryEntityId) == null) return null;
+                || entities.get(constraint.secondaryEntityId) == null) return null;
 
         if (badgeKind == BadgeKind.COINCIDENT
-                && endpoint(document.entity(constraint.secondaryEntityId),
+                && endpoint(entities.get(constraint.secondaryEntityId),
                 constraint.secondaryPointIndex) == null) return null;
 
         return new Badge(constraint.id,
