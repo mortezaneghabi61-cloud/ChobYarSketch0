@@ -2,9 +2,10 @@ name: K3.6d endpoint authority fix
 
 on:
   push:
-    branches: [k3-6d-coincident-point-authority]
+    branches:
+      - k3-6d-coincident-point-authority
     paths:
-      - '.github/workflows/k36d-endpoint-feedback-fix.yml'
+      - .github/workflows/k36d-endpoint-feedback-fix.yml
 
 permissions:
   contents: write
@@ -21,161 +22,38 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Patch K3.6d endpoint authority contracts
+      - name: Patch exact K3.6d failures
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              if old not in text:
-                  raise SystemExit(f'anchor missing in {path}: {old[:120]!r}')
-              p.write_text(text.replace(old, new, 1))
-
-          # Coincident contract: primary is the driven endpoint, secondary is the target.
-          solver = 'app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java'
-          replace_once(solver,
-              '''            case COINCIDENT: {
-                SketchGeometry.Line a = line(entities, c.primaryEntityId);
-                SketchGeometry.Line b = line(entities, c.secondaryEntityId);
-                SketchGeometry.Point target = endpoint(a, c.primaryPointIndex);
-                entities.put(c.secondaryEntityId, withEndpoint(b, c.secondaryPointIndex, target));
-                break;
-            }
-''',
-              '''            case COINCIDENT: {
-                SketchGeometry.Line driven = line(entities, c.primaryEntityId);
-                SketchGeometry.Line targetOwner = line(entities, c.secondaryEntityId);
-                SketchGeometry.Point target = endpoint(targetOwner, c.secondaryPointIndex);
-                entities.put(c.primaryEntityId, withEndpoint(driven, c.primaryPointIndex, target));
-                break;
-            }
-''')
-
-          # Once the subclass owns endpoint constraints, the old object-reference store must stay empty.
-          shapr = 'app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java'
-          replace_once(shapr,
-              '    public ChobYarShaprCanvasView(Context context) {\n',
-              '    /** Migration hook: subclasses with SketchDocument endpoint authority suppress legacy relationship truth. */\n'
-              '    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n\n'
-              '    public ChobYarShaprCanvasView(Context context) {\n')
-          replace_once(shapr,
-              '                detectCoincidentLinks(created);\n',
-              '                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n')
-
-          param = 'app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java'
-          replace_once(param,
-              '    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n'
-              '    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n',
-              '    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n'
-              '    @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n')
-          replace_once(param,
-              '    private void initReflection() {\n',
-              '    /** Endpoint-to-endpoint stays automatic; Point-on-Entity follows the Auto Constraints setting. */\n'
-              '    protected boolean isAutoConstraintCreationEnabled() { return autoConstraints; }\n\n'
-              '    public void setAutoConstraintsEnabled(boolean enabled) {\n'
-              '        autoConstraints = enabled;\n'
-              '        invalidate();\n'
-              '    }\n\n'
-              '    private void initReflection() {\n')
-
-          k33 = 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
-          replace_once(k33,
-              '    private final Paint modelConstraintTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n',
-              '    private final Paint modelConstraintTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n'
-              '    private final Paint modelConstraintPointPaint = new Paint(Paint.ANTI_ALIAS_FLAG);\n')
-          replace_once(k33,
-              '        modelConstraintTextPaint.setTextAlign(Paint.Align.CENTER);\n',
-              '        modelConstraintTextPaint.setTextAlign(Paint.Align.CENTER);\n'
-              '        modelConstraintPointPaint.setColor(Color.rgb(35, 105, 205));\n'
-              '        modelConstraintPointPaint.setStyle(Paint.Style.FILL);\n')
-          replace_once(k33,
-              '    public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }\n',
-              '    public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }\n'
-              '    /** Number of model-owned endpoint relationships that render point-state feedback. */\n'
-              '    public int modelEndpointConstraintFeedbackCount() {\n'
-              '        int count = 0;\n'
-              '        for (SketchConstraint c : sketchDocument.constraints()) {\n'
-              '            if (c.kind == SketchConstraint.Kind.COINCIDENT\n'
-              '                    || c.kind == SketchConstraint.Kind.POINT_ON_ENTITY) count++;\n'
-              '        }\n'
-              '        return count;\n'
-              '    }\n')
-          replace_once(k33,
-              '                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n',
-              '                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n'
-              '                            && isAutoConstraintCreationEnabled()) {\n')
-          replace_once(k33,
-              '            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL\n',
-              '            } else if (constraint.kind == SketchConstraint.Kind.COINCIDENT\n'
-              '                    || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY) {\n'
-              '                if (constraint.primaryPointIndex < 0 || constraint.primaryPointIndex > 1) continue;\n'
-              '                SketchGeometry.Point point = constraint.primaryPointIndex == 0 ? a.a : a.b;\n'
-              '                float density = getResources().getDisplayMetrics().density;\n'
-              '                canvas.drawCircle(screenX(point.xMm), screenY(point.yMm),\n'
-              '                        4.0f * density, modelConstraintPointPaint);\n'
-              '            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL\n')
-
-          test = 'app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
-          replace_once(test,
-              '            assertEquals(SketchConstraint.Kind.COINCIDENT,c.kind);\n',
-              '            assertEquals(SketchConstraint.Kind.COINCIDENT,c.kind);\n'
-              '            assertEquals(1,cad.modelEndpointConstraintFeedbackCount());\n')
-          replace_once(test,
-              '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n',
-              '            assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,c.kind);\n'
-              '            assertEquals(1,cad.modelEndpointConstraintFeedbackCount());\n')
-          replace_once(test,
-              '            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n',
-              '            K33MirroredCadCanvasView cad=canvas();\n            cad.setAutoConstraintsEnabled(false); // Shapr3D keeps connected endpoints automatic.\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n')
-
-          old = '''    @Test public void createSnappedToLineInteriorCommitsPointOnEntityWithEntityAsOneUndo() throws Exception {
-        onMain(() -> {
-            K33MirroredCadCanvasView cad=canvas();
-            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();
-            Set<String> before=ids(cad.exportSketchProjectState());
-
-            cad.setTool(CadCanvasView.TOOL_LINE);
-            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);
-            cad.requireSketchMirrorParity();
-
-            String state=cad.exportSketchProjectState();
-'''
-          new = '''    @Test public void createSnappedToLineInteriorCommitsPointOnEntityWithEntityAsOneUndo() throws Exception {
-        onMain(() -> {
-            K33MirroredCadCanvasView cad=canvas();
-            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();
-
-            // Interior Point-on-Entity is optional auto-constraining; avoid the midpoint snap zone.
-            cad.setAutoConstraintsEnabled(false);
-            cad.setTool(CadCanvasView.TOOL_LINE);
-            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);
-            cad.requireSketchMirrorParity();
-            assertEquals("ON_EDGE",cad.sketchLastModelSnapKind());
-            assertEquals(0,cad.sketchConstraintCount());
-            cad.undo();
-            cad.requireSketchMirrorParity();
-            assertEquals(1,entityCount(cad.exportSketchProjectState()));
-
-            cad.setAutoConstraintsEnabled(true);
-            Set<String> before=ids(cad.exportSketchProjectState());
-            cad.setTool(CadCanvasView.TOOL_LINE);
-            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);
-            cad.requireSketchMirrorParity();
-
-            String state=cad.exportSketchProjectState();
-'''
-          replace_once(test, old, new)
+          def once(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit('missing patch anchor: '+path)
+              p.write_text(s.replace(old,new,1))
+          solver='app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java'
+          old='            case COINCIDENT: {\n                SketchGeometry.Line a = line(entities, c.primaryEntityId);\n                SketchGeometry.Line b = line(entities, c.secondaryEntityId);\n                SketchGeometry.Point target = endpoint(a, c.primaryPointIndex);\n                entities.put(c.secondaryEntityId, withEndpoint(b, c.secondaryPointIndex, target));\n                break;\n            }\n'
+          new='            case COINCIDENT: {\n                SketchGeometry.Line driven = line(entities, c.primaryEntityId);\n                SketchGeometry.Line targetOwner = line(entities, c.secondaryEntityId);\n                SketchGeometry.Point target = endpoint(targetOwner, c.secondaryPointIndex);\n                entities.put(c.primaryEntityId, withEndpoint(driven, c.primaryPointIndex, target));\n                break;\n            }\n'
+          once(solver,old,new)
+          shapr='app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java'
+          once(shapr,'    public ChobYarShaprCanvasView(Context context) {\n','    /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n\n    public ChobYarShaprCanvasView(Context context) {\n')
+          once(shapr,'                detectCoincidentLinks(created);\n','                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n')
+          param='app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java'
+          once(param,'    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n','    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n')
+          once(param,'    private void initReflection() {\n','    /** Connected endpoints stay automatic; interior Point-on-Entity follows Auto Constraints. */\n    protected boolean isAutoConstraintCreationEnabled() { return autoConstraints; }\n\n    public void setAutoConstraintsEnabled(boolean enabled) { autoConstraints=enabled; invalidate(); }\n\n    private void initReflection() {\n')
+          k33='app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
+          once(k33,'                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n','                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n                            && isAutoConstraintCreationEnabled()) {\n')
+          test='app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
+          once(test,'            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);\n','            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);\n')
+          once(test,'            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n','            K33MirroredCadCanvasView cad=canvas();\n            cad.setAutoConstraintsEnabled(false);\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n')
           PY
-      - name: Verify compilation and JVM contracts
+      - name: Verify production and test compilation
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
-      - name: Commit fixes and remove temporary workflow
+      - name: Commit verified fixes
         shell: bash
         run: |
-          git config user.name 'chobyar-supervisor'
-          git config user.email 'actions@users.noreply.github.com'
+          git config user.name chobyar-supervisor
+          git config user.email actions@users.noreply.github.com
           git rm .github/workflows/k36d-endpoint-feedback-fix.yml
           git add app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
           git commit -m 'K3.6d: correct endpoint constraint authority semantics'
