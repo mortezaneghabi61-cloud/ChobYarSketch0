@@ -97,6 +97,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 if (!(a instanceof SketchGeometry.Line) || !isPointHost(b)) {
                     return "POINT_ON_ENTITY requires a line endpoint and line/circle/arc host";
                 }
+                if (b instanceof SketchGeometry.Line && isDegenerateLine((SketchGeometry.Line) b)) {
+                    return "POINT_ON_ENTITY requires a non-degenerate line host";
+                }
                 return validEndpoint(c.primaryPointIndex)
                         ? null : "POINT_ON_ENTITY requires endpoint index 0 or 1";
             default:
@@ -110,6 +113,12 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return entity instanceof SketchGeometry.Line
                 || entity instanceof SketchGeometry.Circle
                 || entity instanceof SketchGeometry.Arc;
+    }
+
+    private static boolean isDegenerateLine(SketchGeometry.Line line) {
+        double dx = line.b.xMm - line.a.xMm;
+        double dy = line.b.yMm - line.a.yMm;
+        return dx * dx + dy * dy <= EPS;
     }
 
     private static void apply(SketchConstraint c, LinkedHashMap<String, SketchEntity> entities) {
@@ -233,7 +242,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         double dx = line.b.xMm - line.a.xMm;
         double dy = line.b.yMm - line.a.yMm;
         double l2 = dx * dx + dy * dy;
-        if (l2 <= EPS) return line.a;
+        if (l2 <= EPS) throw new IllegalStateException("Degenerate line host reached projection");
         double t = ((p.xMm - line.a.xMm) * dx + (p.yMm - line.a.yMm) * dy) / l2;
         return new SketchGeometry.Point(line.a.xMm + t * dx, line.a.yMm + t * dy);
     }
