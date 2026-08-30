@@ -38,7 +38,7 @@ public class K36dSaveOpenRelationshipHistoryInstrumentationTest {
 
             ConstraintInteractionContract.Result applied=
                     source.applyModelCoincidentForTest(drivenId,0,anchorId,1);
-            assertEquals(ConstraintInteractionContract.Status.APPLIED,applied.status);
+            assertEquals(ConstraintInteractionContract.ResultCode.APPLIED,applied.code);
             source.requireSketchMirrorParity();
 
             String saved=source.exportSketchProjectState();
