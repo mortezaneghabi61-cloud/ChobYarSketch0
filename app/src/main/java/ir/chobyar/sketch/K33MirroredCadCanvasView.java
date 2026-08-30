@@ -670,7 +670,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected void onDraw(Canvas canvas) {
-        replayAuthoritativeConstrainedGeometryBeforeDraw();
+        // Rendering is presentation-only. Geometry replay belongs to interaction/transaction boundaries.
         super.onDraw(canvas);
         drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
@@ -685,6 +685,15 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     private void drawModelConstraintFeedback(Canvas canvas) {
+        // K3.6d endpoint badges are a stateless projection of model-owned constraints.
+        // They must never read coincidenceLinks/pointOnLineLinks or repair geometry while drawing.
+        for (ModelConstraintBadgeProjection.Badge badge
+                : ModelConstraintBadgeProjection.project(sketchDocument)) {
+            float bx = screenX(badge.xMm);
+            float by = screenY(badge.yMm);
+            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";
+            canvas.drawText(glyph, bx, by - 12f, modelConstraintTextPaint);
+        }
         for (SketchConstraint constraint : sketchDocument.constraints()) {
             SketchEntity primary = sketchDocument.entity(constraint.primaryEntityId);
             if (!(primary instanceof SketchGeometry.Line)) continue;

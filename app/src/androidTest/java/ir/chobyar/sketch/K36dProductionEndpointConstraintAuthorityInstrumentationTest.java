@@ -211,7 +211,7 @@ public class K36dProductionEndpointConstraintAuthorityInstrumentationTest {
         });
     }
 
-    @Test public void directLegacyEndpointDriftIsReplayedFromModelDuringDrawWithoutChangingModel() throws Exception {
+    @Test public void drawNeverRepairsLegacyDriftOrMutatesAuthoritativeGeometry() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad=canvas();
             cad.executeCommand("LINE 0 0 10 0"); CadCanvasView.Entity a=cad.selected;
@@ -224,11 +224,11 @@ public class K36dProductionEndpointConstraintAuthorityInstrumentationTest {
 
             CadCanvasView.LineEntity legacy=legacyLine(cad,bId);
             legacy.x1=77f; legacy.y1=88f;
-            assertEquals(77f,legacy.x1,0f); assertEquals(88f,legacy.y1,0f);
-
             Bitmap bitmap=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888);
             cad.onDraw(new Canvas(bitmap));
-            assertEquals(10f,legacy.x1,(float)EPS); assertEquals(0f,legacy.y1,(float)EPS);
+
+            // Draw is pure presentation: it neither repairs stale View geometry nor changes model truth.
+            assertEquals(77f,legacy.x1,0f); assertEquals(88f,legacy.y1,0f);
             SketchGeometry.Line after=modelLine(cad,bId);
             assertPoint(after.a,before.a.xMm,before.a.yMm);
             assertPoint(after.b,before.b.xMm,before.b.yMm);
