@@ -33,6 +33,33 @@ public class K36dEndpointConstraintAuthorityTest {
         assertTrue(d.remove("host")); assertEquals(0,d.constraintCount());
     }
 
+    @Test public void pointOnEntityProjectsToSupportingLineBeyondVisibleSegment() {
+        SketchDocument d=new SketchDocument();
+        d.add(line("host",0,0,10,0));
+        d.add(line("owner",15,4,15,9));
+
+        d.addConstraintsAndSolve(Collections.singletonList(
+                SketchConstraint.pointOnEntity("p-extension","owner",0,"host")),
+                new DeterministicSketchConstraintSolver());
+
+        SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(15.0,solved.a.xMm,1e-9);
+        assertEquals(0.0,solved.a.yMm,1e-9);
+        assertEquals(1,d.constraintCount());
+        assertEquals("host",d.constraint("p-extension").secondaryEntityId);
+
+        assertTrue(d.undo());
+        SketchGeometry.Line before=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(15.0,before.a.xMm,1e-9);
+        assertEquals(4.0,before.a.yMm,1e-9);
+        assertEquals(0,d.constraintCount());
+        assertTrue(d.redo());
+        SketchGeometry.Line redone=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(15.0,redone.a.xMm,1e-9);
+        assertEquals(0.0,redone.a.yMm,1e-9);
+        assertEquals(1,d.constraintCount());
+    }
+
     @Test public void danglingCreateConstraintFailsBeforeMutationOrHistory() {
         SketchDocument d=new SketchDocument();
         d.add(line("host",0,0,20,0));
