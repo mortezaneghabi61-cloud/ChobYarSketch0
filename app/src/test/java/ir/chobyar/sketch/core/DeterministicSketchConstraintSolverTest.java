@@ -83,7 +83,7 @@ public class DeterministicSketchConstraintSolverTest {
         SketchGeometry.Line other = line("other", 30, 4, 40, 4);
         SketchConstraintSolver.Result coincident = solver.solve(
                 Arrays.asList(host, other),
-                Collections.singletonList(SketchConstraint.coincident("c", "host", 1, "other", 0)));
+                Collections.singletonList(SketchConstraint.coincident("c", "other", 0, "host", 1)));
         assertTrue(coincident.solved());
         SketchGeometry.Line moved = solvedLine(coincident, "other");
         assertEquals(20.0, moved.a.xMm, EPS);
