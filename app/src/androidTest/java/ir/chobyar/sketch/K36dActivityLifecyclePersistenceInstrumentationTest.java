@@ -111,6 +111,70 @@ public class K36dActivityLifecyclePersistenceInstrumentationTest {
         assertEquals(0,(int)onMain(reopened::legacyMigratedConstraintTruthCount));
     }
 
+    @Test public void launcherPointOnEntityCreateIsOneUndoAndSurvivesPauseRelaunchWithHistoryReset() throws Exception {
+        activity=launch();
+        K33MirroredCadCanvasView cad=canvas(activity);
+
+        String hostId=onMain(() -> {
+            cad.clearAll();
+            cad.executeCommand("LINE 0 0 100 0");
+            return cad.selected.stableId();
+        });
+        Set<String> before=ids(onMain(cad::exportSketchProjectState));
+
+        onMain(() -> {
+            cad.setTool(CadCanvasView.TOOL_LINE);
+            float[] a=screen(cad,20f,25f);
+            float[] b=screen(cad,30f,0.2f);
+            stroke(cad,a,b);
+            cad.requireSketchMirrorParity();
+            return true;
+        });
+
+        String state=onMain(cad::exportSketchProjectState);
+        String created=onlyNewId(before,state);
+        assertEquals("ON_EDGE",onMain(cad::sketchLastModelSnapKind));
+        SketchConstraint constraint=onMain(() -> cad.sketchConstraints().get(0));
+        assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,constraint.kind);
+        assertEquals(created,constraint.primaryEntityId);
+        assertEquals(1,constraint.primaryPointIndex);
+        assertEquals(hostId,constraint.secondaryEntityId);
+        assertEquals(-1,constraint.secondaryPointIndex);
+
+        // Real interaction contract: Create + generated Point-on-Entity is one Undo.
+        onMain(() -> { cad.undo(); cad.requireSketchMirrorParity(); return true; });
+        assertFalse(ids(onMain(cad::exportSketchProjectState)).contains(created));
+        assertEquals(0,(int)onMain(cad::sketchConstraintCount));
+        assertTrue(onMain(cad::redoSketch));
+        assertTrue(ids(onMain(cad::exportSketchProjectState)).contains(created));
+        assertEquals(1,(int)onMain(cad::sketchConstraintCount));
+
+        finish(activity);
+        activity=null;
+        assertTrue(recovery.hasSnapshot());
+
+        activity=launch();
+        K33MirroredCadCanvasView reopened=canvas(activity);
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+
+        String reopenedState=onMain(reopened::exportSketchProjectState);
+        assertTrue(ids(reopenedState).contains(hostId));
+        assertTrue(ids(reopenedState).contains(created));
+        assertEquals(1,(int)onMain(reopened::sketchConstraintCount));
+        SketchConstraint reopenedConstraint=onMain(() -> reopened.sketchConstraints().get(0));
+        assertEquals(constraint.id,reopenedConstraint.id);
+        assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY,reopenedConstraint.kind);
+        assertEquals(constraint.primaryEntityId,reopenedConstraint.primaryEntityId);
+        assertEquals(constraint.primaryPointIndex,reopenedConstraint.primaryPointIndex);
+        assertEquals(constraint.secondaryEntityId,reopenedConstraint.secondaryEntityId);
+        assertEquals(constraint.secondaryPointIndex,reopenedConstraint.secondaryPointIndex);
+        onMain(() -> { reopened.requireSketchMirrorParity(); return true; });
+
+        assertFalse(onMain(reopened::sketchAuthorityCanUndo));
+        assertFalse(onMain(reopened::sketchAuthorityHistoryActive));
+        assertEquals(0,(int)onMain(reopened::legacyMigratedConstraintTruthCount));
+    }
+
     private static ChobYarActivity launch() {
         Context context=ApplicationProvider.getApplicationContext();
         Intent intent=new Intent(context,ChobYarActivity.class)
