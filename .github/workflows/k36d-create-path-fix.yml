@@ -1,0 +1,54 @@
+name: K3.6d create-path authority repair
+
+on:
+  push:
+    branches: [k3-6d-coincident-point-authority]
+    paths: ['.github/workflows/k36d-create-path-fix.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: k3-6d-coincident-point-authority
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Remove legacy Coincident truth from model-authoritative create path
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java')
+          s=p.read_text()
+          old='''                detectCoincidentLinks(created);\n'''
+          new='''                // K3.6d: when model endpoint authority is active, routed Create\n                // commits COINCIDENT/POINT_ON_ENTITY into SketchDocument. Do not\n                // create a second object-identity truth in the legacy View.\n                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n'''
+          if old not in s: raise SystemExit('legacy coincident create anchor missing')
+          p.write_text(s.replace(old,new,1))
+
+          t=Path('app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java')
+          s=t.read_text()
+          old='stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);'
+          new='stroke(cad,screen(cad,20f,25f),screen(cad,30.0f,0.2f),true);'
+          if old not in s: raise SystemExit('ON_EDGE test anchor missing')
+          t.write_text(s.replace(old,new,1))
+          PY
+      - name: Compile all K3.6d code and tests
+        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Commit verified fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name chobyar-supervisor
+          git config user.email actions@users.noreply.github.com
+          git rm .github/workflows/k36d-create-path-fix.yml
+          git add app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
+          git commit -m 'K3.6d: keep create constraints model-authoritative'
+          git pull --rebase origin k3-6d-coincident-point-authority
+          git push origin HEAD:k3-6d-coincident-point-authority
