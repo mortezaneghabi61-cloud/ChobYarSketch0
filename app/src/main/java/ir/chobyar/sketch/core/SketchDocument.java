@@ -395,8 +395,10 @@ public final class SketchDocument {
         boolean any = false;
         for (String id : selection) {
             SketchEntity current = moved.get(id);
-            if (current == null || isFixedEntity(id)) continue;
-            SketchEntity candidate = current.translated(dxMm, dyMm);
+            if (current == null || isWholeFixedEntity(id)) continue;
+            Set<Integer> fixedPoints = fixedPointIndices(id);
+            SketchEntity candidate = translateRespectingFixedPoints(current, fixedPoints, dxMm, dyMm);
+            if (candidate == null) continue;
             requireValid(candidate);
             moved.put(id, candidate);
             any = true;
@@ -404,12 +406,50 @@ public final class SketchDocument {
         return any ? moved : new LinkedHashMap<>();
     }
 
-    private boolean isFixedEntity(String entityId) {
+    private boolean isWholeFixedEntity(String entityId) {
         for (SketchConstraint constraint : constraints.values()) {
             if (constraint.kind == SketchConstraint.Kind.FIXED
-                    && constraint.primaryEntityId.equals(entityId)) return true;
+                    && constraint.primaryEntityId.equals(entityId)
+                    && constraint.fixesWholeEntity()) return true;
         }
         return false;
+    }
+
+    private Set<Integer> fixedPointIndices(String entityId) {
+        LinkedHashSet<Integer> out = new LinkedHashSet<>();
+        for (SketchConstraint constraint : constraints.values()) {
+            if (constraint.kind == SketchConstraint.Kind.FIXED
+                    && constraint.primaryEntityId.equals(entityId)
+                    && constraint.fixesPoint()) {
+                out.add(constraint.primaryPointIndex);
+            }
+        }
+        return out;
+    }
+
+    /** Returns null when the selected entity has no translational degree of freedom. */
+    private static SketchEntity translateRespectingFixedPoints(SketchEntity current, Set<Integer> fixedPoints,
+                                                               double dxMm, double dyMm) {
+        if (fixedPoints == null || fixedPoints.isEmpty()) return current.translated(dxMm, dyMm);
+        if (current instanceof SketchGeometry.Line) {
+            SketchGeometry.Line line = (SketchGeometry.Line) current;
+            boolean lockA = fixedPoints.contains(0);
+            boolean lockB = fixedPoints.contains(1);
+            if (lockA && lockB) return null;
+            if (lockA) {
+                return new SketchGeometry.Line(line.id(), line.a,
+                        line.b.translated(dxMm, dyMm));
+            }
+            if (lockB) {
+                return new SketchGeometry.Line(line.id(),
+                        line.a.translated(dxMm, dyMm), line.b);
+            }
+            return line.translated(dxMm, dyMm);
+        }
+        if (current instanceof SketchGeometry.Circle || current instanceof SketchGeometry.Arc) {
+            return fixedPoints.contains(0) ? null : current.translated(dxMm, dyMm);
+        }
+        throw new IllegalStateException("Unsupported point-FIXED geometry reached translation: " + current.id());
     }
 
     private static LinkedHashMap<String, SketchEntity> requireSolvedSnapshot(
@@ -515,6 +555,21 @@ public final class SketchDocument {
         for (String entityId : constraint.referencedEntityIds()) {
             if (!entityMap.containsKey(entityId)) {
                 throw new IllegalArgumentException("Constraint " + constraint.id + " references missing entity: " + entityId);
+            }
+        }
+        if (constraint.kind == SketchConstraint.Kind.FIXED && constraint.fixesPoint()) {
+            SketchEntity entity = entityMap.get(constraint.primaryEntityId);
+            if (entity instanceof SketchGeometry.Line) {
+                if (constraint.primaryPointIndex != 0 && constraint.primaryPointIndex != 1) {
+                    throw new IllegalArgumentException("FIXED line point must be endpoint 0 or 1");
+                }
+            } else if (entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc) {
+                if (constraint.primaryPointIndex != 0) {
+                    throw new IllegalArgumentException("FIXED circle/arc point must be center index 0");
+                }
+            } else {
+                throw new IllegalArgumentException(
+                        "Point FIXED currently supports line endpoints and circle/arc centers");
             }
         }
     }
