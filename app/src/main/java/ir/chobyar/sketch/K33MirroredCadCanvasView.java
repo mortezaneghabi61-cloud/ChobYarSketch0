@@ -589,7 +589,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             double distance = Math.hypot(x - rawX, y - rawY);
             if (distance <= radiusMm * GUIDE_RADIUS_FACTOR
                     && (best == null || distance < best.distanceMm)) {
-                best = new RoutedSnap(x, y, distance, "Guide",
+                best = new RoutedSnap(x, y, distance, "On extension",
                         SketchSnapService.Kind.ON_EDGE, line.id(), -1);
             }
         }
@@ -616,14 +616,13 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
         RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
         if (extension != null) {
-            // Keep the interaction router consistent with SketchSnapService's
-            // discrete magnetic lock: a nearby semantic target must not be
-            // stolen by a slightly closer generic line-extension projection.
-            boolean magneticDiscrete = best != null
+            // Endpoint/midpoint/other discrete model semantics are authoritative
+            // inside the snap radius. Extension only competes with generic edge
+            // projection (or an empty result), never with a discrete model target.
+            boolean semanticDiscrete = best != null
                     && best.modelKind != null
-                    && best.modelKind != SketchSnapService.Kind.ON_EDGE
-                    && best.distanceMm <= radiusMm * 0.25d;
-            if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {
+                    && best.modelKind != SketchSnapService.Kind.ON_EDGE;
+            if (best == null || (!semanticDiscrete && extension.distanceMm < best.distanceMm)) {
                 best = extension;
             }
         }
