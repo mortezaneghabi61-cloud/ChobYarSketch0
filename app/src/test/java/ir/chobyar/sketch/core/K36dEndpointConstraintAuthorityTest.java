@@ -150,4 +150,31 @@ public class K36dEndpointConstraintAuthorityTest {
         assertNull(d.entity("replacement"));
         assertTrue(d.canUndo());
     }
+
+    @Test public void deletingCoincidentHostCascadesAndUndoRedoRestoresConstraintAtomically() {
+        SketchDocument d=new SketchDocument();
+        d.add(line("host",0,0,10,0));
+        d.addWithConstraintsAndSolve(
+                line("owner",10,0,18,5),
+                Collections.singletonList(SketchConstraint.coincident("c-delete","owner",0,"host",1)),
+                new DeterministicSketchConstraintSolver());
+        assertEquals(2,d.size());
+        assertEquals(1,d.constraintCount());
+
+        assertTrue(d.remove("host"));
+        assertNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertEquals(0,d.constraintCount());
+
+        assertTrue(d.undo());
+        assertNotNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertNotNull(d.constraint("c-delete"));
+        assertEquals(1,d.constraintCount());
+
+        assertTrue(d.redo());
+        assertNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertEquals(0,d.constraintCount());
+    }
 }
