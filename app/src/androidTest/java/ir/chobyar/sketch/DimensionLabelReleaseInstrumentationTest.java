@@ -59,6 +59,7 @@ public final class DimensionLabelReleaseInstrumentationTest {
                 canvas.executeCommand("RECT 0 0 40 20");
                 assertNotNull("Rectangle must remain selected for exact dimension editing", canvas.selected);
                 canvas.setTool(CadCanvasView.TOOL_SELECT);
+                centerSelectedEntityInSafeCanvas(canvas);
                 canvas.invalidate();
             });
             instrumentation.waitForIdleSync();
@@ -68,6 +69,12 @@ public final class DimensionLabelReleaseInstrumentationTest {
                 Shapr3DGuideCadCanvasView canvas = holder[0];
                 RectF label = exactFieldRect(canvas);
                 assertFalse("Exact dimension label was not drawn", label.isEmpty());
+                assertTrue("Exact label must stay inside safe horizontal canvas area: " + label,
+                        label.centerX() > canvas.getWidth() * 0.25f
+                                && label.centerX() < canvas.getWidth() * 0.75f);
+                assertTrue("Exact label must stay inside safe vertical canvas area: " + label,
+                        label.centerY() > canvas.getHeight() * 0.25f
+                                && label.centerY() < canvas.getHeight() * 0.75f);
                 int[] location = new int[2];
                 canvas.getLocationOnScreen(location);
                 start[0] = location[0] + label.centerX();
@@ -121,6 +128,14 @@ public final class DimensionLabelReleaseInstrumentationTest {
                         Math.abs(offset.y - finalDy) <= 3f);
             });
         }
+    }
+
+    private static void centerSelectedEntityInSafeCanvas(Shapr3DGuideCadCanvasView canvas) {
+        RectF b = canvas.selected.bounds();
+        float wx = (b.left + b.right) * 0.5f;
+        float wy = (b.top + b.bottom) * 0.5f;
+        canvas.offsetX = canvas.getWidth() * 0.50f - wx * 3f * canvas.viewScale;
+        canvas.offsetY = canvas.getHeight() * 0.55f - wy * 3f * canvas.viewScale;
     }
 
     private static RectF exactFieldRect(Shapr3DGuideCadCanvasView canvas) {
