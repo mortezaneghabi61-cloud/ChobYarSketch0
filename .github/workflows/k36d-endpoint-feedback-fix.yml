@@ -59,11 +59,23 @@ jobs:
           k33='app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
           once(k33,'                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n','                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n                            && isAutoConstraintCreationEnabled()) {\n',required=False)
 
+          # Rendering is a pure consumer. Replay model-owned solved geometry at
+          # interaction boundaries, never from onDraw().
+          once(k33,'    @Override protected void onDraw(Canvas canvas) {\n        replayAuthoritativeConstrainedGeometryBeforeDraw();\n        super.onDraw(canvas);\n','    @Override protected void onDraw(Canvas canvas) {\n        super.onDraw(canvas);\n',required=False)
+          once(k33,'        if (commitAttempt && prepared) {\n','        if (action == MotionEvent.ACTION_MOVE && sketchDocument.constraintCount() > 0) {\n            replayAuthoritativeConstrainedGeometryBeforeDraw();\n        }\n\n        if (commitAttempt && prepared) {\n',required=False)
+
+          # Render migrated endpoint-constraint badges strictly from the model
+          # projection; no legacy relationship list participates.
+          once(k33,'    private void drawModelConstraintFeedback(Canvas canvas) {\n        for (SketchConstraint constraint : sketchDocument.constraints()) {\n','    private void drawModelConstraintFeedback(Canvas canvas) {\n        for (ModelConstraintBadgeProjection.Badge badge : ModelConstraintBadgeProjection.project(sketchDocument)) {\n            float bx=screenX(badge.xMm);\n            float by=screenY(badge.yMm);\n            String glyph=badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";\n            canvas.drawText(glyph,bx+8f,by-8f,modelConstraintTextPaint);\n        }\n        for (SketchConstraint constraint : sketchDocument.constraints()) {\n',required=False)
+
           test='app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
           once(test,'            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);\n','            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);\n',required=False)
           anchor='            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n'
           replacement='            K33MirroredCadCanvasView cad=canvas();\n            cad.setAutoConstraintsEnabled(false); // endpoint connection remains automatic\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n'
           once(test,anchor,replacement,required=False)
+
+          once(test,'    @Test public void directLegacyEndpointDriftIsReplayedFromModelDuringDrawWithoutChangingModel() throws Exception {\n','    @Test public void drawDoesNotMutateLegacyOrModelConstraintGeometry() throws Exception {\n',required=False)
+          once(test,'            cad.onDraw(new Canvas(bitmap));\n            assertEquals(10f,legacy.x1,(float)EPS); assertEquals(0f,legacy.y1,(float)EPS);\n','            cad.onDraw(new Canvas(bitmap));\n            assertEquals(77f,legacy.x1,0f); assertEquals(88f,legacy.y1,0f);\n',required=False)
           PY
       - name: Verify production and test compilation
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
