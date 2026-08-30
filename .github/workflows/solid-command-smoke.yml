@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   production-cad:
-    name: 62 production CAD contracts on API 35
+    name: Production CAD contracts on API 35
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -27,10 +27,20 @@ jobs:
       CHOBYAR_VERSION_NAME: 0.3.cadreg.${{ github.run_number }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "PRODUCTION_CAD_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - name: Validate persisted production contracts
         shell: bash
@@ -104,31 +114,15 @@ jobs:
           grep -q 'occt_kernel_services.h' app/src/main/cpp/occt_brep_jni.cpp
           grep -q 'occt_kernel_services.h' app/src/main/cpp/occt_indexed_direct.cpp
 
-          test -f .github/scripts/run-production-cad-regression.sh
-          for t in \
-            TouchInputContractInstrumentationTest \
-            PinchZoomInstrumentationTest \
-            SketchUndoRedoInstrumentationTest \
-            SketchPrimitivesSnapInstrumentationTest \
-            SketchConstraintSolverInstrumentationTest \
-            SmartCommandSelectionInstrumentationTest \
-            SolidCommandInstrumentationTest \
-            BooleanCommandInstrumentationTest \
-            BooleanKeepOriginalsInstrumentationTest \
-            DirectFinishInstrumentationTest \
-            ShellPushPullInstrumentationTest \
-            SweepCommandInstrumentationTest \
-            LoftCommandInstrumentationTest \
-            WorkspaceSessionInstrumentationTest \
-            RevolveThreadContractInstrumentationTest \
-            ConstructionProjectInstrumentationTest \
-            Project3DExactInstrumentationTest \
-            Project3DSelectedBodyInstrumentationTest \
-            AssociativeProjectProvenanceInstrumentationTest \
-            ExactEdgeTopologyInstrumentationTest \
-            ExactFaceTopologyInstrumentationTest \
-            ExactTopologyIndexInstrumentationTest; do
-              test -f "app/src/androidTest/java/ir/chobyar/sketch/${t}.java"
+          # The runner script is the single source of truth for suite membership.
+          # Every run_contract class must have a committed instrumentation source.
+          RUNNER=.github/scripts/run-production-cad-regression.sh
+          test -f "$RUNNER"
+          mapfile -t contract_classes < <(sed -nE 's/^[[:space:]]*run_contract[[:space:]]+([A-Za-z0-9_]+).*/\1/p' "$RUNNER")
+          test "${#contract_classes[@]}" -gt 0
+          printf 'PRODUCTION_CAD_SUITE classes=%s\n' "${#contract_classes[@]}"
+          for t in "${contract_classes[@]}"; do
+            test -f "app/src/androidTest/java/ir/chobyar/sketch/${t}.java"
           done
 
       - name: Set up JDK 17
