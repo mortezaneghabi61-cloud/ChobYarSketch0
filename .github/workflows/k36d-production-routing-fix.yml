@@ -26,160 +26,167 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_once(text, old, new, label):
-              if old not in text:
-                  raise SystemExit(f'missing anchor: {label}')
-              return text.replace(old, new, 1)
+          def require(condition, label):
+              if not condition:
+                  raise SystemExit('precondition failed: ' + label)
 
+          def sub_once(text, pattern, replacement, label, flags=0):
+              out, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, got {count}')
+              return out
+
+          # Expose the existing private Auto Constraints state to the model-routing subclass.
           p = Path('app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java')
           s = p.read_text()
-          anchor = '''        super.setLayerVisible(first.layerName, true);
-              }
-          '''
-          replacement = '''        super.setLayerVisible(first.layerName, true);
-              }
-
-              /** Single source of truth for model-routed automatic constraint policy. */
-              protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }
-          '''
-          s = replace_once(s, anchor, replacement, 'auto-constraints accessor')
+          if 'modelAutoConstraintsEnabled()' not in s:
+              anchor = '    private void initReflection() {'
+              require(anchor in s, 'Parametric initReflection anchor')
+              accessor = (
+                  '    /** Single source of truth for model-routed automatic constraint policy. */\n'
+                  '    protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }\n\n'
+              )
+              s = s.replace(anchor, accessor + anchor, 1)
+          require('protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }' in s,
+                  'Auto Constraints accessor')
           p.write_text(s)
 
           p = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
           s = p.read_text()
 
-          s = replace_once(s,
-              '''                case COINCIDENT:
-                          case POINT_ON_ENTITY: score += 100; break;
-              ''',
-              '''                case COINCIDENT:
-                          case POINT_ON_ENTITY:
-                          case MIDPOINT: score += 100; break;
-              ''',
-              'midpoint authority score')
+          # Existing driving midpoint relationships must participate in anchor authority.
+          if not re.search(r'case\s+MIDPOINT\s*:\s*score\s*\+=\s*100', s):
+              s = sub_once(
+                  s,
+                  r'(case\s+COINCIDENT\s*:\s*\n\s*case\s+POINT_ON_ENTITY\s*:)\s*score\s*\+=\s*100\s*;\s*break\s*;',
+                  r'\1\n                case MIDPOINT: score += 100; break;',
+                  'midpoint authority score')
 
-          s = replace_once(s,
-              '''                    && c.kind != SketchConstraint.Kind.COINCIDENT
-                          && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY) continue;
-              ''',
-              '''                    && c.kind != SketchConstraint.Kind.COINCIDENT
-                          && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
-                          && c.kind != SketchConstraint.Kind.MIDPOINT) continue;
-              ''',
-              'midpoint parity replay')
+          # Model-owned midpoint geometry must be fenced from stale legacy control points too.
+          if '&& c.kind != SketchConstraint.Kind.MIDPOINT) continue;' not in s:
+              s = sub_once(
+                  s,
+                  r'(&&\s*c\.kind\s*!=\s*SketchConstraint\.Kind\.POINT_ON_ENTITY)\s*\)\s*continue\s*;',
+                  r'\1\n                    && c.kind != SketchConstraint.Kind.MIDPOINT) continue;',
+                  'midpoint authority replay')
 
-          s = replace_once(s,
-              '''                    if (snap.modelKind == SketchSnapService.Kind.ENDPOINT && snap.targetPointIndex >= 0) {
-                                  generated.add(SketchConstraint.coincident(UUID.randomUUID().toString(),
-                                          stableId, drivenPoint, snap.targetEntityId, snap.targetPointIndex));
-                              } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {
-                                  generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
-                                          stableId, drivenPoint, snap.targetEntityId));
-                              }
-              ''',
-              '''                    if (snap.modelKind == SketchSnapService.Kind.ENDPOINT && snap.targetPointIndex >= 0) {
-                                  generated.add(SketchConstraint.coincident(UUID.randomUUID().toString(),
-                                          stableId, drivenPoint, snap.targetEntityId, snap.targetPointIndex));
-                              } else if (snap.modelKind == SketchSnapService.Kind.MIDPOINT) {
-                                  generated.add(SketchConstraint.midpoint(UUID.randomUUID().toString(),
-                                          stableId, drivenPoint, snap.targetEntityId));
-                              } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE
-                                      && modelAutoConstraintsEnabled()) {
-                                  generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
-                                          stableId, drivenPoint, snap.targetEntityId));
-                              }
-              ''',
-              'create relationship generation')
+          # Create+auto-relationship is one model transaction: Endpoint/Midpoint are always automatic;
+          # generic on-edge/extension obeys the actual Auto Constraints setting.
+          old_on_edge = '} else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {'
+          if 'SketchConstraint.midpoint(UUID.randomUUID().toString()' not in s:
+              require(old_on_edge in s, 'Create ON_EDGE generation anchor')
+              midpoint_branch = (
+                  '} else if (snap.modelKind == SketchSnapService.Kind.MIDPOINT) {\n'
+                  '                        generated.add(SketchConstraint.midpoint(UUID.randomUUID().toString(),\n'
+                  '                                stableId, drivenPoint, snap.targetEntityId));\n'
+                  '                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n'
+                  '                            && modelAutoConstraintsEnabled()) {'
+              )
+              s = s.replace(old_on_edge, midpoint_branch, 1)
+          require('SketchConstraint.midpoint(UUID.randomUUID().toString()' in s,
+                  'MIDPOINT Create relationship generation')
+          require('snap.modelKind == SketchSnapService.Kind.ON_EDGE\n                            && modelAutoConstraintsEnabled()' in s,
+                  'ON_EDGE Auto Constraints policy')
 
-          anchor = '''    private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
-          '''
-          helper = '''    private RoutedSnap modelLineExtensionGuideSnap(float rawX, float rawY, float radiusMm) {
-              if (!isShowGuides()) return null;
-              RoutedSnap best = null;
-              for (SketchEntity value : sketchDocument.entities()) {
-                  if (!(value instanceof SketchGeometry.Line)) continue;
-                  SketchGeometry.Line line = (SketchGeometry.Line) value;
-                  double dx = line.b.xMm - line.a.xMm;
-                  double dy = line.b.yMm - line.a.yMm;
-                  double length2 = dx * dx + dy * dy;
-                  if (length2 <= 1.0e-12) continue;
-                  double t = ((rawX - line.a.xMm) * dx + (rawY - line.a.yMm) * dy) / length2;
-                  if (t >= 0.0 && t <= 1.0) continue;
-                  double x = line.a.xMm + t * dx;
-                  double y = line.a.yMm + t * dy;
-                  double distance = Math.hypot(x - rawX, y - rawY);
-                  if (distance <= radiusMm * GUIDE_RADIUS_FACTOR
-                          && (best == null || distance < best.distanceMm)) {
-                      best = new RoutedSnap(x, y, distance, "Guide",
-                              SketchSnapService.Kind.ON_EDGE, line.id(), -1);
-                  }
-              }
-              return best;
-          }
+          # Source-aware line-extension guide from SketchDocument geometry.
+          if 'modelLineExtensionGuideSnap(' not in s:
+              anchor = '    private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {'
+              require(anchor in s, 'modelGuideGridSnap anchor')
+              helper = (
+                  '    private RoutedSnap modelLineExtensionGuideSnap(float rawX, float rawY, float radiusMm) {\n'
+                  '        if (!isShowGuides()) return null;\n'
+                  '        RoutedSnap best = null;\n'
+                  '        for (SketchEntity value : sketchDocument.entities()) {\n'
+                  '            if (!(value instanceof SketchGeometry.Line)) continue;\n'
+                  '            SketchGeometry.Line line = (SketchGeometry.Line) value;\n'
+                  '            double dx = line.b.xMm - line.a.xMm;\n'
+                  '            double dy = line.b.yMm - line.a.yMm;\n'
+                  '            double length2 = dx * dx + dy * dy;\n'
+                  '            if (length2 <= 1.0e-12) continue;\n'
+                  '            double t = ((rawX - line.a.xMm) * dx + (rawY - line.a.yMm) * dy) / length2;\n'
+                  '            if (t >= 0.0 && t <= 1.0) continue;\n'
+                  '            double x = line.a.xMm + t * dx;\n'
+                  '            double y = line.a.yMm + t * dy;\n'
+                  '            double distance = Math.hypot(x - rawX, y - rawY);\n'
+                  '            if (distance <= radiusMm * GUIDE_RADIUS_FACTOR\n'
+                  '                    && (best == null || distance < best.distanceMm)) {\n'
+                  '                best = new RoutedSnap(x, y, distance, "Guide",\n'
+                  '                        SketchSnapService.Kind.ON_EDGE, line.id(), -1);\n'
+                  '            }\n'
+                  '        }\n'
+                  '        return best;\n'
+                  '    }\n\n'
+              )
+              s = s.replace(anchor, helper + anchor, 1)
 
-              private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
-          '''
-          s = replace_once(s, anchor, helper, 'model extension helper')
+          # Insert the model extension candidate before legacy visual-only Guide fallback.
+          if 'RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);' not in s:
+              guide_anchor = '        if (isShowGuides()) {'
+              require(guide_anchor in s, 'legacy Guide block anchor')
+              extension_eval = (
+                  '        RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);\n'
+                  '        if (extension != null) {\n'
+                  '            boolean magneticDiscrete = best != null\n'
+                  '                    && (best.modelKind == SketchSnapService.Kind.ENDPOINT\n'
+                  '                        || best.modelKind == SketchSnapService.Kind.MIDPOINT)\n'
+                  '                    && best.distanceMm <= radiusMm * 0.25d;\n'
+                  '            if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {\n'
+                  '                best = extension;\n'
+                  '            }\n'
+                  '        }\n\n'
+              )
+              s = s.replace(guide_anchor, extension_eval + guide_anchor, 1)
 
-          legacy_guide = '''        if (isShowGuides()) {
-                  for (Entity entity : entities) {
-                      if (entity == null || !coreIsVisible(entity)) continue;
-                      String description = entity.describe();
-                      if (description == null || !description.startsWith("Guide ")) continue;
-                      PointF p = entity.nearestPoint(rawX, rawY);
-                      if (p == null) continue;
-                      double d = Math.hypot(p.x - rawX, p.y - rawY);
-                      if (d <= radiusMm * GUIDE_RADIUS_FACTOR
-                              && (best == null || d < best.distanceMm)) {
-                          best = new RoutedSnap(p.x, p.y, d, "Guide", null, null, -1);
-                      }
-                  }
-              }
+          # Anonymous legacy Guide may still provide visual snap fallback, but can never override model semantics.
+          legacy_condition = ('                if (d <= radiusMm * GUIDE_RADIUS_FACTOR\n'
+                              '                        && (best == null || d < best.distanceMm)) {')
+          if legacy_condition in s:
+              s = s.replace(
+                  legacy_condition,
+                  '                if (best == null && d <= radiusMm * GUIDE_RADIUS_FACTOR) {',
+                  1)
 
-              if (best == null) {
-          '''
-          model_guide = '''        RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
-              if (extension != null) {
-                  boolean magneticDiscrete = best != null
-                          && (best.modelKind == SketchSnapService.Kind.ENDPOINT
-                              || best.modelKind == SketchSnapService.Kind.MIDPOINT)
-                          && best.distanceMm <= radiusMm * 0.25d;
-                  if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {
-                      best = extension;
-                  }
-              }
+          # Persist durable snap metadata according to policy.
+          route_pattern = (
+              r'if\s*\(action\s*==\s*MotionEvent\.ACTION_UP\s*'
+              r'&&\s*\(snap\.modelKind\s*==\s*SketchSnapService\.Kind\.ENDPOINT\s*'
+              r'\|\|\s*snap\.modelKind\s*==\s*SketchSnapService\.Kind\.ON_EDGE\)\s*'
+              r'&&\s*snap\.targetEntityId\s*!=\s*null\)\s*\{\s*'
+              r'committedCreateSnap\s*=\s*snap\s*;\s*\}'
+          )
+          if 'boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT' not in s:
+              route_replacement = (
+                  'if (action == MotionEvent.ACTION_UP && snap.targetEntityId != null) {\n'
+                  '                boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT\n'
+                  '                        || snap.modelKind == SketchSnapService.Kind.MIDPOINT;\n'
+                  '                boolean policyAutomatic = snap.modelKind == SketchSnapService.Kind.ON_EDGE\n'
+                  '                        && modelAutoConstraintsEnabled();\n'
+                  '                if (alwaysAutomatic || policyAutomatic) committedCreateSnap = snap;\n'
+                  '            }'
+              )
+              s = sub_once(s, route_pattern, route_replacement, 'route Create durable policy', flags=re.S)
 
-              if (best == null) {
-          '''
-          s = replace_once(s, legacy_guide, model_guide, 'source-aware model extension')
+          # Filled-center feedback for connected midpoint authority.
+          if 'BadgeKind.MIDPOINT) ? "●" : "◇"' not in s:
+              glyph = '            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";'
+              require(glyph in s, 'constraint feedback glyph anchor')
+              s = s.replace(
+                  glyph,
+                  '            String glyph = (badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT\n'
+                  '                    || badge.kind == ModelConstraintBadgeProjection.BadgeKind.MIDPOINT) ? "●" : "◇";',
+                  1)
 
-          s = replace_once(s,
-              '''            if (action == MotionEvent.ACTION_UP
-                          && (snap.modelKind == SketchSnapService.Kind.ENDPOINT
-                              || snap.modelKind == SketchSnapService.Kind.ON_EDGE)
-                          && snap.targetEntityId != null) {
-                      committedCreateSnap = snap;
-                  }
-              ''',
-              '''            if (action == MotionEvent.ACTION_UP && snap.targetEntityId != null) {
-                      boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT
-                              || snap.modelKind == SketchSnapService.Kind.MIDPOINT;
-                      boolean policyAutomatic = snap.modelKind == SketchSnapService.Kind.ON_EDGE
-                              && modelAutoConstraintsEnabled();
-                      if (alwaysAutomatic || policyAutomatic) committedCreateSnap = snap;
-                  }
-              ''',
-              'route create durable policy')
-
-          s = replace_once(s,
-              '''            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";
-              ''',
-              '''            String glyph = (badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT
-                          || badge.kind == ModelConstraintBadgeProjection.BadgeKind.MIDPOINT) ? "●" : "◇";
-              ''',
-              'midpoint feedback glyph')
-
+          # Final semantic assertions: patching must leave no ambiguous policy path.
+          require('modelLineExtensionGuideSnap(' in s, 'source-aware model extension helper')
+          require('SketchSnapService.Kind.ON_EDGE, line.id(), -1' in s, 'extension stable host ID')
+          require('boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT' in s,
+                  'durable snap routing')
+          require('|| snap.modelKind == SketchSnapService.Kind.MIDPOINT' in s,
+                  'automatic midpoint routing')
+          require('&& modelAutoConstraintsEnabled();' in s,
+                  'generic ON_EDGE policy routing')
           p.write_text(s)
           PY
       - name: Verify unit and Android test compilation
