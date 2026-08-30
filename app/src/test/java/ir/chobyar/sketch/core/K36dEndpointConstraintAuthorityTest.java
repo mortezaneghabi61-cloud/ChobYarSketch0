@@ -96,20 +96,21 @@ public class K36dEndpointConstraintAuthorityTest {
 
     @Test public void degenerateLineHostFailsClosedWithoutEnteringAuthority() {
         SketchDocument d=new SketchDocument();
-        d.add(line("host",4,4,4,4));
         d.add(line("owner",9,7,9,12));
         long revisionBefore=d.revision();
+        boolean canUndoBefore=d.canUndo();
 
         try {
-            d.addConstraintsAndSolve(Collections.singletonList(
-                    SketchConstraint.pointOnEntity("p-degenerate","owner",0,"host")),
-                    new DeterministicSketchConstraintSolver());
-            fail("zero-length line host must be rejected rather than treated as a point");
-        } catch (IllegalStateException expected) {
-            assertTrue(expected.getMessage().contains("non-degenerate line host"));
+            d.add(line("host",4,4,4,4));
+            fail("zero-length line host must be rejected before entering model authority");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("Invalid sketch entity: host", expected.getMessage());
         }
 
         assertEquals(revisionBefore,d.revision());
+        assertEquals(canUndoBefore,d.canUndo());
+        assertEquals(1,d.size());
+        assertNull(d.entity("host"));
         assertEquals(0,d.constraintCount());
         SketchGeometry.Line owner=(SketchGeometry.Line)d.entity("owner");
         assertEquals(9.0,owner.a.xMm,1e-9);
@@ -197,6 +198,42 @@ public class K36dEndpointConstraintAuthorityTest {
         assertTrue(d.redo());
         assertNull(d.entity("host"));
         assertNotNull(d.entity("owner"));
+        assertEquals(0,d.constraintCount());
+    }
+
+    @Test public void deletingPointOnEntityHostCascadesAndUndoRedoRestoresStableReferenceAtomically() {
+        SketchDocument d=new SketchDocument();
+        d.add(line("host",0,0,20,0));
+        d.add(line("owner",6,4,6,10));
+        d.addConstraintsAndSolve(
+                Collections.singletonList(SketchConstraint.pointOnEntity("p-delete","owner",0,"host")),
+                new DeterministicSketchConstraintSolver());
+        SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(6.0,solved.a.xMm,1e-9);
+        assertEquals(0.0,solved.a.yMm,1e-9);
+        assertEquals("host",d.constraint("p-delete").secondaryEntityId);
+        assertEquals(0,d.constraint("p-delete").primaryPointIndex);
+
+        assertTrue(d.remove("host"));
+        assertNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertNull(d.constraint("p-delete"));
+        assertEquals(0,d.constraintCount());
+
+        assertTrue(d.undo());
+        assertNotNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        SketchConstraint restored=d.constraint("p-delete");
+        assertNotNull(restored);
+        assertEquals("owner",restored.primaryEntityId);
+        assertEquals(0,restored.primaryPointIndex);
+        assertEquals("host",restored.secondaryEntityId);
+        assertEquals(1,d.constraintCount());
+
+        assertTrue(d.redo());
+        assertNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertNull(d.constraint("p-delete"));
         assertEquals(0,d.constraintCount());
     }
 }
