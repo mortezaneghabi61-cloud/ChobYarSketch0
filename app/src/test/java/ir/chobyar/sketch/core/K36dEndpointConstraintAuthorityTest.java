@@ -104,7 +104,7 @@ public class K36dEndpointConstraintAuthorityTest {
             d.add(line("host",4,4,4,4));
             fail("zero-length line host must be rejected before entering model authority");
         } catch (IllegalArgumentException expected) {
-            assertEquals("Invalid sketch entity: host", expected.getMessage());
+            assertEquals("Invalid sketch geometry: host", expected.getMessage());
         }
 
         assertEquals(revisionBefore,d.revision());
