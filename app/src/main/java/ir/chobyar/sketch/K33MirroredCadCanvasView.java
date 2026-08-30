@@ -1036,8 +1036,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             int incomingSchema=incoming.optInt("schemaVersion",-1);
             boolean hasModelConstraints=incomingSchema==2 && incoming.has("modelConstraints");
 
-            // The legacy importer owns schema-v1 -> v2 stable-id migration. Do not
-            // pre-parse v1 through the v2-only bridge before that migration runs.
+            // Project Open is a transaction boundary. For stable-id schema-v2
+            // states that carry model-owned constraints, validate the entire incoming
+            // geometry/relationship graph before the legacy View is allowed to mutate.
+            // This keeps malformed/dangling opens fail-closed across both authorities.
+            // Schema-v1 still goes through the legacy importer first because that path
+            // owns the v1 -> v2 stable-id migration.
+            if (hasModelConstraints) {
+                SketchDocument preflight = new SketchDocument();
+                LegacySketchStateBridge.restoreDocument(preflight, raw);
+            }
+
             String out=super.importSketchProjectState(raw);
             if (hasModelConstraints) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
