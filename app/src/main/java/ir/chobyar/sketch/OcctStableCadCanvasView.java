@@ -606,7 +606,7 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
         Geometry3D.Vec3 anchor=null;int subshapeIndex=-1;
         if(edit.target!=null){
             OcctTopologyRef.Resolution r=OcctTopologyRef.resolve(handle,edit.target);
-            if(r==null||r.score>180.0){edit.broken=true;edit.warning="Topology text was not found";return 0L;}
+            if(r==null||!r.confident()){edit.broken=true;edit.warning="Topology text was not found";return 0L;}
             anchor=r.anchor;subshapeIndex=r.subshapeIndex;
         }
         switch(edit.kind){
