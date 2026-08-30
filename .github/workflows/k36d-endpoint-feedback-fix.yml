@@ -1,17 +1,22 @@
 name: K3.6d endpoint authority fix
 
 on:
-  push:
-    branches:
-      - k3-6d-coincident-point-authority
+  pull_request:
+    branches: [main]
     paths:
-      - .github/workflows/k36d-endpoint-feedback-fix.yml
+      - '.github/workflows/k36d-endpoint-feedback-fix.yml'
+      - 'app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java'
+      - 'app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java'
+      - 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
 
 permissions:
   contents: write
 
 jobs:
   patch-test-commit:
+    if: github.head_ref == 'k3-6d-coincident-point-authority'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,40 +27,54 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Patch exact K3.6d failures
+      - name: Patch remaining exact K3.6d failures
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          def once(path, old, new):
+
+          def once(path, old, new, required=True):
               p=Path(path); s=p.read_text()
-              if old not in s: raise SystemExit('missing patch anchor: '+path)
+              if old not in s:
+                  if required: raise SystemExit('missing patch anchor: '+path+' :: '+old[:100])
+                  return False
               p.write_text(s.replace(old,new,1))
+              return True
+
           solver='app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java'
           old='            case COINCIDENT: {\n                SketchGeometry.Line a = line(entities, c.primaryEntityId);\n                SketchGeometry.Line b = line(entities, c.secondaryEntityId);\n                SketchGeometry.Point target = endpoint(a, c.primaryPointIndex);\n                entities.put(c.secondaryEntityId, withEndpoint(b, c.secondaryPointIndex, target));\n                break;\n            }\n'
           new='            case COINCIDENT: {\n                SketchGeometry.Line driven = line(entities, c.primaryEntityId);\n                SketchGeometry.Line targetOwner = line(entities, c.secondaryEntityId);\n                SketchGeometry.Point target = endpoint(targetOwner, c.secondaryPointIndex);\n                entities.put(c.primaryEntityId, withEndpoint(driven, c.primaryPointIndex, target));\n                break;\n            }\n'
-          once(solver,old,new)
+          once(solver,old,new,required=False)
+
           shapr='app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java'
-          once(shapr,'    public ChobYarShaprCanvasView(Context context) {\n','    /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n\n    public ChobYarShaprCanvasView(Context context) {\n')
-          once(shapr,'                detectCoincidentLinks(created);\n','                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n')
+          if 'protected boolean isModelEndpointConstraintAuthorityEnabled()' not in Path(shapr).read_text():
+              once(shapr,'    public ChobYarShaprCanvasView(Context context) {\n','    /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n\n    public ChobYarShaprCanvasView(Context context) {\n')
+          once(shapr,'                detectCoincidentLinks(created);\n','                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);\n',required=False)
+
           param='app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java'
-          once(param,'    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n','    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n')
-          once(param,'    private void initReflection() {\n','    /** Connected endpoints stay automatic; interior Point-on-Entity follows Auto Constraints. */\n    protected boolean isAutoConstraintCreationEnabled() { return autoConstraints; }\n\n    public void setAutoConstraintsEnabled(boolean enabled) { autoConstraints=enabled; invalidate(); }\n\n    private void initReflection() {\n')
+          once(param,'    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n','    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */\n    @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }\n',required=False)
+          if 'isAutoConstraintCreationEnabled()' not in Path(param).read_text():
+              once(param,'    private void initReflection() {\n','    /** Connected endpoints stay automatic; interior Point-on-Entity follows Auto Constraints. */\n    protected boolean isAutoConstraintCreationEnabled() { return autoConstraints; }\n\n    public void setAutoConstraintsEnabled(boolean enabled) { autoConstraints=enabled; invalidate(); }\n\n    private void initReflection() {\n')
+
           k33='app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
-          once(k33,'                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n','                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n                            && isAutoConstraintCreationEnabled()) {\n')
+          once(k33,'                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {\n','                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE\n                            && isAutoConstraintCreationEnabled()) {\n',required=False)
+
           test='app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java'
-          once(test,'            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);\n','            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);\n')
-          once(test,'            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n','            K33MirroredCadCanvasView cad=canvas();\n            cad.setAutoConstraintsEnabled(false);\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n')
+          once(test,'            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);\n','            stroke(cad,screen(cad,20f,25f),screen(cad,42.3f,0.2f),true);\n',required=False)
+          anchor='            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n'
+          replacement='            K33MirroredCadCanvasView cad=canvas();\n            cad.setAutoConstraintsEnabled(false); // endpoint connection remains automatic\n            cad.executeCommand("LINE 0 0 100 0"); String hostId=cad.selected.stableId();\n            Set<String> before=ids(cad.exportSketchProjectState());\n\n            cad.setTool(CadCanvasView.TOOL_LINE);\n            stroke(cad,screen(cad,20f,25f),screen(cad,100.4f,0.2f),true);\n'
+          once(test,anchor,replacement,required=False)
           PY
       - name: Verify production and test compilation
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
-      - name: Commit verified fixes
+      - name: Commit verified fixes and remove temporary workflow
         shell: bash
         run: |
           git config user.name chobyar-supervisor
           git config user.email actions@users.noreply.github.com
           git rm .github/workflows/k36d-endpoint-feedback-fix.yml
           git add app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m 'K3.6d: correct endpoint constraint authority semantics'
           git pull --rebase origin k3-6d-coincident-point-authority
           git push origin HEAD:k3-6d-coincident-point-authority
