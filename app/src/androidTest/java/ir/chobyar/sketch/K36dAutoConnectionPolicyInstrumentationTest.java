@@ -24,6 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * API35 UX contract for K3.6d automatic endpoint relationships.
@@ -122,10 +123,23 @@ public final class K36dAutoConnectionPolicyInstrumentationTest {
                 assertEquals(-1, c.secondaryPointIndex);
                 assertEquals(0, cad.legacyMigratedConstraintTruthCount());
 
+                // Create + extension Point-on-Entity must be exactly one history step in both directions.
                 cad.undo();
                 cad.requireSketchMirrorParity();
                 assertFalse(ids(cad.exportSketchProjectState()).contains(createdId));
                 assertEquals(0, cad.sketchConstraintCount());
+
+                assertTrue(cad.redoSketch());
+                cad.requireSketchMirrorParity();
+                assertTrue(ids(cad.exportSketchProjectState()).contains(createdId));
+                assertEquals(1, cad.sketchConstraintCount());
+                SketchConstraint redone = cad.sketchConstraints().get(0);
+                assertEquals(SketchConstraint.Kind.POINT_ON_ENTITY, redone.kind);
+                assertEquals(createdId, redone.primaryEntityId);
+                assertEquals(1, redone.primaryPointIndex);
+                assertEquals(hostId, redone.secondaryEntityId);
+                assertEquals(-1, redone.secondaryPointIndex);
+                assertEquals(0, cad.legacyMigratedConstraintTruthCount());
             }
             return true;
         });
@@ -182,11 +196,23 @@ public final class K36dAutoConnectionPolicyInstrumentationTest {
         assertEquals(-1, c.secondaryPointIndex);
         assertEquals(0, cad.legacyMigratedConstraintTruthCount());
 
-        // Create + automatic MIDPOINT must be one model history step.
+        // Create + automatic MIDPOINT must be one model history step in both directions.
         cad.undo();
         cad.requireSketchMirrorParity();
         assertFalse(ids(cad.exportSketchProjectState()).contains(createdId));
         assertEquals(0, cad.sketchConstraintCount());
+
+        assertTrue(cad.redoSketch());
+        cad.requireSketchMirrorParity();
+        assertTrue(ids(cad.exportSketchProjectState()).contains(createdId));
+        assertEquals(1, cad.sketchConstraintCount());
+        SketchConstraint redone = cad.sketchConstraints().get(0);
+        assertEquals(SketchConstraint.Kind.MIDPOINT, redone.kind);
+        assertEquals(createdId, redone.primaryEntityId);
+        assertEquals(1, redone.primaryPointIndex);
+        assertEquals(hostId, redone.secondaryEntityId);
+        assertEquals(-1, redone.secondaryPointIndex);
+        assertEquals(0, cad.legacyMigratedConstraintTruthCount());
     }
 
     private static K33MirroredCadCanvasView canvas(boolean autoConstraints) throws Exception {
