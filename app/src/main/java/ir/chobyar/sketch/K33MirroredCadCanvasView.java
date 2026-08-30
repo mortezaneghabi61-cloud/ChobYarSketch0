@@ -112,6 +112,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 + reflectedStoreSize("coincidenceLinks") + legacyPointOnLineTruthCount();
     }
 
+    /** K3.8 fence: production Lock must not write the inherited object-identity map. */
+    public int legacySelectionLockTruthCount() {
+        try {
+            Field field = ParametricSketchCanvasView.class.getDeclaredField("elementLocks");
+            field.setAccessible(true);
+            Object value = field.get(this);
+            if (value instanceof Map) return ((Map<?, ?>) value).size();
+        } catch (Exception ignored) {}
+        return -1000;
+    }
+
     private int reflectedStoreSize(String fieldName) {
         try {
             Field field = ChobYarShaprCanvasView.class.getDeclaredField(fieldName);
@@ -1050,6 +1061,61 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String applyTangentConstraint() { String out=super.applyTangentConstraint(); syncMirror("constraint-tangent"); return out; }
     @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
     @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
+
+    private boolean hasWholeFixed(String entityId) {
+        for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
+            if (c.kind == SketchConstraint.Kind.FIXED
+                    && entityId.equals(c.primaryEntityId) && c.fixesWholeEntity()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * K3.8 production Lock authority. The installable K33 canvas must never
+     * populate ParametricSketchCanvasView.elementLocks: stable model ids and
+     * FIXED constraints are the sole semantic/persistence boundary here.
+     */
+    @Override public String toggleSelectedLock() {
+        if (!prepareTransactionalSelection("constraint-fixed-prepare")) return "Select geometry first";
+        Set<String> ids = sketchDocument.selectionIds();
+        if (ids.isEmpty()) return "Select geometry first";
+
+        boolean shouldLock = false;
+        for (String id : ids) {
+            if (!hasWholeFixed(id)) { shouldLock = true; break; }
+        }
+
+        try {
+            if (shouldLock) {
+                ArrayList<SketchConstraint> incoming = new ArrayList<>();
+                for (String id : ids) {
+                    if (!hasWholeFixed(id)) {
+                        incoming.add(SketchConstraint.fixed(UUID.randomUUID().toString(), id));
+                    }
+                }
+                if (incoming.isEmpty()) return ids.size() + " selection(s) locked";
+                sketchDocument.addConstraintsAndSolve(incoming, sketchConstraintSolver);
+            } else {
+                ArrayList<String> removeIds = new ArrayList<>();
+                for (SketchConstraint c : sketchDocument.constraints()) {
+                    if (c.kind == SketchConstraint.Kind.FIXED && c.fixesWholeEntity()
+                            && ids.contains(c.primaryEntityId)) removeIds.add(c.id);
+                }
+                if (removeIds.isEmpty()) return ids.size() + " selection(s) unlocked";
+                // Single-selection unlock is one model transaction. Multi-selection
+                // batch removal will be hardened before K3.8 leaves draft.
+                for (String constraintId : removeIds) sketchDocument.removeConstraint(constraintId);
+            }
+            coreSaveUndo();
+            if (!finishTransactionalMutation("constraint-fixed")) {
+                return "Lock constraint rollback: parity failed";
+            }
+            invalidate();
+            return ids.size() + (shouldLock ? " selection(s) locked" : " selection(s) unlocked");
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-fixed", e);
+        }
+    }
 
     @Override public String exportSketchProjectState() {
         try {
