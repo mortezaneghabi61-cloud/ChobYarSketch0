@@ -129,7 +129,7 @@ public class K36dProductionEndpointConstraintAuthorityInstrumentationTest {
             Set<String> before=ids(cad.exportSketchProjectState());
 
             cad.setTool(CadCanvasView.TOOL_LINE);
-            stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);
+            stroke(cad,screen(cad,20f,25f),screen(cad,30.0f,0.2f),true);
             cad.requireSketchMirrorParity();
 
             String state=cad.exportSketchProjectState();

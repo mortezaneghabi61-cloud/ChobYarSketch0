@@ -83,6 +83,9 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     private final Paint gizmoCenterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint gizmoTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */
+    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }
+
     public ChobYarShaprCanvasView(Context context) {
         super(context);
         initPaints();
@@ -227,7 +230,8 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
                 if (pendingPerpendicular && isLine(previousLine) && previousLine != created) {
                     addRelation(previousLine, created, false);
                 }
-                detectCoincidentLinks(created);
+                // K3.6d: routed Create commits endpoint relationships in SketchDocument.
+                if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);
             }
             pendingAxis = 0;
             pendingPerpendicular = false;
