@@ -137,7 +137,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 SketchGeometry.Line host = line(entities, c.secondaryEntityId);
                 SketchGeometry.Point p = endpoint(owner, c.primaryPointIndex);
                 entities.put(c.primaryEntityId,
-                        withEndpoint(owner, c.primaryPointIndex, projectToSegment(host, p)));
+                        withEndpoint(owner, c.primaryPointIndex, projectToSupportingLine(host, p)));
                 break;
             }
             default:
@@ -197,13 +197,18 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return index == 0 ? line.a : line.b;
     }
 
-    private static SketchGeometry.Point projectToSegment(SketchGeometry.Line line, SketchGeometry.Point p) {
+    /**
+     * Projects onto the line's infinite supporting geometry, not only the visible
+     * segment. Point-on-entity is a geometric relationship; clamping to [0,1]
+     * incorrectly turns it into a segment-bound relationship and breaks edit
+     * propagation when the nearest solution lies on an extension.
+     */
+    private static SketchGeometry.Point projectToSupportingLine(SketchGeometry.Line line, SketchGeometry.Point p) {
         double dx = line.b.xMm - line.a.xMm;
         double dy = line.b.yMm - line.a.yMm;
         double l2 = dx * dx + dy * dy;
         if (l2 <= EPS) return line.a;
         double t = ((p.xMm - line.a.xMm) * dx + (p.yMm - line.a.yMm) * dy) / l2;
-        t = Math.max(0.0, Math.min(1.0, t));
         return new SketchGeometry.Point(line.a.xMm + t * dx, line.a.yMm + t * dy);
     }
 
@@ -236,7 +241,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             case POINT_ON_ENTITY: {
                 SketchGeometry.Line host = line(entities, c.secondaryEntityId);
                 SketchGeometry.Point p = endpoint(a, c.primaryPointIndex);
-                return distance(p, projectToSegment(host, p));
+                return distance(p, projectToSupportingLine(host, p));
             }
             default:
                 return Double.POSITIVE_INFINITY;
