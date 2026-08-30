@@ -816,15 +816,27 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     @Override public String importSketchProjectState(String raw) {
         try {
-            LegacySketchStateBridge.parse(raw);
+            JSONObject incoming=new JSONObject(raw);
+            int incomingSchema=incoming.optInt("schemaVersion",-1);
+            boolean hasModelConstraints=incomingSchema==2 && incoming.has("modelConstraints");
+
+            // The legacy importer owns schema-v1 -> v2 stable-id migration. Do not
+            // pre-parse v1 through the v2-only bridge before that migration runs.
             String out=super.importSketchProjectState(raw);
-            LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
+            if (hasModelConstraints) {
+                LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
+            } else {
+                LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());
+            }
             mirrorSyncCount++;
-            authorityHistoryValid=true;
+
+            // Project open is a persistence boundary, not an Undo-history restore.
+            // The first subsequent edit rehydrates one fresh transactional history.
+            authorityHistoryValid=false;
             lastMirrorError="";
             requireSketchMirrorParity();
             return out;
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             authorityHistoryValid=false;
             lastMirrorError="project-open: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());
             return "Project sketch state could not be restored";
