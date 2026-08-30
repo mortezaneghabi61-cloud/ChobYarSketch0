@@ -106,4 +106,20 @@ public class K36dEndpointConstraintAuthorityTest {
         assertNull(d.entity("new")); assertEquals(1,d.size()); assertEquals(0,d.constraintCount());
         assertTrue(d.undo()); assertEquals(0,d.size());
     }
+
+    @Test public void malformedEndpointIndexesAreRejectedBeforeEnteringModelAuthority() {
+        try {
+            SketchConstraint.pointOnEntity("bad-poe","owner",7,"host");
+            fail("POINT_ON_ENTITY must reject non-endpoint point indexes");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("endpoint 0 or 1"));
+        }
+
+        try {
+            SketchConstraint.coincident("bad-coincident","a",0,"b",7);
+            fail("COINCIDENT must reject non-endpoint secondary point indexes");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("endpoint 0 or 1"));
+        }
+    }
 }
