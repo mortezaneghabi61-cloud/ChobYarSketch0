@@ -167,9 +167,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private boolean prepareTransactionalDocument(String source) {
         try {
-            // Model-owned constrained geometry is authoritative. A stale legacy
-            // control-point mutation must not overwrite solved model truth when
-            // the next transaction refreshes its document snapshot.
             replayAuthoritativeConstrainedGeometryBeforeDraw();
             String raw = exportSketchProjectState();
             if (!authorityHistoryValid || !LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
@@ -267,7 +264,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return score;
     }
 
-    /** Existing driving constraints take precedence; selection policy resolves ties. */
     private int chooseConstraintAnchorIndex(List<String> ids) {
         if (ids == null || ids.isEmpty()) return -1;
         int max = 0;
@@ -301,12 +297,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         invalidate();
     }
 
-    /**
-     * Presentation-only parity fence. If old View code or a stale reference
-     * mutates a model-constrained line directly, the View must not become a
-     * second semantic authority. We replay the already-solved model geometry;
-     * no constraint solving is performed from rendering.
-     */
     private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
         LinkedHashSet<String> constrained = new LinkedHashSet<>();
         for (SketchConstraint c : sketchDocument.constraints()) {
@@ -527,9 +517,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void reconcileLegacyTouchIfNeeded(String source) {
         try {
-            // Handle drags still pass through legacy View code during migration.
-            // Reassert model-owned constrained geometry before parity/rehydration
-            // so touch cannot become a second semantic authority.
             replayAuthoritativeConstrainedGeometryBeforeDraw();
             String raw = exportSketchProjectState();
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
@@ -627,9 +614,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
         RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
         if (extension != null) {
-            // Keep the interaction router consistent with SketchSnapService's
-            // discrete magnetic lock: a nearby semantic target must not be
-            // stolen by a slightly closer generic line-extension projection.
             boolean magneticDiscrete = best != null
                     && best.modelKind != null
                     && best.modelKind != SketchSnapService.Kind.ON_EDGE
@@ -725,7 +709,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected void onDraw(Canvas canvas) {
-        // Rendering is presentation-only. Geometry replay belongs to interaction/transaction boundaries.
         super.onDraw(canvas);
         drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
@@ -740,8 +723,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     private void drawModelConstraintFeedback(Canvas canvas) {
-        // K3.6d endpoint badges are a stateless projection of model-owned constraints.
-        // They must never read coincidenceLinks/pointOnLineLinks or repair geometry while drawing.
         for (ModelConstraintBadgeProjection.Badge badge
                 : ModelConstraintBadgeProjection.project(sketchDocument)) {
             float bx = screenX(badge.xMm);
@@ -780,12 +761,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (event == null) return false;
-
         int action = event.getActionMasked();
         int toolBefore = getTool();
         boolean drawingBefore = drawing;
         int legacyCountBefore = entities.size();
-
         boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);
         String authorityId = commitAttempt ? UUID.randomUUID().toString() : null;
         boolean prepared = commitAttempt && prepareTransactionalDocument("gesture-create-prepare");
@@ -897,7 +876,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             syncMirror("copy-fallback");
             return;
         }
-
         try {
             SketchEntity source = sketchDocument.entity(sourceId);
             if (source == null) {
@@ -905,12 +883,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 syncMirror("copy-source-fallback");
                 return;
             }
-
             String newId = UUID.randomUUID().toString();
             SketchEntity duplicate = SketchEntities.duplicateAs(source, newId).translated(dx, dy);
             sketchDocument.add(duplicate);
             sketchDocument.selectOnly(newId);
-
             super.copySelected(dx,dy);
             if (!restoreLegacySelectedStableId(newId)) {
                 finishTransactionalMutation("copy-id-injection");
@@ -1070,11 +1046,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
-    /**
-     * K3.8 production Lock authority. The installable K33 canvas must never
-     * populate ParametricSketchCanvasView.elementLocks: stable model ids and
-     * FIXED constraints are the sole semantic/persistence boundary here.
-     */
     @Override public String toggleSelectedLock() {
         if (!prepareTransactionalSelection("constraint-fixed-prepare")) return "Select geometry first";
         Set<String> ids = sketchDocument.selectionIds();
@@ -1089,9 +1060,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             if (shouldLock) {
                 ArrayList<SketchConstraint> incoming = new ArrayList<>();
                 for (String id : ids) {
-                    if (!hasWholeFixed(id)) {
-                        incoming.add(SketchConstraint.fixed(UUID.randomUUID().toString(), id));
-                    }
+                    if (!hasWholeFixed(id)) incoming.add(SketchConstraint.fixed(UUID.randomUUID().toString(), id));
                 }
                 if (incoming.isEmpty()) return ids.size() + " selection(s) locked";
                 sketchDocument.addConstraintsAndSolve(incoming, sketchConstraintSolver);
@@ -1102,14 +1071,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                             && ids.contains(c.primaryEntityId)) removeIds.add(c.id);
                 }
                 if (removeIds.isEmpty()) return ids.size() + " selection(s) unlocked";
-                // Single-selection unlock is one model transaction. Multi-selection
-                // batch removal will be hardened before K3.8 leaves draft.
-                for (String constraintId : removeIds) sketchDocument.removeConstraint(constraintId);
+                sketchDocument.removeConstraints(removeIds);
             }
             coreSaveUndo();
-            if (!finishTransactionalMutation("constraint-fixed")) {
-                return "Lock constraint rollback: parity failed";
-            }
+            if (!finishTransactionalMutation("constraint-fixed")) return "Lock constraint rollback: parity failed";
             invalidate();
             return ids.size() + (shouldLock ? " selection(s) locked" : " selection(s) unlocked");
         } catch (RuntimeException e) {
@@ -1146,18 +1111,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             JSONObject incoming=new JSONObject(raw);
             int incomingSchema=incoming.optInt("schemaVersion",-1);
             boolean hasModelConstraints=incomingSchema==2 && incoming.has("modelConstraints");
-
-            // Project Open is a transaction boundary. For stable-id schema-v2
-            // states that carry model-owned constraints, validate the entire incoming
-            // geometry/relationship graph before the legacy View is allowed to mutate.
-            // This keeps malformed/dangling opens fail-closed across both authorities.
-            // Schema-v1 still goes through the legacy importer first because that path
-            // owns the v1 -> v2 stable-id migration.
             if (hasModelConstraints) {
                 SketchDocument preflight = new SketchDocument();
                 LegacySketchStateBridge.restoreDocument(preflight, raw);
             }
-
             String out=super.importSketchProjectState(raw);
             if (hasModelConstraints) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
@@ -1165,9 +1122,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());
             }
             mirrorSyncCount++;
-
-            // Project open is a persistence boundary, not an Undo-history restore.
-            // The first subsequent edit rehydrates one fresh transactional history.
             authorityHistoryValid=false;
             lastMirrorError="";
             requireSketchMirrorParity();
@@ -1191,12 +1145,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 syncMirror("create-command-rejected");
                 return out;
             }
-
             boolean injected = restoreLegacySelectedStableId(newId);
             boolean committed = injected && finishTransactionalMutation("create-command");
             if (committed) return out;
             if (!injected) finishTransactionalMutation("create-command-id-injection");
-
             String fallback = super.executeCommand(raw);
             syncMirror("create-command-fallback");
             return fallback;
