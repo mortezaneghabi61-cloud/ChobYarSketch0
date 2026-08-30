@@ -105,6 +105,28 @@ public final class K38PointFixedBehaviorTest {
         assertEquals(1, restored.primaryPointIndex);
     }
 
+    @Test public void batchUnlockRemovalIsExactlyOneUndoStep() {
+        SketchDocument doc = new SketchDocument();
+        doc.add(line("a", 0, 0, 10, 0));
+        doc.add(line("b", 0, 5, 10, 5));
+        doc.addConstraints(Arrays.asList(
+                SketchConstraint.fixed("lock-a", "a"),
+                SketchConstraint.fixed("lock-b", "b")));
+
+        assertEquals(2, doc.removeConstraints(Arrays.asList("lock-a", "lock-b")));
+        assertFalse(doc.containsConstraint("lock-a"));
+        assertFalse(doc.containsConstraint("lock-b"));
+
+        assertTrue(doc.undo());
+        assertTrue("One Undo must restore the complete multi-selection Lock state",
+                doc.containsConstraint("lock-a"));
+        assertTrue(doc.containsConstraint("lock-b"));
+
+        assertTrue(doc.redo());
+        assertFalse(doc.containsConstraint("lock-a"));
+        assertFalse(doc.containsConstraint("lock-b"));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void documentRejectsUnsupportedPointLockTarget() {
         SketchDocument doc = new SketchDocument();
