@@ -91,6 +91,8 @@ jobs:
             grep -q 'OK (1 test)' test-artifacts/k3-constraint-schema-version.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dSaveOpenRelationshipHistoryInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-save-open-relationship-history.txt
             grep -q 'OK (1 test)' test-artifacts/k3-save-open-relationship-history.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K36dActivityLifecyclePersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-activity-lifecycle-persistence.txt
+            grep -q 'OK (1 test)' test-artifacts/k3-activity-lifecycle-persistence.txt
 
       - name: Upload K3 authority evidence
         if: always()
