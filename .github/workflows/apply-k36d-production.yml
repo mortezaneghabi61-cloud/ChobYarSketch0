@@ -21,6 +21,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Correct K3.6d test assertion applicator
+        run: python3 .github/scripts/fix-k36d-applicator.py
       - name: Apply K3.6d model-authority slice
         run: python3 .github/scripts/apply-k36d-production.py
       - name: Verify JVM contracts and Android compilation
