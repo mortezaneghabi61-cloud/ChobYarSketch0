@@ -78,12 +78,16 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             reopened.importSketchProjectState(raw);
             reopened.requireSketchMirrorParity();
             SketchGeometry.Line before = lineFor(reopened, entityId);
-            assertNotNull("Open must restore the selected legacy entity", reopened.selected);
-            assertEquals(entityId, reopened.selected.stableId());
+
+            // Selection is session/UI state and intentionally is not persisted across Open.
+            // Locate the reopened legacy object only by the model's stable entity ID so this
+            // regression never makes Java object identity part of the persistence contract.
+            CadCanvasView.Entity legacy = legacyEntityFor(reopened, entityId);
+            assertNotNull("Open must recreate the stable-ID legacy projection", legacy);
 
             // Simulate a stale legacy handle/touch path mutating View geometry directly.
             // The model-owned FIXED relation must win at the next interaction boundary.
-            reopened.selected.moveControlPoint(0, 77f, 88f);
+            legacy.moveControlPoint(0, 77f, 88f);
             long now = android.os.SystemClock.uptimeMillis();
             MotionEvent cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0);
             try {
@@ -119,6 +123,13 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             }
         }
         throw new AssertionError("Model line was not found for " + entityId);
+    }
+
+    private static CadCanvasView.Entity legacyEntityFor(K33MirroredCadCanvasView cad, String entityId) {
+        for (CadCanvasView.Entity entity : cad.entities) {
+            if (entity != null && entityId.equals(entity.stableId())) return entity;
+        }
+        return null;
     }
 
     private static K33MirroredCadCanvasView cad() {
