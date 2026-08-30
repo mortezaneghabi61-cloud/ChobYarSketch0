@@ -155,6 +155,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private boolean prepareTransactionalDocument(String source) {
         try {
+            // Model-owned constrained geometry is authoritative. A stale legacy
+            // control-point mutation must not overwrite solved model truth when
+            // the next transaction refreshes its document snapshot.
+            replayAuthoritativeConstrainedGeometryBeforeDraw();
             String raw = exportSketchProjectState();
             if (!authorityHistoryValid || !LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
@@ -405,6 +409,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void reconcileLegacyTouchIfNeeded(String source) {
         try {
+            // Handle drags still pass through legacy View code during migration.
+            // Reassert model-owned constrained geometry before parity/rehydration
+            // so touch cannot become a second semantic authority.
+            replayAuthoritativeConstrainedGeometryBeforeDraw();
             String raw = exportSketchProjectState();
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
         } catch (RuntimeException e) {
