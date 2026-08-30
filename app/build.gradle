@@ -105,6 +105,10 @@ dependencies {
     implementation 'com.google.android.filament:filamat-android:1.74.0'
 
     testImplementation 'junit:junit:4.13.2'
+    // JVM sketch-persistence tests execute LegacySketchStateBridge directly.
+    // Android's compile-time org.json stubs throw at runtime outside a device,
+    // so provide the reference implementation without changing production code.
+    testImplementation 'org.json:json:20240303'
 
     androidTestImplementation 'androidx.test:core:1.6.1'
     androidTestImplementation 'androidx.test:runner:1.6.2'
