@@ -61,8 +61,10 @@ run_contract() {
   printf '%s | %s\n' "$class" "$expected" | tee -a test-artifacts/production-cad-summary.txt
 }
 
-# Sketch interaction, primitives, selection, dimensions and constraints: 16 tests
+# Sketch interaction, primitives, selection, dimensions and constraints: 19 tests
 run_contract TouchInputContractInstrumentationTest touch 'OK (3 tests)'
+run_contract StylusDimensionLabelRoutingInstrumentationTest stylus-label-routing 'OK (1 test)'
+run_contract DimensionLabelReleaseInstrumentationTest dimension-label-release 'OK (2 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
@@ -80,7 +82,7 @@ run_contract LoftCommandInstrumentationTest loft 'OK (1 test)'
 run_contract WorkspaceSessionInstrumentationTest workspace-session 'OK (5 tests)'
 run_contract RevolveThreadContractInstrumentationTest revolve-thread 'OK (4 tests)'
 
-# Construction / exact Project / associative references / exact topology: 21 tests
+# Construction / exact Project / associative references / exact topology: 23 tests
 run_contract ConstructionProjectInstrumentationTest construction-project 'OK (2 tests)'
 run_contract Project3DExactInstrumentationTest project-exact 'OK (3 tests)'
 run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 tests)'
@@ -89,10 +91,12 @@ run_contract ExactEdgeTopologyInstrumentationTest exact-edge-topology 'OK (3 tes
 run_contract ExactFaceTopologyInstrumentationTest exact-face-topology 'OK (6 tests)'
 run_contract ExactTopologyIndexInstrumentationTest exact-topology-index 'OK (2 tests)'
 
+# The declared run_contract entries are the source of truth for suite membership.
+declared_classes=$(sed -nE 's/^[[:space:]]*run_contract[[:space:]]+([A-Za-z0-9_]+).*/\1/p' "$0" | wc -l | tr -d '[:space:]')
 passed_classes=$(grep -c ' | OK (' test-artifacts/production-cad-summary.txt || true)
-if [[ "$passed_classes" -ne 22 ]]; then
-  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=22" | tee -a test-artifacts/production-cad-summary.txt
+if [[ "$passed_classes" -ne "$declared_classes" ]]; then
+  echo "CONSOLIDATED_COUNT_FAIL passed_classes=${passed_classes} expected=${declared_classes}" | tee -a test-artifacts/production-cad-summary.txt
   exit 1
 fi
 
-echo 'PRODUCTION_CAD_REGRESSION OK classes=22 tests=62' | tee -a test-artifacts/production-cad-summary.txt
+echo "PRODUCTION_CAD_REGRESSION OK classes=${passed_classes}" | tee -a test-artifacts/production-cad-summary.txt
