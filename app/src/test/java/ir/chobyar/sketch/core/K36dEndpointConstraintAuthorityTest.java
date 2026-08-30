@@ -122,4 +122,32 @@ public class K36dEndpointConstraintAuthorityTest {
             assertTrue(expected.getMessage().contains("endpoint 0 or 1"));
         }
     }
+
+    @Test public void danglingPersistenceRestoreIsFailClosedAndPreservesCurrentAuthority() {
+        SketchDocument d=new SketchDocument();
+        d.add(line("host",0,0,20,0));
+        d.add(line("owner",5,0,5,8));
+        d.addConstraintsAndSolve(Collections.singletonList(
+                SketchConstraint.pointOnEntity("existing","owner",0,"host")),
+                new DeterministicSketchConstraintSolver());
+        long revisionBefore=d.revision();
+        assertTrue(d.canUndo());
+
+        try {
+            d.restoreExternal(
+                    Collections.singletonList(line("replacement",0,0,5,0)),
+                    Collections.singletonList("replacement"),
+                    Collections.singletonList(SketchConstraint.pointOnEntity("dangling","replacement",0,"missing")));
+            fail("persistence restore must reject dangling stable-id references before mutation");
+        } catch (IllegalArgumentException expected) {}
+
+        assertEquals(revisionBefore,d.revision());
+        assertEquals(2,d.size());
+        assertEquals(1,d.constraintCount());
+        assertNotNull(d.entity("host"));
+        assertNotNull(d.entity("owner"));
+        assertNotNull(d.constraint("existing"));
+        assertNull(d.entity("replacement"));
+        assertTrue(d.canUndo());
+    }
 }
