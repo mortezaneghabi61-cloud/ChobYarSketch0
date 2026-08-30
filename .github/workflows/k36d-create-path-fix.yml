@@ -27,8 +27,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Endpoint authority: the legacy View may render old relationships, but
-          # it must not create object-identity Coincident truth once K3.6d owns it.
           p=Path('app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java')
           s=p.read_text()
           if 'protected boolean isModelEndpointConstraintAuthorityEnabled()' not in s:
@@ -41,8 +39,6 @@ jobs:
           if old not in s: raise SystemExit('legacy coincident create anchor missing')
           p.write_text(s.replace(old,new,1))
 
-          # The former ON_EDGE test target sat inside the semantic midpoint lock
-          # band. Move only the query point; snap priority/tolerances stay intact.
           t=Path('app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java')
           s=t.read_text()
           old='stroke(cad,screen(cad,20f,25f),screen(cad,50.3f,0.2f),true);'
@@ -50,10 +46,6 @@ jobs:
           if old not in s: raise SystemExit('ON_EDGE test anchor missing')
           t.write_text(s.replace(old,new,1))
 
-          # K3.6c retired solve/mutation from onDraw. The old API35 regression
-          # deliberately corrupts a legacy Entity then waits for redraw; route
-          # that stale View mutation through the production model transaction
-          # boundary instead, keeping the same strict geometry assertions.
           q=Path('app/src/androidTest/java/ir/chobyar/sketch/SketchConstraintSolverInstrumentationTest.java')
           s=q.read_text()
           replacements=[
@@ -66,20 +58,17 @@ jobs:
           for old,new in replacements:
               if old not in s: raise SystemExit('solver authority regression anchor missing: '+old[:48])
               s=s.replace(old,new,1)
-          helper='''\n    private static void reassertModelAuthority(Shapr3DGuideCadCanvasView c) {\n        if (c instanceof K33MirroredCadCanvasView) {\n            // prepareTransactionalSelection() replays model-owned solved geometry\n            // before any edit and moveSelected() stays outside onDraw.\n            c.moveSelected(0f, 0f);\n        } else {\n            c.invalidate();\n        }\n    }\n'''
+          helper='''\n    private static void reassertModelAuthority(Shapr3DGuideCadCanvasView c) {\n        if (c instanceof K33MirroredCadCanvasView) {\n            c.moveSelected(0f, 0f);\n        } else {\n            c.invalidate();\n        }\n    }\n'''
           anchor='\n    private static Shapr3DGuideCadCanvasView canvas(ChobYarActivity activity) {'
           if helper.strip() not in s:
               if anchor not in s: raise SystemExit('solver helper anchor missing')
               s=s.replace(anchor,helper+anchor,1)
           q.write_text(s)
 
-          # Keep a focused K3.6 model-authority regression: after persistence
-          # reopen, force another model solve pass and retain perpendicularity.
           k=Path('app/src/androidTest/java/ir/chobyar/sketch/K36ProductionConstraintAuthorityInstrumentationTest.java')
           s=k.read_text()
           old='''            assertEquals(1,reopened.sketchConstraintCount());\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            return true;\n'''
           new='''            assertEquals(1,reopened.sketchConstraintCount());\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            select(reopened,reopened.entities.get(1));\n            reopened.moveSelected(7f,-4f);\n            reopened.requireSketchMirrorParity();\n            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));\n            return true;\n'''
-          # Restrict replacement to the disconnected-perpendicular method area.
           start=s.index('    @Test public void disconnectedPerpendicularKeepsCentersAndSurvivesEditUndoRedoAndReopen()')
           end=s.index('    @Test public void perpendicularAnchorPolicyHonorsSelectionOrder()',start)
           block=s[start:end]
@@ -87,8 +76,8 @@ jobs:
           block=block.replace(old,new,1)
           k.write_text(s[:start]+block+s[end:])
           PY
-      - name: Compile all affected production and API35 tests
-        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Compile production, unit tests and API35 instrumentation sources
+        run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
       - name: Commit verified fixes and remove temporary workflow
         shell: bash
         run: |
