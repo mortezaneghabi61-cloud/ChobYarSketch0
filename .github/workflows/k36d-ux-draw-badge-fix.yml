@@ -1,0 +1,66 @@
+name: K3.6d UX draw purity and model badges
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/k36d-ux-draw-badge-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.head_ref == 'k3-6d-coincident-point-authority'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: k3-6d-coincident-point-authority
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Make draw geometry-pure and render endpoint badges from SketchDocument
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          k33 = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          s = k33.read_text()
+          old = '''    @Override protected void onDraw(Canvas canvas) {\n        replayAuthoritativeConstrainedGeometryBeforeDraw();\n        super.onDraw(canvas);\n        drawModelConstraintFeedback(canvas);\n'''
+          new = '''    @Override protected void onDraw(Canvas canvas) {\n        // Rendering is presentation-only. Geometry replay belongs to interaction/transaction boundaries.\n        super.onDraw(canvas);\n        drawModelConstraintFeedback(canvas);\n'''
+          if old not in s:
+              raise SystemExit('K33 onDraw replay anchor missing or already changed')
+          s = s.replace(old, new, 1)
+
+          old = '''    private void drawModelConstraintFeedback(Canvas canvas) {\n        for (SketchConstraint constraint : sketchDocument.constraints()) {\n'''
+          new = '''    private void drawModelConstraintFeedback(Canvas canvas) {\n        // K3.6d endpoint badges are a stateless projection of model-owned constraints.\n        // They must never read coincidenceLinks/pointOnLineLinks or repair geometry while drawing.\n        for (ModelConstraintBadgeProjection.Badge badge\n                : ModelConstraintBadgeProjection.project(sketchDocument)) {\n            float bx = screenX(badge.xMm);\n            float by = screenY(badge.yMm);\n            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";\n            canvas.drawText(glyph, bx, by - 12f, modelConstraintTextPaint);\n        }\n        for (SketchConstraint constraint : sketchDocument.constraints()) {\n'''
+          if old not in s:
+              raise SystemExit('model constraint feedback anchor missing')
+          s = s.replace(old, new, 1)
+          k33.write_text(s)
+
+          test = Path('app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java')
+          t = test.read_text()
+          old = '''    @Test public void directLegacyEndpointDriftIsReplayedFromModelDuringDrawWithoutChangingModel() throws Exception {\n        onMain(() -> {\n            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 10 0"); CadCanvasView.Entity a=cad.selected;\n            cad.executeCommand("LINE 12 2 20 2"); CadCanvasView.Entity b=cad.selected; String bId=b.stableId();\n            select(cad,a,b);\n            cad.applyManualCoincident();\n            cad.requireSketchMirrorParity();\n            SketchGeometry.Line before=modelLine(cad,bId);\n            assertPoint(before.a,10,0);\n\n            CadCanvasView.LineEntity legacy=legacyLine(cad,bId);\n            legacy.x1=77f; legacy.y1=88f;\n            assertEquals(77f,legacy.x1,0f); assertEquals(88f,legacy.y1,0f);\n\n            Bitmap bitmap=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888);\n            cad.onDraw(new Canvas(bitmap));\n            assertEquals(10f,legacy.x1,(float)EPS); assertEquals(0f,legacy.y1,(float)EPS);\n            SketchGeometry.Line after=modelLine(cad,bId);\n            assertPoint(after.a,before.a.xMm,before.a.yMm);\n            assertPoint(after.b,before.b.xMm,before.b.yMm);\n            assertEquals(1,cad.sketchConstraintCount());\n            assertEquals(0,cad.legacyMigratedConstraintTruthCount());\n            return true;\n        });\n    }\n'''
+          new = '''    @Test public void drawNeverRepairsLegacyDriftOrMutatesAuthoritativeGeometry() throws Exception {\n        onMain(() -> {\n            K33MirroredCadCanvasView cad=canvas();\n            cad.executeCommand("LINE 0 0 10 0"); CadCanvasView.Entity a=cad.selected;\n            cad.executeCommand("LINE 12 2 20 2"); CadCanvasView.Entity b=cad.selected; String bId=b.stableId();\n            select(cad,a,b);\n            cad.applyManualCoincident();\n            cad.requireSketchMirrorParity();\n            SketchGeometry.Line before=modelLine(cad,bId);\n            assertPoint(before.a,10,0);\n\n            CadCanvasView.LineEntity legacy=legacyLine(cad,bId);\n            legacy.x1=77f; legacy.y1=88f;\n            Bitmap bitmap=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888);\n            cad.onDraw(new Canvas(bitmap));\n\n            // Draw is pure presentation: it neither repairs stale View geometry nor changes model truth.\n            assertEquals(77f,legacy.x1,0f); assertEquals(88f,legacy.y1,0f);\n            SketchGeometry.Line after=modelLine(cad,bId);\n            assertPoint(after.a,before.a.xMm,before.a.yMm);\n            assertPoint(after.b,before.b.xMm,before.b.yMm);\n            assertEquals(1,cad.sketchConstraintCount());\n            assertEquals(0,cad.legacyMigratedConstraintTruthCount());\n            return true;\n        });\n    }\n'''
+          if old not in t:
+              raise SystemExit('draw mutation regression block missing')
+          test.write_text(t.replace(old, new, 1))
+          PY
+      - name: Verify UX-layer production and instrumentation compilation
+        run: ./gradlew :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac testDebugUnitTest --stacktrace
+      - name: Commit verified K3.6d UX slice
+        shell: bash
+        run: |
+          git config user.name chobyar-ux-engineer
+          git config user.email actions@users.noreply.github.com
+          git rm -f .github/workflows/k36d-ux-draw-badge-fix.yml
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java \
+                  app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
+          git commit -m 'K3.6d UX: keep draw pure and render model endpoint badges'
+          git pull --rebase origin k3-6d-coincident-point-authority
+          git push origin HEAD:k3-6d-coincident-point-authority
