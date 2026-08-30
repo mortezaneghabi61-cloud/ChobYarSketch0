@@ -24,7 +24,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 /**
  * API35 UX contract for K3.6d automatic endpoint relationships.
@@ -122,6 +121,36 @@ public final class K36dAutoConnectionPolicyInstrumentationTest {
                         hostId, c.secondaryEntityId);
                 assertEquals(-1, c.secondaryPointIndex);
                 assertEquals(0, cad.legacyMigratedConstraintTruthCount());
+
+                cad.undo();
+                cad.requireSketchMirrorParity();
+                assertFalse(ids(cad.exportSketchProjectState()).contains(createdId));
+                assertEquals(0, cad.sketchConstraintCount());
+            }
+            return true;
+        });
+    }
+
+    @Test public void touchAndStylusExtensionRemainGuideOnlyWithAutoConstraintsOff() throws Exception {
+        onMain(() -> {
+            for (boolean stylus : new boolean[]{false, true}) {
+                K33MirroredCadCanvasView cad = canvas(false);
+                cad.executeCommand("LINE 0 0 100 0");
+                String hostId = cad.selected.stableId();
+                Set<String> before = ids(cad.exportSketchProjectState());
+
+                cad.setTool(CadCanvasView.TOOL_LINE);
+                stroke(cad, screen(cad, 20f, 24f), screen(cad, 118f, 0.15f), stylus);
+                cad.requireSketchMirrorParity();
+
+                String createdId = onlyNewId(before, cad.exportSketchProjectState());
+                assertEquals("extension feedback stays source-aware even when relationship creation is disabled",
+                        "ON_EDGE", cad.sketchLastModelSnapKind());
+                assertEquals("Auto Constraints off must suppress extension Point-on-Entity", 0,
+                        cad.sketchConstraintCount());
+                assertEquals("anonymous legacy Guide pixels must not become durable truth", 0,
+                        cad.legacyMigratedConstraintTruthCount());
+                assertNotEquals("new entity must remain distinct from extension host", hostId, createdId);
 
                 cad.undo();
                 cad.requireSketchMirrorParity();
