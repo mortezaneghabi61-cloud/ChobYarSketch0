@@ -3,14 +3,21 @@ package ir.chobyar.sketch;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.view.MotionEvent;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,8 +36,8 @@ import ir.chobyar.sketch.core.SketchSnapService;
  * Sketch authority migration canvas.
  *
  * K3.4 owns exact/gesture Create, Move, Delete, Copy and transactional history
- * in SketchDocument. K3.5 moves Create snapping into the model. K3.6 starts
- * moving persistent constraints/solving out of the legacy View hierarchy.
+ * in SketchDocument. K3.5 moves Create snapping into the model. K3.6 moves
+ * persistent line constraints/solving out of the legacy View hierarchy.
  * Dimensions, annotations and remaining constraint kinds stay legacy-owned
  * until their dedicated authority slices.
  */
@@ -39,12 +46,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private static final double GUIDE_RADIUS_FACTOR = 0.70d;
     private static final double GRID_RADIUS_FACTOR = 0.58d;
     private static final double GRID_MM = 10.0d;
+    private static final float MODEL_PX_PER_MM = 3f;
+
+    public enum ConstraintAnchorPolicy { FIRST_SELECTED, LAST_SELECTED }
 
     private final SketchDocument sketchDocument = new SketchDocument();
     private final SketchSnapService sketchSnapService = new SketchSnapService();
     private final SketchConstraintSolver sketchConstraintSolver = new DeterministicSketchConstraintSolver();
     private final Paint routedSnapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint routedSnapTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint modelConstraintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint modelConstraintTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private long mirrorSyncCount;
     private long authorityTransitionCount;
@@ -56,6 +68,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private float routedSnapScreenX;
     private float routedSnapScreenY;
     private String routedSnapLabel = "";
+    private ConstraintAnchorPolicy constraintAnchorPolicy = ConstraintAnchorPolicy.FIRST_SELECTED;
 
     public K33MirroredCadCanvasView(Context context) {
         super(context);
@@ -64,6 +77,14 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         routedSnapPaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
         routedSnapTextPaint.setColor(Color.rgb(35, 85, 180));
         routedSnapTextPaint.setTextSize(13f * getResources().getDisplayMetrics().scaledDensity);
+
+        modelConstraintPaint.setColor(Color.rgb(45, 125, 225));
+        modelConstraintPaint.setStyle(Paint.Style.STROKE);
+        modelConstraintPaint.setStrokeWidth(1.5f * getResources().getDisplayMetrics().density);
+        modelConstraintPaint.setPathEffect(new DashPathEffect(new float[]{8f, 7f}, 0f));
+        modelConstraintTextPaint.setColor(Color.rgb(35, 105, 205));
+        modelConstraintTextPaint.setTextSize(13f * getResources().getDisplayMetrics().scaledDensity);
+        modelConstraintTextPaint.setTextAlign(Paint.Align.CENTER);
         syncMirror("constructor");
     }
 
@@ -78,11 +99,33 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     public long sketchAuthorityTransitionCount() { return authorityTransitionCount; }
     public long sketchModelSnapCount() { return modelSnapCount; }
     public String sketchLastModelSnapKind() { return lastModelSnapKind; }
+    public ConstraintAnchorPolicy constraintAnchorPolicy() { return constraintAnchorPolicy; }
+    public void setConstraintAnchorPolicy(ConstraintAnchorPolicy policy) {
+        if (policy == null) throw new NullPointerException("policy");
+        constraintAnchorPolicy = policy;
+    }
+    public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }
+
+    /** Test/diagnostic seam proving migrated constraints did not populate legacy View truth. */
+    public int legacyMigratedConstraintTruthCount() {
+        return reflectedStoreSize("axisLocks") + reflectedStoreSize("lineRelations");
+    }
+
+    private int reflectedStoreSize(String fieldName) {
+        try {
+            Field field = ChobYarShaprCanvasView.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object value = field.get(this);
+            if (value instanceof Map) return ((Map<?, ?>) value).size();
+            if (value instanceof Collection) return ((Collection<?>) value).size();
+        } catch (Exception ignored) {}
+        return -1000;
+    }
 
     public boolean assertSketchMirrorParity() {
         try {
             boolean ok = LegacySketchStateBridge.hasParity(sketchDocument, exportSketchProjectState());
-            if (!ok) lastMirrorError = "SketchDocument geometry parity mismatch";
+            if (!ok) lastMirrorError = "SketchDocument geometry/constraint parity mismatch";
             return ok;
         } catch (RuntimeException e) {
             lastMirrorError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -194,11 +237,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return null;
     }
 
-    /**
-     * Legacy is now a compatibility renderer/history adapter for migrated line
-     * constraints. Replay the model-solved geometry by stable id so the View can
-     * never choose a different mathematical outcome from SketchDocument.
-     */
     private void replaySolvedLineGeometryToLegacy() {
         for (SketchEntity value : sketchDocument.entities()) {
             if (!(value instanceof SketchGeometry.Line)) continue;
@@ -391,12 +429,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /**
-     * K3.5b touch routing. Geometry is chosen by SketchSnapService, while guide
-     * and grid remain interaction-layer concerns. Legacy geometric snap is
-     * disabled only while the routed Create event is replayed, preventing it
-     * from overriding model semantics (notably phantom full-circle Arc snaps).
-     */
     private MotionEvent routeCreateSnap(MotionEvent event, int tool) {
         routedSnapVisible = false;
         routedSnapLabel = "";
@@ -437,6 +469,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
         float density = getResources().getDisplayMetrics().density;
         float s = 8f * density;
@@ -447,6 +480,35 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     routedSnapScreenY - 9f * density, routedSnapTextPaint);
         }
     }
+
+    private void drawModelConstraintFeedback(Canvas canvas) {
+        for (SketchConstraint constraint : sketchDocument.constraints()) {
+            SketchEntity primary = sketchDocument.entity(constraint.primaryEntityId);
+            if (!(primary instanceof SketchGeometry.Line)) continue;
+            SketchGeometry.Line a = (SketchGeometry.Line) primary;
+            float ax = screenX((a.a.xMm + a.b.xMm) * 0.5);
+            float ay = screenY((a.a.yMm + a.b.yMm) * 0.5);
+            if (constraint.kind == SketchConstraint.Kind.HORIZONTAL) {
+                canvas.drawText("H", ax, ay - 10f, modelConstraintTextPaint);
+            } else if (constraint.kind == SketchConstraint.Kind.VERTICAL) {
+                canvas.drawText("V", ax + 10f, ay, modelConstraintTextPaint);
+            } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL
+                    || constraint.kind == SketchConstraint.Kind.PERPENDICULAR)
+                    && constraint.secondaryEntityId != null) {
+                SketchEntity secondary = sketchDocument.entity(constraint.secondaryEntityId);
+                if (!(secondary instanceof SketchGeometry.Line)) continue;
+                SketchGeometry.Line b = (SketchGeometry.Line) secondary;
+                float bx = screenX((b.a.xMm + b.b.xMm) * 0.5);
+                float by = screenY((b.a.yMm + b.b.yMm) * 0.5);
+                canvas.drawLine(ax, ay, bx, by, modelConstraintPaint);
+                canvas.drawText(constraint.kind == SketchConstraint.Kind.PARALLEL ? "∥" : "⊥",
+                        (ax + bx) * 0.5f, (ay + by) * 0.5f - 7f, modelConstraintTextPaint);
+            }
+        }
+    }
+
+    private float screenX(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetX); }
+    private float screenY(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetY); }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (event == null) return false;
@@ -495,6 +557,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             boolean changed = sketchDocument.undo();
             if (changed) {
                 super.undo();
+                replaySolvedLineGeometryToLegacy();
                 finishTransactionalHistoryStep("undo");
                 return;
             }
@@ -656,11 +719,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
 
     @Override public String applyHorizontalVerticalConstraint() {
-        if (!prepareTransactionalSelection("constraint-hv-prepare")) {
-            String out=super.applyHorizontalVerticalConstraint();
-            syncMirror("constraint-hv-fallback");
-            return out;
-        }
+        if (!prepareTransactionalSelection("constraint-hv-prepare")) return "Select one or more lines for H/V";
         List<String> ids=selectedModelLineIds();
         if (ids.isEmpty()) return "Select one or more lines for H/V";
         ArrayList<SketchConstraint> incoming=new ArrayList<>();
@@ -674,50 +733,51 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
         try {
             sketchDocument.addConstraintsAndSolve(incoming,sketchConstraintSolver);
-            String out=super.applyHorizontalVerticalConstraint();
+            coreSaveUndo();
             replaySolvedLineGeometryToLegacy();
-            finishTransactionalMutation("constraint-hv");
-            return out;
+            if (!finishTransactionalMutation("constraint-hv")) return "H/V constraint rollback: parity failed";
+            return ids.size()+" line(s) constrained H/V";
         } catch (RuntimeException e) {
             return modelConstraintFailure("constraint-hv",e);
         }
     }
 
     @Override public String applyPerpendicularConstraint() {
-        if (!prepareTransactionalSelection("constraint-perpendicular-prepare")) {
-            String out=super.applyPerpendicularConstraint();
-            syncMirror("constraint-perpendicular-fallback");
-            return out;
-        }
+        if (!prepareTransactionalSelection("constraint-perpendicular-prepare")) return "Select exactly two lines for Perpendicular";
         List<String> ids=selectedModelLineIds();
         if (ids.size()!=2) return "Select exactly two lines for Perpendicular";
+        int anchorIndex=constraintAnchorPolicy==ConstraintAnchorPolicy.FIRST_SELECTED?0:1;
+        String anchor=ids.get(anchorIndex);
+        String moving=ids.get(anchorIndex==0?1:0);
         try {
-            SketchConstraint c=SketchConstraint.perpendicular(UUID.randomUUID().toString(),ids.get(0),ids.get(1));
+            SketchConstraint c=SketchConstraint.perpendicular(UUID.randomUUID().toString(),anchor,moving);
             sketchDocument.addConstraintsAndSolve(java.util.Collections.singletonList(c),sketchConstraintSolver);
-            String out=super.applyPerpendicularConstraint();
+            coreSaveUndo();
             replaySolvedLineGeometryToLegacy();
-            finishTransactionalMutation("constraint-perpendicular");
-            return out;
+            if (!finishTransactionalMutation("constraint-perpendicular")) return "Perpendicular constraint rollback: parity failed";
+            return "Perpendicular ⊥ applied";
         } catch (RuntimeException e) {
             return modelConstraintFailure("constraint-perpendicular",e);
         }
     }
 
     @Override public String applyParallelConstraint() {
-        if (!prepareTransactionalSelection("constraint-parallel-prepare")) {
-            String out=super.applyParallelConstraint();
-            syncMirror("constraint-parallel-fallback");
-            return out;
-        }
+        if (!prepareTransactionalSelection("constraint-parallel-prepare")) return "Select two or more lines for Parallel";
         List<String> ids=selectedModelLineIds();
-        if (ids.size()!=2) return "Select exactly two lines for Parallel";
+        if (ids.size()<2) return "Select two or more lines for Parallel";
+        int anchorIndex=constraintAnchorPolicy==ConstraintAnchorPolicy.FIRST_SELECTED?0:ids.size()-1;
+        String anchor=ids.get(anchorIndex);
+        ArrayList<SketchConstraint> incoming=new ArrayList<>();
+        for (int i=0;i<ids.size();i++) {
+            if (i==anchorIndex) continue;
+            incoming.add(SketchConstraint.parallel(UUID.randomUUID().toString(),anchor,ids.get(i)));
+        }
         try {
-            SketchConstraint c=SketchConstraint.parallel(UUID.randomUUID().toString(),ids.get(0),ids.get(1));
-            sketchDocument.addConstraintsAndSolve(java.util.Collections.singletonList(c),sketchConstraintSolver);
-            String out=super.applyParallelConstraint();
+            sketchDocument.addConstraintsAndSolve(incoming,sketchConstraintSolver);
+            coreSaveUndo();
             replaySolvedLineGeometryToLegacy();
-            finishTransactionalMutation("constraint-parallel");
-            return out;
+            if (!finishTransactionalMutation("constraint-parallel")) return "Parallel constraint rollback: parity failed";
+            return "Parallel ∥ applied to "+ids.size()+" lines";
         } catch (RuntimeException e) {
             return modelConstraintFailure("constraint-parallel",e);
         }
@@ -730,7 +790,46 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
     @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
 
-    @Override public String importSketchProjectState(String raw) { String out=super.importSketchProjectState(raw); syncMirror("project-open"); return out; }
+    @Override public String exportSketchProjectState() {
+        try {
+            JSONObject root=new JSONObject(super.exportSketchProjectState());
+            JSONArray rows=new JSONArray();
+            for (SketchConstraint c:sketchDocument.constraints()) {
+                JSONObject row=new JSONObject();
+                row.put("id",c.id);
+                row.put("kind",c.kind.name());
+                row.put("primaryEntityId",c.primaryEntityId);
+                row.put("primaryPointIndex",c.primaryPointIndex);
+                if (c.secondaryEntityId!=null) row.put("secondaryEntityId",c.secondaryEntityId);
+                row.put("secondaryPointIndex",c.secondaryPointIndex);
+                if (!Double.isNaN(c.value)) row.put("value",c.value);
+                row.put("driving",c.driving);
+                rows.put(row);
+            }
+            root.put("modelConstraintSchemaVersion",1);
+            root.put("modelConstraints",rows);
+            return root.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot export model-owned sketch constraints",e);
+        }
+    }
+
+    @Override public String importSketchProjectState(String raw) {
+        try {
+            LegacySketchStateBridge.parse(raw);
+            String out=super.importSketchProjectState(raw);
+            LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
+            mirrorSyncCount++;
+            authorityHistoryValid=true;
+            lastMirrorError="";
+            requireSketchMirrorParity();
+            return out;
+        } catch (RuntimeException e) {
+            authorityHistoryValid=false;
+            lastMirrorError="project-open: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());
+            return "Project sketch state could not be restored";
+        }
+    }
 
     @Override public String executeCommand(String raw) {
         String newId = UUID.randomUUID().toString();
