@@ -246,7 +246,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case HORIZONTAL:
                 case VERTICAL: score += 120; break;
                 case COINCIDENT:
-                case POINT_ON_ENTITY: score += 100; break;
+                case POINT_ON_ENTITY:
+                case MIDPOINT: score += 100; break;
                 case PARALLEL:
                 case PERPENDICULAR: score += 60; break;
                 default: score += 30; break;
@@ -303,7 +304,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.PARALLEL
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
                     && c.kind != SketchConstraint.Kind.COINCIDENT
-                    && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY) continue;
+                    && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
+                    && c.kind != SketchConstraint.Kind.MIDPOINT) continue;
             constrained.addAll(c.referencedEntityIds());
         }
         for (String id : constrained) {
@@ -489,7 +491,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     if (snap.modelKind == SketchSnapService.Kind.ENDPOINT && snap.targetPointIndex >= 0) {
                         generated.add(SketchConstraint.coincident(UUID.randomUUID().toString(),
                                 stableId, drivenPoint, snap.targetEntityId, snap.targetPointIndex));
-                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE) {
+                    } else if (snap.modelKind == SketchSnapService.Kind.MIDPOINT) {
+                        generated.add(SketchConstraint.midpoint(UUID.randomUUID().toString(),
+                                stableId, drivenPoint, snap.targetEntityId));
+                    } else if (snap.modelKind == SketchSnapService.Kind.ON_EDGE
+                            && modelAutoConstraintsEnabled()) {
                         generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
                                 stableId, drivenPoint, snap.targetEntityId));
                     }
@@ -566,6 +572,30 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return da <= db ? 0 : 1;
     }
 
+    private RoutedSnap modelLineExtensionGuideSnap(float rawX, float rawY, float radiusMm) {
+        if (!isShowGuides()) return null;
+        RoutedSnap best = null;
+        for (SketchEntity value : sketchDocument.entities()) {
+            if (!(value instanceof SketchGeometry.Line)) continue;
+            SketchGeometry.Line line = (SketchGeometry.Line) value;
+            double dx = line.b.xMm - line.a.xMm;
+            double dy = line.b.yMm - line.a.yMm;
+            double length2 = dx * dx + dy * dy;
+            if (length2 <= 1.0e-12) continue;
+            double t = ((rawX - line.a.xMm) * dx + (rawY - line.a.yMm) * dy) / length2;
+            if (t >= 0.0 && t <= 1.0) continue;
+            double x = line.a.xMm + t * dx;
+            double y = line.a.yMm + t * dy;
+            double distance = Math.hypot(x - rawX, y - rawY);
+            if (distance <= radiusMm * GUIDE_RADIUS_FACTOR
+                    && (best == null || distance < best.distanceMm)) {
+                best = new RoutedSnap(x, y, distance, "Guide",
+                        SketchSnapService.Kind.ON_EDGE, line.id(), -1);
+            }
+        }
+        return best;
+    }
+
     private RoutedSnap modelGuideGridSnap(float rawX, float rawY, float radiusMm) {
         RoutedSnap best = null;
         try {
@@ -584,6 +614,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             lastMirrorError = "model-snap: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
 
+        RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
+        if (extension != null) {
+            boolean magneticDiscrete = best != null
+                    && (best.modelKind == SketchSnapService.Kind.ENDPOINT
+                        || best.modelKind == SketchSnapService.Kind.MIDPOINT)
+                    && best.distanceMm <= radiusMm * 0.25d;
+            if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {
+                best = extension;
+            }
+        }
+
         if (isShowGuides()) {
             for (Entity entity : entities) {
                 if (entity == null || !coreIsVisible(entity)) continue;
@@ -592,8 +633,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 PointF p = entity.nearestPoint(rawX, rawY);
                 if (p == null) continue;
                 double d = Math.hypot(p.x - rawX, p.y - rawY);
-                if (d <= radiusMm * GUIDE_RADIUS_FACTOR
-                        && (best == null || d < best.distanceMm)) {
+                if (best == null && d <= radiusMm * GUIDE_RADIUS_FACTOR) {
                     best = new RoutedSnap(p.x, p.y, d, "Guide", null, null, -1);
                 }
             }
@@ -659,11 +699,12 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         if (snap.modelKind != null) {
             modelSnapCount++;
             lastModelSnapKind = snap.modelKind.name();
-            if (action == MotionEvent.ACTION_UP
-                    && (snap.modelKind == SketchSnapService.Kind.ENDPOINT
-                        || snap.modelKind == SketchSnapService.Kind.ON_EDGE)
-                    && snap.targetEntityId != null) {
-                committedCreateSnap = snap;
+            if (action == MotionEvent.ACTION_UP && snap.targetEntityId != null) {
+                boolean alwaysAutomatic = snap.modelKind == SketchSnapService.Kind.ENDPOINT
+                        || snap.modelKind == SketchSnapService.Kind.MIDPOINT;
+                boolean policyAutomatic = snap.modelKind == SketchSnapService.Kind.ON_EDGE
+                        && modelAutoConstraintsEnabled();
+                if (alwaysAutomatic || policyAutomatic) committedCreateSnap = snap;
             }
         }
         return routed;
@@ -691,7 +732,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 : ModelConstraintBadgeProjection.project(sketchDocument)) {
             float bx = screenX(badge.xMm);
             float by = screenY(badge.yMm);
-            String glyph = badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT ? "●" : "◇";
+            String glyph = (badge.kind == ModelConstraintBadgeProjection.BadgeKind.COINCIDENT
+                    || badge.kind == ModelConstraintBadgeProjection.BadgeKind.MIDPOINT) ? "●" : "◇";
             canvas.drawText(glyph, bx, by - 12f, modelConstraintTextPaint);
         }
         for (SketchConstraint constraint : sketchDocument.constraints()) {

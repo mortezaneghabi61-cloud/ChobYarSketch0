@@ -90,6 +90,9 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         super.setLayerVisible(first.layerName, true);
     }
 
+    /** Single source of truth for model-routed automatic constraint policy. */
+    protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }
+
     private void initReflection() {
         try {
             selectedField = field(CadCanvasView.class, "selected");
