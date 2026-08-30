@@ -229,6 +229,41 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return out;
     }
 
+    private int constraintAuthorityScore(String entityId) {
+        int score = 0;
+        for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
+            if (!c.driving) continue;
+            switch (c.kind) {
+                case FIXED: score += 1000; break;
+                case DISTANCE:
+                case RADIUS:
+                case ANGLE: score += 250; break;
+                case HORIZONTAL:
+                case VERTICAL: score += 120; break;
+                case COINCIDENT:
+                case POINT_ON_ENTITY: score += 100; break;
+                case PARALLEL:
+                case PERPENDICULAR: score += 60; break;
+                default: score += 30; break;
+            }
+        }
+        return score;
+    }
+
+    /** Existing driving constraints take precedence; selection policy resolves ties. */
+    private int chooseConstraintAnchorIndex(List<String> ids) {
+        if (ids == null || ids.isEmpty()) return -1;
+        int max = 0;
+        for (String id : ids) max = Math.max(max, constraintAuthorityScore(id));
+        if (max <= 0) return constraintAnchorPolicy == ConstraintAnchorPolicy.FIRST_SELECTED ? 0 : ids.size() - 1;
+        if (constraintAnchorPolicy == ConstraintAnchorPolicy.FIRST_SELECTED) {
+            for (int i = 0; i < ids.size(); i++) if (constraintAuthorityScore(ids.get(i)) == max) return i;
+        } else {
+            for (int i = ids.size() - 1; i >= 0; i--) if (constraintAuthorityScore(ids.get(i)) == max) return i;
+        }
+        return 0;
+    }
+
     private Entity legacyEntityByStableId(String stableId) {
         if (stableId == null) return null;
         for (Entity entity : entities) {
@@ -247,6 +282,32 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             legacy.moveControlPoint(1, (float) solved.b.xMm, (float) solved.b.yMm);
         }
         invalidate();
+    }
+
+    /**
+     * Presentation-only parity fence. If old View code or a stale reference
+     * mutates a model-constrained line directly, the View must not become a
+     * second semantic authority. We replay the already-solved model geometry;
+     * no constraint solving is performed from rendering.
+     */
+    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
+        LinkedHashSet<String> constrained = new LinkedHashSet<>();
+        for (SketchConstraint c : sketchDocument.constraints()) {
+            if (c.kind != SketchConstraint.Kind.HORIZONTAL
+                    && c.kind != SketchConstraint.Kind.VERTICAL
+                    && c.kind != SketchConstraint.Kind.PARALLEL
+                    && c.kind != SketchConstraint.Kind.PERPENDICULAR) continue;
+            constrained.addAll(c.referencedEntityIds());
+        }
+        for (String id : constrained) {
+            SketchEntity value = sketchDocument.entity(id);
+            if (!(value instanceof SketchGeometry.Line)) continue;
+            Entity legacy = legacyEntityByStableId(id);
+            if (legacy == null) continue;
+            SketchGeometry.Line solved = (SketchGeometry.Line) value;
+            legacy.moveControlPoint(0, (float) solved.a.xMm, (float) solved.a.yMm);
+            legacy.moveControlPoint(1, (float) solved.b.xMm, (float) solved.b.yMm);
+        }
     }
 
     private String modelConstraintFailure(String source, RuntimeException e) {
@@ -468,6 +529,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected void onDraw(Canvas canvas) {
+        replayAuthoritativeConstrainedGeometryBeforeDraw();
         super.onDraw(canvas);
         drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
@@ -550,7 +612,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return handled;
     }
 
-    @Override public void clearAll() { super.clearAll(); syncMirror("clear"); }
+    @Override public void clearAll() {
+        sketchDocument.restoreExternal(java.util.Collections.emptyList(), java.util.Collections.emptySet(), java.util.Collections.emptyList());
+        super.clearAll();
+        syncMirror("clear");
+    }
 
     @Override public void undo() {
         if (authorityHistoryValid && sketchDocument.canUndo()) {
@@ -746,7 +812,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         if (!prepareTransactionalSelection("constraint-perpendicular-prepare")) return "Select exactly two lines for Perpendicular";
         List<String> ids=selectedModelLineIds();
         if (ids.size()!=2) return "Select exactly two lines for Perpendicular";
-        int anchorIndex=constraintAnchorPolicy==ConstraintAnchorPolicy.FIRST_SELECTED?0:1;
+        int anchorIndex=chooseConstraintAnchorIndex(ids);
         String anchor=ids.get(anchorIndex);
         String moving=ids.get(anchorIndex==0?1:0);
         try {
@@ -765,7 +831,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         if (!prepareTransactionalSelection("constraint-parallel-prepare")) return "Select two or more lines for Parallel";
         List<String> ids=selectedModelLineIds();
         if (ids.size()<2) return "Select two or more lines for Parallel";
-        int anchorIndex=constraintAnchorPolicy==ConstraintAnchorPolicy.FIRST_SELECTED?0:ids.size()-1;
+        int anchorIndex=chooseConstraintAnchorIndex(ids);
         String anchor=ids.get(anchorIndex);
         ArrayList<SketchConstraint> incoming=new ArrayList<>();
         for (int i=0;i<ids.size();i++) {
