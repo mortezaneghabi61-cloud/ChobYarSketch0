@@ -616,9 +616,12 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
         RoutedSnap extension = modelLineExtensionGuideSnap(rawX, rawY, radiusMm);
         if (extension != null) {
+            // Keep the interaction router consistent with SketchSnapService's
+            // discrete magnetic lock: a nearby semantic target must not be
+            // stolen by a slightly closer generic line-extension projection.
             boolean magneticDiscrete = best != null
-                    && (best.modelKind == SketchSnapService.Kind.ENDPOINT
-                        || best.modelKind == SketchSnapService.Kind.MIDPOINT)
+                    && best.modelKind != null
+                    && best.modelKind != SketchSnapService.Kind.ON_EDGE
                     && best.distanceMm <= radiusMm * 0.25d;
             if (best == null || (!magneticDiscrete && extension.distanceMm < best.distanceMm)) {
                 best = extension;
