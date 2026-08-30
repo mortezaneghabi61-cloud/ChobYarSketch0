@@ -2,8 +2,10 @@ name: K3.6d atomic project-open fix
 
 on:
   push:
-    branches: [k3-6d-coincident-point-authority]
-    paths: ['.github/workflows/k36d-open-atomicity-fix.yml']
+    branches:
+      - k3-6d-coincident-point-authority
+    paths:
+      - .github/workflows/k36d-open-atomicity-fix.yml
   workflow_dispatch:
 
 permissions:
@@ -17,7 +19,7 @@ jobs:
         with:
           ref: k3-6d-coincident-point-authority
           fetch-depth: 0
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
@@ -26,38 +28,42 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
-          s=p.read_text()
-          old='''            // The legacy importer owns schema-v1 -> v2 stable-id migration. Do not
-            // pre-parse v1 through the v2-only bridge before that migration runs.
-            String out=super.importSketchProjectState(raw);
-            if (hasModelConstraints) {
-                LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
-            } else {
-                LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());
-            }
-'''
-          new='''            // Project Open is a transaction boundary. For stable-id schema-v2
-            // states that carry model-owned constraints, validate the entire incoming
-            // geometry/relationship graph before the legacy View is allowed to mutate.
-            // This keeps malformed/dangling opens fail-closed across both authorities.
-            // Schema-v1 still goes through the legacy importer first because that path
-            // owns the v1 -> v2 stable-id migration.
-            if (hasModelConstraints) {
-                SketchDocument preflight = new SketchDocument();
-                LegacySketchStateBridge.restoreDocument(preflight, raw);
-            }
-
-            String out=super.importSketchProjectState(raw);
-            if (hasModelConstraints) {
-                LegacySketchStateBridge.restoreDocument(sketchDocument,raw);
-            } else {
-                LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());
-            }
-'''
+          p = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          s = p.read_text()
+          old = "\n".join([
+              "            // The legacy importer owns schema-v1 -> v2 stable-id migration. Do not",
+              "            // pre-parse v1 through the v2-only bridge before that migration runs.",
+              "            String out=super.importSketchProjectState(raw);",
+              "            if (hasModelConstraints) {",
+              "                LegacySketchStateBridge.restoreDocument(sketchDocument,raw);",
+              "            } else {",
+              "                LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());",
+              "            }",
+              ""
+          ])
+          new = "\n".join([
+              "            // Project Open is a transaction boundary. For stable-id schema-v2",
+              "            // states that carry model-owned constraints, validate the entire incoming",
+              "            // geometry/relationship graph before the legacy View is allowed to mutate.",
+              "            // This keeps malformed/dangling opens fail-closed across both authorities.",
+              "            // Schema-v1 still goes through the legacy importer first because that path",
+              "            // owns the v1 -> v2 stable-id migration.",
+              "            if (hasModelConstraints) {",
+              "                SketchDocument preflight = new SketchDocument();",
+              "                LegacySketchStateBridge.restoreDocument(preflight, raw);",
+              "            }",
+              "",
+              "            String out=super.importSketchProjectState(raw);",
+              "            if (hasModelConstraints) {",
+              "                LegacySketchStateBridge.restoreDocument(sketchDocument,raw);",
+              "            } else {",
+              "                LegacySketchStateBridge.restoreDocument(sketchDocument,super.exportSketchProjectState());",
+              "            }",
+              ""
+          ])
           if old not in s:
               raise SystemExit('K3.6d import atomicity anchor missing')
-          p.write_text(s.replace(old,new,1))
+          p.write_text(s.replace(old, new, 1))
           PY
       - name: Verify JVM and Android instrumentation compilation
         run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
