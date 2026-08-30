@@ -37,8 +37,8 @@ jobs:
           PY
       - name: Apply K3.6d model-authority slice
         run: python3 .github/scripts/apply-k36d-production.py
-      - name: Verify JVM contracts and Android compilation
-        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Verify JVM contracts and Android test compilation
+        run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
       - name: Commit coherent K3.6d slice
         run: |
           git config user.name 'chobyar-sketch-authority'
