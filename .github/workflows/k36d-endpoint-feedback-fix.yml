@@ -148,4 +148,5 @@ jobs:
           git rm .github/workflows/k36d-endpoint-feedback-fix.yml
           git add app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/androidTest/java/ir/chobyar/sketch/K36dProductionEndpointConstraintAuthorityInstrumentationTest.java
           git commit -m 'K3.6d: align endpoint feedback and auto-constraint behavior'
+          git pull --rebase origin k3-6d-coincident-point-authority
           git push origin HEAD:k3-6d-coincident-point-authority
