@@ -1,0 +1,49 @@
+name: K3.6d degenerate model validity fence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/k36d-degenerate-model-fence-fix.yml'
+      - 'app/src/test/java/ir/chobyar/sketch/core/K36dEndpointConstraintAuthorityTest.java'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.head_ref == 'k3-6d-coincident-point-authority'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: k3-6d-coincident-point-authority
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Assert degenerate hosts never enter model authority
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/test/java/ir/chobyar/sketch/core/K36dEndpointConstraintAuthorityTest.java')
+          s=p.read_text()
+          start=s.index('    @Test public void degenerateLineHostFailsClosedWithoutEnteringAuthority() {')
+          end=s.index('\n    @Test public void danglingCreateConstraintFailsBeforeMutationOrHistory()', start)
+          new='''    @Test public void degenerateLineHostFailsClosedWithoutEnteringAuthority() {\n        SketchDocument d=new SketchDocument();\n        d.add(line("owner",9,7,9,12));\n        long revisionBefore=d.revision();\n        boolean canUndoBefore=d.canUndo();\n\n        try {\n            d.add(line("host",4,4,4,4));\n            fail("zero-length line host must be rejected before entering model authority");\n        } catch (IllegalArgumentException expected) {\n            assertTrue(expected.getMessage().toLowerCase().contains("degenerate")\n                    || expected.getMessage().toLowerCase().contains("length"));\n        }\n\n        assertEquals(revisionBefore,d.revision());\n        assertEquals(canUndoBefore,d.canUndo());\n        assertEquals(1,d.size());\n        assertNull(d.entity("host"));\n        assertEquals(0,d.constraintCount());\n        SketchGeometry.Line owner=(SketchGeometry.Line)d.entity("owner");\n        assertEquals(9.0,owner.a.xMm,1e-9);\n        assertEquals(7.0,owner.a.yMm,1e-9);\n    }\n'''
+          p.write_text(s[:start]+new+s[end:])
+          PY
+      - name: Verify full JVM regression
+        run: ./gradlew testDebugUnitTest --stacktrace
+      - name: Commit verified model-fence test
+        shell: bash
+        run: |
+          git config user.name chobyar-supervisor
+          git config user.email actions@users.noreply.github.com
+          git rm -f .github/workflows/k36d-degenerate-model-fence-fix.yml .github/workflows/k36d-degenerate-contract-fix.yml
+          git add app/src/test/java/ir/chobyar/sketch/core/K36dEndpointConstraintAuthorityTest.java
+          git commit -m 'test: enforce degenerate endpoint-host model fence'
+          git pull --rebase origin k3-6d-coincident-point-authority
+          git push origin HEAD:k3-6d-coincident-point-authority
