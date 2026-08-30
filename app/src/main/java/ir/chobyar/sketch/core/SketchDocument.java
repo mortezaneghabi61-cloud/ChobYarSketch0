@@ -113,6 +113,41 @@ public final class SketchDocument {
         changed();
     }
 
+    /**
+     * Adds a newly-created entity plus generated constraints and their solved geometry
+     * as one fail-closed user transaction. Validation and solving happen entirely on
+     * prospective copies; a dangling reference, conflict or unsupported solve leaves
+     * geometry, constraints and Undo history untouched.
+     */
+    public synchronized SketchConstraintSolver.Result addWithConstraintsAndSolve(
+            SketchEntity entity, Collection<SketchConstraint> values, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        requireValid(entity);
+        if (entities.containsKey(entity.id())) {
+            throw new IllegalArgumentException("Duplicate sketch entity id: " + entity.id());
+        }
+
+        LinkedHashMap<String, SketchEntity> prospectiveEntities = copyEntities();
+        prospectiveEntities.put(entity.id(), entity.copy());
+        LinkedHashMap<String, SketchConstraint> incoming =
+                validateIncomingConstraints(values, prospectiveEntities, constraints.keySet());
+        LinkedHashMap<String, SketchConstraint> prospectiveConstraints = copyConstraints(constraints);
+        prospectiveConstraints.putAll(copyConstraints(incoming));
+
+        SketchConstraintSolver.Result solution = prospectiveConstraints.isEmpty()
+                ? new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                        0, 0.0, "", prospectiveEntities.values())
+                : solver.solve(prospectiveEntities.values(), prospectiveConstraints.values());
+        LinkedHashMap<String, SketchEntity> solved = requireSolvedSnapshot(solution, prospectiveEntities);
+
+        pushUndo();
+        entities.clear();
+        entities.putAll(solved);
+        constraints.putAll(copyConstraints(incoming));
+        changed();
+        return solution;
+    }
+
     public synchronized void addAll(Collection<? extends SketchEntity> values) {
         if (values == null || values.isEmpty()) return;
         LinkedHashMap<String, SketchEntity> incoming = new LinkedHashMap<>();
