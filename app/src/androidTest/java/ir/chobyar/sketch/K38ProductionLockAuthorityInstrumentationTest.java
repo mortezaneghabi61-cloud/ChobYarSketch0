@@ -32,6 +32,8 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             K33MirroredCadCanvasView cad = cad();
             cad.executeCommand("LINE 0 0 100 25");
             String entityId = cad.selected.stableId();
+            assertEquals("Legacy object-identity Lock truth must start empty", 0,
+                    cad.legacySelectionLockTruthCount());
 
             cad.toggleSelectedLock();
             cad.requireSketchMirrorParity();
@@ -40,6 +42,8 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             assertTrue(fixed.fixesWholeEntity());
             assertEquals(entityId, fixed.primaryEntityId);
             assertTrue(cad.sketchAuthorityCanUndo());
+            assertEquals("Production Lock must not populate legacy object-identity truth", 0,
+                    cad.legacySelectionLockTruthCount());
 
             String raw = cad.exportSketchProjectState();
             K33MirroredCadCanvasView reopened = cad();
@@ -49,6 +53,8 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             SketchConstraint restored = fixedFor(reopened, entityId);
             assertTrue(restored.fixesWholeEntity());
             assertEquals(entityId, restored.primaryEntityId);
+            assertEquals("Reopen must not reconstruct legacy object-identity Lock truth", 0,
+                    reopened.legacySelectionLockTruthCount());
             assertFalse("Open must reset session Undo while preserving FIXED relationship",
                     reopened.sketchAuthorityCanUndo());
             assertFalse(reopened.sketchAuthorityCanRedo());
