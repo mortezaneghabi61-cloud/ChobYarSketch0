@@ -1,0 +1,59 @@
+name: K3.7 Apply FIXED Constraint
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - k3-7-sketch-solver
+    paths:
+      - '.github/scripts/apply_k37_fixed_constraint.py'
+      - '.github/workflows/k37-fixed-constraint-apply.yml'
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: k3-7-sketch-solver
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android 35 toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Apply model-owned FIXED semantics
+        run: python3 .github/scripts/apply_k37_fixed_constraint.py
+
+      - name: Run K3.7 FIXED unit contracts
+        run: gradle :app:testDebugUnitTest --tests ir.chobyar.sketch.core.K37FixedConstraintTest --stacktrace
+
+      - name: Commit production fix
+        run: |
+          git config user.name "chobyar-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            app/src/main/java/ir/chobyar/sketch/core/SketchDocument.java \
+            app/src/main/java/ir/chobyar/sketch/core/DeterministicSketchConstraintSolver.java
+          if ! git diff --cached --quiet; then
+            git commit -m "K3.7: enforce model-owned FIXED geometry [skip ci]"
+            git push origin HEAD:k3-7-sketch-solver
+          fi
