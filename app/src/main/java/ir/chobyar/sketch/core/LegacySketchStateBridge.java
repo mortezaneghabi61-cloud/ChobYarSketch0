@@ -10,9 +10,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * K3.3 migration seam from the persisted legacy canvas representation into
- * {@link SketchDocument}. This deliberately mirrors geometry + stable identity
- * only; constraints/snapping remain legacy-owned until a later authority move.
+ * Migration seam from the persisted legacy canvas representation into
+ * {@link SketchDocument}. Geometry keeps the stable-id schema-v2 contract and
+ * K3.6c adds an optional modelConstraints array. Older geometry-only projects
+ * remain valid and restore with no model-owned constraints.
  */
 public final class LegacySketchStateBridge {
     private static final double EPS = 1.0e-6;
@@ -21,10 +22,13 @@ public final class LegacySketchStateBridge {
 
     public static final class Result {
         public final List<SketchEntity> entities;
+        public final List<SketchConstraint> constraints;
         public final Set<String> ignoredAnnotationIds;
 
-        Result(List<SketchEntity> entities, Set<String> ignoredAnnotationIds) {
+        Result(List<SketchEntity> entities, List<SketchConstraint> constraints,
+               Set<String> ignoredAnnotationIds) {
             this.entities = Collections.unmodifiableList(new ArrayList<>(entities));
+            this.constraints = Collections.unmodifiableList(new ArrayList<>(constraints));
             this.ignoredAnnotationIds = Collections.unmodifiableSet(new LinkedHashSet<>(ignoredAnnotationIds));
         }
     }
@@ -33,7 +37,7 @@ public final class LegacySketchStateBridge {
         try {
             JSONObject root = new JSONObject(raw);
             int schema = root.optInt("schemaVersion", -1);
-            if (schema != 2) throw new IllegalArgumentException("K3.3 mirror requires stable-id schema v2");
+            if (schema != 2) throw new IllegalArgumentException("Sketch bridge requires stable-id schema v2");
             JSONArray rows = root.getJSONArray("entities");
             ArrayList<SketchEntity> modeled = new ArrayList<>();
             LinkedHashSet<String> ignored = new LinkedHashSet<>();
@@ -50,28 +54,62 @@ public final class LegacySketchStateBridge {
                     modeled.add(entity);
                 }
             }
-            return new Result(modeled, ignored);
+
+            ArrayList<SketchConstraint> constraints = new ArrayList<>();
+            LinkedHashSet<String> constraintIds = new LinkedHashSet<>();
+            JSONArray constraintRows = root.optJSONArray("modelConstraints");
+            if (constraintRows != null) {
+                for (int i = 0; i < constraintRows.length(); i++) {
+                    JSONObject row = constraintRows.getJSONObject(i);
+                    String id = normalizedId(row.optString("id", ""));
+                    if (!constraintIds.add(id)) {
+                        throw new IllegalArgumentException("Duplicate sketch constraint id: " + id);
+                    }
+                    SketchConstraint.Kind kind = SketchConstraint.Kind.valueOf(
+                            row.getString("kind").trim().toUpperCase(java.util.Locale.US));
+                    String primary = normalizedId(row.getString("primaryEntityId"));
+                    String secondary = normalizedOptionalId(row.optString("secondaryEntityId", null));
+                    int primaryPoint = row.optInt("primaryPointIndex", -1);
+                    int secondaryPoint = row.optInt("secondaryPointIndex", -1);
+                    double value = row.has("value") ? row.getDouble("value") : Double.NaN;
+                    boolean driving = row.optBoolean("driving", true);
+                    constraints.add(new SketchConstraint(id, kind, primary, primaryPoint,
+                            secondary, secondaryPoint, value, driving));
+                }
+            }
+            return new Result(modeled, constraints, ignored);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot bridge legacy sketch state", e);
+            throw new IllegalArgumentException("Cannot bridge sketch state", e);
         }
     }
 
     public static void restoreDocument(SketchDocument document, String raw) {
         if (document == null) throw new NullPointerException("document");
         Result result = parse(raw);
-        document.restoreExternal(result.entities, Collections.emptySet());
+        document.restoreExternal(result.entities, Collections.emptySet(), result.constraints);
     }
 
-    /** Restore modeled legacy geometry except one in-flight candidate id. */
+    /** Restore modeled geometry except one in-flight candidate id, retaining all valid constraints. */
     public static void restoreDocumentExcluding(SketchDocument document, String raw, String excludedId) {
         if (document == null) throw new NullPointerException("document");
         String excluded = normalizedId(excludedId);
         Result result = parse(raw);
         ArrayList<SketchEntity> kept = new ArrayList<>();
-        for (SketchEntity entity : result.entities) if (!excluded.equals(entity.id())) kept.add(entity);
-        document.restoreExternal(kept, Collections.emptySet());
+        LinkedHashSet<String> keptIds = new LinkedHashSet<>();
+        for (SketchEntity entity : result.entities) {
+            if (excluded.equals(entity.id())) continue;
+            kept.add(entity);
+            keptIds.add(entity.id());
+        }
+        ArrayList<SketchConstraint> keptConstraints = new ArrayList<>();
+        for (SketchConstraint constraint : result.constraints) {
+            if (constraint.references(excluded)) continue;
+            if (!keptIds.containsAll(constraint.referencedEntityIds())) continue;
+            keptConstraints.add(constraint);
+        }
+        document.restoreExternal(kept, Collections.emptySet(), keptConstraints);
     }
 
     /** Returns one modeled legacy entity by stable id, or null for annotations/missing ids. */
@@ -85,9 +123,14 @@ public final class LegacySketchStateBridge {
         if (document == null) return false;
         Result legacy = parse(raw);
         if (document.size() != legacy.entities.size()) return false;
+        if (document.constraintCount() != legacy.constraints.size()) return false;
         for (SketchEntity expected : legacy.entities) {
             SketchEntity actual = document.entity(expected.id());
             if (actual == null || !sameGeometry(expected, actual)) return false;
+        }
+        for (SketchConstraint expected : legacy.constraints) {
+            SketchConstraint actual = document.constraint(expected.id);
+            if (actual == null || !sameConstraint(expected, actual)) return false;
         }
         return true;
     }
@@ -104,7 +147,15 @@ public final class LegacySketchStateBridge {
             SketchEntity actual = document.entity(expected.id());
             if (actual == null || !sameGeometry(expected, actual)) return false;
         }
-        return document.size() == expectedSize;
+        if (document.size() != expectedSize) return false;
+        int expectedConstraints = 0;
+        for (SketchConstraint expected : legacy.constraints) {
+            if (expected.references(excluded)) continue;
+            expectedConstraints++;
+            SketchConstraint actual = document.constraint(expected.id);
+            if (actual == null || !sameConstraint(expected, actual)) return false;
+        }
+        return document.constraintCount() == expectedConstraints;
     }
 
     private static SketchEntity toEntity(String type, String id, JSONObject row) throws Exception {
@@ -137,7 +188,6 @@ public final class LegacySketchStateBridge {
         if ("POLYLINE".equals(type)) {
             return new SketchGeometry.Polyline(id, points(row.getJSONArray("points")), row.optBoolean("closed", false));
         }
-        // Dimensions and construction guides are still legacy-owned in K3.3.
         if ("MEASURE".equals(type) || "ANGLE".equals(type) || "GUIDE".equals(type)) return null;
         throw new IllegalArgumentException("Unsupported legacy sketch type: " + type);
     }
@@ -161,6 +211,22 @@ public final class LegacySketchStateBridge {
         String value = id == null ? "" : id.trim();
         if (value.isEmpty() || value.length() > 128) throw new IllegalArgumentException("Invalid stable sketch id");
         return value;
+    }
+
+    private static String normalizedOptionalId(String id) {
+        if (id == null) return null;
+        String value = id.trim();
+        return value.isEmpty() ? null : normalizedId(value);
+    }
+
+    private static boolean sameConstraint(SketchConstraint a, SketchConstraint b) {
+        if (!a.id.equals(b.id) || a.kind != b.kind) return false;
+        if (!a.primaryEntityId.equals(b.primaryEntityId)) return false;
+        if (a.primaryPointIndex != b.primaryPointIndex || a.secondaryPointIndex != b.secondaryPointIndex) return false;
+        if (a.secondaryEntityId == null ? b.secondaryEntityId != null : !a.secondaryEntityId.equals(b.secondaryEntityId)) return false;
+        if (a.driving != b.driving) return false;
+        if (Double.isNaN(a.value) || Double.isNaN(b.value)) return Double.isNaN(a.value) && Double.isNaN(b.value);
+        return near(a.value, b.value);
     }
 
     private static boolean sameGeometry(SketchEntity a, SketchEntity b) {
@@ -201,6 +267,9 @@ public final class LegacySketchStateBridge {
         return true;
     }
     private static boolean same(SketchGeometry.Point a,SketchGeometry.Point b){return near(a.xMm,b.xMm)&&near(a.yMm,b.yMm);}
-    private static boolean near(double a,double b){return Math.abs(a-b)<=EPS;}
+    private static boolean near(double a,double b){
+        double floatUlp=Math.max(Math.ulp((float)a),Math.ulp((float)b));
+        return Math.abs(a-b)<=Math.max(EPS,floatUlp);
+    }
     private static boolean finite(double v){return !Double.isNaN(v)&&!Double.isInfinite(v)&&Math.abs(v)<=1.0e9;}
 }

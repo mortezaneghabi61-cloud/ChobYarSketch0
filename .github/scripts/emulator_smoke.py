@@ -245,17 +245,13 @@ def main():
     edit_x = max(24, moved_x - 90)
     print(f"Tapping unobscured moved dimension label at ({edit_x},{moved_y})", flush=True)
     shell("input", "tap", str(edit_x), str(moved_y))
-    editor = wait_for_contains("عرض و ارتفاع", "05-dimension-editor", timeout=10)
-    if editor is None or find_contains(editor, "عرض و ارتفاع")[0] is None:
+    editor = wait_for_contains("Width and Height", "05-dimension-editor", timeout=10)
+    if editor is None or find_contains(editor, "Width and Height")[0] is None:
         raise AssertionError("Moved rectangle dimension label did not open its numeric editor")
     screenshot("05-moved-dimension-editor")
     shell("input", "keyevent", "KEYCODE_BACK")
     time.sleep(0.8)
 
-    # Explicit selection regression: leave the Sketch palette, clear the
-    # auto-selection created by Rectangle, then select the rectangle again by
-    # touching an unobscured edge. The adaptive Deselect All command is our
-    # accessibility-visible proof that the production selection path fired.
     after_editor = dump_ui("06-before-selection-test")
     close_node, close_bounds = find_label(after_editor, "Close")
     if close_node is not None:
@@ -278,10 +274,6 @@ def main():
     assert_alive("rectangle reselection")
     screenshot("07-rectangle-reselected")
 
-    # Viewport zoom regression: Fit is the production zoom-to-fit path and
-    # recalculates viewScale/offsets through the same core viewport state used
-    # by pinch zoom. Exercise it after reselection to catch viewport/selection
-    # coupling regressions introduced by the architecture refactor.
     fit_node, fit_bounds = find_label(selected_ui, "Fit")
     if fit_node is None:
         raise AssertionError("Fit zoom control disappeared after refactor")
