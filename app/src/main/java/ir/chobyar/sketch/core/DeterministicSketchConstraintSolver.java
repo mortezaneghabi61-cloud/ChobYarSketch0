@@ -133,10 +133,15 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                                 line(entities, c.secondaryEntityId), false));
                 break;
             case COINCIDENT: {
-                SketchGeometry.Line a = line(entities, c.primaryEntityId);
-                SketchGeometry.Line b = line(entities, c.secondaryEntityId);
-                SketchGeometry.Point target = endpoint(a, c.primaryPointIndex);
-                entities.put(c.secondaryEntityId, withEndpoint(b, c.secondaryPointIndex, target));
+                // K3.6d contract: primary is the driven endpoint and secondary
+                // is the target endpoint. Preserve the target and move only the
+                // driven geometry so manual selection policy and Create+AutoConstraint
+                // have deterministic, model-owned anchor semantics.
+                SketchGeometry.Line driven = line(entities, c.primaryEntityId);
+                SketchGeometry.Line targetLine = line(entities, c.secondaryEntityId);
+                SketchGeometry.Point target = endpoint(targetLine, c.secondaryPointIndex);
+                entities.put(c.primaryEntityId,
+                        withEndpoint(driven, c.primaryPointIndex, target));
                 break;
             }
             case POINT_ON_ENTITY: {
