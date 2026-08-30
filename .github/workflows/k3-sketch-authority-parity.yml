@@ -99,7 +99,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dActivityLifecyclePersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-activity-lifecycle-persistence.txt
             grep -q 'OK (2 tests)' test-artifacts/k3-activity-lifecycle-persistence.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K38ProductionLockAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-production-lock-authority.txt
-            grep -q 'OK (1 test)' test-artifacts/k3-production-lock-authority.txt
+            grep -q 'OK (2 tests)' test-artifacts/k3-production-lock-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
