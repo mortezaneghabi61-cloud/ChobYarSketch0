@@ -60,6 +60,40 @@ public class K36dEndpointConstraintAuthorityTest {
         assertEquals(1,d.constraintCount());
     }
 
+    @Test public void pointOnEntitySupportsCircleHostAndTracksTranslatedHost() {
+        SketchDocument d=new SketchDocument();
+        d.add(new SketchGeometry.Circle("circle",new SketchGeometry.Point(0,0),10));
+        d.add(line("owner",6,8,6,14));
+        d.addConstraintsAndSolve(Collections.singletonList(
+                SketchConstraint.pointOnEntity("p-circle","owner",0,"circle")),
+                new DeterministicSketchConstraintSolver());
+
+        SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(6.0,solved.a.xMm,1e-9);
+        assertEquals(8.0,solved.a.yMm,1e-9);
+
+        d.selectOnly("circle");
+        d.translateSelectionAndSolve(5,0,new DeterministicSketchConstraintSolver());
+        SketchGeometry.Line moved=(SketchGeometry.Line)d.entity("owner");
+        SketchGeometry.Circle circle=(SketchGeometry.Circle)d.entity("circle");
+        assertEquals(10.0,Math.hypot(moved.a.xMm-circle.center.xMm,moved.a.yMm-circle.center.yMm),1e-7);
+        assertEquals(1,d.constraintCount());
+    }
+
+    @Test public void pointOnEntitySupportsArcUnderlyingCurve() {
+        SketchDocument d=new SketchDocument();
+        d.add(new SketchGeometry.Arc("arc",new SketchGeometry.Point(0,0),10,0,90));
+        d.add(line("owner",-15,0,-15,5));
+        d.addConstraintsAndSolve(Collections.singletonList(
+                SketchConstraint.pointOnEntity("p-arc","owner",0,"arc")),
+                new DeterministicSketchConstraintSolver());
+
+        SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("owner");
+        assertEquals(-10.0,solved.a.xMm,1e-9);
+        assertEquals(0.0,solved.a.yMm,1e-9);
+        assertEquals(1,d.constraintCount());
+    }
+
     @Test public void danglingCreateConstraintFailsBeforeMutationOrHistory() {
         SketchDocument d=new SketchDocument();
         d.add(line("host",0,0,20,0));
