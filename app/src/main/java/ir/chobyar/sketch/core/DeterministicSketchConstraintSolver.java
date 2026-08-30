@@ -27,6 +27,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                         Collection<SketchConstraint> sourceConstraints) {
         LinkedHashMap<String, SketchEntity> entities = copyEntities(sourceEntities);
         List<SketchConstraint> constraints = copyConstraints(sourceConstraints);
+        LinkedHashMap<String, SketchEntity> fixedEntities = fixedEntitySnapshots(entities, constraints);
 
         for (SketchConstraint constraint : constraints) {
             String unsupported = unsupportedReason(constraint, entities);
@@ -41,6 +42,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         double residual = Double.POSITIVE_INFINITY;
         for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
             for (SketchConstraint constraint : constraints) apply(constraint, entities);
+            restoreFixedEntities(entities, fixedEntities);
             residual = maxResidual(constraints, entities);
             if (residual <= DIST_TOL_MM) {
                 return result(Status.SOLVED, iteration, residual, "", entities);
@@ -71,6 +73,24 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             out.add(constraint.copy());
         }
         return out;
+    }
+
+    private static LinkedHashMap<String, SketchEntity> fixedEntitySnapshots(
+            Map<String, SketchEntity> entities, List<SketchConstraint> constraints) {
+        LinkedHashMap<String, SketchEntity> fixed = new LinkedHashMap<>();
+        for (SketchConstraint constraint : constraints) {
+            if (constraint.kind != SketchConstraint.Kind.FIXED) continue;
+            SketchEntity entity = entities.get(constraint.primaryEntityId);
+            if (entity != null) fixed.put(constraint.primaryEntityId, entity.copy());
+        }
+        return fixed;
+    }
+
+    private static void restoreFixedEntities(Map<String, SketchEntity> entities,
+                                             Map<String, SketchEntity> fixedEntities) {
+        for (Map.Entry<String, SketchEntity> entry : fixedEntities.entrySet()) {
+            entities.put(entry.getKey(), entry.getValue().copy());
+        }
     }
 
     private static String unsupportedReason(SketchConstraint c, Map<String, SketchEntity> entities) {
@@ -111,6 +131,8 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return validEndpoint(c.primaryPointIndex)
                         ? null : "POINT_ON_ENTITY requires endpoint index 0 or 1";
+            case FIXED:
+                return null;
             default:
                 return "Constraint kind not yet supported by K3.6 solver: " + c.kind;
         }
@@ -173,6 +195,8 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                         withEndpoint(owner, c.primaryPointIndex, projectToEntity(host, p)));
                 break;
             }
+            case FIXED:
+                break;
             default:
                 throw new IllegalStateException("Unsupported constraint reached apply: " + c.kind);
         }
@@ -280,6 +304,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
     }
 
     private static double residual(SketchConstraint c, Map<String, SketchEntity> entities) {
+        if (c.kind == SketchConstraint.Kind.FIXED) return 0.0;
         SketchGeometry.Line a = line(entities, c.primaryEntityId);
         switch (c.kind) {
             case HORIZONTAL:
