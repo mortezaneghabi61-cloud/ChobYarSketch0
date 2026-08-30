@@ -26,11 +26,14 @@ public class K36dConstraintInteractionContractInstrumentationTest {
     }
 
     @Test
-    public void endpointSnapAndOnEdgeSnapHaveDistinctFeedback() {
+    public void endpointEdgeAndExtensionHaveDistinctFeedback() {
         assertEquals("Endpoint", ConstraintInteractionContract.SnapFeedback.ENDPOINT.label);
         assertEquals("On edge", ConstraintInteractionContract.SnapFeedback.ON_EDGE.label);
+        assertEquals("On extension", ConstraintInteractionContract.SnapFeedback.ON_EXTENSION.label);
         assertFalse(ConstraintInteractionContract.SnapFeedback.ENDPOINT.label
                 .equals(ConstraintInteractionContract.SnapFeedback.ON_EDGE.label));
+        assertFalse(ConstraintInteractionContract.SnapFeedback.ON_EDGE.label
+                .equals(ConstraintInteractionContract.SnapFeedback.ON_EXTENSION.label));
     }
 
     @Test
@@ -61,6 +64,22 @@ public class K36dConstraintInteractionContractInstrumentationTest {
         assertEquals(driven, intent.drivenPoint);
         assertEquals("line-host", intent.hostEntityId);
         assertNull(intent.targetPoint);
+    }
+
+    @Test
+    public void extensionFeedbackDoesNotChangePointOnEntityIdentityContract() {
+        ConstraintInteractionContract.PointRef driven =
+                new ConstraintInteractionContract.PointRef("line-created", 0);
+        ConstraintInteractionContract.Intent intent =
+                ConstraintInteractionContract.Intent.pointOnEntity(driven, "line-host");
+
+        ConstraintInteractionContract.SnapFeedback feedback =
+                ConstraintInteractionContract.SnapFeedback.ON_EXTENSION;
+
+        assertEquals(ConstraintInteractionContract.Kind.POINT_ON_ENTITY, intent.kind);
+        assertEquals("line-host", intent.hostEntityId);
+        assertEquals(driven, intent.drivenPoint);
+        assertEquals("On extension", feedback.label);
     }
 
     @Test
