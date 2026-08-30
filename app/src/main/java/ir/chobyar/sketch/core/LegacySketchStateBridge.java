@@ -17,6 +17,7 @@ import java.util.Set;
  */
 public final class LegacySketchStateBridge {
     private static final double EPS = 1.0e-6;
+    private static final int MODEL_CONSTRAINT_SCHEMA_VERSION = 1;
 
     private LegacySketchStateBridge() {}
 
@@ -58,6 +59,12 @@ public final class LegacySketchStateBridge {
             ArrayList<SketchConstraint> constraints = new ArrayList<>();
             LinkedHashSet<String> constraintIds = new LinkedHashSet<>();
             JSONArray constraintRows = root.optJSONArray("modelConstraints");
+            if (constraintRows != null || root.has("modelConstraintSchemaVersion")) {
+                int relationshipSchema = root.optInt("modelConstraintSchemaVersion", -1);
+                if (relationshipSchema != MODEL_CONSTRAINT_SCHEMA_VERSION) {
+                    throw new IllegalArgumentException("Unsupported model constraint schema version: " + relationshipSchema);
+                }
+            }
             if (constraintRows != null) {
                 for (int i = 0; i < constraintRows.length(); i++) {
                     JSONObject row = constraintRows.getJSONObject(i);

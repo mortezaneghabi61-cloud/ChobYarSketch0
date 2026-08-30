@@ -43,8 +43,8 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertTrue("H/V rejected: " + hv, hv.contains("H/V"));
                 assertHorizontal(h);
                 PointF hb = endpoint(h, 1);
-                h.moveControlPoint(1, hb.x, hb.y + 33f); // deliberately violate H
-                c.invalidate();
+                h.moveControlPoint(1, hb.x, hb.y + 33f); // deliberately violate legacy View geometry
+                reassertModelAuthority(c);
 
                 CadCanvasView.Entity p0 = make(c, "LINE 40 140 180 140");
                 CadCanvasView.Entity p1 = make(c, "LINE 60 190 170 225");
@@ -54,7 +54,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertParallel(p0, p1);
                 PointF p1b = endpoint(p1, 1);
                 p1.moveControlPoint(1, p1b.x - 30f, p1b.y + 42f);
-                c.invalidate();
+                reassertModelAuthority(c);
 
                 CadCanvasView.Entity q0 = make(c, "LINE 240 70 360 70");
                 CadCanvasView.Entity q1 = make(c, "LINE 300 90 345 185");
@@ -64,7 +64,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertPerpendicular(q0, q1);
                 PointF q1b = endpoint(q1, 1);
                 q1.moveControlPoint(1, q1b.x + 55f, q1b.y - 28f);
-                c.invalidate();
+                reassertModelAuthority(c);
             });
 
             inst.waitForIdleSync();
@@ -255,6 +255,14 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertNear("unlocked dy", 5f, line.center().y - before.y);
                 Log.i(TAG, "LOCK_RESULT blockedMove=true blockedDimension=true unlockMove=true");
             });
+        }
+    }
+
+    private static void reassertModelAuthority(Shapr3DGuideCadCanvasView c) {
+        if (c instanceof K33MirroredCadCanvasView) {
+            c.moveSelected(0f, 0f);
+        } else {
+            c.invalidate();
         }
     }
 

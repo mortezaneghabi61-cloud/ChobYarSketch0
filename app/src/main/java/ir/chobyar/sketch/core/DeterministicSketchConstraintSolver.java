@@ -9,11 +9,12 @@ import java.util.Map;
 /**
  * Small deterministic solver used while the mature-solver benchmark is running.
  *
- * It intentionally supports only the constraint slice being migrated in K3.6b:
- * horizontal, vertical, parallel, perpendicular, endpoint coincidence and
- * point-on-line. Unsupported records fail closed rather than silently becoming
- * decorative metadata. The implementation is solver-independent test evidence;
- * it is not intended to replace a mature geometric constraint engine long-term.
+ * It intentionally supports only the constraint slice being migrated in K3.6:
+ * horizontal, vertical, parallel, perpendicular, endpoint coincidence,
+ * midpoint and point-on-entity for line/circle/arc hosts. Unsupported records
+ * fail closed rather than silently becoming decorative metadata. The
+ * implementation remains behind SketchConstraintSolver so a mature solver can
+ * replace it without changing model ownership or persistence records.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -92,18 +93,42 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return validEndpoint(c.primaryPointIndex) && validEndpoint(c.secondaryPointIndex)
                         ? null : "COINCIDENT requires endpoint indices 0 or 1";
-            case POINT_ON_ENTITY:
+            case MIDPOINT:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
-                    return "POINT_ON_ENTITY currently requires a line endpoint and line host";
+                    return "MIDPOINT requires a line endpoint and line host";
+                }
+                if (isDegenerateLine((SketchGeometry.Line) b)) {
+                    return "MIDPOINT requires a non-degenerate line host";
+                }
+                return validEndpoint(c.primaryPointIndex)
+                        ? null : "MIDPOINT requires endpoint index 0 or 1";
+            case POINT_ON_ENTITY:
+                if (!(a instanceof SketchGeometry.Line) || !isPointHost(b)) {
+                    return "POINT_ON_ENTITY requires a line endpoint and line/circle/arc host";
+                }
+                if (b instanceof SketchGeometry.Line && isDegenerateLine((SketchGeometry.Line) b)) {
+                    return "POINT_ON_ENTITY requires a non-degenerate line host";
                 }
                 return validEndpoint(c.primaryPointIndex)
                         ? null : "POINT_ON_ENTITY requires endpoint index 0 or 1";
             default:
-                return "Constraint kind not yet supported by K3.6b solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.6 solver: " + c.kind;
         }
     }
 
     private static boolean validEndpoint(int index) { return index == 0 || index == 1; }
+
+    private static boolean isPointHost(SketchEntity entity) {
+        return entity instanceof SketchGeometry.Line
+                || entity instanceof SketchGeometry.Circle
+                || entity instanceof SketchGeometry.Arc;
+    }
+
+    private static boolean isDegenerateLine(SketchGeometry.Line line) {
+        double dx = line.b.xMm - line.a.xMm;
+        double dy = line.b.yMm - line.a.yMm;
+        return dx * dx + dy * dy <= EPS;
+    }
 
     private static void apply(SketchConstraint c, LinkedHashMap<String, SketchEntity> entities) {
         switch (c.kind) {
@@ -126,18 +151,26 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                                 line(entities, c.secondaryEntityId), false));
                 break;
             case COINCIDENT: {
-                SketchGeometry.Line a = line(entities, c.primaryEntityId);
-                SketchGeometry.Line b = line(entities, c.secondaryEntityId);
-                SketchGeometry.Point target = endpoint(a, c.primaryPointIndex);
-                entities.put(c.secondaryEntityId, withEndpoint(b, c.secondaryPointIndex, target));
+                SketchGeometry.Line driven = line(entities, c.primaryEntityId);
+                SketchGeometry.Line targetLine = line(entities, c.secondaryEntityId);
+                SketchGeometry.Point target = endpoint(targetLine, c.secondaryPointIndex);
+                entities.put(c.primaryEntityId,
+                        withEndpoint(driven, c.primaryPointIndex, target));
+                break;
+            }
+            case MIDPOINT: {
+                SketchGeometry.Line owner = line(entities, c.primaryEntityId);
+                SketchGeometry.Line host = line(entities, c.secondaryEntityId);
+                entities.put(c.primaryEntityId,
+                        withEndpoint(owner, c.primaryPointIndex, midpoint(host)));
                 break;
             }
             case POINT_ON_ENTITY: {
                 SketchGeometry.Line owner = line(entities, c.primaryEntityId);
-                SketchGeometry.Line host = line(entities, c.secondaryEntityId);
+                SketchEntity host = entities.get(c.secondaryEntityId);
                 SketchGeometry.Point p = endpoint(owner, c.primaryPointIndex);
                 entities.put(c.primaryEntityId,
-                        withEndpoint(owner, c.primaryPointIndex, projectToSegment(host, p)));
+                        withEndpoint(owner, c.primaryPointIndex, projectToEntity(host, p)));
                 break;
             }
             default:
@@ -147,6 +180,11 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
 
     private static SketchGeometry.Line line(Map<String, SketchEntity> entities, String id) {
         return (SketchGeometry.Line) entities.get(id);
+    }
+
+    private static SketchGeometry.Point midpoint(SketchGeometry.Line line) {
+        return new SketchGeometry.Point((line.a.xMm + line.b.xMm) * 0.5,
+                (line.a.yMm + line.b.yMm) * 0.5);
     }
 
     private static SketchGeometry.Line alignAxis(SketchGeometry.Line line, boolean horizontal) {
@@ -197,14 +235,41 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return index == 0 ? line.a : line.b;
     }
 
-    private static SketchGeometry.Point projectToSegment(SketchGeometry.Line line, SketchGeometry.Point p) {
+    private static SketchGeometry.Point projectToEntity(SketchEntity host, SketchGeometry.Point p) {
+        if (host instanceof SketchGeometry.Line) {
+            return projectToSupportingLine((SketchGeometry.Line) host, p);
+        }
+        if (host instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) host;
+            return projectToCircle(circle.center, circle.radiusMm, p);
+        }
+        if (host instanceof SketchGeometry.Arc) {
+            SketchGeometry.Arc arc = (SketchGeometry.Arc) host;
+            return projectToCircle(arc.center, arc.radiusMm, p);
+        }
+        throw new IllegalArgumentException("Unsupported Point-on-Entity host");
+    }
+
+    private static SketchGeometry.Point projectToSupportingLine(SketchGeometry.Line line, SketchGeometry.Point p) {
         double dx = line.b.xMm - line.a.xMm;
         double dy = line.b.yMm - line.a.yMm;
         double l2 = dx * dx + dy * dy;
-        if (l2 <= EPS) return line.a;
+        if (l2 <= EPS) throw new IllegalStateException("Degenerate line host reached projection");
         double t = ((p.xMm - line.a.xMm) * dx + (p.yMm - line.a.yMm) * dy) / l2;
-        t = Math.max(0.0, Math.min(1.0, t));
         return new SketchGeometry.Point(line.a.xMm + t * dx, line.a.yMm + t * dy);
+    }
+
+    private static SketchGeometry.Point projectToCircle(SketchGeometry.Point center,
+                                                         double radiusMm,
+                                                         SketchGeometry.Point p) {
+        double dx = p.xMm - center.xMm;
+        double dy = p.yMm - center.yMm;
+        double len = Math.hypot(dx, dy);
+        if (len <= EPS) {
+            return new SketchGeometry.Point(center.xMm + radiusMm, center.yMm);
+        }
+        double scale = radiusMm / len;
+        return new SketchGeometry.Point(center.xMm + dx * scale, center.yMm + dy * scale);
     }
 
     private static double maxResidual(List<SketchConstraint> constraints,
@@ -233,10 +298,14 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 SketchGeometry.Line b = line(entities, c.secondaryEntityId);
                 return distance(endpoint(a, c.primaryPointIndex), endpoint(b, c.secondaryPointIndex));
             }
-            case POINT_ON_ENTITY: {
+            case MIDPOINT: {
                 SketchGeometry.Line host = line(entities, c.secondaryEntityId);
+                return distance(endpoint(a, c.primaryPointIndex), midpoint(host));
+            }
+            case POINT_ON_ENTITY: {
+                SketchEntity host = entities.get(c.secondaryEntityId);
                 SketchGeometry.Point p = endpoint(a, c.primaryPointIndex);
-                return distance(p, projectToSegment(host, p));
+                return distance(p, projectToEntity(host, p));
             }
             default:
                 return Double.POSITIVE_INFINITY;

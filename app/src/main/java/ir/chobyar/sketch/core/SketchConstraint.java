@@ -15,6 +15,7 @@ public final class SketchConstraint {
     public enum Kind {
         COINCIDENT,
         POINT_ON_ENTITY,
+        MIDPOINT,
         HORIZONTAL,
         VERTICAL,
         PARALLEL,
@@ -57,6 +58,10 @@ public final class SketchConstraint {
 
     public static SketchConstraint pointOnEntity(String id, String pointOwner, int pointIndex, String hostEntity) {
         return new SketchConstraint(id, Kind.POINT_ON_ENTITY, pointOwner, pointIndex, hostEntity, -1, Double.NaN, true);
+    }
+
+    public static SketchConstraint midpoint(String id, String pointOwner, int pointIndex, String hostEntity) {
+        return new SketchConstraint(id, Kind.MIDPOINT, pointOwner, pointIndex, hostEntity, -1, Double.NaN, true);
     }
 
     public static SketchConstraint horizontal(String id, String entityId) {
@@ -133,6 +138,7 @@ public final class SketchConstraint {
     private void validateShape() {
         boolean needsSecondary = kind == Kind.COINCIDENT
                 || kind == Kind.POINT_ON_ENTITY
+                || kind == Kind.MIDPOINT
                 || kind == Kind.PARALLEL
                 || kind == Kind.PERPENDICULAR
                 || kind == Kind.TANGENT
@@ -155,19 +161,30 @@ public final class SketchConstraint {
             throw new IllegalArgumentException(kind + " does not accept a numeric value");
         }
 
-        boolean pointConstraint = kind == Kind.COINCIDENT || kind == Kind.POINT_ON_ENTITY;
+        boolean pointConstraint = kind == Kind.COINCIDENT || kind == Kind.POINT_ON_ENTITY
+                || kind == Kind.MIDPOINT;
         if (pointConstraint && primaryPointIndex < 0) {
             throw new IllegalArgumentException(kind + " requires primary point index");
+        }
+        if (pointConstraint && !isEndpointIndex(primaryPointIndex)) {
+            throw new IllegalArgumentException(kind + " primary point index must be endpoint 0 or 1");
         }
         if (kind == Kind.COINCIDENT && secondaryPointIndex < 0) {
             throw new IllegalArgumentException("COINCIDENT requires secondary point index");
         }
+        if (kind == Kind.COINCIDENT && !isEndpointIndex(secondaryPointIndex)) {
+            throw new IllegalArgumentException("COINCIDENT secondary point index must be endpoint 0 or 1");
+        }
         if (!pointConstraint && (primaryPointIndex >= 0 || secondaryPointIndex >= 0)) {
             throw new IllegalArgumentException(kind + " does not accept point indexes");
         }
-        if (kind == Kind.POINT_ON_ENTITY && secondaryPointIndex >= 0) {
-            throw new IllegalArgumentException("POINT_ON_ENTITY host uses whole entity");
+        if ((kind == Kind.POINT_ON_ENTITY || kind == Kind.MIDPOINT) && secondaryPointIndex >= 0) {
+            throw new IllegalArgumentException(kind + " host uses whole entity");
         }
+    }
+
+    private static boolean isEndpointIndex(int index) {
+        return index == 0 || index == 1;
     }
 
     private static Kind failKind() {

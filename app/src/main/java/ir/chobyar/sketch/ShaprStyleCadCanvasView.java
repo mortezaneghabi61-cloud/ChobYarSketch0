@@ -310,6 +310,12 @@ public class ShaprStyleCadCanvasView extends CentimeterCadCanvasView {
 
             if (action == MotionEvent.ACTION_UP) {
                 boolean wasDragging = exactFieldDragging;
+                if (wasDragging && fieldGestureEntity != null) {
+                    float dx = event.getX() - fieldDownX;
+                    float dy = event.getY() - fieldDownY;
+                    dimensionLabelOffsets.put(fieldGestureEntity,
+                            new PointF(fieldStartOffsetX + dx, fieldStartOffsetY + dy));
+                }
                 exactFieldPressed = false;
                 exactFieldDragging = false;
                 fieldGestureEntity = null;

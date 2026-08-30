@@ -183,6 +183,10 @@ public class K36ProductionConstraintAuthorityInstrumentationTest {
             reopened.requireSketchMirrorParity();
             assertEquals(1,reopened.sketchConstraintCount());
             assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));
+            select(reopened,reopened.entities.get(1));
+            reopened.moveSelected(7f,-4f);
+            reopened.requireSketchMirrorParity();
+            assertPerpendicular(modelLine(reopened,aId),modelLine(reopened,bId));
             return true;
         });
     }

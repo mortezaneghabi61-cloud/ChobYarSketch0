@@ -75,7 +75,7 @@ public class SketchConstraintTransactionTest {
         SketchGeometry.Line child = line("child", 20, 0, 20, 10);
         doc.restoreExternal(Arrays.asList(host, child), Collections.singleton("child"),
                 Arrays.asList(
-                        SketchConstraint.coincident("c", "host", 1, "child", 0),
+                        SketchConstraint.coincident("c", "child", 0, "host", 1),
                         SketchConstraint.vertical("v", "child")));
 
         doc.translateSelectionAndSolve(5, 4, solver);

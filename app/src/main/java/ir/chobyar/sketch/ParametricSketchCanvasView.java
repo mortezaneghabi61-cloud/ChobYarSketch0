@@ -90,6 +90,9 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         super.setLayerVisible(first.layerName, true);
     }
 
+    /** Single source of truth for model-routed automatic constraint policy. */
+    protected final boolean modelAutoConstraintsEnabled() { return autoConstraints; }
+
     private void initReflection() {
         try {
             selectedField = field(CadCanvasView.class, "selected");
@@ -584,10 +587,35 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                 .show();
     }
 
-    private String applyManualCoincident() {
-        if (isSelectionLocked()) return "Selection Lock text";
+    /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */
+    protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }
+
+    protected ConstraintInteractionContract.Result onModelCoincidentRequested(
+            ConstraintInteractionContract.Intent intent) {
+        return ConstraintInteractionContract.Result.invalidSelection("Model Coincident authority is unavailable");
+    }
+
+    protected ConstraintInteractionContract.Result onModelPointOnEntityRequested(
+            ConstraintInteractionContract.Intent intent) {
+        return ConstraintInteractionContract.Result.invalidSelection("Model Point-on-Entity authority is unavailable");
+    }
+
+    protected void onConstraintTargetFeedback(ConstraintInteractionContract.Intent intent,
+                                              ConstraintInteractionContract.SnapFeedback feedback) {}
+
+    /** Diagnostic seam: migrated K33 paths must keep this legacy truth at zero. */
+    protected int legacyPointOnLineTruthCount() { return pointOnLineLinks.size(); }
+
+    private String stableEntityId(Object entity) {
+        Object value = call(entity, "stableId");
+        String id = value == null ? "" : String.valueOf(value).trim();
+        return id;
+    }
+
+    protected String applyManualCoincident() {
+        if (isSelectionLocked()) return "Selection is locked";
         List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "text Coincident text Line text Selection text";
+        if (lines.size() != 2) return "Select exactly two lines for Coincident";
         Object a = lines.get(0), b = lines.get(1);
         int ai = 0, bi = 0;
         float best = Float.MAX_VALUE;
@@ -600,16 +628,35 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                 if (dd < best) { best = dd; ai = i; bi = j; }
             }
         }
+
+        if (isModelEndpointConstraintAuthorityEnabled()) {
+            String aId = stableEntityId(a), bId = stableEntityId(b);
+            if (aId.isEmpty() || bId.isEmpty()) return "Coincident requires stable entity IDs";
+            ConstraintInteractionContract.Intent intent;
+            try {
+                // Keep the first selected line as the deterministic target and move the
+                // closest endpoint on the second selected line.
+                intent = ConstraintInteractionContract.Intent.coincident(
+                        new ConstraintInteractionContract.PointRef(bId, bi),
+                        new ConstraintInteractionContract.PointRef(aId, ai));
+            } catch (RuntimeException e) {
+                return "Coincident selection is invalid";
+            }
+            ConstraintInteractionContract.Result result = onModelCoincidentRequested(intent);
+            onConstraintTargetFeedback(intent, ConstraintInteractionContract.SnapFeedback.ENDPOINT);
+            invalidate();
+            return result.code == ConstraintInteractionContract.ResultCode.APPLIED
+                    ? "Coincident applied" : result.message;
+        }
+
         PointF target = endpoint(a, ai);
-        if (target == null) return "text text text";
+        if (target == null) return "Coincident target is unavailable";
         saveUndo();
         setEndpoint(b, bi, target.x, target.y);
-        // Manual Coincident must create the same persistent relation as auto-connect.
-        // Register it explicitly instead of relying on a later draw-time proximity scan.
         removePointLink(b, bi);
         registerPersistentCoincident(a, ai, b, bi);
         invalidate();
-        return "text Line text text text became";
+        return "Coincident applied";
     }
 
     // ---------------------------------------------------------------------
@@ -657,6 +704,9 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     private void detectPointOnLineLinks(Object newLine) {
         if (!isLine(newLine)) return;
+        // K3.6d model authority captures the routed snap target before Create commit.
+        // Never create a second Object/EndpointRef truth for migrated production paths.
+        if (isModelEndpointConstraintAuthorityEnabled()) return;
         for (int i = 0; i < 2; i++) {
             PointF p = endpoint(newLine, i);
             if (p == null) continue;
@@ -791,7 +841,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        enforcePointLinks();
+        if (!isModelEndpointConstraintAuthorityEnabled()) enforcePointLinks();
         super.onDraw(canvas);
         pruneLinks();
         drawParametricUi(canvas);
@@ -936,7 +986,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
             if (isLine(made)) detectPointOnLineLinks(made);
         }
 
-        enforcePointLinks();
+        if (!isModelEndpointConstraintAuthorityEnabled()) enforcePointLinks();
         invalidate();
         return handled;
     }
