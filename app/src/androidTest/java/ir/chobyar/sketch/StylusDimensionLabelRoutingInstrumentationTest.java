@@ -49,6 +49,7 @@ public final class StylusDimensionLabelRoutingInstrumentationTest {
                 c.executeCommand("RECT 0 0 40 20");
                 assertNotNull(c.selected);
                 c.setTool(CadCanvasView.TOOL_SELECT);
+                centerSelectedEntityInSafeCanvas(c);
                 c.setOnTouchListener((v, e) -> {
                     if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
                         seenDown[0] = true;
@@ -72,6 +73,10 @@ public final class StylusDimensionLabelRoutingInstrumentationTest {
                 assertFalse("Exact dimension label was not drawn", label.isEmpty());
                 localTarget[0] = label.centerX();
                 localTarget[1] = label.centerY();
+                assertTrue("Exact label must stay inside safe horizontal canvas area: " + label,
+                        localTarget[0] > c.getWidth() * 0.25f && localTarget[0] < c.getWidth() * 0.75f);
+                assertTrue("Exact label must stay inside safe vertical canvas area: " + label,
+                        localTarget[1] > c.getHeight() * 0.25f && localTarget[1] < c.getHeight() * 0.75f);
                 int[] loc = new int[2];
                 c.getLocationOnScreen(loc);
                 screenTarget[0] = loc[0] + localTarget[0];
@@ -110,6 +115,14 @@ public final class StylusDimensionLabelRoutingInstrumentationTest {
             send(inst, one(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP,
                     screenTarget[0], screenTarget[1]));
         }
+    }
+
+    private static void centerSelectedEntityInSafeCanvas(Shapr3DGuideCadCanvasView c) {
+        RectF b = c.selected.bounds();
+        float wx = (b.left + b.right) * 0.5f;
+        float wy = (b.top + b.bottom) * 0.5f;
+        c.offsetX = c.getWidth() * 0.50f - wx * 3f * c.viewScale;
+        c.offsetY = c.getHeight() * 0.55f - wy * 3f * c.viewScale;
     }
 
     private static RectF exactFieldRect(Shapr3DGuideCadCanvasView c) {
