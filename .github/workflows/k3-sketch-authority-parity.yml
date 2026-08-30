@@ -85,6 +85,10 @@ jobs:
             grep -q 'OK (7 tests)' test-artifacts/k3-production-constraint-authority.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dProductionEndpointConstraintAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-production-endpoint-authority.txt
             grep -q 'OK (7 tests)' test-artifacts/k3-production-endpoint-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K36dMidpointAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-midpoint-authority.txt
+            grep -q 'OK (1 test)' test-artifacts/k3-midpoint-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K36dAutoConnectionPolicyInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-auto-connection-policy.txt
+            grep -q 'OK (4 tests)' test-artifacts/k3-auto-connection-policy.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dPersistenceFailureAtomicityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-persistence-failure-atomicity.txt
             grep -q 'OK (1 test)' test-artifacts/k3-persistence-failure-atomicity.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K36dConstraintSchemaVersionPersistenceInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-constraint-schema-version.txt
