@@ -306,7 +306,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
                     && c.kind != SketchConstraint.Kind.COINCIDENT
                     && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
-                    && c.kind != SketchConstraint.Kind.MIDPOINT) continue;
+                    && c.kind != SketchConstraint.Kind.MIDPOINT
+                    && c.kind != SketchConstraint.Kind.FIXED) continue;
             constrained.addAll(c.referencedEntityIds());
         }
         for (String id : constrained) {
@@ -962,7 +963,19 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
     @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
 
-    @Override public String applySelectedDimension(String raw) { String out=super.applySelectedDimension(raw); syncMirror("dimension"); return out; }
+    @Override public String applySelectedDimension(String raw) {
+        if (!prepareTransactionalSelection("dimension-prepare")) {
+            String out=super.applySelectedDimension(raw);
+            syncMirror("dimension-fallback");
+            return out;
+        }
+        for (String id : sketchDocument.selectionIds()) {
+            if (hasWholeFixed(id)) return "Lock prevents driving dimension";
+        }
+        String out=super.applySelectedDimension(raw);
+        syncMirror("dimension");
+        return out;
+    }
     @Override public String setSelectedLineAngle(float degrees) { String out=super.setSelectedLineAngle(degrees); syncMirror("line-angle"); return out; }
     @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
 
