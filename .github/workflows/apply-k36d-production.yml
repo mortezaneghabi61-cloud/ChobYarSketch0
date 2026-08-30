@@ -39,10 +39,14 @@ jobs:
         run: python3 .github/scripts/apply-k36d-production.py
       - name: Verify JVM contracts and Android test compilation
         run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
-      - name: Commit coherent K3.6d slice
+      - name: Commit coherent K3.6d product slice
         run: |
           git config user.name 'chobyar-sketch-authority'
           git config user.email 'actions@users.noreply.github.com'
+          # The GitHub App token cannot update workflow files. Keep workflows at
+          # this exact head for the product commit; K3.6d gate wiring is applied
+          # separately through the repository connector after the product push.
+          git checkout HEAD -- .github/workflows
           git add -A
           git commit -m 'K3.6d: model-authoritative Coincident and Point-on-Entity'
           git push origin HEAD:k3-6d-coincident-point-authority
