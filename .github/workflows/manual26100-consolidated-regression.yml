@@ -42,9 +42,20 @@ jobs:
       CHOBYAR_VERSION_NAME: 0.3.manual26100.consolidated.${{ github.run_number }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "CONSOLIDATED_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - uses: actions/setup-java@v5
         with:
@@ -75,7 +86,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run 62 core Sketch + 3D + Project + Topology contracts on API 35
+      - name: Run consolidated Sketch + 3D + Project + Topology contracts on API 35
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -88,9 +99,12 @@ jobs:
 
       - name: Record consolidated result
         if: success()
+        shell: bash
         run: |
+          set -euo pipefail
           cp test-artifacts/production-cad-summary.txt test-artifacts/consolidated-summary.txt
-          echo 'CONSOLIDATED_RESULT classes=22 tests=62 status=PASS' | tee -a test-artifacts/consolidated-summary.txt
+          classes=$(grep -c ' | OK (' test-artifacts/production-cad-summary.txt || true)
+          echo "CONSOLIDATED_RESULT classes=${classes} status=PASS" | tee -a test-artifacts/consolidated-summary.txt
 
       - name: Upload consolidated regression evidence
         if: always()
