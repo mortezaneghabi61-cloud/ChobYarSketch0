@@ -1,0 +1,119 @@
+package ir.chobyar.sketch;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
+import ir.chobyar.sketch.core.SketchConstraint;
+import ir.chobyar.sketch.core.SketchDocument;
+import ir.chobyar.sketch.core.SketchEntity;
+import ir.chobyar.sketch.core.SketchGeometry;
+
+/**
+ * Stateless presentation projection for model-owned endpoint constraints.
+ *
+ * The projection is rebuilt from SketchDocument on demand. It deliberately owns
+ * no geometry, selection, relationship, or Undo state. Rendering code may consume
+ * the returned descriptors, but must never use them to mutate sketch geometry.
+ */
+public final class ModelConstraintBadgeProjection {
+    private ModelConstraintBadgeProjection() {}
+
+    public enum BadgeKind {
+        COINCIDENT("Coincident"),
+        POINT_ON_ENTITY("Point on entity");
+
+        public final String accessibilityLabel;
+
+        BadgeKind(String accessibilityLabel) {
+            this.accessibilityLabel = accessibilityLabel;
+        }
+    }
+
+    public static final class Badge {
+        public final String constraintId;
+        public final BadgeKind kind;
+        public final String pointEntityId;
+        public final int pointIndex;
+        public final String targetEntityId;
+        public final int targetPointIndex;
+        public final double xMm;
+        public final double yMm;
+
+        private Badge(String constraintId,
+                      BadgeKind kind,
+                      String pointEntityId,
+                      int pointIndex,
+                      String targetEntityId,
+                      int targetPointIndex,
+                      double xMm,
+                      double yMm) {
+            this.constraintId = Objects.requireNonNull(constraintId, "constraintId");
+            this.kind = Objects.requireNonNull(kind, "kind");
+            this.pointEntityId = Objects.requireNonNull(pointEntityId, "pointEntityId");
+            this.pointIndex = pointIndex;
+            this.targetEntityId = targetEntityId;
+            this.targetPointIndex = targetPointIndex;
+            this.xMm = xMm;
+            this.yMm = yMm;
+        }
+
+        public String accessibilityLabel() {
+            return kind.accessibilityLabel;
+        }
+    }
+
+    public static List<Badge> project(SketchDocument document) {
+        Objects.requireNonNull(document, "document");
+        ArrayList<Badge> out = new ArrayList<>();
+        for (SketchConstraint constraint : document.constraints()) {
+            Badge badge = projectOne(document, constraint);
+            if (badge != null) out.add(badge);
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    private static Badge projectOne(SketchDocument document, SketchConstraint constraint) {
+        if (constraint == null) return null;
+        BadgeKind badgeKind;
+        if (constraint.kind == SketchConstraint.Kind.COINCIDENT) {
+            badgeKind = BadgeKind.COINCIDENT;
+        } else if (constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY) {
+            badgeKind = BadgeKind.POINT_ON_ENTITY;
+        } else {
+            return null;
+        }
+
+        SketchGeometry.Point point = endpoint(document.entity(constraint.primaryEntityId),
+                constraint.primaryPointIndex);
+        if (point == null) return null;
+
+        // Fail soft for presentation if a stale/dangling secondary reference ever
+        // reaches the renderer. Persistence/model validation remains responsible
+        // for rejecting invalid authority state; drawing must never repair it.
+        if (constraint.secondaryEntityId == null
+                || document.entity(constraint.secondaryEntityId) == null) return null;
+
+        if (badgeKind == BadgeKind.COINCIDENT
+                && endpoint(document.entity(constraint.secondaryEntityId),
+                constraint.secondaryPointIndex) == null) return null;
+
+        return new Badge(constraint.id,
+                badgeKind,
+                constraint.primaryEntityId,
+                constraint.primaryPointIndex,
+                constraint.secondaryEntityId,
+                constraint.secondaryPointIndex,
+                point.xMm,
+                point.yMm);
+    }
+
+    private static SketchGeometry.Point endpoint(SketchEntity entity, int pointIndex) {
+        if (!(entity instanceof SketchGeometry.Line)) return null;
+        SketchGeometry.Line line = (SketchGeometry.Line) entity;
+        if (pointIndex == 0) return line.a;
+        if (pointIndex == 1) return line.b;
+        return null;
+    }
+}
