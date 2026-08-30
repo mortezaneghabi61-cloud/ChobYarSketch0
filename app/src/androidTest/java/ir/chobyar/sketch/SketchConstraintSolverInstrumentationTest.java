@@ -43,7 +43,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertTrue("H/V rejected: " + hv, hv.contains("H/V"));
                 assertHorizontal(h);
                 PointF hb = endpoint(h, 1);
-                h.moveControlPoint(1, hb.x, hb.y + 33f); // deliberately violate legacy View geometry
+                h.moveControlPoint(1, hb.x, hb.y + 33f);
                 reassertModelAuthority(c);
 
                 CadCanvasView.Entity p0 = make(c, "LINE 40 140 180 140");
@@ -142,8 +142,8 @@ public final class SketchConstraintSolverInstrumentationTest {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 reset(c);
 
-                CadCanvasView.Entity l0 = make(c, "LINE 40 60 160 60"); // 120
-                CadCanvasView.Entity l1 = make(c, "LINE 40 100 115 100"); // 75
+                CadCanvasView.Entity l0 = make(c, "LINE 40 60 160 60");
+                CadCanvasView.Entity l1 = make(c, "LINE 40 100 115 100");
                 select(c, l0, l1);
                 String eqLine = c.applyEqualConstraint();
                 assertTrue("Line Equal rejected: " + eqLine, eqLine.contains("Equal"));
@@ -163,10 +163,8 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertPointNear("concentric center", c0.center(), c1.center());
 
                 c1.translate(31f, -17f);
-                // Radius + center are now both intentionally wrong.
-                PointF cc = c1.center();
                 CadCanvasView.SnapPoint edge = c1.snapPoints().get(1);
-                c1.moveControlPoint(1, edge.x + 14f, edge.y); // change radius when supported
+                c1.moveControlPoint(1, edge.x + 14f, edge.y);
                 c.invalidate();
             });
 
@@ -241,7 +239,15 @@ public final class SketchConstraintSolverInstrumentationTest {
                 float len = length(line);
 
                 String locked = c.toggleSelectedLock();
-                assertTrue("Lock rejected: " + locked, locked.contains("Lock"));
+                assertEquals("Lock did not commit model-owned state", "1 selection(s) locked", locked);
+                if (c instanceof K33MirroredCadCanvasView) {
+                    K33MirroredCadCanvasView model = (K33MirroredCadCanvasView)c;
+                    model.requireSketchMirrorParity();
+                    assertEquals("Lock must be represented by one model FIXED constraint", 1, model.sketchConstraintCount());
+                    assertEquals("Legacy object-identity lock truth must stay empty", 0, model.legacySelectionLockTruthCount());
+                    assertTrue("Model Lock must be undoable", model.sketchAuthorityCanUndo());
+                }
+
                 c.moveSelected(55f, 42f);
                 String dim = c.applySelectedDimension("250");
                 assertTrue("Locked dimension was not rejected: " + dim, dim.contains("Lock"));
@@ -249,11 +255,17 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertNear("locked length", len, length(line));
 
                 String unlocked = c.toggleSelectedLock();
-                assertTrue("Unlock rejected: " + unlocked, unlocked.contains("text"));
+                assertEquals("Unlock did not remove model-owned state", "1 selection(s) unlocked", unlocked);
+                if (c instanceof K33MirroredCadCanvasView) {
+                    K33MirroredCadCanvasView model = (K33MirroredCadCanvasView)c;
+                    model.requireSketchMirrorParity();
+                    assertEquals("Unlock must remove model FIXED authority", 0, model.sketchConstraintCount());
+                    assertEquals("Unlock must not reconstruct legacy object identity", 0, model.legacySelectionLockTruthCount());
+                }
                 c.moveSelected(10f, 5f);
                 assertNear("unlocked dx", 10f, line.center().x - before.x);
                 assertNear("unlocked dy", 5f, line.center().y - before.y);
-                Log.i(TAG, "LOCK_RESULT blockedMove=true blockedDimension=true unlockMove=true");
+                Log.i(TAG, "LOCK_RESULT blockedMove=true blockedDimension=true unlockMove=true modelOwned=true");
             });
         }
     }
