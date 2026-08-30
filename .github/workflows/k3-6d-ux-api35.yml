@@ -1,0 +1,84 @@
+name: K3.6d UX API35 Regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - k3-6d-coincident-point-authority
+
+concurrency:
+  group: k3-6d-ux-api35-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  k3-6d-ux-api35:
+    name: K3.6d touch/stylus semantic regression on API 35
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.1.0'
+
+      - name: Restore development signing key
+        run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
+
+      - name: Compile production and instrumentation APKs
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+
+      - name: Run K3.6d API35 touch/stylus regression suite
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p test-artifacts
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+            run_class() {
+              local cls="$1"
+              local out="test-artifacts/${cls##*.}.txt"
+              adb shell am instrument -w -e class "$cls" ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee "$out"
+              grep -q '^OK (' "$out"
+            }
+
+            run_class ir.chobyar.sketch.K36dAutoConnectionPolicyInstrumentationTest
+            run_class ir.chobyar.sketch.K36dMidpointAuthorityInstrumentationTest
+            run_class ir.chobyar.sketch.K36dModelConstraintBadgeProjectionInstrumentationTest
+            run_class ir.chobyar.sketch.K36dSnapFeedbackPriorityInstrumentationTest
+            run_class ir.chobyar.sketch.K36dSnapPriorityAndExtensionFeedbackInstrumentationTest
+            run_class ir.chobyar.sketch.K36dTouchStylusSelectionStabilityInstrumentationTest
+            run_class ir.chobyar.sketch.K36dProductionEndpointConstraintAuthorityInstrumentationTest
+            run_class ir.chobyar.sketch.K36dActivityLifecyclePersistenceInstrumentationTest
+
+      - name: Upload K3.6d API35 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: K3-6d-UX-API35-evidence
+          path: test-artifacts/**
+          if-no-files-found: warn
+          retention-days: 7
