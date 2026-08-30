@@ -237,6 +237,21 @@ public final class SketchDocument {
         return true;
     }
 
+    /** Removes any existing constraint IDs as one user transaction/Undo step. */
+    public synchronized int removeConstraints(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) return 0;
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String id : ids) {
+            String value = normalizeId(id);
+            if (constraints.containsKey(value)) normalized.add(value);
+        }
+        if (normalized.isEmpty()) return 0;
+        pushUndo();
+        for (String id : normalized) constraints.remove(id);
+        changed();
+        return normalized.size();
+    }
+
     public synchronized int removeSelected() {
         if (selection.isEmpty()) return 0;
         pushUndo();
