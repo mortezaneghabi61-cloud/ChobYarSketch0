@@ -395,13 +395,21 @@ public final class SketchDocument {
         boolean any = false;
         for (String id : selection) {
             SketchEntity current = moved.get(id);
-            if (current == null) continue;
+            if (current == null || isFixedEntity(id)) continue;
             SketchEntity candidate = current.translated(dxMm, dyMm);
             requireValid(candidate);
             moved.put(id, candidate);
             any = true;
         }
         return any ? moved : new LinkedHashMap<>();
+    }
+
+    private boolean isFixedEntity(String entityId) {
+        for (SketchConstraint constraint : constraints.values()) {
+            if (constraint.kind == SketchConstraint.Kind.FIXED
+                    && constraint.primaryEntityId.equals(entityId)) return true;
+        }
+        return false;
     }
 
     private static LinkedHashMap<String, SketchEntity> requireSolvedSnapshot(

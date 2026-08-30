@@ -36,7 +36,7 @@ public final class FurnitureSavedProjectsInstrumentationTest {
                 assertEquals(4,boulder.bodyCount());assertTrue(join(boulder.itemRows()).contains("text text"));assertTrue(join(boulder.itemRows()).contains("Plane text"));
                 capture(boulder,new File(output(context),"01-boulder-table-iso.png"),"ISO");
                 capture(boulder,new File(output(context),"03-boulder-table-front.png"),"FRONT");
-                assertTrue(boulder.selectItem(0).contains("Selection"));
+                String selection=boulder.selectItem(0);assertTrue("Body selection contract changed: "+selection,selection.endsWith(" selected"));
                 assertTrue(boulder.updateSelectedProjectSphere(new Geometry3D.Vec3(25f,0f,205f),410f).contains("text"));
                 boulder.entities.get(0).scale(0f,175f,1.05f);assertTrue(boulder.rebuildHistory().contains("Rebuild"));
                 String edited=CadProjectPersistenceController.encode(boulder);repo.save("user-boulder-edit-test","text text text",edited);
