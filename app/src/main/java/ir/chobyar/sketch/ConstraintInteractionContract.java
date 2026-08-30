@@ -21,6 +21,7 @@ public final class ConstraintInteractionContract {
     public enum SnapFeedback {
         ENDPOINT("Endpoint"),
         ON_EDGE("On edge"),
+        ON_EXTENSION("On extension"),
         NONE("");
 
         public final String label;
@@ -136,6 +137,12 @@ public final class ConstraintInteractionContract {
      *                                ConstraintInteractionContract.SnapFeedback feedback)
      *
      * protected boolean isModelEndpointConstraintAuthorityEnabled()
+     *
+     * ON_EDGE is reserved for a point projected onto the visible curve/segment.
+     * ON_EXTENSION is reserved for the same model relationship when the projected
+     * point lies on the host's supporting/extended path outside visible bounds.
+     * The View may render that distinction as guide feedback, but it must not own
+     * or mutate the underlying geometry/constraint state.
      *
      * The base implementation should return false / INVALID_SELECTION and must
      * never create duplicate geometry or constraint truth. K33MirroredCadCanvasView
