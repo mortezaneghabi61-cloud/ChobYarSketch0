@@ -1,4 +1,4 @@
-name: Apply K3.6d production authority
+name: K3.6d preflight
 
 on:
   push:
@@ -6,47 +6,16 @@ on:
     paths:
       - '.github/workflows/apply-k36d-production.yml'
 
-permissions:
-  contents: write
-
 jobs:
-  apply-and-verify:
+  compile-and-unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: k3-6d-coincident-point-authority
-          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Correct K3.6d test assertion applicator
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('.github/scripts/apply-k36d-production.py')
-          s=p.read_text()
-          old='assertEquals(0,((SketchGeometry.Line)d.entity("new")).a.distanceTo(new SketchGeometry.Point(10,0)),1e-9);\\n'
-          new='SketchGeometry.Line solved=(SketchGeometry.Line)d.entity("new");\\n        assertEquals(10,solved.a.xMm,1e-9); assertEquals(0,solved.a.yMm,1e-9);\\n'
-          if old not in s:
-              raise SystemExit('distanceTo assertion substring missing')
-          p.write_text(s.replace(old,new,1))
-          Path('.github/scripts/fix-k36d-applicator.py').unlink(missing_ok=True)
-          PY
-      - name: Apply K3.6d model-authority slice
-        run: python3 .github/scripts/apply-k36d-production.py
-      - name: Verify JVM contracts and Android test compilation
+      - name: Compile production and Android tests; run JVM tests
         run: ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --stacktrace
-      - name: Commit coherent K3.6d product slice
-        run: |
-          git config user.name 'chobyar-sketch-authority'
-          git config user.email 'actions@users.noreply.github.com'
-          # The GitHub App token cannot update workflow files. Keep workflows at
-          # this exact head for the product commit; K3.6d gate wiring is applied
-          # separately through the repository connector after the product push.
-          git checkout HEAD -- .github/workflows
-          git add -A
-          git commit -m 'K3.6d: model-authoritative Coincident and Point-on-Entity'
-          git push origin HEAD:k3-6d-coincident-point-authority
