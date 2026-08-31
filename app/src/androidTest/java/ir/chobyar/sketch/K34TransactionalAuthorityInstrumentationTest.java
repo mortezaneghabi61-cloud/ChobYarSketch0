@@ -203,19 +203,27 @@ public class K34TransactionalAuthorityInstrumentationTest {
         });
     }
 
-    @Test public void lockedSelectionNeverPreMutatesSketchDocumentAuthority() throws Exception {
+    @Test public void modelOwnedLockBlocksMoveWithoutLegacyTruthOrHistoryLoss() throws Exception {
         onMain(() -> {
             Context context=ApplicationProvider.getApplicationContext();
             K33MirroredCadCanvasView cad=new K33MirroredCadCanvasView(context);
             cad.importSketchProjectState(fixture());
             cad.selected=cad.entities.get(0);
-            assertTrue(cad.toggleSelectedLock().contains("Lock"));
+
+            assertEquals("1 selection(s) locked", cad.toggleSelectedLock());
+            cad.requireSketchMirrorParity();
+            assertEquals(1,cad.sketchConstraintCount());
+            assertEquals(0,cad.legacySelectionLockTruthCount());
+            assertTrue(cad.sketchAuthorityHistoryActive());
+            assertTrue(cad.sketchAuthorityCanUndo());
 
             cad.moveSelected(12f,0f);
             cad.requireSketchMirrorParity();
             assertEquals(0.0,lineX1(cad.exportSketchProjectState()),1.0e-6);
-            assertFalse(cad.sketchAuthorityHistoryActive());
-            assertFalse(cad.sketchAuthorityCanUndo());
+            assertEquals(1,cad.sketchConstraintCount());
+            assertEquals(0,cad.legacySelectionLockTruthCount());
+            assertTrue(cad.sketchAuthorityHistoryActive());
+            assertTrue(cad.sketchAuthorityCanUndo());
             return true;
         });
     }

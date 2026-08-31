@@ -50,25 +50,30 @@ public final class SketchUndoRedoInstrumentationTest {
             instrumentation.waitForIdleSync();
 
             final int[] counts = new int[4];
+            final String[] createdStableId = new String[1];
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView canvas = findProductionCanvas(activity.getWindow().getDecorView());
                 assertNotNull(canvas);
                 counts[0] = canvas.entities.size();
                 assertEquals("Rectangle creation must produce one entity", 1, counts[0]);
                 assertNotNull("Created rectangle must initially be selected", canvas.selected);
+                createdStableId[0] = canvas.selected.stableId();
+                assertNotNull("Created rectangle must have a stable model id", createdStableId[0]);
                 assertTrue("Sketch Undo must be available after creation", canvas.canUndoSketch());
                 assertFalse("Fresh edit must invalidate Sketch Redo", canvas.canRedoSketch());
 
                 canvas.undo();
                 counts[1] = canvas.entities.size();
                 assertEquals("Undo must remove the created rectangle", 0, counts[1]);
-                assertNull("Undo must not leave a stale selection reference", canvas.selected);
+                assertNull("Undo must not leave a selection for removed geometry", canvas.selected);
                 assertTrue("Sketch Redo must be available after Undo", canvas.canRedoSketch());
 
                 assertTrue("Redo must restore the undone Sketch snapshot", canvas.redoSketch());
                 counts[2] = canvas.entities.size();
                 assertEquals("Redo must restore exactly one rectangle", 1, counts[2]);
-                assertNull("Snapshot restore must keep selection state safe", canvas.selected);
+                assertNotNull("Redo must restore the model-owned selection projection", canvas.selected);
+                assertEquals("Redo selection must resolve by the original stable entity id",
+                        createdStableId[0], canvas.selected.stableId());
                 assertTrue("Undo must remain available after Redo", canvas.canUndoSketch());
                 assertFalse("Redo stack must be empty after Redo", canvas.canRedoSketch());
 

@@ -100,8 +100,27 @@ public final class SketchConstraint {
         return new SketchConstraint(id, Kind.ANGLE, a, -1, b, -1, degrees, true);
     }
 
+    /** Backward-compatible whole-entity FIXED constraint. */
     public static SketchConstraint fixed(String id, String entityId) {
         return unary(id, Kind.FIXED, entityId);
+    }
+
+    /**
+     * Point-level FIXED anchor used by Shapr-style Lock/Unlock.
+     * Point meaning is entity-specific and validated by the solver/model layer:
+     * line 0/1 = endpoints; circle/arc 0 = center for the first K3.8 slice.
+     */
+    public static SketchConstraint fixedPoint(String id, String entityId, int pointIndex) {
+        return new SketchConstraint(id, Kind.FIXED, entityId, pointIndex,
+                null, -1, Double.NaN, true);
+    }
+
+    public boolean fixesWholeEntity() {
+        return kind == Kind.FIXED && primaryPointIndex < 0;
+    }
+
+    public boolean fixesPoint() {
+        return kind == Kind.FIXED && primaryPointIndex >= 0;
     }
 
     private static SketchConstraint unary(String id, Kind kind, String entityId) {
@@ -161,12 +180,12 @@ public final class SketchConstraint {
             throw new IllegalArgumentException(kind + " does not accept a numeric value");
         }
 
-        boolean pointConstraint = kind == Kind.COINCIDENT || kind == Kind.POINT_ON_ENTITY
-                || kind == Kind.MIDPOINT;
-        if (pointConstraint && primaryPointIndex < 0) {
+        boolean relationshipPointConstraint = kind == Kind.COINCIDENT
+                || kind == Kind.POINT_ON_ENTITY || kind == Kind.MIDPOINT;
+        if (relationshipPointConstraint && primaryPointIndex < 0) {
             throw new IllegalArgumentException(kind + " requires primary point index");
         }
-        if (pointConstraint && !isEndpointIndex(primaryPointIndex)) {
+        if (relationshipPointConstraint && !isEndpointIndex(primaryPointIndex)) {
             throw new IllegalArgumentException(kind + " primary point index must be endpoint 0 or 1");
         }
         if (kind == Kind.COINCIDENT && secondaryPointIndex < 0) {
@@ -175,11 +194,16 @@ public final class SketchConstraint {
         if (kind == Kind.COINCIDENT && !isEndpointIndex(secondaryPointIndex)) {
             throw new IllegalArgumentException("COINCIDENT secondary point index must be endpoint 0 or 1");
         }
-        if (!pointConstraint && (primaryPointIndex >= 0 || secondaryPointIndex >= 0)) {
-            throw new IllegalArgumentException(kind + " does not accept point indexes");
-        }
         if ((kind == Kind.POINT_ON_ENTITY || kind == Kind.MIDPOINT) && secondaryPointIndex >= 0) {
             throw new IllegalArgumentException(kind + " host uses whole entity");
+        }
+        if (kind == Kind.FIXED) {
+            if (secondaryPointIndex >= 0) {
+                throw new IllegalArgumentException("FIXED does not accept a secondary point index");
+            }
+        } else if (!relationshipPointConstraint
+                && (primaryPointIndex >= 0 || secondaryPointIndex >= 0)) {
+            throw new IllegalArgumentException(kind + " does not accept point indexes");
         }
     }
 

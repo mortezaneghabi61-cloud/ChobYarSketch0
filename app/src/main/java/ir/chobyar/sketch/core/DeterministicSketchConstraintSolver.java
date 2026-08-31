@@ -27,7 +27,6 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                         Collection<SketchConstraint> sourceConstraints) {
         LinkedHashMap<String, SketchEntity> entities = copyEntities(sourceEntities);
         List<SketchConstraint> constraints = copyConstraints(sourceConstraints);
-        LinkedHashMap<String, SketchEntity> fixedEntities = fixedEntitySnapshots(entities, constraints);
 
         for (SketchConstraint constraint : constraints) {
             String unsupported = unsupportedReason(constraint, entities);
@@ -37,12 +36,13 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             }
         }
 
+        FixedState fixed = captureFixedState(entities, constraints);
         if (constraints.isEmpty()) return result(Status.SOLVED, 0, 0.0, "", entities);
 
         double residual = Double.POSITIVE_INFINITY;
         for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
             for (SketchConstraint constraint : constraints) apply(constraint, entities);
-            restoreFixedEntities(entities, fixedEntities);
+            restoreFixedState(entities, fixed);
             residual = maxResidual(constraints, entities);
             if (residual <= DIST_TOL_MM) {
                 return result(Status.SOLVED, iteration, residual, "", entities);
@@ -75,22 +75,77 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return out;
     }
 
-    private static LinkedHashMap<String, SketchEntity> fixedEntitySnapshots(
-            Map<String, SketchEntity> entities, List<SketchConstraint> constraints) {
-        LinkedHashMap<String, SketchEntity> fixed = new LinkedHashMap<>();
+    private static FixedState captureFixedState(Map<String, SketchEntity> entities,
+                                                List<SketchConstraint> constraints) {
+        FixedState fixed = new FixedState();
         for (SketchConstraint constraint : constraints) {
             if (constraint.kind != SketchConstraint.Kind.FIXED) continue;
             SketchEntity entity = entities.get(constraint.primaryEntityId);
-            if (entity != null) fixed.put(constraint.primaryEntityId, entity.copy());
+            if (entity == null) continue;
+            if (constraint.fixesWholeEntity()) {
+                fixed.wholeEntities.put(constraint.primaryEntityId, entity.copy());
+                continue;
+            }
+            if (constraint.fixesPoint()) {
+                LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(constraint.primaryEntityId);
+                if (anchors == null) {
+                    anchors = new LinkedHashMap<>();
+                    fixed.pointAnchors.put(constraint.primaryEntityId, anchors);
+                }
+                SketchGeometry.Point point = fixedPoint(entity, constraint.primaryPointIndex);
+                anchors.put(constraint.primaryPointIndex,
+                        new SketchGeometry.Point(point.xMm, point.yMm));
+            }
         }
         return fixed;
     }
 
-    private static void restoreFixedEntities(Map<String, SketchEntity> entities,
-                                             Map<String, SketchEntity> fixedEntities) {
-        for (Map.Entry<String, SketchEntity> entry : fixedEntities.entrySet()) {
+    private static void restoreFixedState(Map<String, SketchEntity> entities, FixedState fixed) {
+        for (Map.Entry<String, SketchEntity> entry : fixed.wholeEntities.entrySet()) {
             entities.put(entry.getKey(), entry.getValue().copy());
         }
+        for (Map.Entry<String, LinkedHashMap<Integer, SketchGeometry.Point>> entry
+                : fixed.pointAnchors.entrySet()) {
+            if (fixed.wholeEntities.containsKey(entry.getKey())) continue;
+            SketchEntity current = entities.get(entry.getKey());
+            if (current == null) continue;
+            for (Map.Entry<Integer, SketchGeometry.Point> anchor : entry.getValue().entrySet()) {
+                current = withFixedPoint(current, anchor.getKey(), anchor.getValue());
+            }
+            entities.put(entry.getKey(), current);
+        }
+    }
+
+    private static SketchGeometry.Point fixedPoint(SketchEntity entity, int pointIndex) {
+        if (entity instanceof SketchGeometry.Line) {
+            return endpoint((SketchGeometry.Line) entity, pointIndex);
+        }
+        if (entity instanceof SketchGeometry.Circle && pointIndex == 0) {
+            return ((SketchGeometry.Circle) entity).center;
+        }
+        if (entity instanceof SketchGeometry.Arc && pointIndex == 0) {
+            return ((SketchGeometry.Arc) entity).center;
+        }
+        throw new IllegalArgumentException("Unsupported FIXED point target: " + entity.id()
+                + "[" + pointIndex + "]");
+    }
+
+    private static SketchEntity withFixedPoint(SketchEntity entity, int pointIndex,
+                                               SketchGeometry.Point value) {
+        SketchGeometry.Point p = new SketchGeometry.Point(value.xMm, value.yMm);
+        if (entity instanceof SketchGeometry.Line) {
+            return withEndpoint((SketchGeometry.Line) entity, pointIndex, p);
+        }
+        if (entity instanceof SketchGeometry.Circle && pointIndex == 0) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) entity;
+            return new SketchGeometry.Circle(circle.id(), p, circle.radiusMm);
+        }
+        if (entity instanceof SketchGeometry.Arc && pointIndex == 0) {
+            SketchGeometry.Arc arc = (SketchGeometry.Arc) entity;
+            return new SketchGeometry.Arc(arc.id(), p, arc.radiusMm, arc.startDeg, arc.sweepDeg);
+        }
+        throw new IllegalArgumentException("Unsupported FIXED point target: " + entity.id()
+                + "[" + pointIndex + "]");
     }
 
     private static String unsupportedReason(SketchConstraint c, Map<String, SketchEntity> entities) {
@@ -132,7 +187,17 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 return validEndpoint(c.primaryPointIndex)
                         ? null : "POINT_ON_ENTITY requires endpoint index 0 or 1";
             case FIXED:
-                return null;
+                if (c.fixesWholeEntity()) return null;
+                if (!c.fixesPoint()) return "FIXED point target is invalid";
+                if (a instanceof SketchGeometry.Line) {
+                    return validEndpoint(c.primaryPointIndex)
+                            ? null : "FIXED line point must be endpoint 0 or 1";
+                }
+                if (a instanceof SketchGeometry.Circle || a instanceof SketchGeometry.Arc) {
+                    return c.primaryPointIndex == 0
+                            ? null : "FIXED circle/arc point must be center index 0";
+                }
+                return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
                 return "Constraint kind not yet supported by K3.6 solver: " + c.kind;
         }
@@ -381,5 +446,11 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
     private static Result result(Status status, int iterations, double residual,
                                  String message, LinkedHashMap<String, SketchEntity> entities) {
         return new Result(status, iterations, residual, message, entities.values());
+    }
+
+    private static final class FixedState {
+        final LinkedHashMap<String, SketchEntity> wholeEntities = new LinkedHashMap<>();
+        final LinkedHashMap<String, LinkedHashMap<Integer, SketchGeometry.Point>> pointAnchors =
+                new LinkedHashMap<>();
     }
 }
