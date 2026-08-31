@@ -109,11 +109,60 @@ public class K38ProductionLockAuthorityInstrumentationTest {
         });
     }
 
+    @Test public void modelOwnedLockBlocksLegacyTransformCommandsAndPreservesSingleUndo() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            cad.executeCommand("LINE 0 0 100 25");
+            String entityId = cad.selected.stableId();
+            cad.toggleSelectedLock();
+            cad.requireSketchMirrorParity();
+            SketchGeometry.Line locked = lineFor(cad, entityId);
+            assertTrue("Lock must be the current model-owned Undo step", cad.sketchAuthorityCanUndo());
+            assertEquals(0, cad.legacySelectionLockTruthCount());
+
+            cad.rotateSelected(30f);
+            cad.scaleSelected(1.5f);
+            cad.requireSketchMirrorParity();
+
+            SketchGeometry.Line afterBlockedTransforms = lineFor(cad, entityId);
+            assertEquals(locked.a.xMm, afterBlockedTransforms.a.xMm, 1.0e-9);
+            assertEquals(locked.a.yMm, afterBlockedTransforms.a.yMm, 1.0e-9);
+            assertEquals(locked.b.xMm, afterBlockedTransforms.b.xMm, 1.0e-9);
+            assertEquals(locked.b.yMm, afterBlockedTransforms.b.yMm, 1.0e-9);
+            assertTrue("Rejected transforms must not consume or fabricate Undo", cad.sketchAuthorityCanUndo());
+            assertTrue(fixedFor(cad, entityId).fixesWholeEntity());
+            assertEquals("Transform guard must not repopulate legacy object-identity truth", 0,
+                    cad.legacySelectionLockTruthCount());
+
+            cad.undo();
+            cad.requireSketchMirrorParity();
+            assertFalse("One Undo after rejected transforms must remove Lock", hasFixedFor(cad, entityId));
+
+            SketchGeometry.Line beforeUnlockedRotate = lineFor(cad, entityId);
+            cad.rotateSelected(30f);
+            cad.requireSketchMirrorParity();
+            SketchGeometry.Line afterUnlockedRotate = lineFor(cad, entityId);
+            boolean changed = Math.abs(beforeUnlockedRotate.a.xMm - afterUnlockedRotate.a.xMm) > 1.0e-9
+                    || Math.abs(beforeUnlockedRotate.a.yMm - afterUnlockedRotate.a.yMm) > 1.0e-9
+                    || Math.abs(beforeUnlockedRotate.b.xMm - afterUnlockedRotate.b.xMm) > 1.0e-9
+                    || Math.abs(beforeUnlockedRotate.b.yMm - afterUnlockedRotate.b.yMm) > 1.0e-9;
+            assertTrue("Rotate must succeed after model-owned Unlock", changed);
+            return true;
+        });
+    }
+
     private static SketchConstraint fixedFor(K33MirroredCadCanvasView cad, String entityId) {
         for (SketchConstraint c : cad.sketchConstraints()) {
             if (c.kind == SketchConstraint.Kind.FIXED && entityId.equals(c.primaryEntityId)) return c;
         }
         throw new AssertionError("Lock UI did not create model-owned FIXED for " + entityId);
+    }
+
+    private static boolean hasFixedFor(K33MirroredCadCanvasView cad, String entityId) {
+        for (SketchConstraint c : cad.sketchConstraints()) {
+            if (c.kind == SketchConstraint.Kind.FIXED && entityId.equals(c.primaryEntityId)) return true;
+        }
+        return false;
     }
 
     private static SketchGeometry.Line lineFor(K33MirroredCadCanvasView cad, String entityId) {
