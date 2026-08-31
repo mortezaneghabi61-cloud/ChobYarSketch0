@@ -61,7 +61,7 @@ run_contract() {
   printf '%s | %s\n' "$class" "$expected" | tee -a test-artifacts/production-cad-summary.txt
 }
 
-# Sketch interaction, primitives, selection, dimensions and constraints: 32 tests
+# Sketch interaction, primitives, selection, dimensions and constraints
 run_contract TouchInputContractInstrumentationTest touch 'OK (3 tests)'
 run_contract StylusDimensionLabelRoutingInstrumentationTest stylus-label-routing 'OK (1 test)'
 run_contract DimensionLabelReleaseInstrumentationTest dimension-label-release 'OK (2 tests)'
@@ -69,13 +69,14 @@ run_contract K38PointLockInteractionInstrumentationTest point-lock-interaction '
 run_contract K39PointFixedTransformInstrumentationTest point-fixed-transform 'OK (4 tests)'
 run_contract K310DrivingDimensionAuthorityInstrumentationTest driving-dimension-authority 'OK (4 tests)'
 run_contract K310DrivingDimensionActivityLifecycleInstrumentationTest driving-dimension-activity-lifecycle 'OK (1 test)'
+run_contract K311EqualConstraintAuthorityInstrumentationTest equal-constraint-authority 'OK (3 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
 run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5 tests)'
 run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
 
-# Solid / History / Boolean / Direct modeling + workspace + Revolve thread: 23 tests
+# Solid / History / Boolean / Direct modeling + workspace + Revolve thread
 run_contract SolidCommandInstrumentationTest solid 'OK (2 tests)'
 run_contract BooleanCommandInstrumentationTest boolean 'OK (3 tests)'
 run_contract BooleanKeepOriginalsInstrumentationTest boolean-keep 'OK (3 tests)'
@@ -86,7 +87,7 @@ run_contract LoftCommandInstrumentationTest loft 'OK (1 test)'
 run_contract WorkspaceSessionInstrumentationTest workspace-session 'OK (5 tests)'
 run_contract RevolveThreadContractInstrumentationTest revolve-thread 'OK (4 tests)'
 
-# Construction / exact Project / associative references / exact topology: 23 tests
+# Construction / exact Project / associative references / exact topology
 run_contract ConstructionProjectInstrumentationTest construction-project 'OK (2 tests)'
 run_contract Project3DExactInstrumentationTest project-exact 'OK (3 tests)'
 run_contract Project3DSelectedBodyInstrumentationTest project-selected 'OK (3 tests)'
