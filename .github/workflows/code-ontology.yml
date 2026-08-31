@@ -19,8 +19,20 @@ jobs:
       - name: Checkout ChobYar
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           path: target
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact ChobYar revision
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "CODE_ONTOLOGY_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - name: Checkout Code Ontology Companion (pinned)
         uses: actions/checkout@v4
@@ -29,6 +41,7 @@ jobs:
           ref: 356808216896a2024eee5329e026836b9f8e14bf
           path: companion
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5

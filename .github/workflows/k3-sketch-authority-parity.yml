@@ -20,6 +20,9 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/K311*InstrumentationTest.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
 
+permissions:
+  contents: read
+
 concurrency:
   group: k3-sketch-authority-${{ github.ref }}
   cancel-in-progress: true
@@ -37,6 +40,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Verify exact tested revision
         shell: bash
@@ -125,7 +130,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.K310DrivingDimensionActivityLifecycleInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-driving-dimension-activity-lifecycle.txt
             grep -q 'OK (1 test)' test-artifacts/k3-driving-dimension-activity-lifecycle.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K311EqualConstraintAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-equal-constraint-authority.txt
-            grep -q 'OK (3 tests)' test-artifacts/k3-equal-constraint-authority.txt
+            grep -q 'OK (4 tests)' test-artifacts/k3-equal-constraint-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()

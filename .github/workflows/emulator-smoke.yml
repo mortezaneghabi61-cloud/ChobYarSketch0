@@ -1,7 +1,7 @@
 name: Android Emulator Smoke Test
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   workflow_dispatch:
@@ -25,21 +25,21 @@ jobs:
       CHOBYAR_VERSION_NAME: 0.1.smoke.${{ github.run_number }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Apply collision-safe Sketch core API
-        if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
+      - name: Verify exact tested revision
+        shell: bash
         run: |
-          python3 .github/scripts/refactor_sketch_core.py
-          python3 .github/scripts/add_sketch_redo.py
-          git config user.name "chobyar-ci"
-          git config user.email "actions@users.noreply.github.com"
-          git add -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarShaprCanvasView.java app/src/main/java/ir/chobyar/sketch/ShaprStyleCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
-          if ! git diff --cached --quiet; then
-            git commit -m "Apply Sketch core refactor and redo contract [skip ci]"
-            git push origin HEAD:refactor/sketch-core-type-safe-20260820
-          fi
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "EMULATOR_SMOKE_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - name: Validate Sketch core refactor
         if: github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820' || github.head_ref == 'refactor/sketch-core-type-safe-20260820'
@@ -183,18 +183,3 @@ jobs:
           path: test-artifacts/**
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Persist refactor smoke result
-        if: always() && github.ref == 'refs/heads/refactor/sketch-core-type-safe-20260820'
-        env:
-          CHOBYAR_JOB_STATUS: ${{ job.status }}
-        run: |
-          mkdir -p docs
-          printf 'status=%s\nsource_sha=%s\nworkflow_run=%s\n' "$CHOBYAR_JOB_STATUS" "$GITHUB_SHA" "$GITHUB_RUN_ID" > docs/sketch-core-smoke-status.txt
-          git config user.name "chobyar-ci"
-          git config user.email "actions@users.noreply.github.com"
-          git add -- docs/sketch-core-smoke-status.txt
-          if ! git diff --cached --quiet; then
-            git commit -m "Record Sketch core smoke result [skip ci]"
-            git push origin HEAD:refactor/sketch-core-type-safe-20260820
-          fi

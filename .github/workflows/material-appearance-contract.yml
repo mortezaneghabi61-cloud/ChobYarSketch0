@@ -28,7 +28,20 @@ jobs:
       CHOBYAR_VERSION_CODE: 37${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.3.material.${{ github.run_number }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "MATERIAL_APPEARANCE_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
       - name: Validate renderer-only appearance wiring
         run: |
           set -euo pipefail

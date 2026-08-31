@@ -22,9 +22,9 @@ require(cad, 'boolean construction=false;', 'Construction state')
 require(cad, 'public boolean isConstruction(){return construction;}', 'Construction getter')
 require(cad, 'public void setConstruction(boolean value){construction=value;}', 'Construction setter implementation')
 require(cad, 'e.construction=construction', 'Construction copy metadata')
-require(cad, 'if(selected.isConstruction())return"Construction قابل Extrude نیست";', '2.5D extrusion guard')
-require(cad, 'case"CONSTRUCTION":if(selected==null)return"اول Sketch را انتخاب کن";', 'Construction command')
-require(cad, 'case"NORMAL":case"REGULAR":if(selected==null)return"اول Sketch را انتخاب کن";', 'Normal command')
+require(cad, 'if(selected.isConstruction())return"Construction cannot be Extrude";', '2.5D extrusion guard')
+require(cad, 'case"CONSTRUCTION":if(selected==null)return"Select a sketch first";', 'Construction command')
+require(cad, 'case"NORMAL":case"REGULAR":if(selected==null)return"Select a sketch first";', 'Normal command')
 require(cad, 'for(Entity e:entities)if(!e.isConstruction())e.appendDxf(d);', 'DXF construction exclusion')
 
 # Construction geometry must remain selectable/snappable. Reject the obsolete

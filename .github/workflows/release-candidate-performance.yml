@@ -30,8 +30,21 @@ jobs:
       EXPECTED_DEV_CERT_SHA256: 6d68da0481eb76eae200fe188386d36ae96ac5a9338bd63b921229d5f18a8735
 
     steps:
-      - name: Checkout
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "RELEASE_CANDIDATE_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - name: Set monotonic Android version code
         run: |

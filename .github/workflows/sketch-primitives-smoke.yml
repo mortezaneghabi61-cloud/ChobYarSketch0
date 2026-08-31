@@ -24,8 +24,21 @@ jobs:
       CHOBYAR_VERSION_NAME: 0.2.sketch.${{ github.run_number }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "SKETCH_PRIMITIVES_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

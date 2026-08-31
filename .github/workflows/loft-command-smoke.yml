@@ -26,14 +26,19 @@ jobs:
     steps:
       - name: Checkout exact head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Verify exact head and clean tracked sources
         shell: bash
         run: |
           set -euo pipefail
-          echo "Expected SHA: $GITHUB_SHA"
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          echo "Expected SHA: $expected"
           echo "Checked out:  $(git rev-parse HEAD)"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$expected"
           git diff --exit-code
 
       - name: Set up JDK 17
