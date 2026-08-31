@@ -2,10 +2,9 @@ name: K3.8 Smart Handle Routing Fix
 
 on:
   push:
-    branches:
-      - k3-8-point-lock-interaction-ready
+    branches: [k3-8-point-lock-interaction-ready]
     paths:
-      - '.github/workflows/k38-smart-handle-routing-fix.yml'
+      - .github/workflows/k38-smart-handle-routing-fix.yml
 
 permissions:
   contents: write
@@ -17,100 +16,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-          ref: k3-8-point-lock-interaction-ready
-
-      - name: Verify guarded parent
+      - name: Verify one-shot parent
         shell: bash
         run: |
           set -euo pipefail
-          expected='d55d4c15fbf8cf6ba55cc7d1b7e91d8cf9817bce'
-          actual="$(git rev-parse HEAD^)"
-          echo "K38_ROUTING_PARENT expected=${expected} actual=${actual}"
-          test "$actual" = "$expected"
-
-      - name: Patch Smart selected-handle routing
+          test "$(git rev-parse HEAD^)" = "c6fb974565b1ff23f80f8f1e1521b9f1d42efb1b"
+      - name: Apply selected-handle routing fix
         shell: bash
         run: |
-          set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java')
           s = p.read_text()
 
-          old = '''        if (action == MotionEvent.ACTION_DOWN) {
-              boxStartX = boxEndX = event.getX();
-              boxStartY = boxEndY = event.getY();
-              Object hit = coreFindHit(wx, wy);
-          '''
-          # Match source indentation exactly without changing the K38 test.
-          if s.count(old) != 1:
-              old = '''        if (action == MotionEvent.ACTION_DOWN) {
-            boxStartX = boxEndX = event.getX();
-            boxStartY = boxEndY = event.getY();
-            Object hit = coreFindHit(wx, wy);
-'''
-          new = '''        if (action == MotionEvent.ACTION_DOWN) {
-            boxStartX = boxEndX = event.getX();
-            boxStartY = boxEndY = event.getY();
+          def once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
+              return text.replace(old, new, 1)
 
-            // A selected control handle is a stronger interaction target than the
-            // primitive body. Arc centers are intentionally off-curve, so body-hit
-            // testing alone would misclassify a center tap as empty-space selection
-            // and clear the selection before higher model-authority layers can commit
-            // endpoint/center intent. Route existing handles to CadCanvasView first.
-            if (selectedControlHandleHit(wx, wy)) {
-                selectionBoxCandidate = false;
-                selectionBoxActive = false;
-                pendingTapHit = null;
-                boolean handled = super.onTouchEvent(event);
-                syncSelectionFromBase();
-                return handled;
-            }
+          s = once(s,
+              '''        if (action == MotionEvent.ACTION_DOWN) {\n            boxStartX = boxEndX = event.getX();\n            boxStartY = boxEndY = event.getY();\n            Object hit = coreFindHit(wx, wy);\n''',
+              '''        if (action == MotionEvent.ACTION_DOWN) {\n            boxStartX = boxEndX = event.getX();\n            boxStartY = boxEndY = event.getY();\n\n            // Selected control handles outrank body-hit. In particular, an Arc\n            // center is intentionally off-curve and must not become empty-space\n            // selection before the model-authority point gesture can finish.\n            if (selectedControlHandleHit(wx, wy)) {\n                selectionBoxCandidate = false;\n                selectionBoxActive = false;\n                pendingTapHit = null;\n                boolean handled = super.onTouchEvent(event);\n                syncSelectionFromBase();\n                return handled;\n            }\n\n            Object hit = coreFindHit(wx, wy);\n''',
+              'normal-select handle priority')
 
-            Object hit = coreFindHit(wx, wy);
-'''
-          if s.count(old) != 1:
-              raise SystemExit(f'ACTION_DOWN anchor count={s.count(old)}')
-          s = s.replace(old, new, 1)
+          s = once(s,
+              '''    private Object baseSelected() { return selected; }\n\n    private void setBaseSelected(Object value) {\n''',
+              '''    private Object baseSelected() { return selected; }\n\n    private boolean selectedControlHandleHit(float wx, float wy) {\n        Object current = baseSelected();\n        if (!(current instanceof Entity)) return false;\n        float radius = 18f / (PX_PER_MM * Math.max(.02f, viewScale()));\n        float radius2 = radius * radius;\n        List<ControlPoint> points = ((Entity) current).controlPoints();\n        if (points == null) return false;\n        for (ControlPoint point : points) {\n            if (point == null) continue;\n            float dx = wx - point.x;\n            float dy = wy - point.y;\n            if (dx * dx + dy * dy <= radius2) return true;\n        }\n        return false;\n    }\n\n    private void setBaseSelected(Object value) {\n''',
+              'selected handle helper')
 
-          old2 = '''    private Object baseSelected() { return selected; }
-
-    private void setBaseSelected(Object value) {
-'''
-          new2 = '''    private Object baseSelected() { return selected; }
-
-    private boolean selectedControlHandleHit(float wx, float wy) {
-        Object current = baseSelected();
-        if (!(current instanceof Entity)) return false;
-        float radius = 18f / (PX_PER_MM * Math.max(.02f, viewScale()));
-        float radius2 = radius * radius;
-        List<ControlPoint> points = ((Entity) current).controlPoints();
-        if (points == null) return false;
-        for (ControlPoint point : points) {
-            if (point == null) continue;
-            float dx = wx - point.x;
-            float dy = wy - point.y;
-            if (dx * dx + dy * dy <= radius2) return true;
-        }
-        return false;
-    }
-
-    private void setBaseSelected(Object value) {
-'''
-          if s.count(old2) != 1:
-              raise SystemExit(f'helper anchor count={s.count(old2)}')
-          s = s.replace(old2, new2, 1)
           p.write_text(s)
           PY
-
-      - name: Commit source fix and remove one-shot workflow
+      - name: Remove one-shot workflow and commit patch
         shell: bash
         run: |
           set -euo pipefail
           git rm .github/workflows/k38-smart-handle-routing-fix.yml
           git add app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java
           git diff --cached --check
-          git config user.name 'chobyar-k38-routing'
-          git config user.email 'actions@users.noreply.github.com'
-          git commit -m 'K3.8 interaction: prioritize selected control handles before body hit'
+          git config user.name "chobyar-k38-routing"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "K3.8 interaction: prioritize selected control handles before body hit"
           git push origin HEAD:k3-8-point-lock-interaction-ready
