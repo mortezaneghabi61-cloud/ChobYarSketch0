@@ -392,7 +392,8 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
                 "T Tangent / Tangent",
                 "Fit All"
         };
-        new AlertDialog.Builder(getContext()).setTitle("ChobYar • Shapr LAB")
+        new AlertDialog.Builder(getContext())
+                .setTitle("ChobYar • Shapr LAB")
                 .setMessage("text text text text text text ChobYar created text until text Toolstext text text.")
                 .setItems(items,(d,w)->{
                     String result;
