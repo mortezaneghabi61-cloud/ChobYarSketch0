@@ -207,7 +207,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         SketchSpace s = activeSketch();
         String lockText = s != null && s.locked ? "🔓 text text Sketch text" : "🔒 Lock Sketch text";
         String visText = s != null && s.visible ? "◉ Hide text Sketch text" : "◉ Show Sketch text";
-        String selLock = isEffectiveSelectionLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";
+        String selLock = lockUiShowsLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";
         String autoText = autoConstraints ? "Auto Constraints: On" : "Auto Constraints: Off";
         String badgeText = showParametricConstraints ? "Show Constraints: On" : "Show Constraints: Off";
         String[] items = {
@@ -329,6 +329,15 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         return false;
     }
 
+    /** Point-level Lock UI seam; K33 overrides this without leaking model state into identity maps. */
+    protected boolean hasModelPointLockTarget() { return false; }
+    protected boolean isModelPointLockTargetLocked() { return false; }
+    protected PointF modelPointLockTargetWorld() { return null; }
+
+    private boolean lockUiShowsLocked() {
+        return hasModelPointLockTarget() ? isModelPointLockTargetLocked() : isEffectiveSelectionLocked();
+    }
+
     private boolean activeSketchLocked() {
         SketchSpace s = activeSketch();
         return s != null && s.locked;
@@ -345,7 +354,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (base == null) base = "";
         SketchSpace s = activeSketch();
         String extra = s == null ? "" : " | " + s.name;
-        if (isEffectiveSelectionLocked()) extra += " | 🔒 Lock";
+        if (lockUiShowsLocked()) extra += " | 🔒 Lock";
         return base + extra;
     }
 
@@ -603,7 +612,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                 "⊥ Perpendicular — Perpendicular",
                 "∥ Parallel — Parallel",
                 "● Coincident — text text text text Line",
-                isEffectiveSelectionLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
+                lockUiShowsLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
                 autoConstraints ? "Auto Constraints — On" : "Auto Constraints — Off",
                 showParametricConstraints ? "Show text Constraints — On" : "Show text Constraints — Off"
         };
@@ -927,10 +936,12 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         lockChip.setEmpty();
         List<Object> sel = selectionObjects();
         if (sel.isEmpty()) return;
-        PointF c = selectionCenter(sel);
+        PointF c = hasModelPointLockTarget() ? modelPointLockTargetWorld() : selectionCenter(sel);
         if (c == null) return;
         PointF s = worldToScreen(c.x, c.y);
-        String text = isEffectiveSelectionLocked() ? "🔒 Lock" : "🔓 Unlocked";
+        String text;
+        if (hasModelPointLockTarget()) text = lockUiShowsLocked() ? "🔒 Point" : "🔓 Point";
+        else text = lockUiShowsLocked() ? "🔒 Lock" : "🔓 Unlocked";
         float w = 105f;
         float left = clamp(s.x + 70f, 10f, Math.max(10f, getWidth() - w - 10f));
         float top = clamp(s.y + 5f, 205f, Math.max(205f, getHeight() - 130f));
