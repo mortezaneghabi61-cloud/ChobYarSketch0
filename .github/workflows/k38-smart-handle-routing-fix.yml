@@ -23,19 +23,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected='dec63e15083de89b7a70a1175d53270e2af7470b'
+          expected='d55d4c15fbf8cf6ba55cc7d1b7e91d8cf9817bce'
           actual="$(git rev-parse HEAD^)"
           echo "K38_ROUTING_PARENT expected=${expected} actual=${actual}"
           test "$actual" = "$expected"
 
       - name: Patch Smart selected-handle routing
-        shell: python
+        shell: bash
         run: |
+          set -euo pipefail
+          python - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java')
           s = p.read_text()
 
           old = '''        if (action == MotionEvent.ACTION_DOWN) {
+              boxStartX = boxEndX = event.getX();
+              boxStartY = boxEndY = event.getY();
+              Object hit = coreFindHit(wx, wy);
+          '''
+          # Match source indentation exactly without changing the K38 test.
+          if s.count(old) != 1:
+              old = '''        if (action == MotionEvent.ACTION_DOWN) {
             boxStartX = boxEndX = event.getX();
             boxStartY = boxEndY = event.getY();
             Object hit = coreFindHit(wx, wy);
@@ -92,6 +101,7 @@ jobs:
               raise SystemExit(f'helper anchor count={s.count(old2)}')
           s = s.replace(old2, new2, 1)
           p.write_text(s)
+          PY
 
       - name: Commit source fix and remove one-shot workflow
         shell: bash
