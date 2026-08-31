@@ -23,6 +23,7 @@ import java.util.UUID;
 
 import ir.chobyar.sketch.core.DeterministicSketchConstraintSolver;
 import ir.chobyar.sketch.core.LegacySketchStateBridge;
+import ir.chobyar.sketch.core.PointLockInteractionMapping;
 import ir.chobyar.sketch.core.SketchConstraint;
 import ir.chobyar.sketch.core.SketchConstraintSolver;
 import ir.chobyar.sketch.core.SketchDocument;
@@ -69,6 +70,16 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private float routedSnapScreenY;
     private String routedSnapLabel = "";
     private ConstraintAnchorPolicy constraintAnchorPolicy = ConstraintAnchorPolicy.FIRST_SELECTED;
+    private static final float POINT_LOCK_HANDLE_RADIUS_PX = 18f;
+    private static final float POINT_LOCK_DRAG_SLOP_PX = 3f;
+    private String pointLockTargetEntityId;
+    private int pointLockTargetPointIndex = -1;
+    private String pendingPointLockEntityId;
+    private int pendingPointLockPointIndex = -1;
+    private float pendingPointLockDownX;
+    private float pendingPointLockDownY;
+    private boolean pendingPointLockMoved;
+    private boolean blockedLockedPointGesture;
 
     public K33MirroredCadCanvasView(Context context) {
         super(context);
@@ -303,21 +314,66 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         invalidate();
     }
 
-    private void replaySolvedLineGeometryToLegacy() {
-        for (SketchEntity value : sketchDocument.entities()) {
-            if (!(value instanceof SketchGeometry.Line)) continue;
+    private SketchGeometry.Point modelPoint(SketchEntity entity, int pointIndex) {
+        if (entity instanceof SketchGeometry.Line) {
+            SketchGeometry.Line line = (SketchGeometry.Line) entity;
+            if (pointIndex == 0) return line.a;
+            if (pointIndex == 1) return line.b;
+            return null;
+        }
+        if (pointIndex == 0 && entity instanceof SketchGeometry.Circle) {
+            return ((SketchGeometry.Circle) entity).center;
+        }
+        if (pointIndex == 0 && entity instanceof SketchGeometry.Arc) {
+            return ((SketchGeometry.Arc) entity).center;
+        }
+        return null;
+    }
+
+    private void replayModelEntityToLegacy(SketchEntity value) {
+        if (value == null) return;
+        Entity legacy = legacyEntityByStableId(value.id());
+        if (legacy == null) return;
+        if (value instanceof SketchGeometry.Line) {
             SketchGeometry.Line solved = (SketchGeometry.Line) value;
-            Entity legacy = legacyEntityByStableId(solved.id());
-            if (legacy == null) continue;
             legacy.moveControlPoint(0, (float) solved.a.xMm, (float) solved.a.yMm);
             legacy.moveControlPoint(1, (float) solved.b.xMm, (float) solved.b.yMm);
+            return;
         }
+        if (value instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle solved = (SketchGeometry.Circle) value;
+            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);
+            legacy.moveControlPoint(1, (float) (solved.center.xMm + solved.radiusMm),
+                    (float) solved.center.yMm);
+            return;
+        }
+        if (value instanceof SketchGeometry.Arc) {
+            SketchGeometry.Arc solved = (SketchGeometry.Arc) value;
+            double startRad = Math.toRadians(solved.startDeg);
+            double endRad = Math.toRadians(solved.startDeg + solved.sweepDeg);
+            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);
+            legacy.moveControlPoint(1,
+                    (float) (solved.center.xMm + Math.cos(startRad) * solved.radiusMm),
+                    (float) (solved.center.yMm + Math.sin(startRad) * solved.radiusMm));
+            legacy.moveControlPoint(2,
+                    (float) (solved.center.xMm + Math.cos(endRad) * solved.radiusMm),
+                    (float) (solved.center.yMm + Math.sin(endRad) * solved.radiusMm));
+        }
+    }
+
+    private void replaySolvedLineGeometryToLegacy() {
+        for (SketchEntity value : sketchDocument.entities()) replayModelEntityToLegacy(value);
         invalidate();
     }
 
     private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
         LinkedHashSet<String> constrained = new LinkedHashSet<>();
         for (SketchConstraint c : sketchDocument.constraints()) {
+            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()) {
+                // Point-FIXED is guarded before legacy handle mutation. Do not replay the
+                // whole primitive here: the remaining degrees of freedom must stay editable.
+                continue;
+            }
             if (c.kind != SketchConstraint.Kind.HORIZONTAL
                     && c.kind != SketchConstraint.Kind.VERTICAL
                     && c.kind != SketchConstraint.Kind.PARALLEL
@@ -328,15 +384,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.FIXED) continue;
             constrained.addAll(c.referencedEntityIds());
         }
-        for (String id : constrained) {
-            SketchEntity value = sketchDocument.entity(id);
-            if (!(value instanceof SketchGeometry.Line)) continue;
-            Entity legacy = legacyEntityByStableId(id);
-            if (legacy == null) continue;
-            SketchGeometry.Line solved = (SketchGeometry.Line) value;
-            legacy.moveControlPoint(0, (float) solved.a.xMm, (float) solved.a.yMm);
-            legacy.moveControlPoint(1, (float) solved.b.xMm, (float) solved.b.yMm);
-        }
+        for (String id : constrained) replayModelEntityToLegacy(sketchDocument.entity(id));
     }
 
     @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return true; }
@@ -752,6 +800,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
         for (SketchConstraint constraint : sketchDocument.constraints()) {
             SketchEntity primary = sketchDocument.entity(constraint.primaryEntityId);
+            if (constraint.kind == SketchConstraint.Kind.FIXED && constraint.fixesPoint()) {
+                SketchGeometry.Point locked = modelPoint(primary, constraint.primaryPointIndex);
+                if (locked != null) {
+                    float px = screenX(locked.xMm);
+                    float py = screenY(locked.yMm);
+                    float rr = 6f * getResources().getDisplayMetrics().density;
+                    canvas.drawCircle(px, py, rr, modelConstraintPaint);
+                    canvas.drawText("🔒", px + rr + 4f, py - rr, modelConstraintTextPaint);
+                }
+                continue;
+            }
             if (!(primary instanceof SketchGeometry.Line)) continue;
             SketchGeometry.Line a = (SketchGeometry.Line) primary;
             float ax = screenX((a.a.xMm + a.b.xMm) * 0.5);
@@ -778,12 +837,154 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private float screenX(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetX); }
     private float screenY(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetY); }
 
+    private boolean hasPointFixed(String entityId, int pointIndex) {
+        if (entityId == null || pointIndex < 0) return false;
+        for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
+            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()
+                    && entityId.equals(c.primaryEntityId) && c.primaryPointIndex == pointIndex) return true;
+        }
+        return false;
+    }
+
+    private boolean activePointLockTargetMatchesSelection() {
+        if (pointLockTargetEntityId == null || pointLockTargetPointIndex < 0 || selected == null) return false;
+        if (!pointLockTargetEntityId.equals(selected.stableId())) return false;
+        return modelPoint(sketchDocument.entity(pointLockTargetEntityId), pointLockTargetPointIndex) != null;
+    }
+
+    @Override protected boolean hasModelPointLockTarget() {
+        return activePointLockTargetMatchesSelection();
+    }
+
+    @Override protected boolean isModelPointLockTargetLocked() {
+        return activePointLockTargetMatchesSelection()
+                && hasPointFixed(pointLockTargetEntityId, pointLockTargetPointIndex);
+    }
+
+    @Override protected PointF modelPointLockTargetWorld() {
+        if (!activePointLockTargetMatchesSelection()) return null;
+        SketchGeometry.Point point = modelPoint(sketchDocument.entity(pointLockTargetEntityId),
+                pointLockTargetPointIndex);
+        return point == null ? null : new PointF((float) point.xMm, (float) point.yMm);
+    }
+
+    public String pointLockTargetEntityId() {
+        return activePointLockTargetMatchesSelection() ? pointLockTargetEntityId : "";
+    }
+
+    public int pointLockTargetPointIndex() {
+        return activePointLockTargetMatchesSelection() ? pointLockTargetPointIndex : -1;
+    }
+
+    public boolean pointLockTargetLocked() {
+        return isModelPointLockTargetLocked();
+    }
+
+    private void clearPointLockTarget() {
+        pointLockTargetEntityId = null;
+        pointLockTargetPointIndex = -1;
+    }
+
+    private void clearPendingPointLockGesture() {
+        pendingPointLockEntityId = null;
+        pendingPointLockPointIndex = -1;
+        pendingPointLockMoved = false;
+    }
+
+    private int selectedControlHandleAt(MotionEvent event) {
+        if (event == null || selected == null || event.getPointerCount() != 1) return -1;
+        List<ControlPoint> points = selected.controlPoints();
+        if (points == null || points.isEmpty()) return -1;
+        float bestDistance2 = POINT_LOCK_HANDLE_RADIUS_PX * POINT_LOCK_HANDLE_RADIUS_PX;
+        int best = -1;
+        for (int i = 0; i < points.size(); i++) {
+            ControlPoint point = points.get(i);
+            float dx = event.getX() - screenX(point.x);
+            float dy = event.getY() - screenY(point.y);
+            float d2 = dx * dx + dy * dy;
+            if (d2 <= bestDistance2) {
+                bestDistance2 = d2;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private boolean beginPointLockGesture(MotionEvent event) {
+        clearPendingPointLockGesture();
+        blockedLockedPointGesture = false;
+        if (selected == null) { clearPointLockTarget(); return false; }
+        int handle = selectedControlHandleAt(event);
+        String entityId = selected.stableId();
+        SketchEntity model = sketchDocument.entity(entityId);
+        int pointIndex = model == null ? -1
+                : PointLockInteractionMapping.modelPointIndex(model.kind(), handle);
+        if (pointIndex < 0) { clearPointLockTarget(); return false; }
+        clearPointLockTarget();
+        pendingPointLockEntityId = entityId;
+        pendingPointLockPointIndex = pointIndex;
+        pendingPointLockDownX = event.getX();
+        pendingPointLockDownY = event.getY();
+        if (hasPointFixed(entityId, pointIndex)) {
+            pointLockTargetEntityId = entityId;
+            pointLockTargetPointIndex = pointIndex;
+            blockedLockedPointGesture = true;
+            invalidate();
+            return true;
+        }
+        return false;
+    }
+
+    private void updatePendingPointLockGesture(MotionEvent event) {
+        if (pendingPointLockEntityId == null || event == null) return;
+        float dx = event.getX() - pendingPointLockDownX;
+        float dy = event.getY() - pendingPointLockDownY;
+        if (dx * dx + dy * dy > POINT_LOCK_DRAG_SLOP_PX * POINT_LOCK_DRAG_SLOP_PX) {
+            pendingPointLockMoved = true;
+        }
+    }
+
+    private boolean consumeBlockedPointLockGesture(MotionEvent event) {
+        updatePendingPointLockGesture(event);
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            blockedLockedPointGesture = false;
+            clearPendingPointLockGesture();
+            invalidate();
+        }
+        return true;
+    }
+
+    private void finishPointLockGestureAfterSuper(MotionEvent event) {
+        if (pendingPointLockEntityId == null || event == null) return;
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_MOVE) {
+            updatePendingPointLockGesture(event);
+            return;
+        }
+        if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) return;
+        if (action == MotionEvent.ACTION_UP && !pendingPointLockMoved && selected != null
+                && pendingPointLockEntityId.equals(selected.stableId())) {
+            pointLockTargetEntityId = pendingPointLockEntityId;
+            pointLockTargetPointIndex = pendingPointLockPointIndex;
+        } else if (pendingPointLockMoved) {
+            clearPointLockTarget();
+        }
+        clearPendingPointLockGesture();
+        invalidate();
+    }
+
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (event == null) return false;
         int action = event.getActionMasked();
         int toolBefore = getTool();
         boolean drawingBefore = drawing;
         int legacyCountBefore = entities.size();
+        if (toolBefore == TOOL_SELECT && event.getPointerCount() == 1) {
+            if (action == MotionEvent.ACTION_DOWN && beginPointLockGesture(event)) return true;
+            if (blockedLockedPointGesture) return consumeBlockedPointLockGesture(event);
+            if (action == MotionEvent.ACTION_MOVE) updatePendingPointLockGesture(event);
+        }
         boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);
         String authorityId = commitAttempt ? UUID.randomUUID().toString() : null;
         boolean prepared = commitAttempt && prepareTransactionalDocument("gesture-create-prepare");
@@ -798,6 +999,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             if (routedCreateSnap) toggleSnap();
             if (routedEvent != event) routedEvent.recycle();
         }
+
+        if (toolBefore == TOOL_SELECT && event.getPointerCount() == 1) finishPointLockGestureAfterSuper(event);
 
         if (commitAttempt && prepared) {
             boolean legacyCreated = entities.size() == legacyCountBefore + 1 && selected != null;
@@ -817,6 +1020,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override public void clearAll() {
+        clearPointLockTarget();
+        clearPendingPointLockGesture();
+        blockedLockedPointGesture = false;
         sketchDocument.restoreExternal(java.util.Collections.emptyList(), java.util.Collections.emptySet(), java.util.Collections.emptyList());
         super.clearAll();
         syncMirror("clear");
@@ -971,10 +1177,30 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
+    private boolean selectedHasPointFixed() {
+        if (selected == null) return false;
+        String id = selected.stableId();
+        if (id == null || id.trim().isEmpty()) return false;
+        for (SketchConstraint c : sketchDocument.constraintsForEntity(id)) {
+            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()
+                    && id.equals(c.primaryEntityId)) return true;
+        }
+        return false;
+    }
+
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
-    @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
-    @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
-    @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) { String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out; }
+    @Override public String rotateSelected(float deg) {
+        if (selectedHasPointFixed()) return "Locked point prevents Rotate";
+        String out=super.rotateSelected(deg); syncMirror("rotate"); return out;
+    }
+    @Override public String scaleSelected(float factor) {
+        if (selectedHasPointFixed()) return "Locked point prevents Scale";
+        String out=super.scaleSelected(factor); syncMirror("scale"); return out;
+    }
+    @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) {
+        if (selectedHasPointFixed()) return "Locked point prevents Mirror";
+        String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out;
+    }
     @Override public String arraySelected(int count,float dx,float dy) { String out=super.arraySelected(count,dx,dy); syncMirror("array"); return out; }
 
     @Override public String trimSelectedLines() { String out=super.trimSelectedLines(); syncMirror("trim"); return out; }
@@ -1079,7 +1305,48 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
+    private String toggleActivePointLock() {
+        if (!activePointLockTargetMatchesSelection()) return "Select an endpoint or center point first";
+        String entityId = pointLockTargetEntityId;
+        int pointIndex = pointLockTargetPointIndex;
+        if (!prepareTransactionalSelection("constraint-fixed-point-prepare")) {
+            clearPointLockTarget();
+            return "Select an endpoint or center point first";
+        }
+        if (!sketchDocument.selectionIds().contains(entityId)
+                || modelPoint(sketchDocument.entity(entityId), pointIndex) == null) {
+            clearPointLockTarget();
+            return "Point selection is no longer valid";
+        }
+        boolean shouldLock = !hasPointFixed(entityId, pointIndex);
+        try {
+            if (shouldLock) {
+                SketchConstraint fixed = SketchConstraint.fixedPoint(
+                        UUID.randomUUID().toString(), entityId, pointIndex);
+                sketchDocument.addConstraintsAndSolve(
+                        java.util.Collections.singletonList(fixed), sketchConstraintSolver);
+            } else {
+                ArrayList<String> removeIds = new ArrayList<>();
+                for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
+                    if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()
+                            && entityId.equals(c.primaryEntityId)
+                            && c.primaryPointIndex == pointIndex) removeIds.add(c.id);
+                }
+                if (!removeIds.isEmpty()) sketchDocument.removeConstraints(removeIds);
+            }
+            coreSaveUndo();
+            if (!finishTransactionalMutation("constraint-fixed-point")) {
+                return "Point Lock rollback: parity failed";
+            }
+            invalidate();
+            return (shouldLock ? "Point locked" : "Point unlocked");
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-fixed-point", e);
+        }
+    }
+
     @Override public String toggleSelectedLock() {
+        if (activePointLockTargetMatchesSelection()) return toggleActivePointLock();
         if (!prepareTransactionalSelection("constraint-fixed-prepare")) return "Select geometry first";
         Set<String> ids = sketchDocument.selectionIds();
         if (ids.isEmpty()) return "Select geometry first";
