@@ -207,7 +207,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         SketchSpace s = activeSketch();
         String lockText = s != null && s.locked ? "🔓 text text Sketch text" : "🔒 Lock Sketch text";
         String visText = s != null && s.visible ? "◉ Hide text Sketch text" : "◉ Show Sketch text";
-        String selLock = isSelectionLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";
+        String selLock = isEffectiveSelectionLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";
         String autoText = autoConstraints ? "Auto Constraints: On" : "Auto Constraints: Off";
         String badgeText = showParametricConstraints ? "Show Constraints: On" : "Show Constraints: Off";
         String[] items = {
@@ -297,6 +297,38 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         return false;
     }
 
+    /**
+     * Model-owned whole-entity FIXED is authoritative for interaction, but must
+     * never be copied into the legacy identity map. Reflection keeps this layer
+     * decoupled from the K3 authority subclass while still allowing that subclass
+     * to expose its stable-ID constraint projection through sketchConstraints().
+     */
+    private boolean isModelEntityFixed(Object e) {
+        if (e == null) return false;
+        String entityId = stableEntityId(e);
+        if (entityId.isEmpty()) return false;
+        Object value = call(this, "sketchConstraints");
+        if (!(value instanceof List)) return false;
+        for (Object constraint : (List<?>) value) {
+            Object kind = getObjectField(constraint, "kind");
+            Object primaryId = getObjectField(constraint, "primaryEntityId");
+            if (!"FIXED".equals(String.valueOf(kind)) || !entityId.equals(String.valueOf(primaryId))) continue;
+            if (Boolean.TRUE.equals(call(constraint, "fixesWholeEntity"))) return true;
+        }
+        return false;
+    }
+
+    private boolean isEffectiveEntityLocked(Object e) {
+        return isEntityLocked(e) || isModelEntityFixed(e);
+    }
+
+    private boolean isEffectiveSelectionLocked() {
+        List<Object> sel = selectionObjects();
+        if (sel.isEmpty()) return false;
+        for (Object e : sel) if (isEffectiveEntityLocked(e)) return true;
+        return false;
+    }
+
     private boolean activeSketchLocked() {
         SketchSpace s = activeSketch();
         return s != null && s.locked;
@@ -304,7 +336,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     public boolean canEditExactDimension() {
-        return !isSelectionLocked() && super.canEditExactDimension();
+        return !isEffectiveSelectionLocked() && super.canEditExactDimension();
     }
 
     @Override
@@ -313,7 +345,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (base == null) base = "";
         SketchSpace s = activeSketch();
         String extra = s == null ? "" : " | " + s.name;
-        if (isSelectionLocked()) extra += " | 🔒 Lock";
+        if (isEffectiveSelectionLocked()) extra += " | 🔒 Lock";
         return base + extra;
     }
 
@@ -329,43 +361,49 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     public String beginAnchorMove() {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.beginAnchorMove();
     }
 
     @Override
     public void moveSelected(float dx, float dy) {
-        if (isSelectionLocked()) { toast("Selection Lock text"); return; }
+        if (isEffectiveSelectionLocked()) { toast("Selection Lock text"); return; }
         super.moveSelected(dx, dy);
     }
 
     @Override
     public String rotateSelected(float deg) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.rotateSelected(deg);
     }
 
     @Override
     public String scaleSelected(float factor) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.scaleSelected(factor);
     }
 
     @Override
     public String mirrorSelected(boolean acrossXAxis, float axisValue) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.mirrorSelected(acrossXAxis, axisValue);
     }
 
     @Override
     public String offsetSelected(float distance) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.offsetSelected(distance);
     }
 
     @Override
+    public String arraySelected(int count, float dx, float dy) {
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
+        return super.arraySelected(count, dx, dy);
+    }
+
+    @Override
     public String applySelectedDimension(String raw) {
-        if (isSelectionLocked()) return "Selection Lock text; Dimension Transform text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text; Dimension Transform text";
         return super.applySelectedDimension(raw);
     }
 
@@ -380,31 +418,31 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     @Override
     public String trimSelectedLines() {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.trimSelectedLines();
     }
 
     @Override
     public String extendSelectedLines() {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.extendSelectedLines();
     }
 
     @Override
     public String filletSelectedLines(float radius) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.filletSelectedLines(radius);
     }
 
     @Override
     public String chamferSelectedLines(float distance) {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.chamferSelectedLines(distance);
     }
 
     @Override
     public String joinSelectedLines() {
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         return super.joinSelectedLines();
     }
 
@@ -414,7 +452,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     private boolean canEditAngle() {
         List<Object> lines = selectedLines();
-        return (lines.size() == 1 || lines.size() == 2) && !isSelectionLocked();
+        return (lines.size() == 1 || lines.size() == 2) && !isEffectiveSelectionLocked();
     }
 
     private String angleLabel() {
@@ -427,7 +465,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     private void showAngleEditor() {
         List<Object> lines = selectedLines();
         if (lines.size() != 1 && lines.size() != 2) return;
-        if (isSelectionLocked()) { toast("Selection Lock text"); return; }
+        if (isEffectiveSelectionLocked()) { toast("Selection Lock text"); return; }
         EditText input = new EditText(getContext());
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
@@ -453,7 +491,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     public String setSelectedLineAngle(float degrees) {
         List<Object> lines = selectedLines();
         if (lines.size() != 1) return "text Line text Selection text";
-        if (isSelectionLocked()) return "Line Lock text";
+        if (isEffectiveSelectionLocked()) return "Line Lock text";
         Object line = lines.get(0);
         saveUndo();
         clearDirectionalConstraints(line);
@@ -471,7 +509,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (degrees < 0f || degrees > 180f) return "Angle text text 0 text 180 text";
         List<Object> lines = selectedLines();
         if (lines.size() != 2) return "text Line text Selection text";
-        if (isSelectionLocked()) return "Selection Lock text";
+        if (isEffectiveSelectionLocked()) return "Selection Lock text";
         Object fixed = lines.get(0), moving = lines.get(1);
         saveUndo();
         clearDirectionalConstraints(moving);
@@ -565,7 +603,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                 "⊥ Perpendicular — Perpendicular",
                 "∥ Parallel — Parallel",
                 "● Coincident — text text text text Line",
-                isSelectionLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
+                isEffectiveSelectionLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
                 autoConstraints ? "Auto Constraints — On" : "Auto Constraints — Off",
                 showParametricConstraints ? "Show text Constraints — On" : "Show text Constraints — Off"
         };
@@ -892,7 +930,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         PointF c = selectionCenter(sel);
         if (c == null) return;
         PointF s = worldToScreen(c.x, c.y);
-        String text = isSelectionLocked() ? "🔒 Lock" : "🔓 Unlocked";
+        String text = isEffectiveSelectionLocked() ? "🔒 Lock" : "🔓 Unlocked";
         float w = 105f;
         float left = clamp(s.x + 70f, 10f, Math.max(10f, getWidth() - w - 10f));
         float top = clamp(s.y + 5f, 205f, Math.max(205f, getHeight() - 130f));
@@ -903,7 +941,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     private void drawSelectionLockOutline(Canvas canvas) {
         if (!showParametricConstraints) return;
         for (Object e : entities()) {
-            if (!isEntityLocked(e)) continue;
+            if (!isEffectiveEntityLocked(e)) continue;
             Object b = call(e, "bounds");
             if (!(b instanceof RectF)) continue;
             RectF r = (RectF) b;
@@ -951,13 +989,13 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         if (getTool() == TOOL_SELECT && action == MotionEvent.ACTION_DOWN) {
             float wx = screenToWorldX(sx), wy = screenToWorldY(sy);
             Object hit = findHit(wx, wy);
-            if (isEntityLocked(hit)) {
+            if (isEffectiveEntityLocked(hit)) {
                 selectOnly(hit);
                 lockedGesture = true;
                 toast("text Geometry Lock text; Selection text but Transform text");
                 return true;
             }
-            if (isSelectionLocked()) {
+            if (isEffectiveSelectionLocked()) {
                 PointF c = selectionCenter(selectionObjects());
                 if (c != null) {
                     PointF cs = worldToScreen(c.x, c.y);
