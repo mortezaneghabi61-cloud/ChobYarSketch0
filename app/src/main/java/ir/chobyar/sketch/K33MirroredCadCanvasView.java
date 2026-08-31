@@ -38,9 +38,10 @@ import ir.chobyar.sketch.core.SketchSnapService;
  *
  * K3.4 owns exact/gesture Create, Move, Delete, Copy and transactional history
  * in SketchDocument. K3.5 moves Create snapping into the model. K3.6 moves
- * persistent line constraints/solving out of the legacy View hierarchy.
- * Dimensions, annotations and remaining constraint kinds stay legacy-owned
- * until their dedicated authority slices.
+ * persistent line constraints/solving out of the legacy View hierarchy. K3.10
+ * moves Line DISTANCE, Circle/Arc RADIUS and binary Line ANGLE driving
+ * dimensions into the same model authority. Remaining annotations and
+ * constraint kinds stay legacy-owned until their dedicated authority slices.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private static final float LEGACY_SNAP_RADIUS_PX = 30f;
@@ -377,6 +378,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.COINCIDENT
                     && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
                     && c.kind != SketchConstraint.Kind.MIDPOINT
+                    && c.kind != SketchConstraint.Kind.DISTANCE
+                    && c.kind != SketchConstraint.Kind.RADIUS
+                    && c.kind != SketchConstraint.Kind.ANGLE
                     && c.kind != SketchConstraint.Kind.FIXED) continue;
             constrained.addAll(c.referencedEntityIds());
         }
@@ -1238,21 +1242,103 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
     @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
 
+    private static double parsePositiveDrivingValue(String raw) {
+        if (raw == null) throw new IllegalArgumentException("Dimension value is empty");
+        String normalized = raw.trim().replace(',', '.');
+        if (normalized.isEmpty()) throw new IllegalArgumentException("Dimension value is empty");
+        double value = Double.parseDouble(normalized);
+        if (!SketchGeometry.finite(value) || value <= 0.0) {
+            throw new IllegalArgumentException("Dimension value must be positive and finite");
+        }
+        return value;
+    }
+
     @Override public String applySelectedDimension(String raw) {
         if (!prepareTransactionalSelection("dimension-prepare")) {
             String out=super.applySelectedDimension(raw);
             syncMirror("dimension-fallback");
             return out;
         }
-        for (String id : sketchDocument.selectionIds()) {
-            if (hasWholeFixed(id)) return "Lock prevents driving dimension";
+        if (sketchDocument.selectionIds().size()!=1) {
+            String out=super.applySelectedDimension(raw);
+            syncMirror("dimension-multi-legacy");
+            return out;
         }
-        String out=super.applySelectedDimension(raw);
-        syncMirror("dimension");
+        String id=sketchDocument.selectionIds().iterator().next();
+        SketchEntity entity=sketchDocument.entity(id);
+        if (!(entity instanceof SketchGeometry.Line)
+                && !(entity instanceof SketchGeometry.Circle)
+                && !(entity instanceof SketchGeometry.Arc)) {
+            String out=super.applySelectedDimension(raw);
+            syncMirror("dimension-legacy-type");
+            return out;
+        }
+        if (hasWholeFixed(id)) return "Lock prevents driving dimension";
+        final double entered;
+        try {
+            entered=parsePositiveDrivingValue(raw);
+        } catch (RuntimeException invalid) {
+            String out=super.applySelectedDimension(raw);
+            syncMirror("dimension-invalid-legacy");
+            return out;
+        }
+        try {
+            SketchConstraint driver;
+            String label;
+            if (entity instanceof SketchGeometry.Line) {
+                driver=SketchConstraint.distance(UUID.randomUUID().toString(),id,entered);
+                label="Length";
+            } else if (entity instanceof SketchGeometry.Circle) {
+                // Existing exact-dimension UI is diameter-based for circles.
+                driver=SketchConstraint.radius(UUID.randomUUID().toString(),id,entered*0.5d);
+                label="Diameter";
+            } else {
+                driver=SketchConstraint.radius(UUID.randomUUID().toString(),id,entered);
+                label="Radius";
+            }
+            sketchDocument.setDrivingDimensionAndSolve(driver,sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("dimension-driving")) {
+                return "Driving dimension rollback: parity failed";
+            }
+            return label+" = "+entered+" mm";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("dimension-driving",e);
+        }
+    }
+
+    /** Single-Line absolute angle remains legacy-owned in K3.10 by design. */
+    @Override public String setSelectedLineAngle(float degrees) {
+        String out=super.setSelectedLineAngle(degrees);
+        syncMirror("line-angle");
         return out;
     }
-    @Override public String setSelectedLineAngle(float degrees) { String out=super.setSelectedLineAngle(degrees); syncMirror("line-angle"); return out; }
-    @Override public String setSelectedLinesAngle(float degrees) { String out=super.setSelectedLinesAngle(degrees); syncMirror("lines-angle"); return out; }
+
+    @Override public String setSelectedLinesAngle(float degrees) {
+        if (degrees<0f || degrees>180f || Float.isNaN(degrees) || Float.isInfinite(degrees)) {
+            return super.setSelectedLinesAngle(degrees);
+        }
+        if (!prepareTransactionalSelection("lines-angle-prepare")) {
+            String out=super.setSelectedLinesAngle(degrees);
+            syncMirror("lines-angle-fallback");
+            return out;
+        }
+        List<String> ids=selectedModelLineIds();
+        if (ids.size()!=2) return "Select exactly two lines for Angle";
+        try {
+            SketchConstraint driver=SketchConstraint.angle(UUID.randomUUID().toString(),ids.get(0),ids.get(1),degrees);
+            sketchDocument.setDrivingDimensionAndSolve(driver,sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("lines-angle-driving")) {
+                return "Angle dimension rollback: parity failed";
+            }
+            return "Angle between lines = "+degrees+"°";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("lines-angle-driving",e);
+        }
+    }
 
     @Override public String applyHorizontalVerticalConstraint() {
         if (!prepareTransactionalSelection("constraint-hv-prepare")) return "Select one or more lines for H/V";
