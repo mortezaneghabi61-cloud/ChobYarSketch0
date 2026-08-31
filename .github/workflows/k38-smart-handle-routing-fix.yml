@@ -1,0 +1,106 @@
+name: K3.8 Smart Handle Routing Fix
+
+on:
+  push:
+    branches:
+      - k3-8-point-lock-interaction-ready
+    paths:
+      - '.github/workflows/k38-smart-handle-routing-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: k3-8-point-lock-interaction-ready
+
+      - name: Verify guarded parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='dec63e15083de89b7a70a1175d53270e2af7470b'
+          actual="$(git rev-parse HEAD^)"
+          echo "K38_ROUTING_PARENT expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
+
+      - name: Patch Smart selected-handle routing
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java')
+          s = p.read_text()
+
+          old = '''        if (action == MotionEvent.ACTION_DOWN) {
+            boxStartX = boxEndX = event.getX();
+            boxStartY = boxEndY = event.getY();
+            Object hit = coreFindHit(wx, wy);
+'''
+          new = '''        if (action == MotionEvent.ACTION_DOWN) {
+            boxStartX = boxEndX = event.getX();
+            boxStartY = boxEndY = event.getY();
+
+            // A selected control handle is a stronger interaction target than the
+            // primitive body. Arc centers are intentionally off-curve, so body-hit
+            // testing alone would misclassify a center tap as empty-space selection
+            // and clear the selection before higher model-authority layers can commit
+            // endpoint/center intent. Route existing handles to CadCanvasView first.
+            if (selectedControlHandleHit(wx, wy)) {
+                selectionBoxCandidate = false;
+                selectionBoxActive = false;
+                pendingTapHit = null;
+                boolean handled = super.onTouchEvent(event);
+                syncSelectionFromBase();
+                return handled;
+            }
+
+            Object hit = coreFindHit(wx, wy);
+'''
+          if s.count(old) != 1:
+              raise SystemExit(f'ACTION_DOWN anchor count={s.count(old)}')
+          s = s.replace(old, new, 1)
+
+          old2 = '''    private Object baseSelected() { return selected; }
+
+    private void setBaseSelected(Object value) {
+'''
+          new2 = '''    private Object baseSelected() { return selected; }
+
+    private boolean selectedControlHandleHit(float wx, float wy) {
+        Object current = baseSelected();
+        if (!(current instanceof Entity)) return false;
+        float radius = 18f / (PX_PER_MM * Math.max(.02f, viewScale()));
+        float radius2 = radius * radius;
+        List<ControlPoint> points = ((Entity) current).controlPoints();
+        if (points == null) return false;
+        for (ControlPoint point : points) {
+            if (point == null) continue;
+            float dx = wx - point.x;
+            float dy = wy - point.y;
+            if (dx * dx + dy * dy <= radius2) return true;
+        }
+        return false;
+    }
+
+    private void setBaseSelected(Object value) {
+'''
+          if s.count(old2) != 1:
+              raise SystemExit(f'helper anchor count={s.count(old2)}')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s)
+
+      - name: Commit source fix and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/k38-smart-handle-routing-fix.yml
+          git add app/src/main/java/ir/chobyar/sketch/SmartCadCanvasView.java
+          git diff --cached --check
+          git config user.name 'chobyar-k38-routing'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'K3.8 interaction: prioritize selected control handles before body hit'
+          git push origin HEAD:k3-8-point-lock-interaction-ready
