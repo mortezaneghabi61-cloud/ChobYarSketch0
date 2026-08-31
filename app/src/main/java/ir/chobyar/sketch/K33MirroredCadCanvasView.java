@@ -349,15 +349,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
         if (value instanceof SketchGeometry.Arc) {
             SketchGeometry.Arc solved = (SketchGeometry.Arc) value;
-            double startRad = Math.toRadians(solved.startDeg);
-            double endRad = Math.toRadians(solved.startDeg + solved.sweepDeg);
-            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);
-            legacy.moveControlPoint(1,
-                    (float) (solved.center.xMm + Math.cos(startRad) * solved.radiusMm),
-                    (float) (solved.center.yMm + Math.sin(startRad) * solved.radiusMm));
-            legacy.moveControlPoint(2,
-                    (float) (solved.center.xMm + Math.cos(endRad) * solved.radiusMm),
-                    (float) (solved.center.yMm + Math.sin(endRad) * solved.radiusMm));
+            if (!coreUpdateReferenceArc(legacy,
+                    (float) solved.center.xMm, (float) solved.center.yMm,
+                    (float) solved.radiusMm, (float) solved.startDeg, (float) solved.sweepDeg)) {
+                throw new IllegalStateException("Arc authority replay target mismatch: " + solved.id());
+            }
         }
     }
 
