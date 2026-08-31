@@ -1,0 +1,127 @@
+name: K3.8 Point Lock Interaction Patch
+
+on:
+  push:
+    branches: [k3-8-point-lock-interaction-ready]
+    paths:
+      - .github/workflows/k38-point-lock-interaction-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify one-shot parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "a1211076848147ef2373b570d6782e0d29347557"
+      - name: Apply guarded interaction patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          k33 = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          p = Path('app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java')
+          s = k33.read_text()
+          q = p.read_text()
+
+          def once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
+              return text.replace(old, new, 1)
+
+          s = once(s,
+              'import ir.chobyar.sketch.core.LegacySketchStateBridge;\n',
+              'import ir.chobyar.sketch.core.LegacySketchStateBridge;\nimport ir.chobyar.sketch.core.PointLockInteractionMapping;\n',
+              'point-lock import')
+
+          s = once(s,
+              '    private ConstraintAnchorPolicy constraintAnchorPolicy = ConstraintAnchorPolicy.FIRST_SELECTED;\n',
+              '''    private ConstraintAnchorPolicy constraintAnchorPolicy = ConstraintAnchorPolicy.FIRST_SELECTED;\n    private static final float POINT_LOCK_HANDLE_RADIUS_PX = 18f;\n    private static final float POINT_LOCK_DRAG_SLOP_PX = 3f;\n    private String pointLockTargetEntityId;\n    private int pointLockTargetPointIndex = -1;\n    private String pendingPointLockEntityId;\n    private int pendingPointLockPointIndex = -1;\n    private float pendingPointLockDownX;\n    private float pendingPointLockDownY;\n    private boolean pendingPointLockMoved;\n    private boolean blockedLockedPointGesture;\n''',
+              'point-lock fields')
+
+          start = s.index('    private void replaySolvedLineGeometryToLegacy() {')
+          end = s.index('    @Override protected boolean isModelEndpointConstraintAuthorityEnabled()', start)
+          replacement = '''    private SketchGeometry.Point modelPoint(SketchEntity entity, int pointIndex) {\n        if (entity instanceof SketchGeometry.Line) {\n            SketchGeometry.Line line = (SketchGeometry.Line) entity;\n            if (pointIndex == 0) return line.a;\n            if (pointIndex == 1) return line.b;\n            return null;\n        }\n        if (pointIndex == 0 && entity instanceof SketchGeometry.Circle) {\n            return ((SketchGeometry.Circle) entity).center;\n        }\n        if (pointIndex == 0 && entity instanceof SketchGeometry.Arc) {\n            return ((SketchGeometry.Arc) entity).center;\n        }\n        return null;\n    }\n\n    private void replayModelEntityToLegacy(SketchEntity value) {\n        if (value == null) return;\n        Entity legacy = legacyEntityByStableId(value.id());\n        if (legacy == null) return;\n        if (value instanceof SketchGeometry.Line) {\n            SketchGeometry.Line solved = (SketchGeometry.Line) value;\n            legacy.moveControlPoint(0, (float) solved.a.xMm, (float) solved.a.yMm);\n            legacy.moveControlPoint(1, (float) solved.b.xMm, (float) solved.b.yMm);\n            return;\n        }\n        if (value instanceof SketchGeometry.Circle) {\n            SketchGeometry.Circle solved = (SketchGeometry.Circle) value;\n            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);\n            legacy.moveControlPoint(1, (float) (solved.center.xMm + solved.radiusMm),\n                    (float) solved.center.yMm);\n            return;\n        }\n        if (value instanceof SketchGeometry.Arc) {\n            SketchGeometry.Arc solved = (SketchGeometry.Arc) value;\n            double startRad = Math.toRadians(solved.startDeg);\n            double endRad = Math.toRadians(solved.startDeg + solved.sweepDeg);\n            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);\n            legacy.moveControlPoint(1,\n                    (float) (solved.center.xMm + Math.cos(startRad) * solved.radiusMm),\n                    (float) (solved.center.yMm + Math.sin(startRad) * solved.radiusMm));\n            legacy.moveControlPoint(2,\n                    (float) (solved.center.xMm + Math.cos(endRad) * solved.radiusMm),\n                    (float) (solved.center.yMm + Math.sin(endRad) * solved.radiusMm));\n        }\n    }\n\n    private void replaySolvedLineGeometryToLegacy() {\n        for (SketchEntity value : sketchDocument.entities()) replayModelEntityToLegacy(value);\n        invalidate();\n    }\n\n    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {\n        LinkedHashSet<String> constrained = new LinkedHashSet<>();\n        for (SketchConstraint c : sketchDocument.constraints()) {\n            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()) {\n                // Point-FIXED is guarded before legacy handle mutation. Do not replay the\n                // whole primitive here: the remaining degrees of freedom must stay editable.\n                continue;\n            }\n            if (c.kind != SketchConstraint.Kind.HORIZONTAL\n                    && c.kind != SketchConstraint.Kind.VERTICAL\n                    && c.kind != SketchConstraint.Kind.PARALLEL\n                    && c.kind != SketchConstraint.Kind.PERPENDICULAR\n                    && c.kind != SketchConstraint.Kind.COINCIDENT\n                    && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY\n                    && c.kind != SketchConstraint.Kind.MIDPOINT\n                    && c.kind != SketchConstraint.Kind.FIXED) continue;\n            constrained.addAll(c.referencedEntityIds());\n        }\n        for (String id : constrained) replayModelEntityToLegacy(sketchDocument.entity(id));\n    }\n\n'''
+          s = s[:start] + replacement + s[end:]
+
+          touch_anchor = '    @Override public boolean onTouchEvent(MotionEvent event) {\n'
+          point_helpers = '''    private boolean hasPointFixed(String entityId, int pointIndex) {\n        if (entityId == null || pointIndex < 0) return false;\n        for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {\n            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()\n                    && entityId.equals(c.primaryEntityId) && c.primaryPointIndex == pointIndex) return true;\n        }\n        return false;\n    }\n\n    private boolean activePointLockTargetMatchesSelection() {\n        if (pointLockTargetEntityId == null || pointLockTargetPointIndex < 0 || selected == null) return false;\n        if (!pointLockTargetEntityId.equals(selected.stableId())) return false;\n        return modelPoint(sketchDocument.entity(pointLockTargetEntityId), pointLockTargetPointIndex) != null;\n    }\n\n    @Override protected boolean hasModelPointLockTarget() {\n        return activePointLockTargetMatchesSelection();\n    }\n\n    @Override protected boolean isModelPointLockTargetLocked() {\n        return activePointLockTargetMatchesSelection()\n                && hasPointFixed(pointLockTargetEntityId, pointLockTargetPointIndex);\n    }\n\n    @Override protected PointF modelPointLockTargetWorld() {\n        if (!activePointLockTargetMatchesSelection()) return null;\n        SketchGeometry.Point point = modelPoint(sketchDocument.entity(pointLockTargetEntityId),\n                pointLockTargetPointIndex);\n        return point == null ? null : new PointF((float) point.xMm, (float) point.yMm);\n    }\n\n    public String pointLockTargetEntityId() {\n        return activePointLockTargetMatchesSelection() ? pointLockTargetEntityId : \"\";\n    }\n\n    public int pointLockTargetPointIndex() {\n        return activePointLockTargetMatchesSelection() ? pointLockTargetPointIndex : -1;\n    }\n\n    public boolean pointLockTargetLocked() {\n        return isModelPointLockTargetLocked();\n    }\n\n    private void clearPointLockTarget() {\n        pointLockTargetEntityId = null;\n        pointLockTargetPointIndex = -1;\n    }\n\n    private void clearPendingPointLockGesture() {\n        pendingPointLockEntityId = null;\n        pendingPointLockPointIndex = -1;\n        pendingPointLockMoved = false;\n    }\n\n    private int selectedControlHandleAt(MotionEvent event) {\n        if (event == null || selected == null || event.getPointerCount() != 1) return -1;\n        List<ControlPoint> points = selected.controlPoints();\n        if (points == null || points.isEmpty()) return -1;\n        float bestDistance2 = POINT_LOCK_HANDLE_RADIUS_PX * POINT_LOCK_HANDLE_RADIUS_PX;\n        int best = -1;\n        for (int i = 0; i < points.size(); i++) {\n            ControlPoint point = points.get(i);\n            float dx = event.getX() - screenX(point.x);\n            float dy = event.getY() - screenY(point.y);\n            float d2 = dx * dx + dy * dy;\n            if (d2 <= bestDistance2) {\n                bestDistance2 = d2;\n                best = i;\n            }\n        }\n        return best;\n    }\n\n    private boolean beginPointLockGesture(MotionEvent event) {\n        clearPendingPointLockGesture();\n        blockedLockedPointGesture = false;\n        if (selected == null) { clearPointLockTarget(); return false; }\n        int handle = selectedControlHandleAt(event);\n        String entityId = selected.stableId();\n        SketchEntity model = sketchDocument.entity(entityId);\n        int pointIndex = model == null ? -1\n                : PointLockInteractionMapping.modelPointIndex(model.kind(), handle);\n        if (pointIndex < 0) { clearPointLockTarget(); return false; }\n        clearPointLockTarget();\n        pendingPointLockEntityId = entityId;\n        pendingPointLockPointIndex = pointIndex;\n        pendingPointLockDownX = event.getX();\n        pendingPointLockDownY = event.getY();\n        if (hasPointFixed(entityId, pointIndex)) {\n            pointLockTargetEntityId = entityId;\n            pointLockTargetPointIndex = pointIndex;\n            blockedLockedPointGesture = true;\n            invalidate();\n            return true;\n        }\n        return false;\n    }\n\n    private void updatePendingPointLockGesture(MotionEvent event) {\n        if (pendingPointLockEntityId == null || event == null) return;\n        float dx = event.getX() - pendingPointLockDownX;\n        float dy = event.getY() - pendingPointLockDownY;\n        if (dx * dx + dy * dy > POINT_LOCK_DRAG_SLOP_PX * POINT_LOCK_DRAG_SLOP_PX) {\n            pendingPointLockMoved = true;\n        }\n    }\n\n    private boolean consumeBlockedPointLockGesture(MotionEvent event) {\n        updatePendingPointLockGesture(event);\n        int action = event.getActionMasked();\n        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {\n            blockedLockedPointGesture = false;\n            clearPendingPointLockGesture();\n            invalidate();\n        }\n        return true;\n    }\n\n    private void finishPointLockGestureAfterSuper(MotionEvent event) {\n        if (pendingPointLockEntityId == null || event == null) return;\n        int action = event.getActionMasked();\n        if (action == MotionEvent.ACTION_MOVE) {\n            updatePendingPointLockGesture(event);\n            return;\n        }\n        if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) return;\n        if (action == MotionEvent.ACTION_UP && !pendingPointLockMoved && selected != null\n                && pendingPointLockEntityId.equals(selected.stableId())) {\n            pointLockTargetEntityId = pendingPointLockEntityId;\n            pointLockTargetPointIndex = pendingPointLockPointIndex;\n        } else if (pendingPointLockMoved) {\n            clearPointLockTarget();\n        }\n        clearPendingPointLockGesture();\n        invalidate();\n    }\n\n'''
+          s = once(s, touch_anchor, point_helpers + touch_anchor, 'point-lock helpers')
+
+          s = once(s,
+              '        int legacyCountBefore = entities.size();\n        boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);\n',
+              '''        int legacyCountBefore = entities.size();\n        if (toolBefore == TOOL_SELECT && event.getPointerCount() == 1) {\n            if (action == MotionEvent.ACTION_DOWN && beginPointLockGesture(event)) return true;\n            if (blockedLockedPointGesture) return consumeBlockedPointLockGesture(event);\n            if (action == MotionEvent.ACTION_MOVE) updatePendingPointLockGesture(event);\n        }\n        boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);\n''',
+              'touch pre-gate')
+
+          s = once(s,
+              '        if (commitAttempt && prepared) {\n',
+              '        if (toolBefore == TOOL_SELECT && event.getPointerCount() == 1) finishPointLockGestureAfterSuper(event);\n\n        if (commitAttempt && prepared) {\n',
+              'touch finalize')
+
+          s = once(s,
+              '    @Override public void clearAll() {\n        sketchDocument.restoreExternal',
+              '    @Override public void clearAll() {\n        clearPointLockTarget();\n        clearPendingPointLockGesture();\n        blockedLockedPointGesture = false;\n        sketchDocument.restoreExternal',
+              'clear point target')
+
+          s = once(s,
+              '    @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }\n    @Override public String rotateSelected(float deg) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }\n    @Override public String scaleSelected(float factor) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }\n    @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) { String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out; }\n',
+              '''    private boolean selectedHasPointFixed() {\n        if (selected == null) return false;\n        String id = selected.stableId();\n        if (id == null || id.trim().isEmpty()) return false;\n        for (SketchConstraint c : sketchDocument.constraintsForEntity(id)) {\n            if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()\n                    && id.equals(c.primaryEntityId)) return true;\n        }\n        return false;\n    }\n\n    @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }\n    @Override public String rotateSelected(float deg) {\n        if (selectedHasPointFixed()) return "Locked point prevents Rotate";\n        String out=super.rotateSelected(deg); syncMirror("rotate"); return out;\n    }\n    @Override public String scaleSelected(float factor) {\n        if (selectedHasPointFixed()) return "Locked point prevents Scale";\n        String out=super.scaleSelected(factor); syncMirror("scale"); return out;\n    }\n    @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) {\n        if (selectedHasPointFixed()) return "Locked point prevents Mirror";\n        String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out;\n    }\n''',
+              'point transform guards')
+
+          toggle_anchor = '    @Override public String toggleSelectedLock() {\n        if (!prepareTransactionalSelection("constraint-fixed-prepare")) return "Select geometry first";\n'
+          toggle_helpers = '''    private String toggleActivePointLock() {\n        if (!activePointLockTargetMatchesSelection()) return "Select an endpoint or center point first";\n        String entityId = pointLockTargetEntityId;\n        int pointIndex = pointLockTargetPointIndex;\n        if (!prepareTransactionalSelection("constraint-fixed-point-prepare")) {\n            clearPointLockTarget();\n            return "Select an endpoint or center point first";\n        }\n        if (!sketchDocument.selectionIds().contains(entityId)\n                || modelPoint(sketchDocument.entity(entityId), pointIndex) == null) {\n            clearPointLockTarget();\n            return "Point selection is no longer valid";\n        }\n        boolean shouldLock = !hasPointFixed(entityId, pointIndex);\n        try {\n            if (shouldLock) {\n                SketchConstraint fixed = SketchConstraint.fixedPoint(\n                        UUID.randomUUID().toString(), entityId, pointIndex);\n                sketchDocument.addConstraintsAndSolve(\n                        java.util.Collections.singletonList(fixed), sketchConstraintSolver);\n            } else {\n                ArrayList<String> removeIds = new ArrayList<>();\n                for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {\n                    if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()\n                            && entityId.equals(c.primaryEntityId)\n                            && c.primaryPointIndex == pointIndex) removeIds.add(c.id);\n                }\n                if (!removeIds.isEmpty()) sketchDocument.removeConstraints(removeIds);\n            }\n            coreSaveUndo();\n            if (!finishTransactionalMutation("constraint-fixed-point")) {\n                return "Point Lock rollback: parity failed";\n            }\n            invalidate();\n            return (shouldLock ? "Point locked" : "Point unlocked");\n        } catch (RuntimeException e) {\n            return modelConstraintFailure("constraint-fixed-point", e);\n        }\n    }\n\n'''
+          s = once(s, toggle_anchor,
+              toggle_helpers + '    @Override public String toggleSelectedLock() {\n        if (activePointLockTargetMatchesSelection()) return toggleActivePointLock();\n        if (!prepareTransactionalSelection("constraint-fixed-prepare")) return "Select geometry first";\n',
+              'point toggle')
+
+          draw_anchor = '        for (SketchConstraint constraint : sketchDocument.constraints()) {\n            SketchEntity primary = sketchDocument.entity(constraint.primaryEntityId);\n'
+          s = once(s, draw_anchor,
+              '''        for (SketchConstraint constraint : sketchDocument.constraints()) {\n            SketchEntity primary = sketchDocument.entity(constraint.primaryEntityId);\n            if (constraint.kind == SketchConstraint.Kind.FIXED && constraint.fixesPoint()) {\n                SketchGeometry.Point locked = modelPoint(primary, constraint.primaryPointIndex);\n                if (locked != null) {\n                    float px = screenX(locked.xMm);\n                    float py = screenY(locked.yMm);\n                    float rr = 6f * getResources().getDisplayMetrics().density;\n                    canvas.drawCircle(px, py, rr, modelConstraintPaint);\n                    canvas.drawText("🔒", px + rr + 4f, py - rr, modelConstraintTextPaint);\n                }\n                continue;\n            }\n''',
+              'point lock visual')
+
+          # Parametric UI: point target controls the Lock/Unlock presentation without turning the whole entity into locked state.
+          q = once(q,
+              '        String selLock = isEffectiveSelectionLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";\n',
+              '        String selLock = lockUiShowsLocked() ? "🔓 text text Selection" : "🔒 Lock Selection";\n',
+              'sketch manager lock label')
+          q = once(q,
+              '                isEffectiveSelectionLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",\n',
+              '                lockUiShowsLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",\n',
+              'constraints lock label')
+          q = once(q,
+              '''    private boolean isEffectiveSelectionLocked() {\n        List<Object> sel = selectionObjects();\n        if (sel.isEmpty()) return false;\n        for (Object e : sel) if (isEffectiveEntityLocked(e)) return true;\n        return false;\n    }\n''',
+              '''    private boolean isEffectiveSelectionLocked() {\n        List<Object> sel = selectionObjects();\n        if (sel.isEmpty()) return false;\n        for (Object e : sel) if (isEffectiveEntityLocked(e)) return true;\n        return false;\n    }\n\n    /** Point-level Lock UI seam; K33 overrides this without leaking model state into identity maps. */\n    protected boolean hasModelPointLockTarget() { return false; }\n    protected boolean isModelPointLockTargetLocked() { return false; }\n    protected PointF modelPointLockTargetWorld() { return null; }\n\n    private boolean lockUiShowsLocked() {\n        return hasModelPointLockTarget() ? isModelPointLockTargetLocked() : isEffectiveSelectionLocked();\n    }\n''',
+              'point lock UI seam')
+          q = once(q,
+              '        if (isEffectiveSelectionLocked()) extra += " | 🔒 Lock";\n',
+              '        if (lockUiShowsLocked()) extra += " | 🔒 Lock";\n',
+              'selected info point lock')
+          q = once(q,
+              '''        PointF c = selectionCenter(sel);\n        if (c == null) return;\n        PointF s = worldToScreen(c.x, c.y);\n        String text = isEffectiveSelectionLocked() ? "🔒 Lock" : "🔓 Unlocked";\n''',
+              '''        PointF c = hasModelPointLockTarget() ? modelPointLockTargetWorld() : selectionCenter(sel);\n        if (c == null) return;\n        PointF s = worldToScreen(c.x, c.y);\n        String text;\n        if (hasModelPointLockTarget()) text = lockUiShowsLocked() ? "🔒 Point" : "🔓 Point";\n        else text = lockUiShowsLocked() ? "🔒 Lock" : "🔓 Unlocked";\n''',
+              'lock chip point context')
+
+          k33.write_text(s)
+          p.write_text(q)
+          PY
+          git diff --check
+      - name: Remove one-shot workflow and commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chobyar-k38-patch"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/k38-point-lock-interaction-patch.yml
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java
+          git diff --cached --check
+          git commit -m "K3.8 interaction: route endpoint and center Lock to model FIXED"
+          git push origin HEAD:k3-8-point-lock-interaction-ready
