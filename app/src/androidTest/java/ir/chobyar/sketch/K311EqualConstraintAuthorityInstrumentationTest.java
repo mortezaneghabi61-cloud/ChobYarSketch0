@@ -27,7 +27,7 @@ import ir.chobyar.sketch.core.SketchConstraint;
 import ir.chobyar.sketch.core.SketchEntity;
 import ir.chobyar.sketch.core.SketchGeometry;
 
-/** K3.11 API35 fence: Equal must be model-owned across interaction/history/persistence. */
+/** K3.11 API35 fence: Equal is model-owned and rendering is presentation-only. */
 @RunWith(AndroidJUnit4.class)
 public final class K311EqualConstraintAuthorityInstrumentationTest {
 
@@ -45,8 +45,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             double drivenBefore = ((SketchGeometry.Line) entity(cad, drivenId)).lengthMm();
             selectTwo(cad, referenceLegacy, drivenLegacy);
 
-            String result = applyEqual(cad);
-            assertEquals("Equal applied", result);
+            assertEquals("Equal applied", applyEqual(cad));
             cad.requireSketchMirrorParity();
             SketchConstraint equal = singleEqual(cad, referenceId, drivenId);
             assertTrue(equal.driving);
@@ -80,8 +79,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             SketchGeometry.Arc before = (SketchGeometry.Arc) entity(cad, arcId);
             selectTwo(cad, circleLegacy, arcLegacy);
 
-            String result = applyEqual(cad);
-            assertEquals("Equal applied", result);
+            assertEquals("Equal applied", applyEqual(cad));
             cad.requireSketchMirrorParity();
             SketchGeometry.Circle circle = (SketchGeometry.Circle) entity(cad, circleId);
             SketchGeometry.Arc arc = (SketchGeometry.Arc) entity(cad, arcId);
@@ -105,8 +103,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             CadCanvasView.Entity drivenLegacy = cad.selected;
             String drivenId = drivenLegacy.stableId();
             selectTwo(cad, referenceLegacy, drivenLegacy);
-            String result = applyEqual(cad);
-            assertEquals("Equal applied", result);
+            assertEquals("Equal applied", applyEqual(cad));
             cad.requireSketchMirrorParity();
             String saved = cad.exportSketchProjectState();
 
@@ -120,143 +117,77 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
         });
     }
 
-    @Test public void drawRepairsOnlyEqualOwnedLegacyGeometryWithoutMutatingModel() throws Exception {
+    @Test public void drawNeverRepairsEqualLegacyProjectionOrMutatesModelAuthority() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad = cad();
             cad.executeCommand("LINE 0 0 50 0");
-            CadCanvasView.Entity referenceLegacy = cad.selected;
+            CadCanvasView.LineEntity referenceLegacy = (CadCanvasView.LineEntity) cad.selected;
             String referenceId = referenceLegacy.stableId();
             cad.executeCommand("LINE 10 20 30 40");
-            CadCanvasView.Entity drivenLegacy = cad.selected;
+            CadCanvasView.LineEntity drivenLegacy = (CadCanvasView.LineEntity) cad.selected;
             String drivenId = drivenLegacy.stableId();
-            cad.executeCommand("LINE 80 10 105 35");
-            CadCanvasView.LineEntity freeLegacy = (CadCanvasView.LineEntity) cad.selected;
-            String freeId = freeLegacy.stableId();
-            cad.executeCommand("LINE 120 15 150 35");
-            CadCanvasView.LineEntity pointFixedLegacy = (CadCanvasView.LineEntity) cad.selected;
-            String pointFixedId = pointFixedLegacy.stableId();
-            cad.setTool(CadCanvasView.TOOL_SELECT);
-            tap(cad, screenX(cad, 120), screenY(cad, 15));
-            assertEquals(pointFixedId, cad.pointLockTargetEntityId());
-            assertEquals(0, cad.pointLockTargetPointIndex());
-            assertEquals("Point locked", cad.toggleSelectedLock());
-
-            cad.executeCommand("LINE 160 15 190 35");
-            CadCanvasView.LineEntity fixedEqualLegacy = (CadCanvasView.LineEntity) cad.selected;
-            String fixedEqualId = fixedEqualLegacy.stableId();
-            cad.setTool(CadCanvasView.TOOL_SELECT);
-            tap(cad, screenX(cad, 190), screenY(cad, 35));
-            assertEquals(fixedEqualId, cad.pointLockTargetEntityId());
-            assertEquals(1, cad.pointLockTargetPointIndex());
-            assertEquals("Point locked", cad.toggleSelectedLock());
-            selectTwo(cad, fixedEqualLegacy, referenceLegacy);
+            selectTwo(cad, referenceLegacy, drivenLegacy);
             assertEquals("Equal applied", applyEqual(cad));
 
             cad.executeCommand("CIRCLE 200 40 18");
             CadCanvasView.Entity circleLegacy = cad.selected;
+            String circleId = circleLegacy.stableId();
             cad.executeCommand("ARC 250 50 7 25 120");
             CadCanvasView.Entity arcLegacy = cad.selected;
             String arcId = arcLegacy.stableId();
             selectTwo(cad, circleLegacy, arcLegacy);
             assertEquals("Equal applied", applyEqual(cad));
-            selectTwo(cad, referenceLegacy, drivenLegacy);
-            assertEquals("Equal applied", applyEqual(cad));
             cad.requireSketchMirrorParity();
 
-            SketchGeometry.Line referenceModel = line(cad, referenceId);
-            SketchGeometry.Line drivenModel = line(cad, drivenId);
-            SketchGeometry.Line freeModel = line(cad, freeId);
-            SketchGeometry.Line pointFixedModel = line(cad, pointFixedId);
-            SketchGeometry.Line fixedEqualModel = line(cad, fixedEqualId);
-            SketchGeometry.Arc arcModel = (SketchGeometry.Arc) entity(cad, arcId);
-            double[] referenceTruth = coordinates(referenceModel);
-            double[] drivenTruth = coordinates(drivenModel);
-            double[] freeTruth = coordinates(freeModel);
-            double[] pointFixedTruth = coordinates(pointFixedModel);
-            double[] fixedEqualTruth = coordinates(fixedEqualModel);
-            double[] arcTruth = arcCoordinates(arcModel);
+            double[] referenceTruth = coordinates(line(cad, referenceId));
+            double[] drivenTruth = coordinates(line(cad, drivenId));
+            double[] circleTruth = circleCoordinates((SketchGeometry.Circle) entity(cad, circleId));
+            double[] arcTruth = arcCoordinates((SketchGeometry.Arc) entity(cad, arcId));
+            int equalCountBefore = countEqual(cad);
+            int legacyTruthBefore = cad.legacyMigratedConstraintTruthCount();
+            boolean undoBefore = cad.sketchAuthorityCanUndo();
+            boolean redoBefore = cad.sketchAuthorityCanRedo();
+            long transitionsBefore = cad.sketchAuthorityTransitionCount();
+            List<String> idsBefore = stableIds(cad);
 
-            CadCanvasView.LineEntity equalLegacy = (CadCanvasView.LineEntity) drivenLegacy;
-            equalLegacy.x1 = 311f;
-            equalLegacy.y1 = 312f;
-            equalLegacy.x2 = 314f;
-            equalLegacy.y2 = 316f;
-            freeLegacy.x1 = 411f;
-            freeLegacy.y1 = 412f;
-            freeLegacy.x2 = 413f;
-            freeLegacy.y2 = 414f;
-            pointFixedLegacy.x2 = 511f;
-            pointFixedLegacy.y2 = 512f;
-
-            float fixedEqualEndX = fixedEqualLegacy.x2;
-            float fixedEqualEndY = fixedEqualLegacy.y2;
-            fixedEqualLegacy.x1 = fixedEqualEndX - 6f;
-            fixedEqualLegacy.y1 = fixedEqualEndY - 8f;
-            double fixedEqualPerturbedLength = Math.hypot(
-                    fixedEqualLegacy.x2 - fixedEqualLegacy.x1,
-                    fixedEqualLegacy.y2 - fixedEqualLegacy.y1);
-            double fixedEqualDirectionX = (fixedEqualLegacy.x2 - fixedEqualLegacy.x1)
-                    / fixedEqualPerturbedLength;
-            double fixedEqualDirectionY = (fixedEqualLegacy.y2 - fixedEqualLegacy.y1)
-                    / fixedEqualPerturbedLength;
+            drivenLegacy.x1 = 311f;
+            drivenLegacy.y1 = 312f;
+            drivenLegacy.x2 = 314f;
+            drivenLegacy.y2 = 316f;
+            float[] drivenDrift = new float[]{drivenLegacy.x1, drivenLegacy.y1, drivenLegacy.x2, drivenLegacy.y2};
 
             arcLegacy.translate(13f, -9f);
-            double[] perturbedArc = arcSignature(arcLegacy);
+            double[] arcDrift0 = arcSignature(arcLegacy);
             arcLegacy.moveControlPoint(1,
-                    (float) (perturbedArc[0] + perturbedArc[3] * 6.0),
-                    (float) (perturbedArc[1] + perturbedArc[4] * 6.0));
-            arcLegacy.rotate((float) perturbedArc[0], (float) perturbedArc[1], 17f);
-            perturbedArc = arcSignature(arcLegacy);
+                    (float) (arcDrift0[0] + arcDrift0[3] * 6.0),
+                    (float) (arcDrift0[1] + arcDrift0[4] * 6.0));
+            arcLegacy.rotate((float) arcDrift0[0], (float) arcDrift0[1], 17f);
+            double[] arcDrift = arcSignature(arcLegacy);
 
             Bitmap bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
             cad.onDraw(new Canvas(bitmap));
 
-            assertEquals(311f, equalLegacy.x1, 0f);
-            assertEquals(312f, equalLegacy.y1, 0f);
-            assertEquals(3.0 / 5.0,
-                    (equalLegacy.x2 - equalLegacy.x1) / drivenModel.lengthMm(), 1.0e-5);
-            assertEquals(4.0 / 5.0,
-                    (equalLegacy.y2 - equalLegacy.y1) / drivenModel.lengthMm(), 1.0e-5);
-            assertEquals(drivenModel.lengthMm(), Math.hypot(
-                    equalLegacy.x2 - equalLegacy.x1, equalLegacy.y2 - equalLegacy.y1), 1.0e-5);
-            assertEquals(411f, freeLegacy.x1, 0f);
-            assertEquals(412f, freeLegacy.y1, 0f);
-            assertEquals(413f, freeLegacy.x2, 0f);
-            assertEquals(414f, freeLegacy.y2, 0f);
-            assertEquals(511f, pointFixedLegacy.x2, 0f);
-            assertEquals(512f, pointFixedLegacy.y2, 0f);
-
-            assertEquals("Equal draw replay must not move a fixed endpoint",
-                    fixedEqualEndX, fixedEqualLegacy.x2, 0f);
-            assertEquals("Equal draw replay must not move a fixed endpoint",
-                    fixedEqualEndY, fixedEqualLegacy.y2, 0f);
-            double fixedEqualRepairedLength = Math.hypot(
-                    fixedEqualLegacy.x2 - fixedEqualLegacy.x1,
-                    fixedEqualLegacy.y2 - fixedEqualLegacy.y1);
-            assertEquals(fixedEqualModel.lengthMm(), fixedEqualRepairedLength, 1.0e-5);
-            assertEquals(fixedEqualDirectionX,
-                    (fixedEqualLegacy.x2 - fixedEqualLegacy.x1) / fixedEqualRepairedLength, 1.0e-6);
-            assertEquals(fixedEqualDirectionY,
-                    (fixedEqualLegacy.y2 - fixedEqualLegacy.y1) / fixedEqualRepairedLength, 1.0e-6);
+            assertEquals("onDraw must not repair Equal line x1", drivenDrift[0], drivenLegacy.x1, 0f);
+            assertEquals("onDraw must not repair Equal line y1", drivenDrift[1], drivenLegacy.y1, 0f);
+            assertEquals("onDraw must not repair Equal line x2", drivenDrift[2], drivenLegacy.x2, 0f);
+            assertEquals("onDraw must not repair Equal line y2", drivenDrift[3], drivenLegacy.y2, 0f);
+            assertArraySame("onDraw must not repair Equal arc projection", arcDrift, arcSignature(arcLegacy));
 
             assertModelLine(cad, referenceId, referenceTruth);
             assertModelLine(cad, drivenId, drivenTruth);
-            assertModelLine(cad, freeId, freeTruth);
-            assertModelLine(cad, pointFixedId, pointFixedTruth);
-            assertModelLine(cad, fixedEqualId, fixedEqualTruth);
-            assertTrue(hasPointFixed(cad, pointFixedId, 0));
-            assertFalse(hasPointFixed(cad, pointFixedId, 1));
-            assertFalse(hasPointFixed(cad, fixedEqualId, 0));
-            assertTrue(hasPointFixed(cad, fixedEqualId, 1));
-            double[] repairedArc = arcSignature(arcLegacy);
-            assertEquals(arcModel.radiusMm, repairedArc[2], 1.0e-5);
-            assertEquals(perturbedArc[0], repairedArc[0], 0.0);
-            assertEquals(perturbedArc[1], repairedArc[1], 0.0);
-            for (int i = 3; i < perturbedArc.length; i++) {
-                assertEquals("Equal draw replay must preserve free arc-angle DOFs",
-                        perturbedArc[i], repairedArc[i], 1.0e-6);
-            }
+            assertModelCircle(cad, circleId, circleTruth);
             assertModelArc(cad, arcId, arcTruth);
+            assertEquals(equalCountBefore, countEqual(cad));
+            assertEquals(legacyTruthBefore, cad.legacyMigratedConstraintTruthCount());
+            assertEquals("Equal must never create legacy migrated truth", 0, cad.legacyMigratedConstraintTruthCount());
+            assertEquals(undoBefore, cad.sketchAuthorityCanUndo());
+            assertEquals(redoBefore, cad.sketchAuthorityCanRedo());
+            assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
+            assertEquals(idsBefore, stableIds(cad));
+            assertEquals(referenceId, referenceLegacy.stableId());
+            assertEquals(drivenId, drivenLegacy.stableId());
+            assertEquals(circleId, circleLegacy.stableId());
+            assertEquals(arcId, arcLegacy.stableId());
             return true;
         });
     }
@@ -296,8 +227,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             boolean reverseOrder = second.equals(c.primaryEntityId) && first.equals(c.secondaryEntityId);
             if (sameOrder || reverseOrder) found.add(c);
         }
-        assertEquals("Expected one model-owned Equal constraint for the selected stable-ID pair",
-                1, found.size());
+        assertEquals("Expected one model-owned Equal constraint for the selected stable-ID pair", 1, found.size());
         return found.get(0);
     }
 
@@ -315,6 +245,10 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
         return new double[]{line.a.xMm, line.a.yMm, line.b.xMm, line.b.yMm};
     }
 
+    private static double[] circleCoordinates(SketchGeometry.Circle circle) {
+        return new double[]{circle.center.xMm, circle.center.yMm, circle.radiusMm};
+    }
+
     private static double[] arcCoordinates(SketchGeometry.Arc arc) {
         return new double[]{arc.center.xMm, arc.center.yMm, arc.radiusMm, arc.startDeg, arc.sweepDeg};
     }
@@ -330,12 +264,30 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
                 (end.x - center.x) / radius, (end.y - center.y) / radius};
     }
 
+    private static List<String> stableIds(K33MirroredCadCanvasView cad) {
+        List<String> out = new ArrayList<>();
+        for (SketchEntity e : cad.sketchMirrorEntities()) out.add(e.id());
+        return out;
+    }
+
+    private static void assertArraySame(String message, double[] expected, double[] actual) {
+        assertEquals(message + " length", expected.length, actual.length);
+        for (int i = 0; i < expected.length; i++) assertEquals(message + "[" + i + "]", expected[i], actual[i], 0.0);
+    }
+
     private static void assertModelLine(K33MirroredCadCanvasView cad, String id, double[] expected) {
         SketchGeometry.Line actual = line(cad, id);
         assertEquals(expected[0], actual.a.xMm, 0.0);
         assertEquals(expected[1], actual.a.yMm, 0.0);
         assertEquals(expected[2], actual.b.xMm, 0.0);
         assertEquals(expected[3], actual.b.yMm, 0.0);
+    }
+
+    private static void assertModelCircle(K33MirroredCadCanvasView cad, String id, double[] expected) {
+        SketchGeometry.Circle actual = (SketchGeometry.Circle) entity(cad, id);
+        assertEquals(expected[0], actual.center.xMm, 0.0);
+        assertEquals(expected[1], actual.center.yMm, 0.0);
+        assertEquals(expected[2], actual.radiusMm, 0.0);
     }
 
     private static void assertModelArc(K33MirroredCadCanvasView cad, String id, double[] expected) {
@@ -345,53 +297,6 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
         assertEquals(expected[2], actual.radiusMm, 0.0);
         assertEquals(expected[3], actual.startDeg, 0.0);
         assertEquals(expected[4], actual.sweepDeg, 0.0);
-    }
-
-    private static boolean hasPointFixed(K33MirroredCadCanvasView cad, String id, int pointIndex) {
-        for (SketchConstraint constraint : cad.sketchConstraints()) {
-            if (constraint.kind == SketchConstraint.Kind.FIXED
-                    && constraint.fixesPoint()
-                    && id.equals(constraint.primaryEntityId)
-                    && constraint.primaryPointIndex == pointIndex) return true;
-        }
-        return false;
-    }
-
-    private static float screenX(K33MirroredCadCanvasView cad, double xMm) {
-        return (float) (xMm * 3.0 * cad.viewScale + cad.offsetX);
-    }
-
-    private static float screenY(K33MirroredCadCanvasView cad, double yMm) {
-        return (float) (yMm * 3.0 * cad.viewScale + cad.offsetY);
-    }
-
-    private static void tap(K33MirroredCadCanvasView cad, float x, float y) {
-        long down = SystemClock.uptimeMillis();
-        send(cad, one(down, down, MotionEvent.ACTION_DOWN, x, y));
-        send(cad, one(down, down + 16L, MotionEvent.ACTION_UP, x, y));
-    }
-
-    private static void send(K33MirroredCadCanvasView cad, MotionEvent event) {
-        try {
-            assertTrue(cad.onTouchEvent(event));
-        } finally {
-            event.recycle();
-        }
-    }
-
-    private static MotionEvent one(long down, long time, int action, float x, float y) {
-        MotionEvent.PointerProperties property = new MotionEvent.PointerProperties();
-        property.id = 0;
-        property.toolType = MotionEvent.TOOL_TYPE_FINGER;
-        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-        coords.x = x;
-        coords.y = y;
-        coords.pressure = 1f;
-        coords.size = 1f;
-        return MotionEvent.obtain(down, time, action, 1,
-                new MotionEvent.PointerProperties[]{property},
-                new MotionEvent.PointerCoords[]{coords},
-                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0);
     }
 
     private static <T> T onMain(Callable<T> callable) throws Exception {
