@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "self_context": "PR Merge Gate",
+  "trusted_app": {
+    "slug": "github-actions",
+    "id": 15368
+  },
+  "always_on": [
+    "construction",
+    "Loft Geometry and History on API 35",
+    "Persistent Sketch constraints on API 35",
+    "reference-image",
+    "Launch and sketch on API 35",
+    "Line Circle Arc Snap Dimension Commands on API 35",
+    "english-only",
+    "Map ChobYar Java architecture",
+    "Production CAD contracts on API 35"
+  ],
+  "conditional": {
+    "project-persistence": {
+      "paths": [
+        "app/src/main/java/ir/chobyar/sketch/CadProjectDocument.java",
+        "app/src/main/java/ir/chobyar/sketch/ExactModelProjectState.java",
+        "app/src/main/java/ir/chobyar/sketch/ExactModelProjectAdapter.java",
+        "app/src/main/java/ir/chobyar/sketch/CadCanvasView.java",
+        "app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java",
+        "app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java",
+        "app/src/main/java/ir/chobyar/sketch/CadProjectPersistenceController.java",
+        "app/src/main/java/ir/chobyar/sketch/ReferenceImageProjectAdapter.java",
+        "app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectState.java",
+        "app/src/main/java/ir/chobyar/sketch/WorkspaceVisualProjectAdapter.java",
+        "app/src/main/java/ir/chobyar/sketch/CadAppearanceController.java",
+        "app/src/main/java/ir/chobyar/sketch/SectionViewController.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/ProjectPersistenceInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectStateInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/ExactModelProjectAdapterInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/ExactModelRestoreInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/ReferenceImageProjectPersistenceInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/WorkspaceVisualProjectStateInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K33SketchMirrorInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K34TransactionalAuthorityInstrumentationTest.java",
+        ".github/workflows/project-persistence-contract.yml"
+      ]
+    },
+    "release-candidate-performance": {
+      "paths": [
+        "app/**",
+        "build.gradle",
+        "settings.gradle",
+        ".github/workflows/build.yml",
+        ".github/workflows/release-candidate-performance.yml",
+        ".github/scripts/run-release-candidate-performance.sh",
+        "docs/PERFORMANCE_REAL_DEVICE_ACCEPTANCE.md"
+      ]
+    },
+    "Stable-ID and transactional authority on API 35": {
+      "paths": [
+        "app/src/main/java/ir/chobyar/sketch/CadCanvasView.java",
+        "app/src/main/java/ir/chobyar/sketch/ParametricSketchCanvasView.java",
+        "app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java",
+        "app/src/main/java/ir/chobyar/sketch/core/**",
+        "app/src/androidTest/java/ir/chobyar/sketch/K33SketchMirrorInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K34TransactionalAuthorityInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K34CreateAuthorityInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K35SnapTouchAuthorityInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K36ProductionConstraintAuthorityInstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K36d*InstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K38*InstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K39*InstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K310*InstrumentationTest.java",
+        "app/src/androidTest/java/ir/chobyar/sketch/K311*InstrumentationTest.java",
+        ".github/workflows/k3-sketch-authority-parity.yml"
+      ]
+    },
+    "kernel-gate": {
+      "paths": [
+        "app/**",
+        ".github/scripts/build_occt_android.sh",
+        ".github/workflows/cad-kernel-v2-gate.yml",
+        "docs/CAD_KERNEL_REWRITE_V2.md"
+      ]
+    },
+    "regression": {
+      "paths": [
+        ".github/workflows/manual26100-consolidated-regression.yml",
+        ".github/scripts/run-production-cad-regression.sh",
+        "app/src/main/**",
+        "app/src/androidTest/**",
+        "app/build.gradle*",
+        "gradle.properties"
+      ]
+    }
+  }
+}
