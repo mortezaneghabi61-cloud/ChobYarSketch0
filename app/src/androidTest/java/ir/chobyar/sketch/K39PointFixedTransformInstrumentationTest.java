@@ -107,7 +107,8 @@ public final class K39PointFixedTransformInstrumentationTest {
             SketchGeometry.Arc before = arcFor(cad, id);
 
             String rotate = cad.rotateSelected(35f);
-            assertFalse(rotate.contains("prevents"));
+            assertEquals("Arc Rotate must commit through model authority; mirrorError=" + cad.sketchMirrorError(),
+                    "Rotation applied", rotate);
             SketchGeometry.Arc rotated = arcFor(cad, id);
             assertPointEquals(before.center, rotated.center);
             assertAngleEquals(before.startDeg + 35.0, rotated.startDeg);
