@@ -87,7 +87,7 @@ jobs:
             grep -q '^POINT_RELATION_RESULT coincident=true midpoint=true persistent=true$' test-artifacts/sketch-constraints-result.txt
             grep -q '^EQUAL_CONCENTRIC_RESULT lineEqual=true radiusEqual=true concentric=true persistent=true$' test-artifacts/sketch-constraints-result.txt
             grep -q '^TANGENT_SYMMETRY_RESULT tangent=true symmetry=true persistent=true$' test-artifacts/sketch-constraints-result.txt
-            grep -q '^LOCK_RESULT blockedMove=true blockedDimension=true unlockMove=true$' test-artifacts/sketch-constraints-result.txt
+            grep -q '^LOCK_RESULT blockedMove=true blockedDimension=true unlockMove=true modelOwned=true$' test-artifacts/sketch-constraints-result.txt
 
       - name: Upload constraint evidence
         if: always()
