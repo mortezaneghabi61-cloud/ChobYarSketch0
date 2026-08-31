@@ -152,9 +152,13 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private void syncMirror(String source) {
         try {
             String raw = exportSketchProjectState();
-            LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
-            mirrorSyncCount++;
-            authorityHistoryValid = false;
+            boolean preserveHistory = authorityHistoryValid
+                    && LegacySketchStateBridge.hasParity(sketchDocument, raw);
+            if (!preserveHistory) {
+                LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
+                mirrorSyncCount++;
+                authorityHistoryValid = false;
+            }
             lastMirrorError = "";
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 lastMirrorError = "Parity failed after " + source;
