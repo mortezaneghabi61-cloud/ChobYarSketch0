@@ -1,0 +1,2 @@
+Temporary governance canary for validating the always-on PR Merge Gate.
+This branch is not a production change and must remain unmerged.
