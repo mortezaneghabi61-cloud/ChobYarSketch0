@@ -1,0 +1,69 @@
+name: PR Merge Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: pr-merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge-gate:
+    name: PR Merge Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "PR_MERGE_GATE_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
+          test "$EXPECTED_HEAD_SHA" = "$expected"
+
+      - name: Validate merge-gate policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/pr_merge_gate.py \
+            --policy .github/pr-merge-gate-policy.json \
+            --validate-only
+
+      - name: Aggregate exact-head validation checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/pr_merge_gate.py \
+            --policy .github/pr-merge-gate-policy.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr-number "$PR_NUMBER" \
+            --head-sha "$EXPECTED_HEAD_SHA" \
+            --timeout-seconds 6000 \
+            --poll-seconds 15 \
+            --settle-seconds 45
