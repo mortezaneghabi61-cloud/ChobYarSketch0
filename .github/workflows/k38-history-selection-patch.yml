@@ -1,0 +1,58 @@
+name: K3.8 History Selection Patch
+
+on:
+  push:
+    branches: [ k3-8-point-lock-schema ]
+    paths:
+      - '.github/workflows/k38-history-selection-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: k3-8-point-lock-schema
+          fetch-depth: 0
+
+      - name: Restore model selection into legacy interaction projection after history
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          s = p.read_text()
+          marker = '''    private void replaySolvedLineGeometryToLegacy() {\n'''
+          helper = '''    /** Re-project model-owned history selection into the legacy interaction layer. */\n    private void restoreLegacySelectionFromModel() {\n        selectedObjects.clear();\n        Entity primary = null;\n        for (String id : sketchDocument.selectionIds()) {\n            Entity legacy = legacyEntityByStableId(id);\n            if (legacy == null) continue;\n            selectedObjects.add(legacy);\n            if (primary == null) primary = legacy;\n        }\n        selected = selectedObjects.size() == 1 ? primary : null;\n        invalidate();\n    }\n\n'''
+          if helper not in s:
+              if marker not in s:
+                  raise SystemExit('replay marker not found')
+              s = s.replace(marker, helper + marker, 1)
+          old_undo = '''                super.undo();\n                replaySolvedLineGeometryToLegacy();\n                finishTransactionalHistoryStep("undo");'''
+          new_undo = '''                super.undo();\n                replaySolvedLineGeometryToLegacy();\n                restoreLegacySelectionFromModel();\n                finishTransactionalHistoryStep("undo");'''
+          if new_undo not in s:
+              if old_undo not in s:
+                  raise SystemExit('undo history block not found')
+              s = s.replace(old_undo, new_undo, 1)
+          old_redo = '''            if (documentChanged && legacyChanged) {\n                replaySolvedLineGeometryToLegacy();\n                finishTransactionalHistoryStep("redo");'''
+          new_redo = '''            if (documentChanged && legacyChanged) {\n                replaySolvedLineGeometryToLegacy();\n                restoreLegacySelectionFromModel();\n                finishTransactionalHistoryStep("redo");'''
+          if new_redo not in s:
+              if old_redo not in s:
+                  raise SystemExit('redo history block not found')
+              s = s.replace(old_redo, new_redo, 1)
+          p.write_text(s)
+          PY
+
+      - name: Remove one-shot patch workflow and commit
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/k38-history-selection-patch.yml
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          git diff --cached --check
+          git config user.name 'chobyar-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Restore stable selection after model history replay'
+          git push origin HEAD:k3-8-point-lock-schema
