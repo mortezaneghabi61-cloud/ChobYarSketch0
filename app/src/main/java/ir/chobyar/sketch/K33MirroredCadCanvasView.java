@@ -184,7 +184,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private boolean prepareTransactionalDocument(String source) {
         try {
-            replayAuthoritativeConstrainedGeometryBeforeDraw();
+            replayAuthoritativeConstrainedGeometry();
             String raw = exportSketchProjectState();
             if (!authorityHistoryValid || !LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
@@ -360,12 +360,29 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
+    private void replayModelEqualMetricToLegacy(SketchEntity value) {
+        if (value == null) return;
+        Entity legacy = legacyEntityByStableId(value.id());
+        if (legacy == null) return;
+        if (value instanceof SketchGeometry.Line && legacy instanceof LineEntity) {
+            ((LineEntity) legacy).setLength((float) ((SketchGeometry.Line) value).lengthMm());
+            return;
+        }
+        if (!(value instanceof SketchGeometry.Circle) && !(value instanceof SketchGeometry.Arc)) return;
+        float radius = (float) (value instanceof SketchGeometry.Circle
+                ? ((SketchGeometry.Circle) value).radiusMm
+                : ((SketchGeometry.Arc) value).radiusMm);
+        if (!coreUpdateEqualRadius(legacy, radius)) {
+            throw new IllegalStateException("Equal radius authority replay target mismatch: " + value.id());
+        }
+    }
+
     private void replaySolvedLineGeometryToLegacy() {
         for (SketchEntity value : sketchDocument.entities()) replayModelEntityToLegacy(value);
         invalidate();
     }
 
-    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
+    private void replayAuthoritativeConstrainedGeometry() {
         LinkedHashSet<String> constrained = new LinkedHashSet<>();
         for (SketchConstraint c : sketchDocument.constraints()) {
             if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()) {
@@ -386,6 +403,15 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             constrained.addAll(c.referencedEntityIds());
         }
         for (String id : constrained) replayModelEntityToLegacy(sketchDocument.entity(id));
+    }
+
+    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
+        LinkedHashSet<String> equalOwned = new LinkedHashSet<>();
+        for (SketchConstraint c : sketchDocument.constraints()) {
+            if (c.kind != SketchConstraint.Kind.EQUAL) continue;
+            equalOwned.addAll(c.referencedEntityIds());
+        }
+        for (String id : equalOwned) replayModelEqualMetricToLegacy(sketchDocument.entity(id));
     }
 
     @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return true; }
@@ -636,7 +662,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void reconcileLegacyTouchIfNeeded(String source) {
         try {
-            replayAuthoritativeConstrainedGeometryBeforeDraw();
+            replayAuthoritativeConstrainedGeometry();
             String raw = exportSketchProjectState();
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
         } catch (RuntimeException e) {
