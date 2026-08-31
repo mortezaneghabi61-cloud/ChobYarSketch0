@@ -22,10 +22,34 @@ jobs:
     env:
       CHOBYAR_VERSION_CODE: 30${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.3.constraints.${{ github.run_number }}
+      EXPECTED_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checked-out head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_HEAD_SHA"
+          echo "EXACT_HEAD_VERIFIED=$actual"
+
+      - name: Verify exact PR head
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          event_head='${{ github.event.pull_request.head.sha }}'
+          test "$EXPECTED_HEAD_SHA" = "$event_head"
+          test "$actual" = "$event_head"
+          echo "EXACT_PR_HEAD_VERIFIED=$actual"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

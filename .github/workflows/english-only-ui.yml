@@ -1,5 +1,8 @@
 name: English-only UI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ main ]
@@ -9,6 +12,19 @@ jobs:
   english-only:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "ENGLISH_ONLY_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
       - name: Reject Persian or Arabic script in production source
         run: python3 .github/scripts/english_only_audit.py

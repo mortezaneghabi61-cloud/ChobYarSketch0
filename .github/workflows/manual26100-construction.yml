@@ -8,7 +8,7 @@ on:
       - refactor/sketch-core-type-safe-20260820
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: manual26100-construction-${{ github.ref }}
@@ -22,12 +22,24 @@ jobs:
       CHOBYAR_VERSION_CODE: 36${{ github.run_number }}
       CHOBYAR_VERSION_NAME: 0.3.manual26100.${{ github.run_number }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
         with:
-          ref: refactor/sketch-core-type-safe-20260820
-          fetch-depth: 0
-      - name: Apply persistent Construction semantics
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "CONSTRUCTION_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
+      - name: Verify persistent Construction semantics are already applied
         run: python3 .github/scripts/apply-manual26100-construction.py
+      - name: Reject source mutation during validation
+        run: git diff --exit-code
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -66,20 +78,6 @@ jobs:
             adb logcat -d -v brief | grep 'Manual26100Sketch.*_RESULT' | sed -E 's/^.*(CONSTRUCTION_RESULT|PROJECT_SKETCH_RESULT)/\1/' | tee test-artifacts/manual26100-results.txt
             grep -q '^CONSTRUCTION_RESULT persistent=true selectable=true dxfExcluded=true undo=true redo=true' test-artifacts/manual26100-results.txt
             grep -q '^PROJECT_SKETCH_RESULT source=1 projected=1 construction=true dxfNormalLines=1' test-artifacts/manual26100-results.txt
-      - name: Persist verified source changes
-        if: success() && github.event_name == 'push'
-        run: |
-          if git diff --quiet -- app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SolidCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java; then
-            echo 'Construction implementation already committed.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/src/main/java/ir/chobyar/sketch/CadCanvasView.java app/src/main/java/ir/chobyar/sketch/SolidCadCanvasView.java app/src/main/java/ir/chobyar/sketch/ParametricHistorySolidCadCanvasView.java
-          git commit -m 'Implement persistent Construction sketch semantics [skip ci]'
-          git fetch origin refactor/sketch-core-type-safe-20260820
-          git rebase origin/refactor/sketch-core-type-safe-20260820
-          git push origin HEAD:refactor/sketch-core-type-safe-20260820
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -30,7 +30,7 @@ import java.util.Map;
  * - per-selection Lock/Unlock that blocks drag, handles, dimensions and transforms
  * - editable angular dimensions for one line or the angle between two lines
  * - stronger auto-connect: endpoint-to-endpoint and endpoint-to-line relationships
- * - adaptive constraints palette (H/V, perpendicular, parallel, coincident, lock)
+ * - adaptive constraints palette (H/V, perpendicular, parallel, equal, coincident, lock)
  * - Auto-constraints and constraint-visibility toggles
  *
  * True 3D sketch planes/faces will bind to the solid kernel later; this class
@@ -611,6 +611,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                 "H/V — Horizontal/Vertical",
                 "⊥ Perpendicular — Perpendicular",
                 "∥ Parallel — Parallel",
+                "＝ Equal — Equal length/radius",
                 "● Coincident — text text text text Line",
                 lockUiShowsLocked() ? "🔓 Unlock — text text" : "🔒 Lock — Lock",
                 autoConstraints ? "Auto Constraints — On" : "Auto Constraints — Off",
@@ -623,9 +624,10 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
                     if (which == 0) result = applyHorizontalVerticalConstraint();
                     else if (which == 1) result = applyPerpendicularConstraint();
                     else if (which == 2) result = applyParallelConstraint();
-                    else if (which == 3) result = applyManualCoincident();
-                    else if (which == 4) result = toggleSelectedLock();
-                    else if (which == 5) { autoConstraints = !autoConstraints; result = autoConstraints ? "Auto Constraints On" : "Auto Constraints Off"; }
+                    else if (which == 3) result = applyEqualConstraint();
+                    else if (which == 4) result = applyManualCoincident();
+                    else if (which == 5) result = toggleSelectedLock();
+                    else if (which == 6) { autoConstraints = !autoConstraints; result = autoConstraints ? "Auto Constraints On" : "Auto Constraints Off"; }
                     else { showParametricConstraints = !showParametricConstraints; result = showParametricConstraints ? "text Constraints Show text text" : "text Constraints Hide text"; }
                     if (result != null) toast(result);
                     invalidate();
@@ -636,6 +638,28 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     /** True only after a subclass has migrated endpoint constraints to SketchDocument authority. */
     protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }
+
+    /** K3.11 seam: Equal must be owned by stable model IDs, never identity maps. */
+    protected boolean isModelEqualConstraintAuthorityEnabled() { return false; }
+
+    protected String onModelEqualRequested(String firstEntityId, String secondEntityId) {
+        return "Equal model authority is unavailable";
+    }
+
+    /** Public Interaction API used by the constraints palette and API35 authority tests. */
+    public String applyEqualConstraint() {
+        List<Object> selected = selectionObjects();
+        if (selected.size() != 2) return "Equal requires exactly 2 sketch elements";
+        if (isEffectiveSelectionLocked()) return "Selection is locked";
+        String firstId = stableEntityId(selected.get(0));
+        String secondId = stableEntityId(selected.get(1));
+        if (firstId.isEmpty() || secondId.isEmpty()) return "Equal requires stable entity IDs";
+        if (firstId.equals(secondId)) return "Equal requires 2 distinct sketch elements";
+        if (!isModelEqualConstraintAuthorityEnabled()) return "Equal model authority is unavailable";
+        String result = onModelEqualRequested(firstId, secondId);
+        invalidate();
+        return result == null ? "Equal was not applied" : result;
+    }
 
     protected ConstraintInteractionContract.Result onModelCoincidentRequested(
             ConstraintInteractionContract.Intent intent) {

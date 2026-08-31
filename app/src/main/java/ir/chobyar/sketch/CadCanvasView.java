@@ -836,6 +836,12 @@ public class CadCanvasView extends View {
     protected final boolean coreUpdateReferenceArc(Entity e,float cx,float cy,float radius,float startDeg,float sweepDeg){
         if(!(e instanceof ArcEntity)||radius<=0f)return false;ArcEntity v=(ArcEntity)e;v.x=cx;v.y=cy;v.r=radius;v.start=startDeg;v.sweep=sweepDeg;return true;
     }
+    protected final boolean coreUpdateEqualRadius(Entity e,float radius){
+        if(radius<=0f)return false;
+        if(e instanceof CircleEntity){((CircleEntity)e).r=radius;return true;}
+        if(e instanceof ArcEntity){((ArcEntity)e).r=radius;return true;}
+        return false;
+    }
 
     public String executeCommand(String raw){
         if(raw==null)return"";

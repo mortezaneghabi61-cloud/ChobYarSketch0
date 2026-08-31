@@ -11,8 +11,8 @@ import java.util.Map;
  *
  * The K3 slice is deliberately fail-closed: a constraint kind/geometry pairing
  * that is not implemented returns UNSUPPORTED rather than becoming decorative
- * metadata. K3.10 adds model-owned driving DISTANCE/RADIUS/ANGLE while keeping
- * point/whole FIXED anchors authoritative during each solver application.
+ * metadata. K3.11 adds model-owned EQUAL length/radius while keeping point/whole
+ * FIXED anchors authoritative during each solver application.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -161,6 +161,17 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             case PERPENDICULAR:
                 return a instanceof SketchGeometry.Line && b instanceof SketchGeometry.Line
                         ? null : c.kind + " requires two lines";
+            case EQUAL:
+                if (b == null || a.id().equals(b.id())) return "EQUAL requires two distinct entities";
+                if (a instanceof SketchGeometry.Line && b instanceof SketchGeometry.Line) {
+                    if (isDegenerateLine((SketchGeometry.Line) a)
+                            || isDegenerateLine((SketchGeometry.Line) b)) {
+                        return "EQUAL requires non-degenerate lines";
+                    }
+                    return null;
+                }
+                if (isRadiusEntity(a) && isRadiusEntity(b)) return null;
+                return "EQUAL requires two lines or two circle/arc radius entities";
             case COINCIDENT:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
                     return "COINCIDENT currently requires two line endpoints";
@@ -190,8 +201,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 return isDegenerateLine((SketchGeometry.Line) a)
                         ? "DISTANCE requires a non-degenerate line" : null;
             case RADIUS:
-                return a instanceof SketchGeometry.Circle || a instanceof SketchGeometry.Arc
-                        ? null : "RADIUS requires a circle or arc";
+                return isRadiusEntity(a) ? null : "RADIUS requires a circle or arc";
             case ANGLE:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
                     return "ANGLE requires two lines";
@@ -216,7 +226,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
-                return "Constraint kind not yet supported by K3.10 solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.11 solver: " + c.kind;
         }
     }
 
@@ -226,6 +236,10 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return entity instanceof SketchGeometry.Line
                 || entity instanceof SketchGeometry.Circle
                 || entity instanceof SketchGeometry.Arc;
+    }
+
+    private static boolean isRadiusEntity(SketchEntity entity) {
+        return entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc;
     }
 
     private static boolean isDegenerateLine(SketchGeometry.Line line) {
@@ -255,6 +269,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 entities.put(c.secondaryEntityId,
                         rotateRelative(line(entities, c.primaryEntityId),
                                 line(entities, c.secondaryEntityId), false));
+                break;
+            case EQUAL:
+                applyEqual(c, entities, fixed);
                 break;
             case COINCIDENT: {
                 SketchGeometry.Line driven = line(entities, c.primaryEntityId);
@@ -295,12 +312,44 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         }
     }
 
+    private static void applyEqual(SketchConstraint c,
+                                   LinkedHashMap<String, SketchEntity> entities,
+                                   FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.secondaryEntityId)) return;
+        SketchEntity reference = entities.get(c.primaryEntityId);
+        SketchEntity driven = entities.get(c.secondaryEntityId);
+        if (reference instanceof SketchGeometry.Line) {
+            SketchGeometry.Line source = (SketchGeometry.Line) reference;
+            SketchGeometry.Line current = (SketchGeometry.Line) driven;
+            resizeLineToLength(c.secondaryEntityId, current, source.lengthMm(), entities, fixed);
+            return;
+        }
+        double targetRadius = radiusOf(reference);
+        if (driven instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) driven;
+            entities.put(c.secondaryEntityId,
+                    new SketchGeometry.Circle(circle.id(), circle.center, targetRadius));
+            return;
+        }
+        SketchGeometry.Arc arc = (SketchGeometry.Arc) driven;
+        entities.put(c.secondaryEntityId,
+                new SketchGeometry.Arc(arc.id(), arc.center, targetRadius, arc.startDeg, arc.sweepDeg));
+    }
+
     private static void applyDistance(SketchConstraint c,
                                       LinkedHashMap<String, SketchEntity> entities,
                                       FixedState fixed) {
         if (fixed.wholeEntities.containsKey(c.primaryEntityId)) return;
-        SketchGeometry.Line current = line(entities, c.primaryEntityId);
-        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(c.primaryEntityId);
+        resizeLineToLength(c.primaryEntityId, line(entities, c.primaryEntityId), c.value,
+                entities, fixed);
+    }
+
+    private static void resizeLineToLength(String entityId,
+                                           SketchGeometry.Line current,
+                                           double target,
+                                           LinkedHashMap<String, SketchEntity> entities,
+                                           FixedState fixed) {
+        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(entityId);
         boolean lockA = anchors != null && anchors.containsKey(0);
         boolean lockB = anchors != null && anchors.containsKey(1);
         if (lockA && lockB) return;
@@ -310,17 +359,16 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         double len = Math.hypot(dx, dy);
         if (len <= EPS) return;
         double ux = dx / len, uy = dy / len;
-        double target = c.value;
 
         if (lockA) {
             SketchGeometry.Point a = anchors.get(0);
-            entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(), a,
+            entities.put(entityId, new SketchGeometry.Line(current.id(), a,
                     new SketchGeometry.Point(a.xMm + ux * target, a.yMm + uy * target)));
             return;
         }
         if (lockB) {
             SketchGeometry.Point b = anchors.get(1);
-            entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(),
+            entities.put(entityId, new SketchGeometry.Line(current.id(),
                     new SketchGeometry.Point(b.xMm - ux * target, b.yMm - uy * target), b));
             return;
         }
@@ -328,7 +376,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         double cx = (current.a.xMm + current.b.xMm) * 0.5;
         double cy = (current.a.yMm + current.b.yMm) * 0.5;
         double half = target * 0.5;
-        entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(),
+        entities.put(entityId, new SketchGeometry.Line(current.id(),
                 new SketchGeometry.Point(cx - ux * half, cy - uy * half),
                 new SketchGeometry.Point(cx + ux * half, cy + uy * half)));
     }
@@ -375,6 +423,12 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
 
     private static SketchGeometry.Line line(Map<String, SketchEntity> entities, String id) {
         return (SketchGeometry.Line) entities.get(id);
+    }
+
+    private static double radiusOf(SketchEntity entity) {
+        return entity instanceof SketchGeometry.Circle
+                ? ((SketchGeometry.Circle) entity).radiusMm
+                : ((SketchGeometry.Arc) entity).radiusMm;
     }
 
     private static SketchGeometry.Point midpoint(SketchGeometry.Line line) {
@@ -497,17 +551,21 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         switch (c.kind) {
             case DISTANCE:
                 return Math.abs(((SketchGeometry.Line) entities.get(c.primaryEntityId)).lengthMm() - c.value);
-            case RADIUS: {
-                SketchEntity entity = entities.get(c.primaryEntityId);
-                double radius = entity instanceof SketchGeometry.Circle
-                        ? ((SketchGeometry.Circle) entity).radiusMm
-                        : ((SketchGeometry.Arc) entity).radiusMm;
-                return Math.abs(radius - c.value);
-            }
+            case RADIUS:
+                return Math.abs(radiusOf(entities.get(c.primaryEntityId)) - c.value);
             case ANGLE:
                 return Math.abs(undirectedAngleDeg(
                         line(entities, c.primaryEntityId),
                         line(entities, c.secondaryEntityId)) - c.value);
+            case EQUAL: {
+                SketchEntity a = entities.get(c.primaryEntityId);
+                SketchEntity b = entities.get(c.secondaryEntityId);
+                if (a instanceof SketchGeometry.Line) {
+                    return Math.abs(((SketchGeometry.Line) a).lengthMm()
+                            - ((SketchGeometry.Line) b).lengthMm());
+                }
+                return Math.abs(radiusOf(a) - radiusOf(b));
+            }
             default:
                 break;
         }

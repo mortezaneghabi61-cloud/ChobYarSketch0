@@ -85,6 +85,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
     // ------------------------------------------------------------------
 
     public String applyEqualConstraint() {
+        if (isModelEqualConstraintAuthorityEnabled()) return super.applyEqualConstraint();
         List<Object> s = selectionObjects();
         if (s.size() < 2) return "text Equal text text Line text text Circle/Arc text Selection text";
         boolean lines = isLine(s.get(0));

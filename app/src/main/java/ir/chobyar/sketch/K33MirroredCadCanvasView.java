@@ -40,8 +40,9 @@ import ir.chobyar.sketch.core.SketchSnapService;
  * in SketchDocument. K3.5 moves Create snapping into the model. K3.6 moves
  * persistent line constraints/solving out of the legacy View hierarchy. K3.10
  * moves Line DISTANCE, Circle/Arc RADIUS and binary Line ANGLE driving
- * dimensions into the same model authority. Remaining annotations and
- * constraint kinds stay legacy-owned until their dedicated authority slices.
+ * dimensions into the same model authority. K3.11 adds model-owned EQUAL for
+ * line length and circle/arc radius. Remaining annotations and constraint kinds
+ * stay legacy-owned until their dedicated authority slices.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private static final float LEGACY_SNAP_RADIUS_PX = 30f;
@@ -183,7 +184,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private boolean prepareTransactionalDocument(String source) {
         try {
-            replayAuthoritativeConstrainedGeometryBeforeDraw();
+            replayAuthoritativeConstrainedGeometry();
             String raw = exportSketchProjectState();
             if (!authorityHistoryValid || !LegacySketchStateBridge.hasParity(sketchDocument, raw)) {
                 LegacySketchStateBridge.restoreDocument(sketchDocument, raw);
@@ -273,7 +274,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case POINT_ON_ENTITY:
                 case MIDPOINT: score += 100; break;
                 case PARALLEL:
-                case PERPENDICULAR: score += 60; break;
+                case PERPENDICULAR:
+                case EQUAL: score += 60; break;
                 default: score += 30; break;
             }
         }
@@ -358,23 +360,57 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
+    private void replayModelEqualMetricToLegacy(SketchEntity value) {
+        if (value == null) return;
+        Entity legacy = legacyEntityByStableId(value.id());
+        if (legacy == null || hasWholeFixed(value.id())) return;
+        if (value instanceof SketchGeometry.Line && legacy instanceof LineEntity) {
+            LineEntity line = (LineEntity) legacy;
+            float targetLength = (float) ((SketchGeometry.Line) value).lengthMm();
+            boolean fixedStart = hasPointFixed(value.id(), 0);
+            boolean fixedEnd = hasPointFixed(value.id(), 1);
+            if (fixedStart && fixedEnd) return;
+            if (fixedEnd) {
+                float dx = line.x2 - line.x1;
+                float dy = line.y2 - line.y1;
+                double currentLength = Math.hypot(dx, dy);
+                if (currentLength <= 1.0e-9) {
+                    line.x1 = line.x2 - targetLength;
+                    line.y1 = line.y2;
+                } else {
+                    line.x1 = line.x2 - (float) (dx / currentLength * targetLength);
+                    line.y1 = line.y2 - (float) (dy / currentLength * targetLength);
+                }
+            } else {
+                line.setLength(targetLength);
+            }
+            return;
+        }
+        if (!(value instanceof SketchGeometry.Circle) && !(value instanceof SketchGeometry.Arc)) return;
+        float radius = (float) (value instanceof SketchGeometry.Circle
+                ? ((SketchGeometry.Circle) value).radiusMm
+                : ((SketchGeometry.Arc) value).radiusMm);
+        if (!coreUpdateEqualRadius(legacy, radius)) {
+            throw new IllegalStateException("Equal radius authority replay target mismatch: " + value.id());
+        }
+    }
+
     private void replaySolvedLineGeometryToLegacy() {
         for (SketchEntity value : sketchDocument.entities()) replayModelEntityToLegacy(value);
         invalidate();
     }
 
-    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
+    private void replayAuthoritativeConstrainedGeometry() {
         LinkedHashSet<String> constrained = new LinkedHashSet<>();
         for (SketchConstraint c : sketchDocument.constraints()) {
             if (c.kind == SketchConstraint.Kind.FIXED && c.fixesPoint()) {
-                // Point-FIXED is guarded before legacy handle mutation. Do not replay the
-                // whole primitive here: the remaining degrees of freedom must stay editable.
                 continue;
             }
             if (c.kind != SketchConstraint.Kind.HORIZONTAL
                     && c.kind != SketchConstraint.Kind.VERTICAL
                     && c.kind != SketchConstraint.Kind.PARALLEL
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
+                    && c.kind != SketchConstraint.Kind.EQUAL
                     && c.kind != SketchConstraint.Kind.COINCIDENT
                     && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
                     && c.kind != SketchConstraint.Kind.MIDPOINT
@@ -387,7 +423,67 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         for (String id : constrained) replayModelEntityToLegacy(sketchDocument.entity(id));
     }
 
+    private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
+        LinkedHashSet<String> equalOwned = new LinkedHashSet<>();
+        for (SketchConstraint c : sketchDocument.constraints()) {
+            if (c.kind != SketchConstraint.Kind.EQUAL) continue;
+            equalOwned.addAll(c.referencedEntityIds());
+        }
+        for (String id : equalOwned) replayModelEqualMetricToLegacy(sketchDocument.entity(id));
+    }
+
     @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return true; }
+    @Override protected boolean isModelEqualConstraintAuthorityEnabled() { return true; }
+
+    private static boolean equalRadiusEntity(SketchEntity entity) {
+        return entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc;
+    }
+
+    private static boolean equalCompatible(SketchEntity first, SketchEntity second) {
+        return (first instanceof SketchGeometry.Line && second instanceof SketchGeometry.Line)
+                || (equalRadiusEntity(first) && equalRadiusEntity(second));
+    }
+
+    private boolean hasEqualBetween(String firstId, String secondId) {
+        for (SketchConstraint c : sketchDocument.constraints()) {
+            if (c.kind != SketchConstraint.Kind.EQUAL || c.secondaryEntityId == null) continue;
+            boolean sameOrder = firstId.equals(c.primaryEntityId) && secondId.equals(c.secondaryEntityId);
+            boolean reverseOrder = secondId.equals(c.primaryEntityId) && firstId.equals(c.secondaryEntityId);
+            if (sameOrder || reverseOrder) return true;
+        }
+        return false;
+    }
+
+    @Override protected String onModelEqualRequested(String firstEntityId, String secondEntityId) {
+        if (!prepareTransactionalDocument("constraint-equal-prepare")) return lastMirrorError;
+        SketchEntity first = sketchDocument.entity(firstEntityId);
+        SketchEntity second = sketchDocument.entity(secondEntityId);
+        if (first == null || second == null || firstEntityId.equals(secondEntityId)) {
+            return "Equal requires two distinct sketch elements";
+        }
+        if (!equalCompatible(first, second)) {
+            return "Equal requires two lines or two circles/arcs";
+        }
+        if (hasEqualBetween(firstEntityId, secondEntityId)) return "Equal already applied";
+
+        ArrayList<String> ids = new ArrayList<>();
+        ids.add(firstEntityId);
+        ids.add(secondEntityId);
+        int anchorIndex = chooseConstraintAnchorIndex(ids);
+        String referenceId = ids.get(anchorIndex);
+        String drivenId = ids.get(anchorIndex == 0 ? 1 : 0);
+        try {
+            sketchDocument.setSelection(ids);
+            SketchConstraint equal = SketchConstraint.equal(UUID.randomUUID().toString(), referenceId, drivenId);
+            sketchDocument.addConstraintsAndSolve(java.util.Collections.singletonList(equal), sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("constraint-equal")) return "Equal constraint rollback: parity failed";
+            return "Equal applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-equal", e);
+        }
+    }
 
     private boolean validLinePointRef(ConstraintInteractionContract.PointRef ref) {
         if (ref == null || ref.pointIndex < 0 || ref.pointIndex > 1) return false;
@@ -584,7 +680,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void reconcileLegacyTouchIfNeeded(String source) {
         try {
-            replayAuthoritativeConstrainedGeometryBeforeDraw();
+            replayAuthoritativeConstrainedGeometry();
             String raw = exportSketchProjectState();
             if (!LegacySketchStateBridge.hasParity(sketchDocument, raw)) syncMirror(source);
         } catch (RuntimeException e) {
@@ -776,6 +872,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected void onDraw(Canvas canvas) {
+        replayAuthoritativeConstrainedGeometryBeforeDraw();
         super.onDraw(canvas);
         drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
@@ -1289,7 +1386,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 driver=SketchConstraint.distance(UUID.randomUUID().toString(),id,entered);
                 label="Length";
             } else if (entity instanceof SketchGeometry.Circle) {
-                // Existing exact-dimension UI is diameter-based for circles.
                 driver=SketchConstraint.radius(UUID.randomUUID().toString(),id,entered*0.5d);
                 label="Diameter";
             } else {
@@ -1405,7 +1501,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    @Override public String applyEqualConstraint() { String out=super.applyEqualConstraint(); syncMirror("constraint-equal"); return out; }
+    @Override public String applyEqualConstraint() { String out=super.applyEqualConstraint(); syncMirror("constraint-equal-post"); return out; }
     @Override public String applySymmetryConstraint() { String out=super.applySymmetryConstraint(); syncMirror("constraint-symmetry"); return out; }
     @Override public String applyMidpointConstraint() { String out=super.applyMidpointConstraint(); syncMirror("constraint-midpoint"); return out; }
     @Override public String applyTangentConstraint() { String out=super.applyTangentConstraint(); syncMirror("constraint-tangent"); return out; }
