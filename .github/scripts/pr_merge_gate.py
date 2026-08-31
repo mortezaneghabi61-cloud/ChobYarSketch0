@@ -222,6 +222,8 @@ def aggregate(policy, repository, pr_number, head_sha, token, timeout_seconds, p
         observed_known = set(trusted_by_name) & known
         dynamic_required = set(required_by_policy) | observed_known
 
+        # Policy-drift fence: a known conditional context that appears on this exact
+        # SHA becomes mandatory even when the current policy did not predict it.
         if observed_known != previous_observed:
             print("OBSERVED_KNOWN " + json.dumps(sorted(observed_known)), flush=True)
             previous_observed = set(observed_known)
@@ -268,6 +270,8 @@ def aggregate(policy, repository, pr_number, head_sha, token, timeout_seconds, p
                     flush=True,
                 )
             elif now - all_success_since >= settle_seconds:
+                # One final fetch closes the race where a known conditional check
+                # is registered just as the settle window expires.
                 final_runs = fetch_check_runs(repository, head_sha, token)
                 final_by_name, _ = trusted_runs_by_name(final_runs, policy)
                 final_observed = set(final_by_name) & known
