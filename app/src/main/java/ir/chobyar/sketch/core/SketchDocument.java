@@ -211,6 +211,82 @@ public final class SketchDocument {
         return solution;
     }
 
+    /**
+     * Creates or edits one model-owned driving dimension as a single atomic user
+     * transaction. Editing reuses the existing constraint id so persistence,
+     * history and external references retain stable identity. Geometry and the
+     * complete prospective constraint set are solved before any state is committed.
+     */
+    public synchronized SketchConstraintSolver.Result setDrivingDimensionAndSolve(
+            SketchConstraint driving, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        if (driving == null) throw new NullPointerException("driving");
+        if (!isDrivingDimensionKind(driving.kind)) {
+            throw new IllegalArgumentException("Not a driving dimension: " + driving.kind);
+        }
+        requireValidConstraint(driving, entities);
+
+        LinkedHashMap<String, SketchConstraint> prospectiveConstraints = copyConstraints(constraints);
+        SketchConstraint existing = null;
+        for (SketchConstraint current : constraints.values()) {
+            if (sameDrivingSlot(current, driving)) {
+                existing = current;
+                break;
+            }
+        }
+
+        SketchConstraint replacement;
+        if (existing != null) {
+            replacement = drivingWithId(existing.id, driving);
+            prospectiveConstraints.put(existing.id, replacement);
+        } else {
+            if (prospectiveConstraints.containsKey(driving.id)) {
+                throw new IllegalArgumentException("Duplicate sketch constraint id: " + driving.id);
+            }
+            replacement = driving.copy();
+            prospectiveConstraints.put(replacement.id, replacement);
+        }
+
+        SketchConstraintSolver.Result solution = solver.solve(entities.values(), prospectiveConstraints.values());
+        LinkedHashMap<String, SketchEntity> solved = requireSolvedSnapshot(solution, entities);
+
+        pushUndo();
+        entities.clear();
+        entities.putAll(solved);
+        constraints.clear();
+        constraints.putAll(copyConstraints(prospectiveConstraints));
+        changed();
+        return solution;
+    }
+
+    private static boolean isDrivingDimensionKind(SketchConstraint.Kind kind) {
+        return kind == SketchConstraint.Kind.DISTANCE
+                || kind == SketchConstraint.Kind.RADIUS
+                || kind == SketchConstraint.Kind.ANGLE;
+    }
+
+    private static boolean sameDrivingSlot(SketchConstraint a, SketchConstraint b) {
+        if (a.kind != b.kind || !isDrivingDimensionKind(a.kind)) return false;
+        if (!a.primaryEntityId.equals(b.primaryEntityId)) return false;
+        if (a.kind == SketchConstraint.Kind.ANGLE) {
+            return a.secondaryEntityId != null && a.secondaryEntityId.equals(b.secondaryEntityId);
+        }
+        return a.secondaryEntityId == null && b.secondaryEntityId == null;
+    }
+
+    private static SketchConstraint drivingWithId(String id, SketchConstraint source) {
+        switch (source.kind) {
+            case DISTANCE:
+                return SketchConstraint.distance(id, source.primaryEntityId, source.value);
+            case RADIUS:
+                return SketchConstraint.radius(id, source.primaryEntityId, source.value);
+            case ANGLE:
+                return SketchConstraint.angle(id, source.primaryEntityId, source.secondaryEntityId, source.value);
+            default:
+                throw new IllegalArgumentException("Not a driving dimension: " + source.kind);
+        }
+    }
+
     public synchronized void replace(SketchEntity entity) {
         requireValid(entity);
         if (!entities.containsKey(entity.id())) throw new IllegalArgumentException("Sketch entity does not exist: " + entity.id());
