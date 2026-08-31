@@ -88,7 +88,10 @@ public class K36dTouchStylusSelectionStabilityInstrumentationTest {
         Set<String> before = ids(cad.exportSketchProjectState());
 
         cad.setTool(CadCanvasView.TOOL_LINE);
-        float targetX = endpoint ? 100.4f : 50.3f;
+        // Keep the ordinary on-edge fixture deliberately away from both endpoints and the
+        // 50 mm midpoint. This preserves the strict ENDPOINT > MIDPOINT > ON_EDGE policy
+        // while still exercising the intended POINT_ON_ENTITY interior-snap contract.
+        float targetX = endpoint ? 100.4f : 35.3f;
         stroke(cad, screen(cad, 20f, 25f), screen(cad, targetX, 0.2f), stylus);
         cad.requireSketchMirrorParity();
 
