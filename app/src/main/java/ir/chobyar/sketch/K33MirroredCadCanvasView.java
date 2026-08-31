@@ -289,6 +289,20 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return null;
     }
 
+    /** Re-project model-owned history selection into the legacy interaction layer. */
+    private void restoreLegacySelectionFromModel() {
+        selectedObjects.clear();
+        Entity primary = null;
+        for (String id : sketchDocument.selectionIds()) {
+            Entity legacy = legacyEntityByStableId(id);
+            if (legacy == null) continue;
+            selectedObjects.add(legacy);
+            if (primary == null) primary = legacy;
+        }
+        selected = selectedObjects.size() == 1 ? primary : null;
+        invalidate();
+    }
+
     private void replaySolvedLineGeometryToLegacy() {
         for (SketchEntity value : sketchDocument.entities()) {
             if (!(value instanceof SketchGeometry.Line)) continue;
@@ -814,6 +828,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             if (changed) {
                 super.undo();
                 replaySolvedLineGeometryToLegacy();
+                restoreLegacySelectionFromModel();
                 finishTransactionalHistoryStep("undo");
                 return;
             }
@@ -828,6 +843,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             boolean legacyChanged = super.redoSketch();
             if (documentChanged && legacyChanged) {
                 replaySolvedLineGeometryToLegacy();
+                restoreLegacySelectionFromModel();
                 finishTransactionalHistoryStep("redo");
                 return true;
             }
