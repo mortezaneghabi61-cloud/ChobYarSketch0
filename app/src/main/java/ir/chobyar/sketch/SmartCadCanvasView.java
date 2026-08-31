@@ -594,6 +594,19 @@ public class SmartCadCanvasView extends CadCanvasView {
         if (action == MotionEvent.ACTION_DOWN) {
             boxStartX = boxEndX = event.getX();
             boxStartY = boxEndY = event.getY();
+
+            // Selected control handles outrank body-hit. In particular, an Arc
+            // center is intentionally off-curve and must not become empty-space
+            // selection before the model-authority point gesture can finish.
+            if (selectedControlHandleHit(wx, wy)) {
+                selectionBoxCandidate = false;
+                selectionBoxActive = false;
+                pendingTapHit = null;
+                boolean handled = super.onTouchEvent(event);
+                syncSelectionFromBase();
+                return handled;
+            }
+
             Object hit = coreFindHit(wx, wy);
 
             List<Object> group = groupFor(hit);
@@ -913,6 +926,22 @@ public class SmartCadCanvasView extends CadCanvasView {
     }
 
     private Object baseSelected() { return selected; }
+
+    private boolean selectedControlHandleHit(float wx, float wy) {
+        Object current = baseSelected();
+        if (!(current instanceof Entity)) return false;
+        float radius = 18f / (PX_PER_MM * Math.max(.02f, viewScale()));
+        float radius2 = radius * radius;
+        List<ControlPoint> points = ((Entity) current).controlPoints();
+        if (points == null) return false;
+        for (ControlPoint point : points) {
+            if (point == null) continue;
+            float dx = wx - point.x;
+            float dy = wy - point.y;
+            if (dx * dx + dy * dy <= radius2) return true;
+        }
+        return false;
+    }
 
     private void setBaseSelected(Object value) {
         selected = value instanceof Entity ? (Entity) value : null;
