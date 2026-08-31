@@ -219,7 +219,7 @@ public final class K36dProductionMidpointDrawAuthorityInstrumentationTest {
     @Test public void incompatiblePointFixedMidpointFailsAtomicallyWithoutLegacyTruth() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad = cad();
-            cad.executeCommand("LINE 10 10 30 25");
+            cad.executeCommand("LINE 40 10 0 30");
             CadCanvasView.LineEntity drivenLegacy = (CadCanvasView.LineEntity) cad.selected;
             String drivenId = drivenLegacy.stableId();
             cad.executeCommand("LINE 0 0 100 0");
