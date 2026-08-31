@@ -203,7 +203,7 @@ public final class SketchGeometry {
         }
     }
 
-    static boolean finite(double v) { return !Double.isNaN(v) && !Double.isInfinite(v); }
+    public static boolean finite(double v) { return !Double.isNaN(v) && !Double.isInfinite(v); }
 
     static double distanceSquared(Point a, Point b) {
         double dx = b.xMm - a.xMm;

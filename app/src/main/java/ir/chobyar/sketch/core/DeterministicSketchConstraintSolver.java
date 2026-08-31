@@ -9,12 +9,10 @@ import java.util.Map;
 /**
  * Small deterministic solver used while the mature-solver benchmark is running.
  *
- * It intentionally supports only the constraint slice being migrated in K3.6:
- * horizontal, vertical, parallel, perpendicular, endpoint coincidence,
- * midpoint and point-on-entity for line/circle/arc hosts. Unsupported records
- * fail closed rather than silently becoming decorative metadata. The
- * implementation remains behind SketchConstraintSolver so a mature solver can
- * replace it without changing model ownership or persistence records.
+ * The K3 slice is deliberately fail-closed: a constraint kind/geometry pairing
+ * that is not implemented returns UNSUPPORTED rather than becoming decorative
+ * metadata. K3.10 adds model-owned driving DISTANCE/RADIUS/ANGLE while keeping
+ * point/whole FIXED anchors authoritative during each solver application.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -41,7 +39,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
 
         double residual = Double.POSITIVE_INFINITY;
         for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-            for (SketchConstraint constraint : constraints) apply(constraint, entities);
+            for (SketchConstraint constraint : constraints) apply(constraint, entities, fixed);
             restoreFixedState(entities, fixed);
             residual = maxResidual(constraints, entities);
             if (residual <= DIST_TOL_MM) {
@@ -87,7 +85,8 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 continue;
             }
             if (constraint.fixesPoint()) {
-                LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(constraint.primaryEntityId);
+                LinkedHashMap<Integer, SketchGeometry.Point> anchors =
+                        fixed.pointAnchors.get(constraint.primaryEntityId);
                 if (anchors == null) {
                     anchors = new LinkedHashMap<>();
                     fixed.pointAnchors.put(constraint.primaryEntityId, anchors);
@@ -186,6 +185,24 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return validEndpoint(c.primaryPointIndex)
                         ? null : "POINT_ON_ENTITY requires endpoint index 0 or 1";
+            case DISTANCE:
+                if (!(a instanceof SketchGeometry.Line)) return "DISTANCE requires a line";
+                return isDegenerateLine((SketchGeometry.Line) a)
+                        ? "DISTANCE requires a non-degenerate line" : null;
+            case RADIUS:
+                return a instanceof SketchGeometry.Circle || a instanceof SketchGeometry.Arc
+                        ? null : "RADIUS requires a circle or arc";
+            case ANGLE:
+                if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
+                    return "ANGLE requires two lines";
+                }
+                if (a.id().equals(b.id())) return "ANGLE requires two distinct lines";
+                if (isDegenerateLine((SketchGeometry.Line) a)
+                        || isDegenerateLine((SketchGeometry.Line) b)) {
+                    return "ANGLE requires non-degenerate lines";
+                }
+                return c.value >= 0.0 && c.value <= 180.0
+                        ? null : "ANGLE must be between 0 and 180 degrees";
             case FIXED:
                 if (c.fixesWholeEntity()) return null;
                 if (!c.fixesPoint()) return "FIXED point target is invalid";
@@ -199,7 +216,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
-                return "Constraint kind not yet supported by K3.6 solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.10 solver: " + c.kind;
         }
     }
 
@@ -217,7 +234,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return dx * dx + dy * dy <= EPS;
     }
 
-    private static void apply(SketchConstraint c, LinkedHashMap<String, SketchEntity> entities) {
+    private static void apply(SketchConstraint c,
+                              LinkedHashMap<String, SketchEntity> entities,
+                              FixedState fixed) {
         switch (c.kind) {
             case HORIZONTAL:
                 entities.put(c.primaryEntityId,
@@ -260,10 +279,97 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                         withEndpoint(owner, c.primaryPointIndex, projectToEntity(host, p)));
                 break;
             }
+            case DISTANCE:
+                applyDistance(c, entities, fixed);
+                break;
+            case RADIUS:
+                applyRadius(c, entities, fixed);
+                break;
+            case ANGLE:
+                applyAngle(c, entities, fixed);
+                break;
             case FIXED:
                 break;
             default:
                 throw new IllegalStateException("Unsupported constraint reached apply: " + c.kind);
+        }
+    }
+
+    private static void applyDistance(SketchConstraint c,
+                                      LinkedHashMap<String, SketchEntity> entities,
+                                      FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.primaryEntityId)) return;
+        SketchGeometry.Line current = line(entities, c.primaryEntityId);
+        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(c.primaryEntityId);
+        boolean lockA = anchors != null && anchors.containsKey(0);
+        boolean lockB = anchors != null && anchors.containsKey(1);
+        if (lockA && lockB) return;
+
+        double dx = current.b.xMm - current.a.xMm;
+        double dy = current.b.yMm - current.a.yMm;
+        double len = Math.hypot(dx, dy);
+        if (len <= EPS) return;
+        double ux = dx / len, uy = dy / len;
+        double target = c.value;
+
+        if (lockA) {
+            SketchGeometry.Point a = anchors.get(0);
+            entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(), a,
+                    new SketchGeometry.Point(a.xMm + ux * target, a.yMm + uy * target)));
+            return;
+        }
+        if (lockB) {
+            SketchGeometry.Point b = anchors.get(1);
+            entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(),
+                    new SketchGeometry.Point(b.xMm - ux * target, b.yMm - uy * target), b));
+            return;
+        }
+
+        double cx = (current.a.xMm + current.b.xMm) * 0.5;
+        double cy = (current.a.yMm + current.b.yMm) * 0.5;
+        double half = target * 0.5;
+        entities.put(c.primaryEntityId, new SketchGeometry.Line(current.id(),
+                new SketchGeometry.Point(cx - ux * half, cy - uy * half),
+                new SketchGeometry.Point(cx + ux * half, cy + uy * half)));
+    }
+
+    private static void applyRadius(SketchConstraint c,
+                                    LinkedHashMap<String, SketchEntity> entities,
+                                    FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.primaryEntityId)) return;
+        SketchEntity entity = entities.get(c.primaryEntityId);
+        if (entity instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) entity;
+            entities.put(c.primaryEntityId,
+                    new SketchGeometry.Circle(circle.id(), circle.center, c.value));
+            return;
+        }
+        SketchGeometry.Arc arc = (SketchGeometry.Arc) entity;
+        entities.put(c.primaryEntityId,
+                new SketchGeometry.Arc(arc.id(), arc.center, c.value, arc.startDeg, arc.sweepDeg));
+    }
+
+    private static void applyAngle(SketchConstraint c,
+                                   LinkedHashMap<String, SketchEntity> entities,
+                                   FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.secondaryEntityId)) return;
+        SketchGeometry.Line reference = line(entities, c.primaryEntityId);
+        SketchGeometry.Line moving = line(entities, c.secondaryEntityId);
+        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(c.secondaryEntityId);
+        boolean lockA = anchors != null && anchors.containsKey(0);
+        boolean lockB = anchors != null && anchors.containsKey(1);
+        if (lockA && lockB) return;
+
+        double targetAngle = nearestAngleConstraintTarget(
+                angleDeg(moving), angleDeg(reference), c.value);
+        if (lockA) {
+            entities.put(c.secondaryEntityId,
+                    setAngleAroundEndpoint(moving, 0, anchors.get(0), targetAngle));
+        } else if (lockB) {
+            entities.put(c.secondaryEntityId,
+                    setAngleAroundEndpoint(moving, 1, anchors.get(1), targetAngle));
+        } else {
+            entities.put(c.secondaryEntityId, setAngleAroundCenter(moving, targetAngle));
         }
     }
 
@@ -312,6 +418,23 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 new SketchGeometry.Point(cx + vx, cy + vy));
     }
 
+    private static SketchGeometry.Line setAngleAroundEndpoint(SketchGeometry.Line line,
+                                                               int fixedIndex,
+                                                               SketchGeometry.Point anchor,
+                                                               double angleDeg) {
+        double len = line.lengthMm();
+        double r = Math.toRadians(angleDeg);
+        double vx = len * Math.cos(r);
+        double vy = len * Math.sin(r);
+        SketchGeometry.Point fixed = new SketchGeometry.Point(anchor.xMm, anchor.yMm);
+        if (fixedIndex == 0) {
+            return new SketchGeometry.Line(line.id(), fixed,
+                    new SketchGeometry.Point(fixed.xMm + vx, fixed.yMm + vy));
+        }
+        return new SketchGeometry.Line(line.id(),
+                new SketchGeometry.Point(fixed.xMm - vx, fixed.yMm - vy), fixed);
+    }
+
     private static SketchGeometry.Line withEndpoint(SketchGeometry.Line line, int index,
                                                      SketchGeometry.Point value) {
         SketchGeometry.Point p = new SketchGeometry.Point(value.xMm, value.yMm);
@@ -339,7 +462,8 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         throw new IllegalArgumentException("Unsupported Point-on-Entity host");
     }
 
-    private static SketchGeometry.Point projectToSupportingLine(SketchGeometry.Line line, SketchGeometry.Point p) {
+    private static SketchGeometry.Point projectToSupportingLine(SketchGeometry.Line line,
+                                                                 SketchGeometry.Point p) {
         double dx = line.b.xMm - line.a.xMm;
         double dy = line.b.yMm - line.a.yMm;
         double l2 = dx * dx + dy * dy;
@@ -370,6 +494,24 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
 
     private static double residual(SketchConstraint c, Map<String, SketchEntity> entities) {
         if (c.kind == SketchConstraint.Kind.FIXED) return 0.0;
+        switch (c.kind) {
+            case DISTANCE:
+                return Math.abs(((SketchGeometry.Line) entities.get(c.primaryEntityId)).lengthMm() - c.value);
+            case RADIUS: {
+                SketchEntity entity = entities.get(c.primaryEntityId);
+                double radius = entity instanceof SketchGeometry.Circle
+                        ? ((SketchGeometry.Circle) entity).radiusMm
+                        : ((SketchGeometry.Arc) entity).radiusMm;
+                return Math.abs(radius - c.value);
+            }
+            case ANGLE:
+                return Math.abs(undirectedAngleDeg(
+                        line(entities, c.primaryEntityId),
+                        line(entities, c.secondaryEntityId)) - c.value);
+            default:
+                break;
+        }
+
         SketchGeometry.Line a = line(entities, c.primaryEntityId);
         switch (c.kind) {
             case HORIZONTAL:
@@ -425,6 +567,38 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
     private static double angleDeg(SketchGeometry.Line line) {
         return normalize360(Math.toDegrees(Math.atan2(line.b.yMm - line.a.yMm,
                 line.b.xMm - line.a.xMm)));
+    }
+
+    private static double undirectedAngleDeg(SketchGeometry.Line a, SketchGeometry.Line b) {
+        double ax = a.b.xMm - a.a.xMm, ay = a.b.yMm - a.a.yMm;
+        double bx = b.b.xMm - b.a.xMm, by = b.b.yMm - b.a.yMm;
+        double dot = ax * bx + ay * by;
+        double cross = ax * by - ay * bx;
+        double angle = Math.toDegrees(Math.atan2(Math.abs(cross), dot));
+        if (angle < 0.0) angle += 360.0;
+        return angle > 180.0 ? 360.0 - angle : angle;
+    }
+
+    private static double nearestAngleConstraintTarget(double current,
+                                                       double reference,
+                                                       double target) {
+        double[] candidates = new double[] {
+                reference + target,
+                reference - target,
+                reference + target + 180.0,
+                reference - target + 180.0
+        };
+        double best = normalize360(candidates[0]);
+        double bestDistance = angleDistance(current, best);
+        for (int i = 1; i < candidates.length; i++) {
+            double candidate = normalize360(candidates[i]);
+            double d = angleDistance(current, candidate);
+            if (d < bestDistance) {
+                best = candidate;
+                bestDistance = d;
+            }
+        }
+        return best;
     }
 
     private static double nearestDirectedAngle(double current, double target) {

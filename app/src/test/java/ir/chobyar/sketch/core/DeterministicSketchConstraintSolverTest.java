@@ -103,9 +103,10 @@ public class DeterministicSketchConstraintSolverTest {
 
     @Test public void unsupportedConstraintNeverPretendsToBeSolved() {
         SketchGeometry.Line a = line("a", 0, 0, 10, 0);
+        SketchGeometry.Line b = line("b", 0, 5, 10, 5);
         SketchConstraintSolver.Result result = solver.solve(
-                Collections.singletonList(a),
-                Collections.singletonList(SketchConstraint.distance("d", "a", 10.0)));
+                Arrays.asList(a, b),
+                Collections.singletonList(SketchConstraint.tangent("t", "a", "b")));
         assertEquals(SketchConstraintSolver.Status.UNSUPPORTED, result.status);
         assertFalse(result.solved());
         assertTrue(result.message.contains("not yet supported"));
