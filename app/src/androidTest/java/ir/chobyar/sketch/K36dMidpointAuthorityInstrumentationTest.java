@@ -66,4 +66,24 @@ public final class K36dMidpointAuthorityInstrumentationTest {
         assertNull(reopened.entity("host"));
         assertNull(reopened.constraint("mid-api35"));
     }
+
+    @Test public void productionDrawNeverEnforcesLegacyMidpointOrMutatesModelAuthority() throws Exception {
+        new K36dProductionMidpointDrawAuthorityInstrumentationTest()
+                .drawNeverEnforcesLegacyMidpointOrMutatesModelAuthority();
+    }
+
+    @Test public void productionMidpointUndoRedoSaveOpenAndHostDeletePreserveStableRelationship() throws Exception {
+        new K36dProductionMidpointDrawAuthorityInstrumentationTest()
+                .midpointUndoRedoSaveOpenAndHostDeletePreserveStableRelationship();
+    }
+
+    @Test public void productionCompatiblePointFixedMidpointKeepsAnchorAndLeavesFreeDofRotatable() throws Exception {
+        new K36dProductionMidpointDrawAuthorityInstrumentationTest()
+                .compatiblePointFixedMidpointKeepsAnchorAndLeavesFreeDofRotatable();
+    }
+
+    @Test public void productionIncompatiblePointFixedMidpointFailsAtomicallyWithoutLegacyTruth() throws Exception {
+        new K36dProductionMidpointDrawAuthorityInstrumentationTest()
+                .incompatiblePointFixedMidpointFailsAtomicallyWithoutLegacyTruth();
+    }
 }

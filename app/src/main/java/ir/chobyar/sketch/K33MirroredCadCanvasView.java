@@ -1503,7 +1503,37 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     @Override public String applyEqualConstraint() { String out=super.applyEqualConstraint(); syncMirror("constraint-equal-post"); return out; }
     @Override public String applySymmetryConstraint() { String out=super.applySymmetryConstraint(); syncMirror("constraint-symmetry"); return out; }
-    @Override public String applyMidpointConstraint() { String out=super.applyMidpointConstraint(); syncMirror("constraint-midpoint"); return out; }
+    @Override public String applyMidpointConstraint() {
+        if (!prepareTransactionalSelection("constraint-midpoint-prepare")) {
+            return "Midpoint requires exactly two lines";
+        }
+        List<String> ids = selectedModelLineIds();
+        if (ids.size() != 2) return "Midpoint requires exactly two lines";
+        String drivenId = ids.get(0);
+        String hostId = ids.get(1);
+        if (drivenId.equals(hostId)) return "Midpoint requires two distinct lines";
+        SketchGeometry.Line driven = (SketchGeometry.Line) sketchDocument.entity(drivenId);
+        SketchGeometry.Line host = (SketchGeometry.Line) sketchDocument.entity(hostId);
+        double midpointX = (host.a.xMm + host.b.xMm) * 0.5d;
+        double midpointY = (host.a.yMm + host.b.yMm) * 0.5d;
+        double d0 = Math.hypot(driven.a.xMm - midpointX, driven.a.yMm - midpointY);
+        double d1 = Math.hypot(driven.b.xMm - midpointX, driven.b.yMm - midpointY);
+        int drivenPoint = d0 <= d1 ? 0 : 1;
+        try {
+            SketchConstraint midpoint = SketchConstraint.midpoint(
+                    UUID.randomUUID().toString(), drivenId, drivenPoint, hostId);
+            sketchDocument.addConstraintsAndSolve(
+                    java.util.Collections.singletonList(midpoint), sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("constraint-midpoint")) {
+                return "Midpoint constraint rollback: parity failed";
+            }
+            return "Midpoint applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-midpoint", e);
+        }
+    }
     @Override public String applyTangentConstraint() { String out=super.applyTangentConstraint(); syncMirror("constraint-tangent"); return out; }
     @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
     @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }

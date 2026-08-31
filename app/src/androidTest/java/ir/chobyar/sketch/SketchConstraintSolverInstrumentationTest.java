@@ -103,7 +103,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                     assertCoincident(a, linked[0], b, linked[1]);
                     PointF bp = endpoint(b, linked[1]);
                     b.moveControlPoint(linked[1], bp.x + 24f, bp.y + 19f);
-                    c.invalidate();
+                    reassertModelAuthority(c);
 
                     CadCanvasView.Entity host = make(c, "LINE 270 210 410 210");
                     CadCanvasView.Entity probe = make(c, "LINE 330 140 342 195");
@@ -114,7 +114,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                     int pi = closestEndpointTo(probe, midpoint(host));
                     PointF pp = endpoint(probe, pi);
                     probe.moveControlPoint(pi, pp.x - 27f, pp.y - 31f);
-                    c.invalidate();
+                    reassertModelAuthority(c);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

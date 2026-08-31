@@ -70,6 +70,7 @@ run_contract K39PointFixedTransformInstrumentationTest point-fixed-transform 'OK
 run_contract K310DrivingDimensionAuthorityInstrumentationTest driving-dimension-authority 'OK (4 tests)'
 run_contract K310DrivingDimensionActivityLifecycleInstrumentationTest driving-dimension-activity-lifecycle 'OK (1 test)'
 run_contract K311EqualConstraintAuthorityInstrumentationTest equal-constraint-authority 'OK (4 tests)'
+run_contract K36dMidpointAuthorityInstrumentationTest midpoint-authority 'OK (5 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
