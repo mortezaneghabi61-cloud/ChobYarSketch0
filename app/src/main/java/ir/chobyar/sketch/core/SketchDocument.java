@@ -21,6 +21,8 @@ import java.util.Set;
 public final class SketchDocument {
     public static final int DEFAULT_MAX_HISTORY = 80;
 
+    private enum PointFixedTransformKind { ROTATE, SCALE, MIRROR_X, MIRROR_Y }
+
     private final int maxHistory;
     private final LinkedHashMap<String, SketchEntity> entities = new LinkedHashMap<>();
     private final LinkedHashMap<String, SketchConstraint> constraints = new LinkedHashMap<>();
@@ -329,27 +331,87 @@ public final class SketchDocument {
             throw new IllegalArgumentException("Translation must be finite");
         }
         if (selection.isEmpty() || (Math.abs(dxMm) < 1.0e-12 && Math.abs(dyMm) < 1.0e-12)) {
-            return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
-                    0, 0.0, "", entities.values());
+            return solvedCurrent();
         }
 
         LinkedHashMap<String, SketchEntity> prospective = translatedSelectionSnapshot(dxMm, dyMm);
-        if (prospective.isEmpty()) {
-            return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
-                    0, 0.0, "", entities.values());
-        }
+        if (prospective.isEmpty()) return solvedCurrent();
+        return solveAndCommitProspective(prospective, solver);
+    }
 
+    /**
+     * K3.9 solver-aware Rotate for a selection containing point-FIXED geometry.
+     * The FIXED point is the transform pivot, so the anchor is never mutated and
+     * the remaining parametric degrees of freedom are transformed prospectively.
+     */
+    public synchronized SketchConstraintSolver.Result rotatePointFixedSelectionAndSolve(
+            double degrees, SketchConstraintSolver solver) {
+        if (!SketchGeometry.finite(degrees)) throw new IllegalArgumentException("Rotation must be finite");
+        if (Math.abs(degrees) < 1.0e-12 || selection.isEmpty()) return solvedCurrent();
+        return transformPointFixedSelectionAndSolve(PointFixedTransformKind.ROTATE, degrees, 0.0, solver);
+    }
+
+    /** K3.9 solver-aware Scale around the point-FIXED anchor. */
+    public synchronized SketchConstraintSolver.Result scalePointFixedSelectionAndSolve(
+            double factor, SketchConstraintSolver solver) {
+        if (!SketchGeometry.finite(factor) || factor <= 0.0) {
+            throw new IllegalArgumentException("Scale factor must be positive and finite");
+        }
+        if (Math.abs(factor - 1.0) < 1.0e-12 || selection.isEmpty()) return solvedCurrent();
+        return transformPointFixedSelectionAndSolve(PointFixedTransformKind.SCALE, factor, 0.0, solver);
+    }
+
+    /**
+     * K3.9 solver-aware Mirror. A point-FIXED anchor constrains the reflected
+     * result back onto the same point, which is equivalent to a parallel mirror
+     * axis through the anchor while preserving the requested X/Y orientation.
+     */
+    public synchronized SketchConstraintSolver.Result mirrorPointFixedSelectionAndSolve(
+            boolean acrossXAxis, double axisValue, SketchConstraintSolver solver) {
+        if (!SketchGeometry.finite(axisValue)) throw new IllegalArgumentException("Mirror axis must be finite");
+        if (selection.isEmpty()) return solvedCurrent();
+        return transformPointFixedSelectionAndSolve(
+                acrossXAxis ? PointFixedTransformKind.MIRROR_X : PointFixedTransformKind.MIRROR_Y,
+                0.0, axisValue, solver);
+    }
+
+    private SketchConstraintSolver.Result transformPointFixedSelectionAndSolve(
+            PointFixedTransformKind kind, double value, double axisValue, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        LinkedHashMap<String, SketchEntity> prospective = copyEntities();
+        boolean any = false;
+        for (String id : selection) {
+            SketchEntity current = prospective.get(id);
+            if (current == null || isWholeFixedEntity(id)) continue;
+            Set<Integer> fixedPoints = fixedPointIndices(id);
+            if (fixedPoints.isEmpty()) continue;
+            SketchEntity transformed = transformRespectingFixedPoints(current, fixedPoints, kind, value, axisValue);
+            if (transformed == null || sameGeometry(current, transformed)) continue;
+            requireValid(transformed);
+            prospective.put(id, transformed);
+            any = true;
+        }
+        if (!any) return solvedCurrent();
+        return solveAndCommitProspective(prospective, solver);
+    }
+
+    private SketchConstraintSolver.Result solveAndCommitProspective(
+            LinkedHashMap<String, SketchEntity> prospective, SketchConstraintSolver solver) {
         SketchConstraintSolver.Result solution = constraints.isEmpty()
                 ? new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
                         0, 0.0, "", prospective.values())
                 : solver.solve(prospective.values(), constraints.values());
         LinkedHashMap<String, SketchEntity> solved = requireSolvedSnapshot(solution, prospective);
-
         pushUndo();
         entities.clear();
         entities.putAll(solved);
         changed();
         return solution;
+    }
+
+    private SketchConstraintSolver.Result solvedCurrent() {
+        return new SketchConstraintSolver.Result(SketchConstraintSolver.Status.SOLVED,
+                0, 0.0, "", entities.values());
     }
 
     public synchronized boolean undo() {
@@ -466,6 +528,99 @@ public final class SketchDocument {
         }
         throw new IllegalStateException("Unsupported point-FIXED geometry reached translation: " + current.id());
     }
+
+    private static SketchEntity transformRespectingFixedPoints(
+            SketchEntity current, Set<Integer> fixedPoints, PointFixedTransformKind kind,
+            double value, double axisValue) {
+        if (current instanceof SketchGeometry.Line) {
+            SketchGeometry.Line line = (SketchGeometry.Line) current;
+            boolean lockA = fixedPoints.contains(0);
+            boolean lockB = fixedPoints.contains(1);
+            if (lockA == lockB) return line.copy();
+            SketchGeometry.Point anchor = lockA ? line.a : line.b;
+            SketchGeometry.Point free = lockA ? line.b : line.a;
+            SketchGeometry.Point transformed = transformPointAboutAnchor(free, anchor, kind, value, axisValue);
+            return lockA
+                    ? new SketchGeometry.Line(line.id(), anchor, transformed)
+                    : new SketchGeometry.Line(line.id(), transformed, anchor);
+        }
+        if (current instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) current;
+            if (!fixedPoints.contains(0)) return circle.copy();
+            double radius = kind == PointFixedTransformKind.SCALE
+                    ? circle.radiusMm * Math.abs(value) : circle.radiusMm;
+            return new SketchGeometry.Circle(circle.id(), circle.center, radius);
+        }
+        if (current instanceof SketchGeometry.Arc) {
+            SketchGeometry.Arc arc = (SketchGeometry.Arc) current;
+            if (!fixedPoints.contains(0)) return arc.copy();
+            double radius = arc.radiusMm;
+            double start = arc.startDeg;
+            double sweep = arc.sweepDeg;
+            if (kind == PointFixedTransformKind.ROTATE) start += value;
+            else if (kind == PointFixedTransformKind.SCALE) radius *= Math.abs(value);
+            else if (kind == PointFixedTransformKind.MIRROR_X) {
+                start = -start;
+                sweep = -sweep;
+            } else if (kind == PointFixedTransformKind.MIRROR_Y) {
+                start = 180.0 - start;
+                sweep = -sweep;
+            }
+            return new SketchGeometry.Arc(arc.id(), arc.center, radius, start, sweep);
+        }
+        throw new IllegalStateException(
+                "Point-FIXED transforms currently support line endpoints and circle/arc centers: " + current.id());
+    }
+
+    private static SketchGeometry.Point transformPointAboutAnchor(
+            SketchGeometry.Point point, SketchGeometry.Point anchor, PointFixedTransformKind kind,
+            double value, double axisValue) {
+        double dx = point.xMm - anchor.xMm;
+        double dy = point.yMm - anchor.yMm;
+        if (kind == PointFixedTransformKind.ROTATE) {
+            double radians = Math.toRadians(value);
+            double cos = Math.cos(radians), sin = Math.sin(radians);
+            return new SketchGeometry.Point(anchor.xMm + dx * cos - dy * sin,
+                    anchor.yMm + dx * sin + dy * cos);
+        }
+        if (kind == PointFixedTransformKind.SCALE) {
+            return new SketchGeometry.Point(anchor.xMm + dx * value, anchor.yMm + dy * value);
+        }
+        if (kind == PointFixedTransformKind.MIRROR_X) {
+            // Reflect about the requested horizontal axis, then satisfy FIXED by
+            // translating the result back to the anchor. Algebraically this is
+            // the parallel horizontal axis through the FIXED point.
+            return new SketchGeometry.Point(point.xMm, anchor.yMm - dy);
+        }
+        if (kind == PointFixedTransformKind.MIRROR_Y) {
+            return new SketchGeometry.Point(anchor.xMm - dx, point.yMm);
+        }
+        throw new IllegalStateException("Unknown point-FIXED transform");
+    }
+
+    private static boolean sameGeometry(SketchEntity a, SketchEntity b) {
+        if (a == null || b == null || !a.id().equals(b.id()) || a.kind() != b.kind()) return false;
+        if (a instanceof SketchGeometry.Line && b instanceof SketchGeometry.Line) {
+            SketchGeometry.Line x = (SketchGeometry.Line) a, y = (SketchGeometry.Line) b;
+            return samePoint(x.a, y.a) && samePoint(x.b, y.b);
+        }
+        if (a instanceof SketchGeometry.Circle && b instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle x = (SketchGeometry.Circle) a, y = (SketchGeometry.Circle) b;
+            return samePoint(x.center, y.center) && close(x.radiusMm, y.radiusMm);
+        }
+        if (a instanceof SketchGeometry.Arc && b instanceof SketchGeometry.Arc) {
+            SketchGeometry.Arc x = (SketchGeometry.Arc) a, y = (SketchGeometry.Arc) b;
+            return samePoint(x.center, y.center) && close(x.radiusMm, y.radiusMm)
+                    && close(x.startDeg, y.startDeg) && close(x.sweepDeg, y.sweepDeg);
+        }
+        return false;
+    }
+
+    private static boolean samePoint(SketchGeometry.Point a, SketchGeometry.Point b) {
+        return a != null && b != null && close(a.xMm, b.xMm) && close(a.yMm, b.yMm);
+    }
+
+    private static boolean close(double a, double b) { return Math.abs(a - b) <= 1.0e-12; }
 
     private static LinkedHashMap<String, SketchEntity> requireSolvedSnapshot(
             SketchConstraintSolver.Result solution, Map<String, SketchEntity> expectedIds) {

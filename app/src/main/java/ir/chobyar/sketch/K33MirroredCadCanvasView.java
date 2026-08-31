@@ -349,15 +349,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
         if (value instanceof SketchGeometry.Arc) {
             SketchGeometry.Arc solved = (SketchGeometry.Arc) value;
-            double startRad = Math.toRadians(solved.startDeg);
-            double endRad = Math.toRadians(solved.startDeg + solved.sweepDeg);
-            legacy.moveControlPoint(0, (float) solved.center.xMm, (float) solved.center.yMm);
-            legacy.moveControlPoint(1,
-                    (float) (solved.center.xMm + Math.cos(startRad) * solved.radiusMm),
-                    (float) (solved.center.yMm + Math.sin(startRad) * solved.radiusMm));
-            legacy.moveControlPoint(2,
-                    (float) (solved.center.xMm + Math.cos(endRad) * solved.radiusMm),
-                    (float) (solved.center.yMm + Math.sin(endRad) * solved.radiusMm));
+            if (!coreUpdateReferenceArc(legacy,
+                    (float) solved.center.xMm, (float) solved.center.yMm,
+                    (float) solved.radiusMm, (float) solved.startDeg, (float) solved.sweepDeg)) {
+                throw new IllegalStateException("Arc authority replay target mismatch: " + solved.id());
+            }
         }
     }
 
@@ -1190,16 +1186,49 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
     @Override public String rotateSelected(float deg) {
-        if (selectedHasPointFixed()) return "Locked point prevents Rotate";
-        String out=super.rotateSelected(deg); syncMirror("rotate"); return out;
+        if (!selectedHasPointFixed()) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
+        if (!prepareTransactionalSelection("rotate-point-fixed-prepare")) return "Select geometry first";
+        try {
+            long before=sketchDocument.revision();
+            sketchDocument.rotatePointFixedSelectionAndSolve(deg,sketchConstraintSolver);
+            if (sketchDocument.revision()==before) return "Rotation unchanged";
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("rotate-point-fixed")) return "Rotate rollback: parity failed";
+            return "Rotation applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("rotate-point-fixed",e);
+        }
     }
     @Override public String scaleSelected(float factor) {
-        if (selectedHasPointFixed()) return "Locked point prevents Scale";
-        String out=super.scaleSelected(factor); syncMirror("scale"); return out;
+        if (!selectedHasPointFixed()) { String out=super.scaleSelected(factor); syncMirror("scale"); return out; }
+        if (!prepareTransactionalSelection("scale-point-fixed-prepare")) return "Select geometry first";
+        try {
+            long before=sketchDocument.revision();
+            sketchDocument.scalePointFixedSelectionAndSolve(factor,sketchConstraintSolver);
+            if (sketchDocument.revision()==before) return "Scale unchanged";
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("scale-point-fixed")) return "Scale rollback: parity failed";
+            return "Scale applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("scale-point-fixed",e);
+        }
     }
     @Override public String mirrorSelected(boolean acrossXAxis,float axisValue) {
-        if (selectedHasPointFixed()) return "Locked point prevents Mirror";
-        String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out;
+        if (!selectedHasPointFixed()) { String out=super.mirrorSelected(acrossXAxis,axisValue); syncMirror("mirror"); return out; }
+        if (!prepareTransactionalSelection("mirror-point-fixed-prepare")) return "Select geometry first";
+        try {
+            long before=sketchDocument.revision();
+            sketchDocument.mirrorPointFixedSelectionAndSolve(acrossXAxis,axisValue,sketchConstraintSolver);
+            if (sketchDocument.revision()==before) return "Mirror unchanged";
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("mirror-point-fixed")) return "Mirror rollback: parity failed";
+            return acrossXAxis ? "Mirrored across Axis X" : "Mirrored across Axis Y";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("mirror-point-fixed",e);
+        }
     }
     @Override public String arraySelected(int count,float dx,float dy) { String out=super.arraySelected(count,dx,dy); syncMirror("array"); return out; }
 

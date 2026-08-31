@@ -61,11 +61,12 @@ run_contract() {
   printf '%s | %s\n' "$class" "$expected" | tee -a test-artifacts/production-cad-summary.txt
 }
 
-# Sketch interaction, primitives, selection, dimensions and constraints: 23 tests
+# Sketch interaction, primitives, selection, dimensions and constraints: 27 tests
 run_contract TouchInputContractInstrumentationTest touch 'OK (3 tests)'
 run_contract StylusDimensionLabelRoutingInstrumentationTest stylus-label-routing 'OK (1 test)'
 run_contract DimensionLabelReleaseInstrumentationTest dimension-label-release 'OK (2 tests)'
 run_contract K38PointLockInteractionInstrumentationTest point-lock-interaction 'OK (4 tests)'
+run_contract K39PointFixedTransformInstrumentationTest point-fixed-transform 'OK (4 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
