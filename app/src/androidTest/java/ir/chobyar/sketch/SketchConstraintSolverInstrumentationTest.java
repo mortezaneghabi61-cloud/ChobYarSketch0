@@ -19,8 +19,9 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Production-canvas regression tests for persistent parametric Sketch constraints.
- * Each relationship is applied, geometry is deliberately disturbed, then the
- * real solver is allowed to redraw and must restore the relationship.
+ * Each relationship is applied, legacy projection geometry is deliberately disturbed,
+ * then an explicit interaction/transaction boundary must restore model authority.
+ * Rendering itself is intentionally not a solver or repair boundary.
  */
 @RunWith(AndroidJUnit4.class)
 public final class SketchConstraintSolverInstrumentationTest {
@@ -98,7 +99,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                     select(c, a, b);
                     String coincident = invokeCoincident(c);
                     assertTrue("Coincident rejected: " + coincident,
-                            coincident.contains("Coincident") || coincident.contains("text") || coincident.contains("text"));
+                            coincident.contains("Coincident") || coincident.contains("text"));
                     closestEndpointPair(a, b, linked);
                     assertCoincident(a, linked[0], b, linked[1]);
                     PointF bp = endpoint(b, linked[1]);
@@ -150,7 +151,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertNear("equal line length", length(l0), length(l1));
                 PointF l1a = endpoint(l1, 0);
                 l1.moveControlPoint(1, l1a.x + 43f, l1a.y + 26f);
-                c.invalidate();
+                reassertModelAuthority(c);
 
                 CadCanvasView.Entity c0 = make(c, "CIRCLE 260 120 38");
                 CadCanvasView.Entity c1 = make(c, "CIRCLE 340 165 21");
@@ -165,7 +166,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 c1.translate(31f, -17f);
                 CadCanvasView.SnapPoint edge = c1.snapPoints().get(1);
                 c1.moveControlPoint(1, edge.x + 14f, edge.y);
-                c.invalidate();
+                reassertModelAuthority(c);
             });
 
             inst.waitForIdleSync();
