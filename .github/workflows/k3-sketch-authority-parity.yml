@@ -121,6 +121,8 @@ jobs:
             grep -q 'OK (4 tests)' test-artifacts/k3-point-fixed-transform.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K310DrivingDimensionAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-driving-dimension-authority.txt
             grep -q 'OK (4 tests)' test-artifacts/k3-driving-dimension-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K310DrivingDimensionActivityLifecycleInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-driving-dimension-activity-lifecycle.txt
+            grep -q 'OK (1 test)' test-artifacts/k3-driving-dimension-activity-lifecycle.txt
 
       - name: Upload K3 authority evidence
         if: always()
