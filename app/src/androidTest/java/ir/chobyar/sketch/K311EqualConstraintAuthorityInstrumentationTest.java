@@ -140,6 +140,18 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             assertEquals(pointFixedId, cad.pointLockTargetEntityId());
             assertEquals(0, cad.pointLockTargetPointIndex());
             assertEquals("Point locked", cad.toggleSelectedLock());
+
+            cad.executeCommand("LINE 160 15 190 35");
+            CadCanvasView.LineEntity fixedEqualLegacy = (CadCanvasView.LineEntity) cad.selected;
+            String fixedEqualId = fixedEqualLegacy.stableId();
+            cad.setTool(CadCanvasView.TOOL_SELECT);
+            tap(cad, screenX(cad, 190), screenY(cad, 35));
+            assertEquals(fixedEqualId, cad.pointLockTargetEntityId());
+            assertEquals(1, cad.pointLockTargetPointIndex());
+            assertEquals("Point locked", cad.toggleSelectedLock());
+            selectTwo(cad, fixedEqualLegacy, referenceLegacy);
+            assertEquals("Equal applied", applyEqual(cad));
+
             cad.executeCommand("CIRCLE 200 40 18");
             CadCanvasView.Entity circleLegacy = cad.selected;
             cad.executeCommand("ARC 250 50 7 25 120");
@@ -155,11 +167,13 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             SketchGeometry.Line drivenModel = line(cad, drivenId);
             SketchGeometry.Line freeModel = line(cad, freeId);
             SketchGeometry.Line pointFixedModel = line(cad, pointFixedId);
+            SketchGeometry.Line fixedEqualModel = line(cad, fixedEqualId);
             SketchGeometry.Arc arcModel = (SketchGeometry.Arc) entity(cad, arcId);
             double[] referenceTruth = coordinates(referenceModel);
             double[] drivenTruth = coordinates(drivenModel);
             double[] freeTruth = coordinates(freeModel);
             double[] pointFixedTruth = coordinates(pointFixedModel);
+            double[] fixedEqualTruth = coordinates(fixedEqualModel);
             double[] arcTruth = arcCoordinates(arcModel);
 
             CadCanvasView.LineEntity equalLegacy = (CadCanvasView.LineEntity) drivenLegacy;
@@ -173,6 +187,19 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             freeLegacy.y2 = 414f;
             pointFixedLegacy.x2 = 511f;
             pointFixedLegacy.y2 = 512f;
+
+            float fixedEqualEndX = fixedEqualLegacy.x2;
+            float fixedEqualEndY = fixedEqualLegacy.y2;
+            fixedEqualLegacy.x1 = fixedEqualEndX - 6f;
+            fixedEqualLegacy.y1 = fixedEqualEndY - 8f;
+            double fixedEqualPerturbedLength = Math.hypot(
+                    fixedEqualLegacy.x2 - fixedEqualLegacy.x1,
+                    fixedEqualLegacy.y2 - fixedEqualLegacy.y1);
+            double fixedEqualDirectionX = (fixedEqualLegacy.x2 - fixedEqualLegacy.x1)
+                    / fixedEqualPerturbedLength;
+            double fixedEqualDirectionY = (fixedEqualLegacy.y2 - fixedEqualLegacy.y1)
+                    / fixedEqualPerturbedLength;
+
             arcLegacy.translate(13f, -9f);
             double[] perturbedArc = arcSignature(arcLegacy);
             arcLegacy.moveControlPoint(1,
@@ -198,12 +225,29 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             assertEquals(414f, freeLegacy.y2, 0f);
             assertEquals(511f, pointFixedLegacy.x2, 0f);
             assertEquals(512f, pointFixedLegacy.y2, 0f);
+
+            assertEquals("Equal draw replay must not move a fixed endpoint",
+                    fixedEqualEndX, fixedEqualLegacy.x2, 0f);
+            assertEquals("Equal draw replay must not move a fixed endpoint",
+                    fixedEqualEndY, fixedEqualLegacy.y2, 0f);
+            double fixedEqualRepairedLength = Math.hypot(
+                    fixedEqualLegacy.x2 - fixedEqualLegacy.x1,
+                    fixedEqualLegacy.y2 - fixedEqualLegacy.y1);
+            assertEquals(fixedEqualModel.lengthMm(), fixedEqualRepairedLength, 1.0e-5);
+            assertEquals(fixedEqualDirectionX,
+                    (fixedEqualLegacy.x2 - fixedEqualLegacy.x1) / fixedEqualRepairedLength, 1.0e-6);
+            assertEquals(fixedEqualDirectionY,
+                    (fixedEqualLegacy.y2 - fixedEqualLegacy.y1) / fixedEqualRepairedLength, 1.0e-6);
+
             assertModelLine(cad, referenceId, referenceTruth);
             assertModelLine(cad, drivenId, drivenTruth);
             assertModelLine(cad, freeId, freeTruth);
             assertModelLine(cad, pointFixedId, pointFixedTruth);
+            assertModelLine(cad, fixedEqualId, fixedEqualTruth);
             assertTrue(hasPointFixed(cad, pointFixedId, 0));
             assertFalse(hasPointFixed(cad, pointFixedId, 1));
+            assertFalse(hasPointFixed(cad, fixedEqualId, 0));
+            assertTrue(hasPointFixed(cad, fixedEqualId, 1));
             double[] repairedArc = arcSignature(arcLegacy);
             assertEquals(arcModel.radiusMm, repairedArc[2], 1.0e-5);
             assertEquals(perturbedArc[0], repairedArc[0], 0.0);

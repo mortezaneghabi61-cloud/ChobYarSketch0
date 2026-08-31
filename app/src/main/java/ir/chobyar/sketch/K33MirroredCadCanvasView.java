@@ -363,9 +363,27 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private void replayModelEqualMetricToLegacy(SketchEntity value) {
         if (value == null) return;
         Entity legacy = legacyEntityByStableId(value.id());
-        if (legacy == null) return;
+        if (legacy == null || hasWholeFixed(value.id())) return;
         if (value instanceof SketchGeometry.Line && legacy instanceof LineEntity) {
-            ((LineEntity) legacy).setLength((float) ((SketchGeometry.Line) value).lengthMm());
+            LineEntity line = (LineEntity) legacy;
+            float targetLength = (float) ((SketchGeometry.Line) value).lengthMm();
+            boolean fixedStart = hasPointFixed(value.id(), 0);
+            boolean fixedEnd = hasPointFixed(value.id(), 1);
+            if (fixedStart && fixedEnd) return;
+            if (fixedEnd) {
+                float dx = line.x2 - line.x1;
+                float dy = line.y2 - line.y1;
+                double currentLength = Math.hypot(dx, dy);
+                if (currentLength <= 1.0e-9) {
+                    line.x1 = line.x2 - targetLength;
+                    line.y1 = line.y2;
+                } else {
+                    line.x1 = line.x2 - (float) (dx / currentLength * targetLength);
+                    line.y1 = line.y2 - (float) (dy / currentLength * targetLength);
+                }
+            } else {
+                line.setLength(targetLength);
+            }
             return;
         }
         if (!(value instanceof SketchGeometry.Circle) && !(value instanceof SketchGeometry.Arc)) return;
