@@ -339,7 +339,6 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        enforceRelations();
         super.onDraw(canvas);
         drawLabChip(canvas);
         drawRelationBadges(canvas);
