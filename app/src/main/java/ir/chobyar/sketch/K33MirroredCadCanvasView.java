@@ -887,7 +887,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void clearPendingPointLockGesture() {
         pendingPointLockEntityId = null;
-        pendingPointLockTargetPointIndex = -1;
+        pendingPointLockPointIndex = -1;
         pendingPointLockMoved = false;
     }
 
