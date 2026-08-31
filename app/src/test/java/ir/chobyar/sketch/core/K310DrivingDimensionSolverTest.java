@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** K3.10 red/green fence for model-owned driving dimensions and remaining DOF. */
@@ -108,6 +107,8 @@ public final class K310DrivingDimensionSolverTest {
         doc.add(new SketchGeometry.Line("line",
                 new SketchGeometry.Point(0, 0), new SketchGeometry.Point(20, 0)));
         long revision = doc.revision();
+        boolean canUndoBefore = doc.canUndo();
+        boolean canRedoBefore = doc.canRedo();
         SketchGeometry.Line before = (SketchGeometry.Line) doc.entity("line");
         try {
             doc.addConstraintsAndSolve(Arrays.asList(
@@ -123,7 +124,8 @@ public final class K310DrivingDimensionSolverTest {
         assertPoint(before.b.xMm, before.b.yMm, after.b);
         assertEquals(revision, doc.revision());
         assertEquals(0, doc.constraintCount());
-        assertFalse(doc.canUndo());
+        assertEquals(canUndoBefore, doc.canUndo());
+        assertEquals(canRedoBefore, doc.canRedo());
     }
 
     @Test public void dimensionKindsRejectUnsupportedGeometryRatherThanMutatingIt() {
