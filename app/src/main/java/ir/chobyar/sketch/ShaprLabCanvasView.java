@@ -85,6 +85,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
     // ------------------------------------------------------------------
 
     public String applyEqualConstraint() {
+        if (isModelEqualConstraintAuthorityEnabled()) return super.applyEqualConstraint();
         List<Object> s = selectionObjects();
         if (s.size() < 2) return "text Equal text text Line text text Circle/Arc text Selection text";
         boolean lines = isLine(s.get(0));
@@ -391,8 +392,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
                 "T Tangent / Tangent",
                 "Fit All"
         };
-        new AlertDialog.Builder(getContext())
-                .setTitle("ChobYar • Shapr LAB")
+        new AlertDialog.Builder(getContext()).setTitle("ChobYar • Shapr LAB")
                 .setMessage("text text text text text text ChobYar created text until text Toolstext text text.")
                 .setItems(items,(d,w)->{
                     String result;
