@@ -40,7 +40,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             selectTwo(cad, referenceLegacy, drivenLegacy);
 
             String result = applyEqual(cad);
-            assertTrue(result, result.contains("Equal"));
+            assertEquals("Equal applied", result);
             cad.requireSketchMirrorParity();
             SketchConstraint equal = singleEqual(cad, referenceId, drivenId);
             assertTrue(equal.driving);
@@ -75,7 +75,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             selectTwo(cad, circleLegacy, arcLegacy);
 
             String result = applyEqual(cad);
-            assertTrue(result, result.contains("Equal"));
+            assertEquals("Equal applied", result);
             cad.requireSketchMirrorParity();
             SketchGeometry.Circle circle = (SketchGeometry.Circle) entity(cad, circleId);
             SketchGeometry.Arc arc = (SketchGeometry.Arc) entity(cad, arcId);
@@ -100,7 +100,7 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
             String drivenId = drivenLegacy.stableId();
             selectTwo(cad, referenceLegacy, drivenLegacy);
             String result = applyEqual(cad);
-            assertTrue(result, result.contains("Equal"));
+            assertEquals("Equal applied", result);
             cad.requireSketchMirrorParity();
             String saved = cad.exportSketchProjectState();
 
@@ -141,13 +141,16 @@ public final class K311EqualConstraintAuthorityInstrumentationTest {
     }
 
     private static SketchConstraint singleEqual(K33MirroredCadCanvasView cad,
-                                                String primary, String secondary) {
+                                                String first, String second) {
         List<SketchConstraint> found = new ArrayList<>();
         for (SketchConstraint c : cad.sketchConstraints()) {
-            if (c.kind == SketchConstraint.Kind.EQUAL && primary.equals(c.primaryEntityId)
-                    && secondary.equals(c.secondaryEntityId)) found.add(c);
+            if (c.kind != SketchConstraint.Kind.EQUAL || c.secondaryEntityId == null) continue;
+            boolean sameOrder = first.equals(c.primaryEntityId) && second.equals(c.secondaryEntityId);
+            boolean reverseOrder = second.equals(c.primaryEntityId) && first.equals(c.secondaryEntityId);
+            if (sameOrder || reverseOrder) found.add(c);
         }
-        assertEquals("Expected one model-owned Equal constraint", 1, found.size());
+        assertEquals("Expected one model-owned Equal constraint for the selected stable-ID pair",
+                1, found.size());
         return found.get(0);
     }
 
