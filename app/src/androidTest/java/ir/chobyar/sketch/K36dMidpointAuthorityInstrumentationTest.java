@@ -66,4 +66,9 @@ public final class K36dMidpointAuthorityInstrumentationTest {
         assertNull(reopened.entity("host"));
         assertNull(reopened.constraint("mid-api35"));
     }
+
+    @Test public void productionDrawNeverEnforcesLegacyMidpointOrMutatesModelAuthority() throws Exception {
+        new K36dProductionMidpointDrawAuthorityInstrumentationTest()
+                .drawNeverEnforcesLegacyMidpointOrMutatesModelAuthority();
+    }
 }
