@@ -137,6 +137,9 @@ public class K38ProductionLockAuthorityInstrumentationTest {
             cad.undo();
             cad.requireSketchMirrorParity();
             assertFalse("One Undo after rejected transforms must remove Lock", hasFixedFor(cad, entityId));
+            assertNotNull("Undo must restore the model-owned selection into interaction state", cad.selected);
+            assertEquals("Undo selection projection must preserve the stable entity id",
+                    entityId, cad.selected.stableId());
 
             SketchGeometry.Line beforeUnlockedRotate = lineFor(cad, entityId);
             cad.rotateSelected(30f);
