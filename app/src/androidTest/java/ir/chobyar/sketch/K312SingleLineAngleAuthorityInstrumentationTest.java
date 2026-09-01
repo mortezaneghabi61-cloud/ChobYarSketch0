@@ -73,7 +73,7 @@ public final class K312SingleLineAngleAuthorityInstrumentationTest {
         });
     }
 
-    @Test public void drawReplaysExactModelProjectionBeforeRendering() throws Exception {
+    @Test public void drawDoesNotRepairSingleLineAngleLegacyProjectionOrMutateModel() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad = cad();
             cad.executeCommand("LINE 20 30 60 50");
@@ -82,6 +82,8 @@ public final class K312SingleLineAngleAuthorityInstrumentationTest {
             assertTrue(cad.setSelectedLineAngle(40f).contains("40"));
             cad.requireSketchMirrorParity();
             SketchGeometry.Line modelBefore = line(cad, id);
+            String constraintIdBefore = singleLineAngle(cad, id).id;
+            long transitionsBefore = cad.sketchAuthorityTransitionCount();
 
             legacy.x1 = 100f;
             legacy.y1 = 120f;
@@ -89,14 +91,19 @@ public final class K312SingleLineAngleAuthorityInstrumentationTest {
             legacy.y2 = 155f;
             cad.onDraw(new Canvas(Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)));
 
-            assertEquals(40.0, displayAngle(legacy), 1.0e-4);
+            assertEquals(100f, legacy.x1, 0f);
+            assertEquals(120f, legacy.y1, 0f);
+            assertEquals(150f, legacy.x2, 0f);
+            assertEquals(155f, legacy.y2, 0f);
             assertLine(modelBefore, line(cad, id));
-            cad.requireSketchMirrorParity();
+            assertEquals(constraintIdBefore, singleLineAngle(cad, id).id);
+            assertEquals(40.0, singleLineAngle(cad, id).value, 0.0);
+            assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
             return true;
         });
     }
 
-    @Test public void secondPointFixedIsPivotAcrossAngleAndPreDrawReplay() throws Exception {
+    @Test public void secondPointFixedIsPivotAndDrawDoesNotRepairLegacyProjection() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad = cad();
             cad.executeCommand("LINE 10 10 50 25");
@@ -111,13 +118,26 @@ public final class K312SingleLineAngleAuthorityInstrumentationTest {
             SketchGeometry.Line solved = line(cad, id);
             assertEquals(before.b.xMm, solved.b.xMm, EPS);
             assertEquals(before.b.yMm, solved.b.yMm, EPS);
+            String constraintIdBefore = singleLineAngle(cad, id).id;
 
             CadCanvasView.LineEntity legacy = (CadCanvasView.LineEntity) cad.selected;
             legacy.x1 += 30f;
             legacy.y1 += 20f;
+            float driftX1 = legacy.x1;
+            float driftY1 = legacy.y1;
+            float driftX2 = legacy.x2;
+            float driftY2 = legacy.y2;
             cad.onDraw(new Canvas(Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)));
-            cad.requireSketchMirrorParity();
-            assertEquals(115.0, displayAngle(legacy), 1.0e-4);
+
+            assertEquals(driftX1, legacy.x1, 0f);
+            assertEquals(driftY1, legacy.y1, 0f);
+            assertEquals(driftX2, legacy.x2, 0f);
+            assertEquals(driftY2, legacy.y2, 0f);
+            assertLine(solved, line(cad, id));
+            assertEquals(before.b.xMm, line(cad, id).b.xMm, EPS);
+            assertEquals(before.b.yMm, line(cad, id).b.yMm, EPS);
+            assertEquals(constraintIdBefore, singleLineAngle(cad, id).id);
+            assertEquals(115.0, singleLineAngle(cad, id).value, 0.0);
             return true;
         });
     }

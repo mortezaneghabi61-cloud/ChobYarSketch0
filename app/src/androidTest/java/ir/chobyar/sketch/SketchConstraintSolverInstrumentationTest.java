@@ -150,7 +150,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 assertNear("equal line length", length(l0), length(l1));
                 PointF l1a = endpoint(l1, 0);
                 l1.moveControlPoint(1, l1a.x + 43f, l1a.y + 26f);
-                c.invalidate();
+                reassertModelAuthority(c);
 
                 CadCanvasView.Entity c0 = make(c, "CIRCLE 260 120 38");
                 CadCanvasView.Entity c1 = make(c, "CIRCLE 340 165 21");
@@ -165,7 +165,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 c1.translate(31f, -17f);
                 CadCanvasView.SnapPoint edge = c1.snapPoints().get(1);
                 c1.moveControlPoint(1, edge.x + 14f, edge.y);
-                c.invalidate();
+                reassertModelAuthority(c);
             });
 
             inst.waitForIdleSync();
