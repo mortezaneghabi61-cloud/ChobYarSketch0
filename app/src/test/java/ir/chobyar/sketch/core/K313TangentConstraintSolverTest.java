@@ -18,6 +18,9 @@ public final class K313TangentConstraintSolverTest {
     @Test public void lineCircleTangentUsesNearbyBranchAndPreservesCurveGeometry() {
         SketchGeometry.Line line = line("line", 10, 0, 5, 2);
         SketchGeometry.Circle circle = circle("circle", 0, 0, 5);
+        double beforeLength = line.lengthMm();
+        double beforeUx = (line.b.xMm - line.a.xMm) / beforeLength;
+        double beforeUy = (line.b.yMm - line.a.yMm) / beforeLength;
 
         SketchConstraintSolver.Result result = solver.solve(
                 Arrays.asList(line, circle),
@@ -26,12 +29,34 @@ public final class K313TangentConstraintSolverTest {
         assertTrue(result.solved());
         SketchGeometry.Line solvedLine = (SketchGeometry.Line) entity(result, "line");
         SketchGeometry.Circle solvedCircle = (SketchGeometry.Circle) entity(result, "circle");
-        assertEquals(10.0, solvedLine.a.xMm, EPS);
-        assertEquals(0.0, solvedLine.a.yMm, EPS);
+        assertEquals(beforeLength, solvedLine.lengthMm(), EPS);
+        assertEquals(beforeUx, (solvedLine.b.xMm - solvedLine.a.xMm) / solvedLine.lengthMm(), EPS);
+        assertEquals(beforeUy, (solvedLine.b.yMm - solvedLine.a.yMm) / solvedLine.lengthMm(), EPS);
         assertEquals(circle.center.xMm, solvedCircle.center.xMm, 0.0);
         assertEquals(circle.center.yMm, solvedCircle.center.yMm, 0.0);
         assertEquals(circle.radiusMm, solvedCircle.radiusMm, 0.0);
         assertTangent(solvedLine, solvedCircle.center, solvedCircle.radiusMm);
+    }
+
+    @Test public void separatedFreeLineTangentPreservesLengthDirectionWithoutForcingEndpointContact() {
+        SketchGeometry.Line line = line("line", 10, 8, 18, 11);
+        SketchGeometry.Circle circle = circle("circle", 0, 0, 5);
+        double beforeLength = line.lengthMm();
+        double beforeUx = (line.b.xMm - line.a.xMm) / beforeLength;
+        double beforeUy = (line.b.yMm - line.a.yMm) / beforeLength;
+
+        SketchConstraintSolver.Result result = solver.solve(
+                Arrays.asList(line, circle),
+                Collections.singletonList(SketchConstraint.tangent("t", "line", "circle")));
+
+        assertTrue(result.solved());
+        SketchGeometry.Line solved = (SketchGeometry.Line) entity(result, "line");
+        assertEquals(beforeLength, solved.lengthMm(), EPS);
+        assertEquals(beforeUx, (solved.b.xMm - solved.a.xMm) / solved.lengthMm(), EPS);
+        assertEquals(beforeUy, (solved.b.yMm - solved.a.yMm) / solved.lengthMm(), EPS);
+        assertTangent(solved, circle.center, circle.radiusMm);
+        assertTrue(Math.abs(distance(solved.a, circle.center) - circle.radiusMm) > 0.5);
+        assertTrue(Math.abs(distance(solved.b, circle.center) - circle.radiusMm) > 0.5);
     }
 
     @Test public void lineArcTangentSupportsReversedConstraintOrderAndPreservesArcParameters() {
@@ -53,9 +78,10 @@ public final class K313TangentConstraintSolverTest {
         assertTangent(solvedLine, solvedArc.center, solvedArc.radiusMm);
     }
 
-    @Test public void pointFixedExternalEndpointIsPreservedWhileOtherEndpointMovesToTangent() {
+    @Test public void pointFixedExternalEndpointIsPreservedWhileOtherEndpointRotatesWithoutChangingLength() {
         SketchGeometry.Line line = line("line", 10, 0, 6, 3);
         SketchGeometry.Circle circle = circle("circle", 0, 0, 5);
+        double beforeLength = line.lengthMm();
         SketchConstraint fixed = SketchConstraint.fixedPoint("fix", "line", 0);
         SketchConstraint tangent = SketchConstraint.tangent("t", "line", "circle");
 
@@ -66,7 +92,9 @@ public final class K313TangentConstraintSolverTest {
         SketchGeometry.Line solved = (SketchGeometry.Line) entity(result, "line");
         assertEquals(10.0, solved.a.xMm, 0.0);
         assertEquals(0.0, solved.a.yMm, 0.0);
+        assertEquals(beforeLength, solved.lengthMm(), EPS);
         assertTangent(solved, circle.center, circle.radiusMm);
+        assertTrue(Math.abs(distance(solved.b, circle.center) - circle.radiusMm) > 0.5);
     }
 
     @Test public void pointFixedContactEndpointRotatesFreeEndpointAndPreservesLength() {
@@ -183,6 +211,10 @@ public final class K313TangentConstraintSolverTest {
                 - dy * (center.xMm - line.a.xMm);
         double distance = Math.abs(cross) / length;
         assertEquals(radius, distance, EPS);
+    }
+
+    private static double distance(SketchGeometry.Point a, SketchGeometry.Point b) {
+        return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
     }
 
     private static void assertLineEquals(SketchGeometry.Line expected, SketchGeometry.Line actual) {
