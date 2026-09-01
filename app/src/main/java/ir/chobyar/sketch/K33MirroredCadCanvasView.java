@@ -41,8 +41,9 @@ import ir.chobyar.sketch.core.SketchSnapService;
  * persistent line constraints/solving out of the legacy View hierarchy. K3.10
  * moves Line DISTANCE, Circle/Arc RADIUS and binary Line ANGLE driving
  * dimensions into the same model authority. K3.11 adds model-owned EQUAL for
- * line length and circle/arc radius. Remaining annotations and constraint kinds
- * stay legacy-owned until their dedicated authority slices.
+ * line length and circle/arc radius. K3.13 adds model-owned line-to-curve
+ * TANGENT. Remaining annotations and constraint kinds stay legacy-owned until
+ * their dedicated authority slices.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private static final float LEGACY_SNAP_RADIUS_PX = 30f;
@@ -284,7 +285,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case MIDPOINT: score += 100; break;
                 case PARALLEL:
                 case PERPENDICULAR:
-                case EQUAL: score += 60; break;
+                case EQUAL:
+                case TANGENT: score += 60; break;
                 default: score += 30; break;
             }
         }
@@ -429,6 +431,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.PARALLEL
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
                     && c.kind != SketchConstraint.Kind.EQUAL
+                    && c.kind != SketchConstraint.Kind.TANGENT
                     && c.kind != SketchConstraint.Kind.COINCIDENT
                     && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
                     && c.kind != SketchConstraint.Kind.MIDPOINT
@@ -940,6 +943,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             } else if (constraint.kind == SketchConstraint.Kind.LINE_ANGLE) {
                 canvas.drawText("∠" + formatConstraintDegrees(constraint.value),
                         ax, ay - 10f, modelConstraintTextPaint);
+            } else if (constraint.kind == SketchConstraint.Kind.TANGENT) {
+                canvas.drawText("T", ax, ay - 10f, modelConstraintTextPaint);
             } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL
                     || constraint.kind == SketchConstraint.Kind.PERPENDICULAR)
                     && constraint.secondaryEntityId != null) {
@@ -1581,7 +1586,50 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return modelConstraintFailure("constraint-midpoint", e);
         }
     }
-    @Override public String applyTangentConstraint() { String out=super.applyTangentConstraint(); syncMirror("constraint-tangent"); return out; }
+
+    @Override public String applyTangentConstraint() {
+        if (!prepareTransactionalSelection("constraint-tangent-prepare")) {
+            return "Tangent requires exactly one line and one circle/arc";
+        }
+        Set<String> selectedIds = sketchDocument.selectionIds();
+        if (selectedIds.size() != 2) return "Tangent requires exactly one line and one circle/arc";
+        String lineId = null;
+        String curveId = null;
+        for (String id : selectedIds) {
+            SketchEntity entity = sketchDocument.entity(id);
+            if (entity instanceof SketchGeometry.Line) {
+                if (lineId != null) return "Tangent requires exactly one line and one circle/arc";
+                lineId = id;
+            } else if (entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc) {
+                if (curveId != null) return "Tangent requires exactly one line and one circle/arc";
+                curveId = id;
+            } else {
+                return "Tangent requires exactly one line and one circle/arc";
+            }
+        }
+        if (lineId == null || curveId == null) return "Tangent requires exactly one line and one circle/arc";
+        for (SketchConstraint existing : sketchDocument.constraints()) {
+            if (existing.kind != SketchConstraint.Kind.TANGENT || existing.secondaryEntityId == null) continue;
+            boolean same = lineId.equals(existing.primaryEntityId) && curveId.equals(existing.secondaryEntityId);
+            boolean reverse = curveId.equals(existing.primaryEntityId) && lineId.equals(existing.secondaryEntityId);
+            if (same || reverse) return "Tangent already applied";
+        }
+        try {
+            SketchConstraint tangent = SketchConstraint.tangent(UUID.randomUUID().toString(), lineId, curveId);
+            sketchDocument.addConstraintsAndSolve(
+                    java.util.Collections.singletonList(tangent), sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("constraint-tangent")) {
+                return "Tangent constraint rollback: parity failed";
+            }
+            invalidate();
+            return "Tangent applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-tangent", e);
+        }
+    }
+
     @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
     @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
 
