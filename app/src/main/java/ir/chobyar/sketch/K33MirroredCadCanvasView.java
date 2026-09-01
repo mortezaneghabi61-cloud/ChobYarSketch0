@@ -729,7 +729,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             this.xMm = xMm;
             this.yMm = yMm;
             this.distanceMm = distanceMm;
-            this.label = label == null ? "";
+            this.label = label == null ? "" : label;
             this.modelKind = modelKind;
             this.targetEntityId = targetEntityId;
             this.targetPointIndex = targetPointIndex;
