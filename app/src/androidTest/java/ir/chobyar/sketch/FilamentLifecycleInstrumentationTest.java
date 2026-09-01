@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -37,11 +38,51 @@ public final class FilamentLifecycleInstrumentationTest {
         activity = null;
 
         // A stale/delayed teardown path after Activity destruction must be harmless.
-        // Current main has no destroyed-state fence, so this second teardown reaches
-        // already-destroyed Filament resources and is expected to fail RED.
         onMain(() -> {
             surface.destroyRenderer();
             surface.destroyRenderer();
+            return true;
+        });
+    }
+
+    @Test public void staleRendererOperationsAreIgnoredAfterDestroy() throws Exception {
+        activity = launch();
+        FilamentCadSurface surface = gpuSurface(activity);
+        finish(activity);
+        activity = null;
+
+        // Simulate callbacks/work that were already queued by the UI/render layer
+        // before teardown completed. None may reach already-destroyed Filament state.
+        onMain(() -> {
+            surface.setAppearance(Color.rgb(80, 130, 190), 0.45f, 0.15f);
+            surface.setCameraState(null);
+            surface.setMesh(new double[]{
+                    0.0, 0.0, 0.0,
+                    10.0, 0.0, 0.0,
+                    0.0, 10.0, 0.0
+            });
+            surface.doFrame(System.nanoTime());
+            surface.destroyRenderer();
+            return true;
+        });
+    }
+
+    @Test public void rendererCanBeRecreatedAfterPreviousActivityDestroy() throws Exception {
+        activity = launch();
+        FilamentCadSurface firstSurface = gpuSurface(activity);
+        finish(activity);
+        activity = null;
+
+        activity = launch();
+        FilamentCadSurface secondSurface = gpuSurface(activity);
+        assertTrue("Recreated Activity must own a fresh GPU surface", secondSurface != firstSurface);
+        finish(activity);
+        activity = null;
+
+        // A stale owner from the first Activity must remain terminal even after a
+        // later renderer has been created and destroyed successfully.
+        onMain(() -> {
+            firstSurface.destroyRenderer();
             return true;
         });
     }
