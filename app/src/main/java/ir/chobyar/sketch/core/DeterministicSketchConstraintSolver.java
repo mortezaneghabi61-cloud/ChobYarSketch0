@@ -202,6 +202,13 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                         ? "DISTANCE requires a non-degenerate line" : null;
             case RADIUS:
                 return isRadiusEntity(a) ? null : "RADIUS requires a circle or arc";
+            case LINE_ANGLE:
+                if (!(a instanceof SketchGeometry.Line)) return "LINE_ANGLE requires a line";
+                if (isDegenerateLine((SketchGeometry.Line) a)) {
+                    return "LINE_ANGLE requires a non-degenerate line";
+                }
+                return c.value >= 0.0 && c.value <= 180.0
+                        ? null : "LINE_ANGLE must be between 0 and 180 degrees";
             case ANGLE:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
                     return "ANGLE requires two lines";
@@ -302,6 +309,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             case RADIUS:
                 applyRadius(c, entities, fixed);
                 break;
+            case LINE_ANGLE:
+                applyLineAngle(c, entities, fixed);
+                break;
             case ANGLE:
                 applyAngle(c, entities, fixed);
                 break;
@@ -395,6 +405,28 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         SketchGeometry.Arc arc = (SketchGeometry.Arc) entity;
         entities.put(c.primaryEntityId,
                 new SketchGeometry.Arc(arc.id(), arc.center, c.value, arc.startDeg, arc.sweepDeg));
+    }
+
+    private static void applyLineAngle(SketchConstraint c,
+                                       LinkedHashMap<String, SketchEntity> entities,
+                                       FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.primaryEntityId)) return;
+        SketchGeometry.Line line = line(entities, c.primaryEntityId);
+        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(c.primaryEntityId);
+        boolean lockA = anchors != null && anchors.containsKey(0);
+        boolean lockB = anchors != null && anchors.containsKey(1);
+        if (lockA && lockB) return;
+
+        double target = nearestDirectedAngle(angleDeg(line), c.value);
+        if (lockA) {
+            entities.put(c.primaryEntityId,
+                    setAngleAroundEndpoint(line, 0, anchors.get(0), target));
+        } else if (lockB) {
+            entities.put(c.primaryEntityId,
+                    setAngleAroundEndpoint(line, 1, anchors.get(1), target));
+        } else {
+            entities.put(c.primaryEntityId, setAngleAroundCenter(line, target));
+        }
     }
 
     private static void applyAngle(SketchConstraint c,
@@ -553,6 +585,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 return Math.abs(((SketchGeometry.Line) entities.get(c.primaryEntityId)).lengthMm() - c.value);
             case RADIUS:
                 return Math.abs(radiusOf(entities.get(c.primaryEntityId)) - c.value);
+            case LINE_ANGLE:
+                return Math.abs(displayLineAngleDeg(
+                        line(entities, c.primaryEntityId)) - normalizeLineAngle(c.value));
             case ANGLE:
                 return Math.abs(undirectedAngleDeg(
                         line(entities, c.primaryEntityId),
@@ -625,6 +660,15 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
     private static double angleDeg(SketchGeometry.Line line) {
         return normalize360(Math.toDegrees(Math.atan2(line.b.yMm - line.a.yMm,
                 line.b.xMm - line.a.xMm)));
+    }
+
+    private static double displayLineAngleDeg(SketchGeometry.Line line) {
+        return normalizeLineAngle(angleDeg(line));
+    }
+
+    private static double normalizeLineAngle(double angle) {
+        double value = normalize360(angle);
+        return value >= 180.0 ? value - 180.0 : value;
     }
 
     private static double undirectedAngleDeg(SketchGeometry.Line a, SketchGeometry.Line b) {
