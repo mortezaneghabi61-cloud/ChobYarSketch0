@@ -13,6 +13,8 @@ import org.junit.runner.RunWith;
 
 import java.lang.reflect.Method;
 
+import ir.chobyar.sketch.core.SketchConstraint;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -186,24 +188,31 @@ public final class SketchConstraintSolverInstrumentationTest {
         Instrumentation inst = InstrumentationRegistry.getInstrumentation();
         try (ActivityScenario<ChobYarActivity> scenario = ActivityScenario.launch(ChobYarActivity.class)) {
             inst.waitForIdleSync();
+            final String[] stableIds = new String[4];
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 reset(c);
 
+                assertTrue("Production canvas must expose model-owned Tangent authority",
+                        c instanceof K33MirroredCadCanvasView);
+                K33MirroredCadCanvasView model = (K33MirroredCadCanvasView)c;
+
                 CadCanvasView.Entity circle = make(c, "CIRCLE 180 180 45");
-                CadCanvasView.Entity tangent = make(c, "LINE 225 180 315 95");
+                CadCanvasView.Entity tangent = make(c, "LINE 300 280 390 245");
+                stableIds[0] = circle.stableId();
+                stableIds[1] = tangent.stableId();
                 select(c, tangent, circle);
                 String tang = c.applyTangentConstraint();
                 assertTrue("Tangent rejected: " + tang, tang.contains("Tangent"));
-                assertTangent(tangent, circle);
-                int moving = endpointOnCircle(tangent, circle);
-                PointF tp = endpoint(tangent, moving);
-                tangent.moveControlPoint(moving, tp.x + 25f, tp.y + 33f);
-                c.invalidate();
+                assertModelOwnedTangent(model, stableIds[1], stableIds[0]);
+                assertSupportingLineTangent(tangent, circle);
+                assertNoEndpointOnCurve(tangent, circle);
 
                 CadCanvasView.Entity source = make(c, "LINE 80 280 130 235");
                 CadCanvasView.Entity mirror = make(c, "LINE 305 260 350 310");
                 CadCanvasView.Entity axis = make(c, "LINE 220 200 220 360");
+                stableIds[2] = source.stableId();
+                stableIds[3] = mirror.stableId();
                 select(c, source, mirror, axis);
                 String sym = c.applySymmetryConstraint();
                 assertTrue("Symmetry rejected: " + sym, sym.contains("Symmetry"));
@@ -215,10 +224,34 @@ public final class SketchConstraintSolverInstrumentationTest {
 
             inst.waitForIdleSync();
             scenario.onActivity(activity -> {
-                Shapr3DGuideCadCanvasView c = canvas(activity);
-                CadCanvasView.Entity circle = c.entities.get(0), tangent = c.entities.get(1);
-                CadCanvasView.Entity source = c.entities.get(2), mirror = c.entities.get(3);
-                assertTangent(tangent, circle);
+                K33MirroredCadCanvasView c = (K33MirroredCadCanvasView)canvas(activity);
+                CadCanvasView.Entity circle = entityByStableId(c, stableIds[0]);
+                CadCanvasView.Entity tangent = entityByStableId(c, stableIds[1]);
+                CadCanvasView.Entity source = entityByStableId(c, stableIds[2]);
+                CadCanvasView.Entity mirror = entityByStableId(c, stableIds[3]);
+                assertModelOwnedTangent(c, stableIds[1], stableIds[0]);
+                assertSupportingLineTangent(tangent, circle);
+                assertNoEndpointOnCurve(tangent, circle);
+                assertMirrorAcrossVertical(source, mirror, 220f);
+
+                String saved = c.exportSketchProjectState();
+                c.clearAll();
+                String restored = c.importSketchProjectState(saved);
+                assertTrue("Tangent/Symmetry project state failed to reload: " + restored,
+                        !restored.contains("could not be restored"));
+                c.requireSketchMirrorParity();
+            });
+
+            inst.waitForIdleSync();
+            scenario.onActivity(activity -> {
+                K33MirroredCadCanvasView c = (K33MirroredCadCanvasView)canvas(activity);
+                CadCanvasView.Entity circle = entityByStableId(c, stableIds[0]);
+                CadCanvasView.Entity tangent = entityByStableId(c, stableIds[1]);
+                CadCanvasView.Entity source = entityByStableId(c, stableIds[2]);
+                CadCanvasView.Entity mirror = entityByStableId(c, stableIds[3]);
+                assertModelOwnedTangent(c, stableIds[1], stableIds[0]);
+                assertSupportingLineTangent(tangent, circle);
+                assertNoEndpointOnCurve(tangent, circle);
                 assertMirrorAcrossVertical(source, mirror, 220f);
                 Log.i(TAG, "TANGENT_SYMMETRY_RESULT tangent=true symmetry=true persistent=true");
             });
@@ -389,19 +422,47 @@ public final class SketchConstraintSolverInstrumentationTest {
         assertEquals("endpoint-to-midpoint distance", 0f, d, EPS);
     }
 
-    private static int endpointOnCircle(CadCanvasView.Entity line, CadCanvasView.Entity curve) {
-        PointF c = curve.center(); float r = radius(curve);
-        float d0 = Math.abs(dist(endpoint(line,0),c)-r), d1 = Math.abs(dist(endpoint(line,1),c)-r);
-        return d0 <= d1 ? 0 : 1;
+    private static CadCanvasView.Entity entityByStableId(K33MirroredCadCanvasView c, String stableId) {
+        for (CadCanvasView.Entity entity : c.entities) {
+            if (stableId.equals(entity.stableId())) return entity;
+        }
+        throw new AssertionError("Missing persisted entity " + stableId);
     }
 
-    private static void assertTangent(CadCanvasView.Entity line, CadCanvasView.Entity curve) {
-        int t = endpointOnCircle(line, curve); int fixed = 1-t;
-        PointF p = endpoint(line,t), f = endpoint(line,fixed), c = curve.center(); float r=radius(curve);
-        assertEquals("tangent point on curve", r, dist(p,c), 0.15f);
-        float rx=p.x-c.x, ry=p.y-c.y, lx=f.x-p.x, ly=f.y-p.y;
-        float denom=Math.max(1f,(float)Math.hypot(rx,ry)*(float)Math.hypot(lx,ly));
-        assertEquals("radius perpendicular to tangent",0f,(rx*lx+ry*ly)/denom,0.003f);
+    private static void assertModelOwnedTangent(K33MirroredCadCanvasView c,
+                                                String lineId, String curveId) {
+        int tangentCount = 0;
+        int hiddenContactCount = 0;
+        for (SketchConstraint constraint : c.sketchConstraints()) {
+            boolean referencesPair = constraint.referencedEntityIds().contains(lineId)
+                    && constraint.referencedEntityIds().contains(curveId);
+            if (constraint.kind == SketchConstraint.Kind.TANGENT && referencesPair) tangentCount++;
+            if ((constraint.kind == SketchConstraint.Kind.COINCIDENT
+                    || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY)
+                    && referencesPair) hiddenContactCount++;
+        }
+        assertEquals("Exactly one model-owned stable-ID Tangent must persist", 1, tangentCount);
+        assertEquals("Tangent must not persist an implicit endpoint contact constraint", 0, hiddenContactCount);
+        c.requireSketchMirrorParity();
+    }
+
+    private static void assertSupportingLineTangent(CadCanvasView.Entity line,
+                                                    CadCanvasView.Entity curve) {
+        PointF a = endpoint(line, 0), b = endpoint(line, 1), center = curve.center();
+        float dx = b.x - a.x, dy = b.y - a.y;
+        float supportingDistance = Math.abs(dx * (center.y - a.y) - dy * (center.x - a.x))
+                / Math.max(EPS, (float)Math.hypot(dx, dy));
+        assertEquals("supporting line tangent distance", radius(curve), supportingDistance, EPS);
+    }
+
+    private static void assertNoEndpointOnCurve(CadCanvasView.Entity line,
+                                                CadCanvasView.Entity curve) {
+        PointF center = curve.center();
+        float r = radius(curve);
+        assertTrue("Tangent must not force endpoint 0 onto the curve",
+                Math.abs(dist(endpoint(line, 0), center) - r) > 1f);
+        assertTrue("Tangent must not force endpoint 1 onto the curve",
+                Math.abs(dist(endpoint(line, 1), center) - r) > 1f);
     }
 
     private static void assertMirrorAcrossVertical(CadCanvasView.Entity source, CadCanvasView.Entity mirror, float axisX) {
