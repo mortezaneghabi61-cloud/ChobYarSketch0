@@ -1,0 +1,2 @@
+Main Governance post-ruleset canary.
+Temporary validation-only change; do not merge.
