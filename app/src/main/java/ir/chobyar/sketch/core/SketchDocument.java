@@ -262,6 +262,7 @@ public final class SketchDocument {
     private static boolean isDrivingDimensionKind(SketchConstraint.Kind kind) {
         return kind == SketchConstraint.Kind.DISTANCE
                 || kind == SketchConstraint.Kind.RADIUS
+                || kind == SketchConstraint.Kind.LINE_ANGLE
                 || kind == SketchConstraint.Kind.ANGLE;
     }
 
@@ -280,6 +281,8 @@ public final class SketchDocument {
                 return SketchConstraint.distance(id, source.primaryEntityId, source.value);
             case RADIUS:
                 return SketchConstraint.radius(id, source.primaryEntityId, source.value);
+            case LINE_ANGLE:
+                return SketchConstraint.lineAngle(id, source.primaryEntityId, source.value);
             case ANGLE:
                 return SketchConstraint.angle(id, source.primaryEntityId, source.secondaryEntityId, source.value);
             default:
