@@ -24,6 +24,7 @@ public final class SketchConstraint {
         EQUAL,
         DISTANCE,
         RADIUS,
+        LINE_ANGLE,
         ANGLE,
         FIXED
     }
@@ -47,7 +48,7 @@ public final class SketchConstraint {
         this.primaryPointIndex = requirePointIndex(primaryPointIndex, "primary point index");
         this.secondaryEntityId = normalizeOptional(secondaryEntityId);
         this.secondaryPointIndex = requirePointIndex(secondaryPointIndex, "secondary point index");
-        this.value = value;
+        this.value = this.kind == Kind.LINE_ANGLE ? normalizeLineAngle(value) : value;
         this.driving = driving;
         validateShape();
     }
@@ -94,6 +95,11 @@ public final class SketchConstraint {
 
     public static SketchConstraint radius(String id, String entityId, double mm) {
         return dimension(id, Kind.RADIUS, entityId, mm);
+    }
+
+    /** Absolute undirected orientation of one line, canonicalized to [0, 180) degrees. */
+    public static SketchConstraint lineAngle(String id, String entityId, double degrees) {
+        return dimension(id, Kind.LINE_ANGLE, entityId, degrees);
     }
 
     public static SketchConstraint angle(String id, String a, String b, double degrees) {
@@ -170,7 +176,8 @@ public final class SketchConstraint {
             throw new IllegalArgumentException(kind + " does not accept a secondary entity");
         }
 
-        boolean dimension = kind == Kind.DISTANCE || kind == Kind.RADIUS || kind == Kind.ANGLE;
+        boolean dimension = kind == Kind.DISTANCE || kind == Kind.RADIUS
+                || kind == Kind.LINE_ANGLE || kind == Kind.ANGLE;
         if (dimension) {
             if (!SketchGeometry.finite(value)) throw new IllegalArgumentException(kind + " value must be finite");
             if ((kind == Kind.DISTANCE || kind == Kind.RADIUS) && value <= 0.0) {
@@ -209,6 +216,13 @@ public final class SketchConstraint {
 
     private static boolean isEndpointIndex(int index) {
         return index == 0 || index == 1;
+    }
+
+    private static double normalizeLineAngle(double degrees) {
+        if (!SketchGeometry.finite(degrees) || degrees < 0.0 || degrees > 180.0) {
+            throw new IllegalArgumentException("LINE_ANGLE must be between 0 and 180 degrees");
+        }
+        return degrees == 180.0 ? 0.0 : degrees;
     }
 
     private static Kind failKind() {
