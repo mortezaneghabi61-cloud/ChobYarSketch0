@@ -136,7 +136,7 @@ jobs:
             adb shell am instrument -w -e class ir.chobyar.sketch.K312SingleLineAngleAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-single-line-angle-authority.txt
             grep -q 'OK (5 tests)' test-artifacts/k3-single-line-angle-authority.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K313TangentAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-tangent-authority.txt
-            grep -q 'OK (5 tests)' test-artifacts/k3-tangent-authority.txt
+            grep -q 'OK (6 tests)' test-artifacts/k3-tangent-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
