@@ -70,6 +70,42 @@ public final class K313TangentAuthorityInstrumentationTest {
         });
     }
 
+    @Test public void separatedLineCircleTangentPreservesLineLengthDirectionAndDoesNotForceContact() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            cad.executeCommand("CIRCLE 180 180 45");
+            CadCanvasView.Entity circleLegacy = cad.selected;
+            String circleId = circleLegacy.stableId();
+
+            cad.executeCommand("LINE 300 280 390 245");
+            CadCanvasView.Entity lineLegacy = cad.selected;
+            String lineId = lineLegacy.stableId();
+            SketchGeometry.Line before = modelLine(cad, lineId);
+            double beforeLength = before.lengthMm();
+            double beforeUx = (before.b.xMm - before.a.xMm) / beforeLength;
+            double beforeUy = (before.b.yMm - before.a.yMm) / beforeLength;
+            selectTwo(cad, lineLegacy, circleLegacy);
+
+            assertEquals("Tangent applied", cad.applyTangentConstraint());
+            cad.requireSketchMirrorParity();
+            SketchGeometry.Line solved = modelLine(cad, lineId);
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) modelEntity(cad, circleId);
+            assertEquals("Free Tangent must preserve line length", beforeLength, solved.lengthMm(), EPS);
+            assertEquals("Free Tangent must preserve line x direction", beforeUx,
+                    (solved.b.xMm - solved.a.xMm) / solved.lengthMm(), EPS);
+            assertEquals("Free Tangent must preserve line y direction", beforeUy,
+                    (solved.b.yMm - solved.a.yMm) / solved.lengthMm(), EPS);
+            assertModelTangent(cad, lineId, circleId);
+            assertTrue("Tangent must not add hidden endpoint contact at endpoint A",
+                    Math.abs(distance(solved.a, circle.center) - circle.radiusMm) > 1.0);
+            assertTrue("Tangent must not add hidden endpoint contact at endpoint B",
+                    Math.abs(distance(solved.b, circle.center) - circle.radiusMm) > 1.0);
+            assertEquals(1, countTangent(cad, lineId, circleId));
+            assertEquals(0, legacyTangentTruthCount(cad));
+            return true;
+        });
+    }
+
     @Test public void drawMustNeverRepairLegacyTangentProjectionOrMutateModelAuthority() throws Exception {
         onMain(() -> {
             K33MirroredCadCanvasView cad = cad();
@@ -164,6 +200,7 @@ public final class K313TangentAuthorityInstrumentationTest {
             SketchGeometry.Line before = modelLine(cad, lineId);
             double fixedX = before.a.xMm;
             double fixedY = before.a.yMm;
+            double beforeLength = before.lengthMm();
             selectTwo(cad, lineLegacy, circleLegacy);
 
             assertEquals("Tangent applied", cad.applyTangentConstraint());
@@ -171,6 +208,7 @@ public final class K313TangentAuthorityInstrumentationTest {
             SketchGeometry.Line solved = modelLine(cad, lineId);
             assertEquals("Point-FIXED x must be preserved", fixedX, solved.a.xMm, 0.0);
             assertEquals("Point-FIXED y must be preserved", fixedY, solved.a.yMm, 0.0);
+            assertEquals("Point-FIXED Tangent must preserve line length", beforeLength, solved.lengthMm(), EPS);
             assertTrue(hasPointFixed(cad, lineId, 0));
             assertFalse(hasPointFixed(cad, lineId, 1));
             assertModelTangent(cad, lineId, circleId);
@@ -342,6 +380,10 @@ public final class K313TangentAuthorityInstrumentationTest {
         assertEquals(message + " ay", expected[1], actual[1], 0.0);
         assertEquals(message + " bx", expected[2], actual[2], 0.0);
         assertEquals(message + " by", expected[3], actual[3], 0.0);
+    }
+
+    private static double distance(SketchGeometry.Point a, SketchGeometry.Point b) {
+        return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
     }
 
     private static float screenX(K33MirroredCadCanvasView cad, double xMm) {
