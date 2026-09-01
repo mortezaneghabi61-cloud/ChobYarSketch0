@@ -531,7 +531,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         }
         SketchGeometry.Arc arc = (SketchGeometry.Arc) entity;
         entities.put(c.primaryEntityId,
-                new SketchGeometry.Arc(arc.id(), arc.center, arc.radiusMm, arc.startDeg, arc.sweepDeg));
+                new SketchGeometry.Arc(arc.id(), arc.center, c.value, arc.startDeg, arc.sweepDeg));
     }
 
     private static void applyLineAngle(SketchConstraint c,
