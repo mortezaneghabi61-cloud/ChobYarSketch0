@@ -729,7 +729,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             this.xMm = xMm;
             this.yMm = yMm;
             this.distanceMm = distanceMm;
-            this.label = label == null ? "" : label;
+            this.label = label == null ? "";
             this.modelKind = modelKind;
             this.targetEntityId = targetEntityId;
             this.targetPointIndex = targetPointIndex;
@@ -1533,8 +1533,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         int anchorIndex=chooseConstraintAnchorIndex(ids);
         String anchor=ids.get(anchorIndex);
         ArrayList<SketchConstraint> incoming=new ArrayList<>();
-        for(int i=0;i<ids.size();i++) {
-            if(i==anchorIndex) continue;
+        for (int i = 0; i < ids.size(); i++) {
+            if (i == anchorIndex) continue;
             incoming.add(SketchConstraint.parallel(UUID.randomUUID().toString(),anchor,ids.get(i)));
         }
         try {
