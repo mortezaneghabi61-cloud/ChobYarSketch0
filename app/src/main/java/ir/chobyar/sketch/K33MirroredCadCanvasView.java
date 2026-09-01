@@ -894,7 +894,6 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected void onDraw(Canvas canvas) {
-        replayAuthoritativeConstrainedGeometryBeforeDraw();
         super.onDraw(canvas);
         drawModelConstraintFeedback(canvas);
         if (!routedSnapVisible) return;
@@ -1014,7 +1013,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void clearPendingPointLockGesture() {
         pendingPointLockEntityId = null;
-        pendingPointLockPointIndex = -1;
+        pendingPointLockTargetPointIndex = -1;
         pendingPointLockMoved = false;
     }
 
