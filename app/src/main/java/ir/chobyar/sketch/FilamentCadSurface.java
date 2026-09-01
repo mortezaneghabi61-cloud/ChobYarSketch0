@@ -58,6 +58,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     private final UiHelper uiHelper;
     private SwapChain swapChain;
     private boolean running;
+    private boolean destroyed;
     private VertexBuffer vertexBuffer;
     private IndexBuffer indexBuffer;
     private int renderableEntity;
@@ -93,15 +94,17 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         uiHelper=new UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK);
         uiHelper.setRenderCallback(new UiHelper.RendererCallback() {
             @Override public void onNativeWindowChanged(Surface surface) {
+                if(destroyed)return;
                 if(swapChain!=null)engine.destroySwapChain(swapChain);
                 swapChain=engine.createSwapChain(surface);startFrames();
             }
             @Override public void onDetachedFromSurface() {
+                if(destroyed)return;
                 stopFrames();if(swapChain!=null){engine.destroySwapChain(swapChain);swapChain=null;}
                 engine.flushAndWait();
             }
             @Override public void onResized(int width,int height) {
-                if(width<=0||height<=0)return;
+                if(destroyed||width<=0||height<=0)return;
                 surfaceWidth=width;surfaceHeight=height;applyCameraState();
             }
         });
@@ -128,6 +131,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
     }
 
     void setAppearance(int color,float roughness,float metallic){
+        if(destroyed)return;
         float r=Color.red(color)/255f,g=Color.green(color)/255f,b=Color.blue(color)/255f;
         roughness=Math.max(.04f,Math.min(1f,roughness));metallic=Math.max(0f,Math.min(1f,metallic));
         if(Math.abs(r-materialRed)<.001f&&Math.abs(g-materialGreen)<.001f&&Math.abs(b-materialBlue)<.001f&&Math.abs(roughness-materialRoughness)<.001f&&Math.abs(metallic-materialMetallic)<.001f)return;
@@ -138,9 +142,13 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         double[] restore=meshSnapshot;clearMesh();Material old=cadMaterial;cadMaterial=buildCadMaterial();engine.destroyMaterial(old);meshLength=-1;meshHash=0;if(restore.length>=9)setMesh(restore);
     }
 
-    void setCameraState(SpatialCadCanvasView.GpuCameraState state){cameraState=state;applyCameraState();}
+    void setCameraState(SpatialCadCanvasView.GpuCameraState state){
+        if(destroyed)return;
+        cameraState=state;applyCameraState();
+    }
 
     private void applyCameraState(){
+        if(destroyed)return;
         SpatialCadCanvasView.GpuCameraState s=cameraState;
         if(surfaceWidth<=0||surfaceHeight<=0||s==null)return;
         int left=Math.max(0,Math.round(s.left)),top=Math.max(0,Math.round(s.top));
@@ -164,6 +172,7 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
 
     /** Uploads non-indexed OCCT triangles (xyz xyz xyz per triangle) to the GPU. */
     void setMesh(double[] xyz){
+        if(destroyed)return;
         if(xyz==null)xyz=new double[0];
         int nextHash=Arrays.hashCode(xyz);
         if(meshLength==xyz.length&&meshHash==nextHash)return;
@@ -225,16 +234,21 @@ final class FilamentCadSurface extends SurfaceView implements Choreographer.Fram
         if(indexBuffer!=null){engine.destroyIndexBuffer(indexBuffer);indexBuffer=null;}
     }
 
-    private void startFrames(){if(running)return;running=true;Choreographer.getInstance().postFrameCallback(this);}
+    private void startFrames(){if(destroyed||running)return;running=true;Choreographer.getInstance().postFrameCallback(this);}
     private void stopFrames(){running=false;Choreographer.getInstance().removeFrameCallback(this);}
 
     @Override public void doFrame(long frameTimeNanos) {
-        if(!running)return;
+        if(destroyed||!running)return;
         if(swapChain!=null&&uiHelper.isReadyToRender()&&renderer.beginFrame(swapChain,frameTimeNanos)){renderer.render(view);renderer.endFrame();}
-        Choreographer.getInstance().postFrameCallback(this);
+        if(!destroyed&&running)Choreographer.getInstance().postFrameCallback(this);
     }
 
     void destroyRenderer(){
+        if(destroyed)return;
+        // Publish terminal ownership before UiHelper.detach(): detach can invoke
+        // onDetachedFromSurface synchronously, and that callback must never touch
+        // an Engine whose destruction is already in progress.
+        destroyed=true;
         stopFrames();uiHelper.detach();
         if(swapChain!=null){engine.destroySwapChain(swapChain);swapChain=null;}
         clearMesh();scene.removeEntity(keyLightEntity);scene.removeEntity(fillLightEntity);
