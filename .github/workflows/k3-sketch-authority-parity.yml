@@ -18,6 +18,8 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/K39*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K310*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K311*InstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K312*InstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K313*InstrumentationTest.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
 
 permissions:
@@ -82,7 +84,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run K3.3 through K3.11 authority regressions
+      - name: Run K3.3 through K3.13 authority regressions
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -131,6 +133,10 @@ jobs:
             grep -q 'OK (1 test)' test-artifacts/k3-driving-dimension-activity-lifecycle.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K311EqualConstraintAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-equal-constraint-authority.txt
             grep -q 'OK (4 tests)' test-artifacts/k3-equal-constraint-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K312SingleLineAngleAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-single-line-angle-authority.txt
+            grep -q 'OK (5 tests)' test-artifacts/k3-single-line-angle-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K313TangentAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-tangent-authority.txt
+            grep -q 'OK (5 tests)' test-artifacts/k3-tangent-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
