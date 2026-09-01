@@ -144,3 +144,8 @@ Milestone K1 is complete when:
 3. at least one production modeling path is migrated to `CadKernel`,
 4. old direct JNI calls remain isolated and measurable,
 5. CI and runtime smoke are green.
+
+## Governance conditional-gate canary
+
+Governance conditional-gate canary.
+Temporary validation-only change; do not merge.
