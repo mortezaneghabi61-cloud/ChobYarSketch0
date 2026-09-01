@@ -79,7 +79,7 @@ run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5
 run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
 
 # GPU renderer lifecycle
-run_contract FilamentLifecycleInstrumentationTest filament-lifecycle 'OK (1 test)'
+run_contract FilamentLifecycleInstrumentationTest filament-lifecycle 'OK (3 tests)'
 
 # Solid / History / Boolean / Direct modeling + workspace + Revolve thread
 run_contract SolidCommandInstrumentationTest solid 'OK (2 tests)'
