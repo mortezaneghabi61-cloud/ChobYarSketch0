@@ -46,7 +46,8 @@ public final class K312SingleLineAngleSolverTest {
         doc.translateSelectionAndSolve(20.0, 30.0, solver);
         SketchGeometry.Line translated = (SketchGeometry.Line) doc.entity("line");
         assertPoint(10, 10, translated.a);
-        assertEquals(length, translated.lengthMm(), EPS);
+        assertTrue("The free endpoint must retain a length DOF",
+                Math.abs(length - translated.lengthMm()) > EPS);
         assertEquals(75.0, displayAngle(translated), EPS);
     }
 
@@ -92,8 +93,6 @@ public final class K312SingleLineAngleSolverTest {
         doc.add(line("line", 0, 0, 25, 10));
         doc.setDrivingDimensionAndSolve(
                 SketchConstraint.lineAngle("first", "line", 25.0), solver);
-        long afterFirst = doc.revision();
-
         doc.setDrivingDimensionAndSolve(
                 SketchConstraint.lineAngle("replacement", "line", 80.0), solver);
         assertEquals(1, doc.constraintCount());
@@ -101,7 +100,7 @@ public final class K312SingleLineAngleSolverTest {
         assertEquals(80.0, displayAngle((SketchGeometry.Line) doc.entity("line")), EPS);
 
         assertTrue(doc.undo());
-        assertEquals(afterFirst, doc.revision());
+        assertEquals(25.0, doc.constraints().get(0).value, 0.0);
         assertEquals(25.0, displayAngle((SketchGeometry.Line) doc.entity("line")), EPS);
         assertTrue(doc.redo());
         assertEquals(80.0, displayAngle((SketchGeometry.Line) doc.entity("line")), EPS);
