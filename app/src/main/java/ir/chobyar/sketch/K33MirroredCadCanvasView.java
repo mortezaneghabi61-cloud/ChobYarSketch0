@@ -118,6 +118,14 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         constraintAnchorPolicy = policy;
     }
     public int modelConstraintFeedbackCount() { return sketchDocument.constraintCount(); }
+    String modelLineAngleFeedbackText(String entityId) {
+        for (SketchConstraint constraint : sketchDocument.constraintsForEntity(entityId)) {
+            if (constraint.kind == SketchConstraint.Kind.LINE_ANGLE) {
+                return "∠" + formatConstraintDegrees(constraint.value);
+            }
+        }
+        return "";
+    }
 
     /** Test/diagnostic seam proving migrated constraints did not populate legacy View truth. */
     public int legacyMigratedConstraintTruthCount() {
@@ -267,6 +275,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case FIXED: score += 1000; break;
                 case DISTANCE:
                 case RADIUS:
+                case LINE_ANGLE:
                 case ANGLE: score += 250; break;
                 case HORIZONTAL:
                 case VERTICAL: score += 120; break;
@@ -395,6 +404,15 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
+    /** Restores the derived legacy projection from model truth immediately before drawing. */
+    private void replayModelLineAngleToLegacy(SketchConstraint constraint) {
+        if (constraint == null || constraint.kind != SketchConstraint.Kind.LINE_ANGLE) return;
+        SketchEntity model = sketchDocument.entity(constraint.primaryEntityId);
+        Entity legacy = legacyEntityByStableId(constraint.primaryEntityId);
+        if (!(model instanceof SketchGeometry.Line) || !(legacy instanceof LineEntity)) return;
+        replayModelEntityToLegacy(model);
+    }
+
     private void replaySolvedLineGeometryToLegacy() {
         for (SketchEntity value : sketchDocument.entities()) replayModelEntityToLegacy(value);
         invalidate();
@@ -416,6 +434,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.MIDPOINT
                     && c.kind != SketchConstraint.Kind.DISTANCE
                     && c.kind != SketchConstraint.Kind.RADIUS
+                    && c.kind != SketchConstraint.Kind.LINE_ANGLE
                     && c.kind != SketchConstraint.Kind.ANGLE
                     && c.kind != SketchConstraint.Kind.FIXED) continue;
             constrained.addAll(c.referencedEntityIds());
@@ -426,8 +445,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private void replayAuthoritativeConstrainedGeometryBeforeDraw() {
         LinkedHashSet<String> equalOwned = new LinkedHashSet<>();
         for (SketchConstraint c : sketchDocument.constraints()) {
-            if (c.kind != SketchConstraint.Kind.EQUAL) continue;
-            equalOwned.addAll(c.referencedEntityIds());
+            if (c.kind == SketchConstraint.Kind.EQUAL) {
+                equalOwned.addAll(c.referencedEntityIds());
+            } else if (c.kind == SketchConstraint.Kind.LINE_ANGLE) {
+                replayModelLineAngleToLegacy(c);
+            }
         }
         for (String id : equalOwned) replayModelEqualMetricToLegacy(sketchDocument.entity(id));
     }
@@ -916,6 +938,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 canvas.drawText("H", ax, ay - 10f, modelConstraintTextPaint);
             } else if (constraint.kind == SketchConstraint.Kind.VERTICAL) {
                 canvas.drawText("V", ax + 10f, ay, modelConstraintTextPaint);
+            } else if (constraint.kind == SketchConstraint.Kind.LINE_ANGLE) {
+                canvas.drawText("∠" + formatConstraintDegrees(constraint.value),
+                        ax, ay - 10f, modelConstraintTextPaint);
             } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL
                     || constraint.kind == SketchConstraint.Kind.PERPENDICULAR)
                     && constraint.secondaryEntityId != null) {
@@ -933,6 +958,11 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private float screenX(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetX); }
     private float screenY(double mm) { return (float)(mm * MODEL_PX_PER_MM * viewScale + offsetY); }
+
+    private static String formatConstraintDegrees(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1.0e-9) return Long.toString(Math.round(value)) + "°";
+        return String.format(java.util.Locale.US, "%.2f°", value);
+    }
 
     private boolean hasPointFixed(String entityId, int pointIndex) {
         if (entityId == null || pointIndex < 0) return false;
@@ -1404,11 +1434,29 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    /** Single-Line absolute angle remains legacy-owned in K3.10 by design. */
     @Override public String setSelectedLineAngle(float degrees) {
-        String out=super.setSelectedLineAngle(degrees);
-        syncMirror("line-angle");
-        return out;
+        if (degrees<0f || degrees>180f || Float.isNaN(degrees) || Float.isInfinite(degrees)) {
+            return "Line angle must be between 0 and 180 degrees";
+        }
+        if (!prepareTransactionalSelection("line-angle-prepare")) {
+            return "Select exactly one line for Angle";
+        }
+        List<String> ids=selectedModelLineIds();
+        if (ids.size()!=1) return "Select exactly one line for Angle";
+        try {
+            SketchConstraint driver=SketchConstraint.lineAngle(
+                    UUID.randomUUID().toString(),ids.get(0),degrees);
+            sketchDocument.setDrivingDimensionAndSolve(driver,sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("line-angle-driving")) {
+                return "Line angle rollback: parity failed";
+            }
+            invalidate();
+            return "Line angle = "+degrees+"°";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("line-angle-driving",e);
+        }
     }
 
     @Override public String setSelectedLinesAngle(float degrees) {
