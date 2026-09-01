@@ -1013,7 +1013,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
 
     private void clearPendingPointLockGesture() {
         pendingPointLockEntityId = null;
-        pendingPointLockTargetPointIndex = -1;
+        pendingPointLockPointIndex = -1;
         pendingPointLockMoved = false;
     }
 
@@ -1533,8 +1533,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         int anchorIndex=chooseConstraintAnchorIndex(ids);
         String anchor=ids.get(anchorIndex);
         ArrayList<SketchConstraint> incoming=new ArrayList<>();
-        for (int i=0;i<ids.size();i++) {
-            if (i==anchorIndex) continue;
+        for(int i=0;i<ids.size();i++) {
+            if(i==anchorIndex) continue;
             incoming.add(SketchConstraint.parallel(UUID.randomUUID().toString(),anchor,ids.get(i)));
         }
         try {
