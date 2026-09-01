@@ -380,30 +380,97 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         boolean lockB = anchors != null && anchors.containsKey(1);
         if (lockA && lockB) return;
 
-        int pivotIndex;
-        if (lockA) pivotIndex = 0;
-        else if (lockB) pivotIndex = 1;
-        else {
-            double da = distance(current.a, center);
-            double db = distance(current.b, center);
-            pivotIndex = da >= db ? 0 : 1;
+        if (!lockA && !lockB) {
+            entities.put(lineId, translateFreeLineToTangent(current, center, radius));
+            return;
         }
-        int movingIndex = 1 - pivotIndex;
-        SketchGeometry.Point pivot = pivotIndex == 0
-                ? (lockA ? anchors.get(0) : current.a)
-                : (lockB ? anchors.get(1) : current.b);
-        SketchGeometry.Point preferred = endpoint(current, movingIndex);
-        double pivotDistance = distance(pivot, center);
-        if (pivotDistance < radius - DIST_TOL_MM) return;
 
-        SketchGeometry.Point target;
-        if (Math.abs(pivotDistance - radius) <= DIST_TOL_MM) {
-            target = tangentDirectionPointAtContact(pivot, center, current.lengthMm(), preferred);
-        } else {
-            target = tangentPointFromExternal(pivot, center, radius, preferred);
-        }
+        int pivotIndex = lockA ? 0 : 1;
+        int movingIndex = 1 - pivotIndex;
+        SketchGeometry.Point pivot = anchors.get(pivotIndex);
+        SketchGeometry.Point preferred = endpoint(current, movingIndex);
+        SketchGeometry.Point target = tangentEndpointAroundFixedPivot(
+                pivot, preferred, center, radius, current.lengthMm());
         if (target == null) return;
         entities.put(lineId, withEndpoint(current, movingIndex, target));
+    }
+
+    private static SketchGeometry.Line translateFreeLineToTangent(
+            SketchGeometry.Line current, SketchGeometry.Point center, double radius) {
+        double dx = current.b.xMm - current.a.xMm;
+        double dy = current.b.yMm - current.a.yMm;
+        double length = Math.hypot(dx, dy);
+        if (length <= EPS) return current;
+        double ux = dx / length;
+        double uy = dy / length;
+        double nx = -uy;
+        double ny = ux;
+        double signedDistance = (center.xMm - current.a.xMm) * nx
+                + (center.yMm - current.a.yMm) * ny;
+        double positiveMove = Math.abs(signedDistance - radius);
+        double negativeMove = Math.abs(signedDistance + radius);
+        double targetSignedDistance = positiveMove <= negativeMove ? radius : -radius;
+        double translation = signedDistance - targetSignedDistance;
+        double tx = translation * nx;
+        double ty = translation * ny;
+        return new SketchGeometry.Line(current.id(),
+                new SketchGeometry.Point(current.a.xMm + tx, current.a.yMm + ty),
+                new SketchGeometry.Point(current.b.xMm + tx, current.b.yMm + ty));
+    }
+
+    private static SketchGeometry.Point tangentEndpointAroundFixedPivot(
+            SketchGeometry.Point pivot, SketchGeometry.Point preferred,
+            SketchGeometry.Point center, double radius, double length) {
+        if (length <= EPS) return null;
+        double preferredDx = preferred.xMm - pivot.xMm;
+        double preferredDy = preferred.yMm - pivot.yMm;
+        double preferredLength = Math.hypot(preferredDx, preferredDy);
+        if (preferredLength <= EPS) return null;
+        double preferredUx = preferredDx / preferredLength;
+        double preferredUy = preferredDy / preferredLength;
+
+        double centerDx = center.xMm - pivot.xMm;
+        double centerDy = center.yMm - pivot.yMm;
+        double pivotDistance = Math.hypot(centerDx, centerDy);
+        if (pivotDistance < radius - DIST_TOL_MM || pivotDistance <= EPS) return null;
+        double ex = centerDx / pivotDistance;
+        double ey = centerDy / pivotDistance;
+        double px = -ey;
+        double py = ex;
+
+        double u1x;
+        double u1y;
+        double u2x;
+        double u2y;
+        if (Math.abs(pivotDistance - radius) <= DIST_TOL_MM) {
+            u1x = px;
+            u1y = py;
+            u2x = -px;
+            u2y = -py;
+        } else {
+            double sin = radius / pivotDistance;
+            double cos = Math.sqrt(Math.max(0.0, 1.0 - sin * sin));
+            u1x = ex * cos + px * sin;
+            u1y = ey * cos + py * sin;
+            u2x = ex * cos - px * sin;
+            u2y = ey * cos - py * sin;
+        }
+
+        double dot1 = u1x * preferredUx + u1y * preferredUy;
+        if (dot1 < 0.0) {
+            u1x = -u1x;
+            u1y = -u1y;
+            dot1 = -dot1;
+        }
+        double dot2 = u2x * preferredUx + u2y * preferredUy;
+        if (dot2 < 0.0) {
+            u2x = -u2x;
+            u2y = -u2y;
+            dot2 = -dot2;
+        }
+        double ux = dot1 >= dot2 ? u1x : u2x;
+        double uy = dot1 >= dot2 ? u1y : u2y;
+        return new SketchGeometry.Point(pivot.xMm + ux * length, pivot.yMm + uy * length);
     }
 
     private static void applyDistance(SketchConstraint c,
@@ -464,7 +531,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         }
         SketchGeometry.Arc arc = (SketchGeometry.Arc) entity;
         entities.put(c.primaryEntityId,
-                new SketchGeometry.Arc(arc.id(), arc.center, c.value, arc.startDeg, arc.sweepDeg));
+                new SketchGeometry.Arc(arc.id(), arc.center, arc.radiusMm, arc.startDeg, arc.sweepDeg));
     }
 
     private static void applyLineAngle(SketchConstraint c,
@@ -526,41 +593,6 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return entity instanceof SketchGeometry.Circle
                 ? ((SketchGeometry.Circle) entity).radiusMm
                 : ((SketchGeometry.Arc) entity).radiusMm;
-    }
-
-    private static SketchGeometry.Point tangentPointFromExternal(
-            SketchGeometry.Point external, SketchGeometry.Point center, double radius,
-            SketchGeometry.Point preferred) {
-        double dx = external.xMm - center.xMm;
-        double dy = external.yMm - center.yMm;
-        double d2 = dx * dx + dy * dy;
-        double r2 = radius * radius;
-        if (d2 <= r2 + EPS) return null;
-        double root = Math.sqrt(Math.max(0.0, d2 - r2));
-        double baseX = center.xMm + r2 * dx / d2;
-        double baseY = center.yMm + r2 * dy / d2;
-        double offX = -radius * dy * root / d2;
-        double offY = radius * dx * root / d2;
-        SketchGeometry.Point p1 = new SketchGeometry.Point(baseX + offX, baseY + offY);
-        SketchGeometry.Point p2 = new SketchGeometry.Point(baseX - offX, baseY - offY);
-        return distance(preferred, p1) <= distance(preferred, p2) ? p1 : p2;
-    }
-
-    private static SketchGeometry.Point tangentDirectionPointAtContact(
-            SketchGeometry.Point contact, SketchGeometry.Point center, double length,
-            SketchGeometry.Point preferred) {
-        if (length <= EPS) return null;
-        double rx = contact.xMm - center.xMm;
-        double ry = contact.yMm - center.yMm;
-        double rlen = Math.hypot(rx, ry);
-        if (rlen <= EPS) return null;
-        double tx = -ry / rlen;
-        double ty = rx / rlen;
-        SketchGeometry.Point p1 = new SketchGeometry.Point(
-                contact.xMm + tx * length, contact.yMm + ty * length);
-        SketchGeometry.Point p2 = new SketchGeometry.Point(
-                contact.xMm - tx * length, contact.yMm - ty * length);
-        return distance(preferred, p1) <= distance(preferred, p2) ? p1 : p2;
     }
 
     private static SketchGeometry.Point midpoint(SketchGeometry.Line line) {
