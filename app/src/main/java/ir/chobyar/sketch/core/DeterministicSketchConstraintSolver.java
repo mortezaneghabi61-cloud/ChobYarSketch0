@@ -11,8 +11,8 @@ import java.util.Map;
  *
  * The K3 slice is deliberately fail-closed: a constraint kind/geometry pairing
  * that is not implemented returns UNSUPPORTED rather than becoming decorative
- * metadata. K3.11 adds model-owned EQUAL length/radius while keeping point/whole
- * FIXED anchors authoritative during each solver application.
+ * metadata. K3.13 adds model-owned line-to-circle/arc TANGENT while keeping
+ * point/whole FIXED anchors authoritative during each solver application.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -172,6 +172,19 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 if (isRadiusEntity(a) && isRadiusEntity(b)) return null;
                 return "EQUAL requires two lines or two circle/arc radius entities";
+            case TANGENT: {
+                if (b == null || a.id().equals(b.id())) return "TANGENT requires two distinct entities";
+                SketchEntity tangentLine = a instanceof SketchGeometry.Line ? a
+                        : b instanceof SketchGeometry.Line ? b : null;
+                SketchEntity tangentCurve = isRadiusEntity(a) ? a : isRadiusEntity(b) ? b : null;
+                if (!(tangentLine instanceof SketchGeometry.Line) || tangentCurve == null) {
+                    return "TANGENT currently requires one line and one circle/arc";
+                }
+                if (isDegenerateLine((SketchGeometry.Line) tangentLine)) {
+                    return "TANGENT requires a non-degenerate line";
+                }
+                return radiusOf(tangentCurve) > EPS ? null : "TANGENT requires a positive curve radius";
+            }
             case COINCIDENT:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
                     return "COINCIDENT currently requires two line endpoints";
@@ -233,7 +246,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
-                return "Constraint kind not yet supported by K3.11 solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.13 solver: " + c.kind;
         }
     }
 
@@ -279,6 +292,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 break;
             case EQUAL:
                 applyEqual(c, entities, fixed);
+                break;
+            case TANGENT:
+                applyTangent(c, entities, fixed);
                 break;
             case COINCIDENT: {
                 SketchGeometry.Line driven = line(entities, c.primaryEntityId);
@@ -344,6 +360,50 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         SketchGeometry.Arc arc = (SketchGeometry.Arc) driven;
         entities.put(c.secondaryEntityId,
                 new SketchGeometry.Arc(arc.id(), arc.center, targetRadius, arc.startDeg, arc.sweepDeg));
+    }
+
+    private static void applyTangent(SketchConstraint c,
+                                     LinkedHashMap<String, SketchEntity> entities,
+                                     FixedState fixed) {
+        SketchEntity primary = entities.get(c.primaryEntityId);
+        SketchEntity secondary = entities.get(c.secondaryEntityId);
+        String lineId = primary instanceof SketchGeometry.Line ? c.primaryEntityId : c.secondaryEntityId;
+        String curveId = primary instanceof SketchGeometry.Line ? c.secondaryEntityId : c.primaryEntityId;
+        if (fixed.wholeEntities.containsKey(lineId)) return;
+
+        SketchGeometry.Line current = line(entities, lineId);
+        SketchEntity curve = entities.get(curveId);
+        SketchGeometry.Point center = curveCenter(curve);
+        double radius = radiusOf(curve);
+        LinkedHashMap<Integer, SketchGeometry.Point> anchors = fixed.pointAnchors.get(lineId);
+        boolean lockA = anchors != null && anchors.containsKey(0);
+        boolean lockB = anchors != null && anchors.containsKey(1);
+        if (lockA && lockB) return;
+
+        int pivotIndex;
+        if (lockA) pivotIndex = 0;
+        else if (lockB) pivotIndex = 1;
+        else {
+            double da = distance(current.a, center);
+            double db = distance(current.b, center);
+            pivotIndex = da >= db ? 0 : 1;
+        }
+        int movingIndex = 1 - pivotIndex;
+        SketchGeometry.Point pivot = pivotIndex == 0
+                ? (lockA ? anchors.get(0) : current.a)
+                : (lockB ? anchors.get(1) : current.b);
+        SketchGeometry.Point preferred = endpoint(current, movingIndex);
+        double pivotDistance = distance(pivot, center);
+        if (pivotDistance < radius - DIST_TOL_MM) return;
+
+        SketchGeometry.Point target;
+        if (Math.abs(pivotDistance - radius) <= DIST_TOL_MM) {
+            target = tangentDirectionPointAtContact(pivot, center, current.lengthMm(), preferred);
+        } else {
+            target = tangentPointFromExternal(pivot, center, radius, preferred);
+        }
+        if (target == null) return;
+        entities.put(lineId, withEndpoint(current, movingIndex, target));
     }
 
     private static void applyDistance(SketchConstraint c,
@@ -457,10 +517,50 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         return (SketchGeometry.Line) entities.get(id);
     }
 
+    private static SketchGeometry.Point curveCenter(SketchEntity entity) {
+        if (entity instanceof SketchGeometry.Circle) return ((SketchGeometry.Circle) entity).center;
+        return ((SketchGeometry.Arc) entity).center;
+    }
+
     private static double radiusOf(SketchEntity entity) {
         return entity instanceof SketchGeometry.Circle
                 ? ((SketchGeometry.Circle) entity).radiusMm
                 : ((SketchGeometry.Arc) entity).radiusMm;
+    }
+
+    private static SketchGeometry.Point tangentPointFromExternal(
+            SketchGeometry.Point external, SketchGeometry.Point center, double radius,
+            SketchGeometry.Point preferred) {
+        double dx = external.xMm - center.xMm;
+        double dy = external.yMm - center.yMm;
+        double d2 = dx * dx + dy * dy;
+        double r2 = radius * radius;
+        if (d2 <= r2 + EPS) return null;
+        double root = Math.sqrt(Math.max(0.0, d2 - r2));
+        double baseX = center.xMm + r2 * dx / d2;
+        double baseY = center.yMm + r2 * dy / d2;
+        double offX = -radius * dy * root / d2;
+        double offY = radius * dx * root / d2;
+        SketchGeometry.Point p1 = new SketchGeometry.Point(baseX + offX, baseY + offY);
+        SketchGeometry.Point p2 = new SketchGeometry.Point(baseX - offX, baseY - offY);
+        return distance(preferred, p1) <= distance(preferred, p2) ? p1 : p2;
+    }
+
+    private static SketchGeometry.Point tangentDirectionPointAtContact(
+            SketchGeometry.Point contact, SketchGeometry.Point center, double length,
+            SketchGeometry.Point preferred) {
+        if (length <= EPS) return null;
+        double rx = contact.xMm - center.xMm;
+        double ry = contact.yMm - center.yMm;
+        double rlen = Math.hypot(rx, ry);
+        if (rlen <= EPS) return null;
+        double tx = -ry / rlen;
+        double ty = rx / rlen;
+        SketchGeometry.Point p1 = new SketchGeometry.Point(
+                contact.xMm + tx * length, contact.yMm + ty * length);
+        SketchGeometry.Point p2 = new SketchGeometry.Point(
+                contact.xMm - tx * length, contact.yMm - ty * length);
+        return distance(preferred, p1) <= distance(preferred, p2) ? p1 : p2;
     }
 
     private static SketchGeometry.Point midpoint(SketchGeometry.Line line) {
@@ -601,6 +701,14 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return Math.abs(radiusOf(a) - radiusOf(b));
             }
+            case TANGENT: {
+                SketchEntity primary = entities.get(c.primaryEntityId);
+                SketchEntity secondary = entities.get(c.secondaryEntityId);
+                SketchGeometry.Line tangentLine = (SketchGeometry.Line) (primary instanceof SketchGeometry.Line
+                        ? primary : secondary);
+                SketchEntity tangentCurve = primary instanceof SketchGeometry.Line ? secondary : primary;
+                return tangentResidual(tangentLine, curveCenter(tangentCurve), radiusOf(tangentCurve));
+            }
             default:
                 break;
         }
@@ -635,6 +743,19 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             default:
                 return Double.POSITIVE_INFINITY;
         }
+    }
+
+    private static double tangentResidual(SketchGeometry.Line line,
+                                          SketchGeometry.Point center,
+                                          double radius) {
+        double dx = line.b.xMm - line.a.xMm;
+        double dy = line.b.yMm - line.a.yMm;
+        double length = Math.hypot(dx, dy);
+        if (length <= EPS) return Double.POSITIVE_INFINITY;
+        double cross = dx * (center.yMm - line.a.yMm)
+                - dy * (center.xMm - line.a.xMm);
+        double supportingDistance = Math.abs(cross) / length;
+        return Math.abs(supportingDistance - radius);
     }
 
     private static double normalizedCrossResidual(SketchGeometry.Line a, SketchGeometry.Line b) {
