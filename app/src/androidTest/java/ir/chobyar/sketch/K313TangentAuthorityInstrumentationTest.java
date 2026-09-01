@@ -1,11 +1,15 @@
 package ir.chobyar.sketch;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.os.SystemClock;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -24,9 +28,10 @@ import ir.chobyar.sketch.core.SketchConstraint;
 import ir.chobyar.sketch.core.SketchEntity;
 import ir.chobyar.sketch.core.SketchGeometry;
 
-/** K3.13 RED/API35 fence: Tangent semantic authority must leave the legacy View layer. */
+/** K3.13 API35 fence: Tangent semantic authority is model-owned and draw is presentation-only. */
 @RunWith(AndroidJUnit4.class)
 public final class K313TangentAuthorityInstrumentationTest {
+    private static final double EPS = 1.0e-5;
 
     @Test public void lineCircleTangentMustBeModelOwnedWithStableIdsAndTransactionalHistory() throws Exception {
         onMain(() -> {
@@ -48,6 +53,7 @@ public final class K313TangentAuthorityInstrumentationTest {
             assertEquals("Migrated Tangent must not populate ShaprLab object-identity truth",
                     0, legacyTangentTruthCount(cad));
             cad.requireSketchMirrorParity();
+            assertModelTangent(cad, lineId, circleId);
             assertTrue("Model-owned Tangent must be undoable", cad.sketchAuthorityCanUndo());
 
             cad.undo();
@@ -59,6 +65,7 @@ public final class K313TangentAuthorityInstrumentationTest {
             cad.requireSketchMirrorParity();
             assertEquals(1, countTangent(cad, lineId, circleId));
             assertEquals(0, legacyTangentTruthCount(cad));
+            assertModelTangent(cad, lineId, circleId);
             return true;
         });
     }
@@ -82,8 +89,6 @@ public final class K313TangentAuthorityInstrumentationTest {
             long transitionsBefore = cad.sketchAuthorityTransitionCount();
             int legacyTangentCountBefore = legacyTangentTruthCount(cad);
 
-            // Legacy TangentRelation chooses endpoint 0 for this geometry. Drift it far from
-            // the circle so a draw-time semantic repair is unambiguous.
             lineLegacy.x1 = 411f;
             lineLegacy.y1 = 337f;
             float[] drift = legacyLineSignature(lineLegacy);
@@ -102,6 +107,113 @@ public final class K313TangentAuthorityInstrumentationTest {
                     legacyTangentCountBefore, legacyTangentTruthCount(cad));
             assertEquals(lineId, lineLegacy.stableId());
             assertEquals(circleId, circleLegacy.stableId());
+            return true;
+        });
+    }
+
+    @Test public void arcTangentPersistsAcrossProjectRoundTripAndDeleteCascades() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            cad.executeCommand("ARC 180 180 45 20 120");
+            CadCanvasView.Entity arcLegacy = cad.selected;
+            String arcId = arcLegacy.stableId();
+            cad.executeCommand("LINE 270 180 225 205");
+            CadCanvasView.Entity lineLegacy = cad.selected;
+            String lineId = lineLegacy.stableId();
+            selectTwo(cad, lineLegacy, arcLegacy);
+
+            assertEquals("Tangent applied", cad.applyTangentConstraint());
+            cad.requireSketchMirrorParity();
+            assertEquals(1, countTangent(cad, lineId, arcId));
+            assertModelTangent(cad, lineId, arcId);
+            assertEquals(0, legacyTangentTruthCount(cad));
+            String saved = cad.exportSketchProjectState();
+
+            K33MirroredCadCanvasView restored = cad();
+            restored.importSketchProjectState(saved);
+            restored.requireSketchMirrorParity();
+            assertEquals(1, countTangent(restored, lineId, arcId));
+            assertModelTangent(restored, lineId, arcId);
+            assertEquals(0, legacyTangentTruthCount(restored));
+
+            CadCanvasView.Entity restoredLine = legacyEntity(restored, lineId);
+            restored.selectedObjects.clear();
+            restored.selectedObjects.add(restoredLine);
+            restored.selected = restoredLine;
+            restored.deleteSelected();
+            restored.requireSketchMirrorParity();
+            assertFalse(hasModelEntity(restored, lineId));
+            assertTrue(hasModelEntity(restored, arcId));
+            assertEquals("Deleting a referenced entity must cascade Tangent metadata",
+                    0, countTangent(restored, lineId, arcId));
+            return true;
+        });
+    }
+
+    @Test public void pointFixedExternalPivotIsPreservedWhileFreeEndpointSolvesTangent() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            cad.executeCommand("CIRCLE 180 180 45");
+            CadCanvasView.Entity circleLegacy = cad.selected;
+            String circleId = circleLegacy.stableId();
+            cad.executeCommand("LINE 300 180 235 215");
+            CadCanvasView.LineEntity lineLegacy = (CadCanvasView.LineEntity) cad.selected;
+            String lineId = lineLegacy.stableId();
+
+            lockPoint(cad, lineLegacy, lineId, 0);
+            SketchGeometry.Line before = modelLine(cad, lineId);
+            double fixedX = before.a.xMm;
+            double fixedY = before.a.yMm;
+            selectTwo(cad, lineLegacy, circleLegacy);
+
+            assertEquals("Tangent applied", cad.applyTangentConstraint());
+            cad.requireSketchMirrorParity();
+            SketchGeometry.Line solved = modelLine(cad, lineId);
+            assertEquals("Point-FIXED x must be preserved", fixedX, solved.a.xMm, 0.0);
+            assertEquals("Point-FIXED y must be preserved", fixedY, solved.a.yMm, 0.0);
+            assertTrue(hasPointFixed(cad, lineId, 0));
+            assertFalse(hasPointFixed(cad, lineId, 1));
+            assertModelTangent(cad, lineId, circleId);
+            assertEquals(0, legacyTangentTruthCount(cad));
+            return true;
+        });
+    }
+
+    @Test public void wholeFixedTangentConflictFailsAtomicallyWithoutMetadataOrHistoryMutation() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            cad.executeCommand("CIRCLE 180 180 45");
+            CadCanvasView.Entity circleLegacy = cad.selected;
+            String circleId = circleLegacy.stableId();
+            cad.executeCommand("LINE 280 280 360 280");
+            CadCanvasView.Entity lineLegacy = cad.selected;
+            String lineId = lineLegacy.stableId();
+
+            cad.selectedObjects.clear();
+            cad.selectedObjects.add(lineLegacy);
+            cad.selected = lineLegacy;
+            assertEquals("1 selection(s) locked", cad.toggleSelectedLock());
+            cad.requireSketchMirrorParity();
+
+            double[] geometryBefore = modelLineSignature(cad, lineId);
+            int constraintsBefore = cad.sketchConstraintCount();
+            long transitionsBefore = cad.sketchAuthorityTransitionCount();
+            boolean undoBefore = cad.sketchAuthorityCanUndo();
+            boolean redoBefore = cad.sketchAuthorityCanRedo();
+            selectTwo(cad, lineLegacy, circleLegacy);
+
+            String result = cad.applyTangentConstraint();
+            assertTrue("Impossible whole-FIXED Tangent must fail closed: " + result,
+                    result.contains("could not be solved") || result.contains("unchanged"));
+            cad.requireSketchMirrorParity();
+            assertEquals(0, countTangent(cad, lineId, circleId));
+            assertEquals(constraintsBefore, cad.sketchConstraintCount());
+            assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
+            assertEquals(undoBefore, cad.sketchAuthorityCanUndo());
+            assertEquals(redoBefore, cad.sketchAuthorityCanRedo());
+            assertModelLineSame("Failed Tangent must leave geometry unchanged",
+                    geometryBefore, modelLineSignature(cad, lineId));
+            assertEquals(0, legacyTangentTruthCount(cad));
             return true;
         });
     }
@@ -152,9 +264,64 @@ public final class K313TangentAuthorityInstrumentationTest {
         throw new AssertionError("Model entity not found: " + id + "; mirrorError=" + cad.sketchMirrorError());
     }
 
+    private static boolean hasModelEntity(K33MirroredCadCanvasView cad, String id) {
+        for (SketchEntity entity : cad.sketchMirrorEntities()) if (id.equals(entity.id())) return true;
+        return false;
+    }
+
+    private static CadCanvasView.Entity legacyEntity(K33MirroredCadCanvasView cad, String id) {
+        for (CadCanvasView.Entity entity : cad.entities) if (id.equals(entity.stableId())) return entity;
+        throw new AssertionError("Legacy projection not found: " + id);
+    }
+
+    private static SketchGeometry.Line modelLine(K33MirroredCadCanvasView cad, String id) {
+        return (SketchGeometry.Line) modelEntity(cad, id);
+    }
+
     private static double[] modelLineSignature(K33MirroredCadCanvasView cad, String id) {
-        SketchGeometry.Line line = (SketchGeometry.Line) modelEntity(cad, id);
+        SketchGeometry.Line line = modelLine(cad, id);
         return new double[]{line.a.xMm, line.a.yMm, line.b.xMm, line.b.yMm};
+    }
+
+    private static void assertModelTangent(K33MirroredCadCanvasView cad, String lineId, String curveId) {
+        SketchGeometry.Line line = modelLine(cad, lineId);
+        SketchEntity curve = modelEntity(cad, curveId);
+        SketchGeometry.Point center;
+        double radius;
+        if (curve instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) curve;
+            center = circle.center;
+            radius = circle.radiusMm;
+        } else {
+            SketchGeometry.Arc arc = (SketchGeometry.Arc) curve;
+            center = arc.center;
+            radius = arc.radiusMm;
+        }
+        double dx = line.b.xMm - line.a.xMm;
+        double dy = line.b.yMm - line.a.yMm;
+        double length = Math.hypot(dx, dy);
+        double cross = dx * (center.yMm - line.a.yMm) - dy * (center.xMm - line.a.xMm);
+        assertEquals("Model line must be tangent to model curve", radius, Math.abs(cross) / length, EPS);
+    }
+
+    private static boolean hasPointFixed(K33MirroredCadCanvasView cad, String id, int pointIndex) {
+        for (SketchConstraint constraint : cad.sketchConstraints()) {
+            if (constraint.kind == SketchConstraint.Kind.FIXED
+                    && constraint.fixesPoint()
+                    && id.equals(constraint.primaryEntityId)
+                    && constraint.primaryPointIndex == pointIndex) return true;
+        }
+        return false;
+    }
+
+    private static void lockPoint(K33MirroredCadCanvasView cad, CadCanvasView.LineEntity legacy,
+                                  String stableId, int pointIndex) {
+        CadCanvasView.ControlPoint p = legacy.controlPoints().get(pointIndex);
+        cad.setTool(CadCanvasView.TOOL_SELECT);
+        tap(cad, screenX(cad, p.x), screenY(cad, p.y));
+        assertEquals(stableId, cad.pointLockTargetEntityId());
+        assertEquals(pointIndex, cad.pointLockTargetPointIndex());
+        assertEquals("Point locked", cad.toggleSelectedLock());
     }
 
     private static float[] legacyLineSignature(CadCanvasView.LineEntity line) {
@@ -175,6 +342,43 @@ public final class K313TangentAuthorityInstrumentationTest {
         assertEquals(message + " ay", expected[1], actual[1], 0.0);
         assertEquals(message + " bx", expected[2], actual[2], 0.0);
         assertEquals(message + " by", expected[3], actual[3], 0.0);
+    }
+
+    private static float screenX(K33MirroredCadCanvasView cad, double xMm) {
+        return (float) (xMm * 3.0 * cad.viewScale + cad.offsetX);
+    }
+
+    private static float screenY(K33MirroredCadCanvasView cad, double yMm) {
+        return (float) (yMm * 3.0 * cad.viewScale + cad.offsetY);
+    }
+
+    private static void tap(K33MirroredCadCanvasView cad, float x, float y) {
+        long down = SystemClock.uptimeMillis();
+        send(cad, one(down, down, MotionEvent.ACTION_DOWN, x, y));
+        send(cad, one(down, down + 16L, MotionEvent.ACTION_UP, x, y));
+    }
+
+    private static void send(K33MirroredCadCanvasView cad, MotionEvent event) {
+        try {
+            assertTrue(cad.onTouchEvent(event));
+        } finally {
+            event.recycle();
+        }
+    }
+
+    private static MotionEvent one(long down, long time, int action, float x, float y) {
+        MotionEvent.PointerProperties property = new MotionEvent.PointerProperties();
+        property.id = 0;
+        property.toolType = MotionEvent.TOOL_TYPE_FINGER;
+        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+        coords.x = x;
+        coords.y = y;
+        coords.pressure = 1f;
+        coords.size = 1f;
+        return MotionEvent.obtain(down, time, action, 1,
+                new MotionEvent.PointerProperties[]{property},
+                new MotionEvent.PointerCoords[]{coords},
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0);
     }
 
     private static <T> T onMain(Callable<T> callable) throws Exception {
