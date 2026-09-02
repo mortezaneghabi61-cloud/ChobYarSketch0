@@ -8,15 +8,17 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 
-import androidx.test.annotation.UiThreadTest;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 
 import ir.chobyar.sketch.core.SketchConstraint;
 import ir.chobyar.sketch.core.SketchEntity;
@@ -34,171 +36,176 @@ import ir.chobyar.sketch.core.SketchGeometry;
 public final class K314SymmetryAuthorityInstrumentationTest {
     private static final double EPS = 1.0e-5;
 
-    @Test
-    @UiThreadTest
-    public void symmetryMustBeModelOwnedWithStableIdsAndNoLegacyTruth() {
-        K33MirroredCadCanvasView cad = cad();
-        CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
-        CadCanvasView.Entity mirror = line(cad, "LINE 300 255 350 305");
-        CadCanvasView.Entity axis = line(cad, "LINE 215 170 240 360");
-        String sourceId = source.stableId();
-        String mirrorId = mirror.stableId();
-        String axisId = axis.stableId();
-        selectThree(cad, source, mirror, axis);
+    @Test public void symmetryMustBeModelOwnedWithStableIdsAndNoLegacyTruth() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
+            CadCanvasView.Entity mirror = line(cad, "LINE 300 255 350 305");
+            CadCanvasView.Entity axis = line(cad, "LINE 215 170 240 360");
+            String sourceId = source.stableId();
+            String mirrorId = mirror.stableId();
+            String axisId = axis.stableId();
+            selectThree(cad, source, mirror, axis);
 
-        String result = cad.applySymmetryConstraint();
-        assertTrue("Symmetry rejected: " + result, result.contains("Symmetry"));
-        assertEquals("Symmetry must be one model-owned stable-ID constraint",
-                1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals("Migrated Symmetry must not populate ShaprLab object-identity truth",
-                0, legacySymmetryTruthCount(cad));
-        cad.requireSketchMirrorParity();
-        assertMirrorAcrossAxis(modelLine(cad, sourceId), modelLine(cad, mirrorId), modelLine(cad, axisId));
-        assertTrue("Model-owned Symmetry must be undoable", cad.sketchAuthorityCanUndo());
+            String result = cad.applySymmetryConstraint();
+            assertTrue("Symmetry rejected: " + result, result.contains("Symmetry"));
+            assertEquals("Symmetry must be one model-owned stable-ID constraint",
+                    1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals("Migrated Symmetry must not populate ShaprLab object-identity truth",
+                    0, legacySymmetryTruthCount(cad));
+            cad.requireSketchMirrorParity();
+            assertMirrorAcrossAxis(modelLine(cad, sourceId), modelLine(cad, mirrorId), modelLine(cad, axisId));
+            assertTrue("Model-owned Symmetry must be undoable", cad.sketchAuthorityCanUndo());
 
-        cad.undo();
-        cad.requireSketchMirrorParity();
-        assertEquals(0, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(cad));
-        assertTrue("Symmetry redo must restore one model transaction", cad.redoSketch());
-        cad.requireSketchMirrorParity();
-        assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(cad));
+            cad.undo();
+            cad.requireSketchMirrorParity();
+            assertEquals(0, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(cad));
+            assertTrue("Symmetry redo must restore one model transaction", cad.redoSketch());
+            cad.requireSketchMirrorParity();
+            assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(cad));
+            return true;
+        });
     }
 
-    @Test
-    @UiThreadTest
-    public void obliqueAxisSymmetryPreservesSourceAndAxisAndDrivesOnlyMirror() {
-        K33MirroredCadCanvasView cad = cad();
-        CadCanvasView.Entity source = line(cad, "LINE 70 250 145 205");
-        CadCanvasView.Entity mirror = line(cad, "LINE 330 260 365 330");
-        CadCanvasView.Entity axis = line(cad, "LINE 190 160 265 370");
-        String sourceId = source.stableId();
-        String mirrorId = mirror.stableId();
-        String axisId = axis.stableId();
-        double[] sourceBefore = modelLineSignature(cad, sourceId);
-        double[] axisBefore = modelLineSignature(cad, axisId);
-        selectThree(cad, source, mirror, axis);
+    @Test public void obliqueAxisSymmetryPreservesSourceAndAxisAndDrivesOnlyMirror() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            CadCanvasView.Entity source = line(cad, "LINE 70 250 145 205");
+            CadCanvasView.Entity mirror = line(cad, "LINE 330 260 365 330");
+            CadCanvasView.Entity axis = line(cad, "LINE 190 160 265 370");
+            String sourceId = source.stableId();
+            String mirrorId = mirror.stableId();
+            String axisId = axis.stableId();
+            double[] sourceBefore = modelLineSignature(cad, sourceId);
+            double[] axisBefore = modelLineSignature(cad, axisId);
+            selectThree(cad, source, mirror, axis);
 
-        assertEquals("Symmetry applied", cad.applySymmetryConstraint());
-        cad.requireSketchMirrorParity();
-        assertLineSame("Symmetry must not move source", sourceBefore, modelLineSignature(cad, sourceId));
-        assertLineSame("Symmetry must not move axis", axisBefore, modelLineSignature(cad, axisId));
-        assertMirrorAcrossAxis(modelLine(cad, sourceId), modelLine(cad, mirrorId), modelLine(cad, axisId));
-        assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(cad));
+            assertEquals("Symmetry applied", cad.applySymmetryConstraint());
+            cad.requireSketchMirrorParity();
+            assertLineSame("Symmetry must not move source", sourceBefore, modelLineSignature(cad, sourceId));
+            assertLineSame("Symmetry must not move axis", axisBefore, modelLineSignature(cad, axisId));
+            assertMirrorAcrossAxis(modelLine(cad, sourceId), modelLine(cad, mirrorId), modelLine(cad, axisId));
+            assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(cad));
+            return true;
+        });
     }
 
-    @Test
-    @UiThreadTest
-    public void drawMustNeverRepairLegacySymmetryProjectionOrMutateModelAuthority() {
-        K33MirroredCadCanvasView cad = cad();
-        CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
-        CadCanvasView.LineEntity mirror = (CadCanvasView.LineEntity) line(cad, "LINE 305 260 350 310");
-        CadCanvasView.Entity axis = line(cad, "LINE 220 200 220 360");
-        String sourceId = source.stableId();
-        String mirrorId = mirror.stableId();
-        String axisId = axis.stableId();
-        selectThree(cad, source, mirror, axis);
-        assertEquals("Symmetry applied", cad.applySymmetryConstraint());
-        cad.requireSketchMirrorParity();
-        assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(cad));
+    @Test public void drawMustNeverRepairLegacySymmetryProjectionOrMutateModelAuthority() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
+            CadCanvasView.LineEntity mirror = (CadCanvasView.LineEntity) line(cad, "LINE 305 260 350 310");
+            CadCanvasView.Entity axis = line(cad, "LINE 220 200 220 360");
+            String sourceId = source.stableId();
+            String mirrorId = mirror.stableId();
+            String axisId = axis.stableId();
+            selectThree(cad, source, mirror, axis);
+            assertEquals("Symmetry applied", cad.applySymmetryConstraint());
+            cad.requireSketchMirrorParity();
+            assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(cad));
 
-        double[] modelBefore = modelLineSignature(cad, mirrorId);
-        int constraintsBefore = cad.sketchConstraintCount();
-        long transitionsBefore = cad.sketchAuthorityTransitionCount();
-        mirror.x1 += 67f;
-        mirror.y1 -= 31f;
-        mirror.x2 += 23f;
-        mirror.y2 += 44f;
-        float[] legacyDrift = legacyLineSignature(mirror);
+            double[] modelBefore = modelLineSignature(cad, mirrorId);
+            int constraintsBefore = cad.sketchConstraintCount();
+            long transitionsBefore = cad.sketchAuthorityTransitionCount();
+            mirror.x1 += 67f;
+            mirror.y1 -= 31f;
+            mirror.x2 += 23f;
+            mirror.y2 += 44f;
+            float[] legacyDrift = legacyLineSignature(mirror);
 
-        Bitmap bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
-        cad.onDraw(new Canvas(bitmap));
+            Bitmap bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+            cad.onDraw(new Canvas(bitmap));
 
-        assertLegacyLineSame("onDraw must be presentation-only for Symmetry", legacyDrift, mirror);
-        assertLineSame("onDraw must not mutate Symmetry model geometry", modelBefore,
-                modelLineSignature(cad, mirrorId));
-        assertEquals(constraintsBefore, cad.sketchConstraintCount());
-        assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
-        assertEquals(0, legacySymmetryTruthCount(cad));
+            assertLegacyLineSame("onDraw must be presentation-only for Symmetry", legacyDrift, mirror);
+            assertLineSame("onDraw must not mutate Symmetry model geometry", modelBefore,
+                    modelLineSignature(cad, mirrorId));
+            assertEquals(constraintsBefore, cad.sketchConstraintCount());
+            assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
+            assertEquals(0, legacySymmetryTruthCount(cad));
+            return true;
+        });
     }
 
-    @Test
-    @UiThreadTest
-    public void symmetryPersistsAcrossProjectRoundTripAndAxisDeleteCascades() {
-        K33MirroredCadCanvasView cad = cad();
-        CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
-        CadCanvasView.Entity mirror = line(cad, "LINE 305 260 350 310");
-        CadCanvasView.Entity axis = line(cad, "LINE 220 200 220 360");
-        String sourceId = source.stableId();
-        String mirrorId = mirror.stableId();
-        String axisId = axis.stableId();
-        selectThree(cad, source, mirror, axis);
-        assertEquals("Symmetry applied", cad.applySymmetryConstraint());
-        cad.requireSketchMirrorParity();
-        assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        String saved = cad.exportSketchProjectState();
+    @Test public void symmetryPersistsAcrossProjectRoundTripAndAxisDeleteCascades() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
+            CadCanvasView.Entity mirror = line(cad, "LINE 305 260 350 310");
+            CadCanvasView.Entity axis = line(cad, "LINE 220 200 220 360");
+            String sourceId = source.stableId();
+            String mirrorId = mirror.stableId();
+            String axisId = axis.stableId();
+            selectThree(cad, source, mirror, axis);
+            assertEquals("Symmetry applied", cad.applySymmetryConstraint());
+            cad.requireSketchMirrorParity();
+            assertEquals(1, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            String saved = cad.exportSketchProjectState();
 
-        K33MirroredCadCanvasView restored = cad();
-        String imported = restored.importSketchProjectState(saved);
-        assertFalse("Symmetry project state failed to reload: " + imported,
-                imported.contains("could not be restored"));
-        restored.requireSketchMirrorParity();
-        assertEquals(1, countModelSymmetry(restored, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(restored));
-        assertMirrorAcrossAxis(modelLine(restored, sourceId), modelLine(restored, mirrorId), modelLine(restored, axisId));
+            K33MirroredCadCanvasView restored = cad();
+            String imported = restored.importSketchProjectState(saved);
+            assertFalse("Symmetry project state failed to reload: " + imported,
+                    imported.contains("could not be restored"));
+            restored.requireSketchMirrorParity();
+            assertEquals(1, countModelSymmetry(restored, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(restored));
+            assertMirrorAcrossAxis(modelLine(restored, sourceId), modelLine(restored, mirrorId), modelLine(restored, axisId));
 
-        CadCanvasView.Entity restoredAxis = legacyEntity(restored, axisId);
-        restored.selectedObjects.clear();
-        restored.selectedObjects.add(restoredAxis);
-        restored.selected = restoredAxis;
-        restored.deleteSelected();
-        restored.requireSketchMirrorParity();
-        assertFalse(hasModelEntity(restored, axisId));
-        assertTrue(hasModelEntity(restored, sourceId));
-        assertTrue(hasModelEntity(restored, mirrorId));
-        assertEquals("Deleting the symmetry axis must cascade model Symmetry metadata",
-                0, countModelSymmetry(restored, sourceId, mirrorId, axisId));
-        assertEquals(0, legacySymmetryTruthCount(restored));
+            CadCanvasView.Entity restoredAxis = legacyEntity(restored, axisId);
+            restored.selectedObjects.clear();
+            restored.selectedObjects.add(restoredAxis);
+            restored.selected = restoredAxis;
+            restored.deleteSelected();
+            restored.requireSketchMirrorParity();
+            assertFalse(hasModelEntity(restored, axisId));
+            assertTrue(hasModelEntity(restored, sourceId));
+            assertTrue(hasModelEntity(restored, mirrorId));
+            assertEquals("Deleting the symmetry axis must cascade model Symmetry metadata",
+                    0, countModelSymmetry(restored, sourceId, mirrorId, axisId));
+            assertEquals(0, legacySymmetryTruthCount(restored));
+            return true;
+        });
     }
 
-    @Test
-    @UiThreadTest
-    public void wholeFixedMirrorConflictFailsAtomicallyWithoutMetadataOrHistoryMutation() {
-        K33MirroredCadCanvasView cad = cad();
-        CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
-        CadCanvasView.Entity mirror = line(cad, "LINE 330 310 390 350");
-        CadCanvasView.Entity axis = line(cad, "LINE 220 180 220 360");
-        String sourceId = source.stableId();
-        String mirrorId = mirror.stableId();
-        String axisId = axis.stableId();
+    @Test public void wholeFixedMirrorConflictFailsAtomicallyWithoutMetadataOrHistoryMutation() throws Exception {
+        onMain(() -> {
+            K33MirroredCadCanvasView cad = cad();
+            CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
+            CadCanvasView.Entity mirror = line(cad, "LINE 330 310 390 350");
+            CadCanvasView.Entity axis = line(cad, "LINE 220 180 220 360");
+            String sourceId = source.stableId();
+            String mirrorId = mirror.stableId();
+            String axisId = axis.stableId();
 
-        cad.selectedObjects.clear();
-        cad.selectedObjects.add(mirror);
-        cad.selected = mirror;
-        assertEquals("1 selection(s) locked", cad.toggleSelectedLock());
-        cad.requireSketchMirrorParity();
-        double[] mirrorBefore = modelLineSignature(cad, mirrorId);
-        int constraintsBefore = cad.sketchConstraintCount();
-        long transitionsBefore = cad.sketchAuthorityTransitionCount();
-        boolean undoBefore = cad.sketchAuthorityCanUndo();
-        boolean redoBefore = cad.sketchAuthorityCanRedo();
+            cad.selectedObjects.clear();
+            cad.selectedObjects.add(mirror);
+            cad.selected = mirror;
+            assertEquals("1 selection(s) locked", cad.toggleSelectedLock());
+            cad.requireSketchMirrorParity();
+            double[] mirrorBefore = modelLineSignature(cad, mirrorId);
+            int constraintsBefore = cad.sketchConstraintCount();
+            long transitionsBefore = cad.sketchAuthorityTransitionCount();
+            boolean undoBefore = cad.sketchAuthorityCanUndo();
+            boolean redoBefore = cad.sketchAuthorityCanRedo();
 
-        selectThree(cad, source, mirror, axis);
-        String result = cad.applySymmetryConstraint();
-        assertTrue("Impossible whole-FIXED Symmetry must fail closed: " + result,
-                result.contains("could not be solved") || result.contains("unchanged"));
-        cad.requireSketchMirrorParity();
-        assertEquals(0, countModelSymmetry(cad, sourceId, mirrorId, axisId));
-        assertEquals(constraintsBefore, cad.sketchConstraintCount());
-        assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
-        assertEquals(undoBefore, cad.sketchAuthorityCanUndo());
-        assertEquals(redoBefore, cad.sketchAuthorityCanRedo());
-        assertLineSame("Failed Symmetry must leave whole-FIXED mirror unchanged",
-                mirrorBefore, modelLineSignature(cad, mirrorId));
-        assertEquals(0, legacySymmetryTruthCount(cad));
+            selectThree(cad, source, mirror, axis);
+            String result = cad.applySymmetryConstraint();
+            assertTrue("Impossible whole-FIXED Symmetry must fail closed: " + result,
+                    result.contains("could not be solved") || result.contains("unchanged"));
+            cad.requireSketchMirrorParity();
+            assertEquals(0, countModelSymmetry(cad, sourceId, mirrorId, axisId));
+            assertEquals(constraintsBefore, cad.sketchConstraintCount());
+            assertEquals(transitionsBefore, cad.sketchAuthorityTransitionCount());
+            assertEquals(undoBefore, cad.sketchAuthorityCanUndo());
+            assertEquals(redoBefore, cad.sketchAuthorityCanRedo());
+            assertLineSame("Failed Symmetry must leave whole-FIXED mirror unchanged",
+                    mirrorBefore, modelLineSignature(cad, mirrorId));
+            assertEquals(0, legacySymmetryTruthCount(cad));
+            return true;
+        });
     }
 
     private static K33MirroredCadCanvasView cad() {
@@ -338,5 +345,11 @@ public final class K314SymmetryAuthorityInstrumentationTest {
 
     private static double distance(SketchGeometry.Point a, SketchGeometry.Point b) {
         return Math.hypot(a.xMm - b.xMm, a.yMm - b.yMm);
+    }
+
+    private static <T> T onMain(Callable<T> callable) throws Exception {
+        FutureTask<T> task = new FutureTask<>(callable);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(task);
+        return task.get();
     }
 }
