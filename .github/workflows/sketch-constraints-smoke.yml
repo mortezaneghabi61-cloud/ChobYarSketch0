@@ -72,7 +72,7 @@ jobs:
         run: base64 -d .github/chobyar-dev.keystore.b64 > chobyar-dev.jks
 
       - name: Build app and instrumentation APKs
-        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
       - name: Enable KVM
         run: |
