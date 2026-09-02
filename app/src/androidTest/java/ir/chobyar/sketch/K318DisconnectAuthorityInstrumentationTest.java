@@ -14,14 +14,11 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
-import ir.chobyar.sketch.core.ConstraintInteractionContract;
 import ir.chobyar.sketch.core.SketchConstraint;
 import ir.chobyar.sketch.core.SketchEntity;
 import ir.chobyar.sketch.core.SketchGeometry;
