@@ -1422,7 +1422,60 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return modelConstraintFailure("mirror-point-fixed",e);
         }
     }
-    @Override public String arraySelected(int count,float dx,float dy) { String out=super.arraySelected(count,dx,dy); syncMirror("array"); return out; }
+    @Override public String arraySelected(int count,float dx,float dy) {
+        if (selected == null) return "Select geometry first";
+        if (count < 2 || count > 200) return "text Array text text 2 text 200 text";
+        String sourceId = selected.stableId();
+        if (!prepareTransactionalSelection("array-prepare")) {
+            return lastMirrorError == null || lastMirrorError.isEmpty()
+                    ? "Array could not prepare model authority"
+                    : "Array unavailable: " + lastMirrorError;
+        }
+        SketchEntity source = sketchDocument.entity(sourceId);
+        if (source == null) return "Array requires model-owned sketch geometry";
+
+        ArrayList<SketchEntity> copies = new ArrayList<>();
+        ArrayList<String> copyIds = new ArrayList<>();
+        try {
+            for (int i = 1; i < count; i++) {
+                String id = UUID.randomUUID().toString();
+                SketchEntity copy = SketchEntities.duplicateAs(source, id).translated(dx * i, dy * i);
+                if (!copy.isValid()) return "Array could not create valid copies";
+                copyIds.add(id);
+                copies.add(copy);
+            }
+        } catch (RuntimeException e) {
+            lastMirrorError = "array-plan: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return "Array could not create valid copies";
+        }
+
+        try {
+            sketchDocument.addAll(copies);
+            sketchDocument.selectOnly(copyIds.get(copyIds.size() - 1));
+            int legacyCountBefore = entities.size();
+            String out = super.arraySelected(count, dx, dy);
+            if (entities.size() != legacyCountBefore + copies.size() || selected == null) {
+                finishTransactionalMutation("array-projection-count");
+                return "Array rollback: projection failed";
+            }
+            for (int i = 0; i < copyIds.size(); i++) {
+                selected = entities.get(legacyCountBefore + i);
+                if (!restoreLegacySelectedStableId(copyIds.get(i))) {
+                    finishTransactionalMutation("array-id-injection");
+                    return "Array rollback: stable-id projection failed";
+                }
+            }
+            selected = entities.get(entities.size() - 1);
+            if (!finishTransactionalMutation("array")) return "Array rollback: parity failed";
+            invalidate();
+            return out;
+        } catch (RuntimeException e) {
+            lastMirrorError = "array-projection: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            finishTransactionalMutation("array-exception");
+            return "Array rollback: projection failed";
+        }
+    }
 
     @Override public String trimSelectedLines() { String out=super.trimSelectedLines(); syncMirror("trim"); return out; }
     @Override public String extendSelectedLines() { String out=super.extendSelectedLines(); syncMirror("extend"); return out; }

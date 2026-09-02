@@ -25,6 +25,7 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/K316*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K317*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K318*InstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K319*InstrumentationTest.java'
       - 'app/src/main/java/ir/chobyar/sketch/ShaprLabCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/ShaprConstraintSolverCadCanvasView.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
@@ -91,7 +92,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run K3.3 through K3.18 authority regressions
+      - name: Run K3.3 through K3.19 authority regressions
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -154,6 +155,8 @@ jobs:
             grep -q 'OK (4 tests)' test-artifacts/k3-directional-render-authority.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K318DisconnectAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-disconnect-authority.txt
             grep -q 'OK (4 tests)' test-artifacts/k3-disconnect-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K319LinearArrayAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-linear-array-authority.txt
+            grep -q 'OK (4 tests)' test-artifacts/k3-linear-array-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()
