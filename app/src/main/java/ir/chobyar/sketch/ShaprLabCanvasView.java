@@ -85,62 +85,21 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
     // ------------------------------------------------------------------
 
     public String applyEqualConstraint() {
-        if (isModelEqualConstraintAuthorityEnabled()) return super.applyEqualConstraint();
-        List<Object> s = selectionObjects();
-        if (s.size() < 2) return "text Equal text text Line text text Circle/Arc text Selection text";
-        boolean lines = isLine(s.get(0));
-        boolean curves = isCurve(s.get(0));
-        if (!lines && !curves) return "Equal text Line, Circle text Arc text text";
-        for (Object e : s) {
-            if (lines && !isLine(e)) return "All Selectiontext text Line text";
-            if (curves && !isCurve(e)) return "All Selectiontext text Circle/Arc text";
-        }
-        EqualRelation r = new EqualRelation(new ArrayList<>(s), lines);
-        equalRelations.add(r);
-        r.enforce();
-        invalidate();
-        return lines ? "Equal: Length Linetext text text" : "Equal: Radiustext text text";
+        return super.applyEqualConstraint();
     }
 
     /** Select two lines, then the axis as the third selected line. */
     public String applySymmetryConstraint() {
-        List<Object> lines = selectedLines();
-        if (lines.size() != 3) return "Symmetry: text Line text Then Line Axis text Selection text";
-        SymmetryRelation r = new SymmetryRelation(lines.get(0), lines.get(1), lines.get(2));
-        symmetryRelations.add(r);
-        r.enforce();
-        invalidate();
-        return "Symmetry Apply text";
+        return "Symmetry model authority is unavailable";
     }
 
     /** First line contributes its nearest endpoint; second line is the host. */
     public String applyMidpointConstraint() {
-        List<Object> lines = selectedLines();
-        if (lines.size() != 2) return "Midpoint: text Line text Selection text";
-        PointF m = midpoint(lines.get(1));
-        if (m == null) return "Midpoint text text";
-        MidpointRelation r = new MidpointRelation(lines.get(0), nearestEndpointIndex(lines.get(0), m), lines.get(1));
-        midpointRelations.add(r);
-        r.enforce();
-        invalidate();
-        return "Midpoint: text Line First text Midpoint Line text text text";
+        return "Midpoint model authority is unavailable";
     }
 
     public String applyTangentConstraint() {
-        List<Object> s = selectionObjects();
-        if (s.size() != 2) return "Tangent: text Line text text Circle/Arc text Selection text";
-        Object line = null, curve = null;
-        for (Object e : s) {
-            if (isLine(e)) line = e;
-            else if (isCurve(e)) curve = e;
-        }
-        if (line == null || curve == null) return "Tangent text text Line text text Circle/Arc text text";
-        TangentRelation r = createTangentRelation(line, curve);
-        if (r == null) return "Tangent text text; Point text Line text text text text";
-        tangentRelations.add(r);
-        r.enforce();
-        invalidate();
-        return "Tangent Apply text";
+        return "Tangent model authority is unavailable";
     }
 
     // ------------------------------------------------------------------
@@ -322,15 +281,8 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
     }
 
     private void enforceRelations() {
-        List<Object> all=entities();
-        Iterator<EqualRelation> ei=equalRelations.iterator();
-        while(ei.hasNext()){EqualRelation r=ei.next();if(!r.valid(all))ei.remove();else r.enforce();}
-        Iterator<SymmetryRelation> si=symmetryRelations.iterator();
-        while(si.hasNext()){SymmetryRelation r=si.next();if(!r.valid(all))si.remove();else r.enforce();}
-        Iterator<MidpointRelation> mi=midpointRelations.iterator();
-        while(mi.hasNext()){MidpointRelation r=mi.next();if(!r.valid(all))mi.remove();else r.enforce();}
-        Iterator<TangentRelation> ti=tangentRelations.iterator();
-        while(ti.hasNext()){TangentRelation r=ti.next();if(!r.valid(all))ti.remove();else r.enforce();}
+        // Compatibility seam for older solver reflection. Legacy identity
+        // relations are diagnostic-only and must never mutate geometry.
     }
 
     // ------------------------------------------------------------------
@@ -339,10 +291,8 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        enforceRelations();
         super.onDraw(canvas);
         drawLabChip(canvas);
-        drawRelationBadges(canvas);
     }
 
     private void drawLabChip(Canvas canvas) {
@@ -379,7 +329,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
             return true;
         }
         boolean handled=super.onTouchEvent(event);
-        if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){enforceRelations();invalidate();}
+        if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)invalidate();
         return handled;
     }
 
