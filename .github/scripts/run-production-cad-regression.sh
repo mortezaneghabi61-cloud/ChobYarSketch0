@@ -77,6 +77,7 @@ run_contract K315ShaprLabRenderAuthorityInstrumentationTest shaprlab-render-auth
 run_contract K316ConcentricAuthorityInstrumentationTest concentric-authority 'OK (5 tests)'
 run_contract K317DirectionalRenderAuthorityInstrumentationTest directional-render-authority 'OK (4 tests)'
 run_contract K318DisconnectAuthorityInstrumentationTest disconnect-authority 'OK (4 tests)'
+run_contract K319LinearArrayAuthorityInstrumentationTest linear-array-authority 'OK (4 tests)'
 run_contract K36dMidpointAuthorityInstrumentationTest midpoint-authority 'OK (5 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
