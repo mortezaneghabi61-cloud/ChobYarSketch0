@@ -8,6 +8,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 
+import androidx.test.annotation.UiThreadTest;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
@@ -33,7 +34,9 @@ import ir.chobyar.sketch.core.SketchGeometry;
 public final class K314SymmetryAuthorityInstrumentationTest {
     private static final double EPS = 1.0e-5;
 
-    @Test public void symmetryMustBeModelOwnedWithStableIdsAndNoLegacyTruth() {
+    @Test
+    @UiThreadTest
+    public void symmetryMustBeModelOwnedWithStableIdsAndNoLegacyTruth() {
         K33MirroredCadCanvasView cad = cad();
         CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
         CadCanvasView.Entity mirror = line(cad, "LINE 300 255 350 305");
@@ -63,7 +66,9 @@ public final class K314SymmetryAuthorityInstrumentationTest {
         assertEquals(0, legacySymmetryTruthCount(cad));
     }
 
-    @Test public void obliqueAxisSymmetryPreservesSourceAndAxisAndDrivesOnlyMirror() {
+    @Test
+    @UiThreadTest
+    public void obliqueAxisSymmetryPreservesSourceAndAxisAndDrivesOnlyMirror() {
         K33MirroredCadCanvasView cad = cad();
         CadCanvasView.Entity source = line(cad, "LINE 70 250 145 205");
         CadCanvasView.Entity mirror = line(cad, "LINE 330 260 365 330");
@@ -84,7 +89,9 @@ public final class K314SymmetryAuthorityInstrumentationTest {
         assertEquals(0, legacySymmetryTruthCount(cad));
     }
 
-    @Test public void drawMustNeverRepairLegacySymmetryProjectionOrMutateModelAuthority() {
+    @Test
+    @UiThreadTest
+    public void drawMustNeverRepairLegacySymmetryProjectionOrMutateModelAuthority() {
         K33MirroredCadCanvasView cad = cad();
         CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
         CadCanvasView.LineEntity mirror = (CadCanvasView.LineEntity) line(cad, "LINE 305 260 350 310");
@@ -118,7 +125,9 @@ public final class K314SymmetryAuthorityInstrumentationTest {
         assertEquals(0, legacySymmetryTruthCount(cad));
     }
 
-    @Test public void symmetryPersistsAcrossProjectRoundTripAndAxisDeleteCascades() {
+    @Test
+    @UiThreadTest
+    public void symmetryPersistsAcrossProjectRoundTripAndAxisDeleteCascades() {
         K33MirroredCadCanvasView cad = cad();
         CadCanvasView.Entity source = line(cad, "LINE 80 280 130 235");
         CadCanvasView.Entity mirror = line(cad, "LINE 305 260 350 310");
@@ -155,7 +164,9 @@ public final class K314SymmetryAuthorityInstrumentationTest {
         assertEquals(0, legacySymmetryTruthCount(restored));
     }
 
-    @Test public void wholeFixedMirrorConflictFailsAtomicallyWithoutMetadataOrHistoryMutation() {
+    @Test
+    @UiThreadTest
+    public void wholeFixedMirrorConflictFailsAtomicallyWithoutMetadataOrHistoryMutation() {
         K33MirroredCadCanvasView cad = cad();
         CadCanvasView.Entity source = line(cad, "LINE 70 260 130 220");
         CadCanvasView.Entity mirror = line(cad, "LINE 330 310 390 350");
