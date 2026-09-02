@@ -86,6 +86,13 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
     /** Migration hook: model endpoint authority suppresses object-reference constraint truth. */
     protected boolean isModelEndpointConstraintAuthorityEnabled() { return false; }
 
+    /** K3.17: model authority consumes one-shot directional inference instead of legacy stores. */
+    protected boolean isModelDirectionalConstraintAuthorityEnabled() { return false; }
+
+    /** One-shot gesture seam; production K33 converts previous-line identity to a stable id immediately. */
+    protected void onAutomaticDirectionalInferenceCommitted(
+            char axis, boolean perpendicular, Object previousLine) {}
+
     public ChobYarShaprCanvasView(Context context) {
         super(context);
         initPaints();
@@ -174,9 +181,10 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        enforceConstraints();
+        // K3.17: production model-authority draw is presentation-only.
+        if (!isModelDirectionalConstraintAuthorityEnabled()) enforceConstraints();
         super.onDraw(canvas);
-        pruneConstraintState();
+        if (!isModelDirectionalConstraintAuthorityEnabled()) pruneConstraintState();
         drawInference(canvas);
         drawConstraintBadges(canvas);
         drawGizmo(canvas);
@@ -224,11 +232,16 @@ public class ChobYarShaprCanvasView extends ShaprStyleCadCanvasView {
             Object created = selectedObject();
             if (isLine(created)) {
                 lastLineCreated = created;
-                if (pendingAxis == 'H' || pendingAxis == 'V') {
-                    axisLocks.put(created, new AxisLock(created, pendingAxis));
-                }
-                if (pendingPerpendicular && isLine(previousLine) && previousLine != created) {
-                    addRelation(previousLine, created, false);
+                if (isModelDirectionalConstraintAuthorityEnabled()) {
+                    onAutomaticDirectionalInferenceCommitted(
+                            pendingAxis, pendingPerpendicular, previousLine);
+                } else {
+                    if (pendingAxis == 'H' || pendingAxis == 'V') {
+                        axisLocks.put(created, new AxisLock(created, pendingAxis));
+                    }
+                    if (pendingPerpendicular && isLine(previousLine) && previousLine != created) {
+                        addRelation(previousLine, created, false);
+                    }
                 }
                 // K3.6d: routed Create commits endpoint relationships in SketchDocument.
                 if (!isModelEndpointConstraintAuthorityEnabled()) detectCoincidentLinks(created);
