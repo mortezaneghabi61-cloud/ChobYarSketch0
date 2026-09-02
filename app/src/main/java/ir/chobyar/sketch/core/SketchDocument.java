@@ -298,6 +298,39 @@ public final class SketchDocument {
         changed();
     }
 
+    /**
+     * Replaces multiple existing entities and solves all current constraints as
+     * one fail-closed user transaction. Validation and solving happen on a
+     * prospective copy, so an invalid replacement or unsatisfied solve leaves
+     * geometry, constraints, selection and Undo/Redo history untouched.
+     */
+    public synchronized SketchConstraintSolver.Result replaceAllAndSolve(
+            Collection<? extends SketchEntity> replacements, SketchConstraintSolver solver) {
+        if (solver == null) throw new NullPointerException("solver");
+        if (replacements == null || replacements.isEmpty()) return solvedCurrent();
+
+        LinkedHashMap<String, SketchEntity> prospective = copyEntities();
+        LinkedHashSet<String> replacementIds = new LinkedHashSet<>();
+        boolean any = false;
+        for (SketchEntity replacement : replacements) {
+            requireValid(replacement);
+            String id = replacement.id();
+            if (!replacementIds.add(id)) {
+                throw new IllegalArgumentException("Duplicate replacement sketch entity id: " + id);
+            }
+            SketchEntity current = entities.get(id);
+            if (current == null) {
+                throw new IllegalArgumentException("Sketch entity does not exist: " + id);
+            }
+            if (!sameGeometry(current, replacement)) {
+                prospective.put(id, replacement.copy());
+                any = true;
+            }
+        }
+        if (!any) return solvedCurrent();
+        return solveAndCommitProspective(prospective, solver);
+    }
+
     public synchronized boolean remove(String id) {
         String normalized = normalizeId(id);
         if (!entities.containsKey(normalized)) return false;
