@@ -1547,7 +1547,46 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return "Trim could not be solved; geometry was left unchanged";
         }
     }
-    @Override public String extendSelectedLines() { String out=super.extendSelectedLines(); syncMirror("extend"); return out; }
+    @Override public String extendSelectedLines() {
+        if (!prepareTransactionalSelection("extend-prepare")) return "Select exactly two lines for Extend";
+        List<String> ids = selectedModelLineIds();
+        if (ids.size() != 2 || sketchDocument.selectionIds().size() != 2) {
+            return "Select exactly two lines for Extend";
+        }
+        SketchEntity firstEntity = sketchDocument.entity(ids.get(0));
+        SketchEntity secondEntity = sketchDocument.entity(ids.get(1));
+        if (!(firstEntity instanceof SketchGeometry.Line)
+                || !(secondEntity instanceof SketchGeometry.Line)) {
+            return "Select exactly two lines for Extend";
+        }
+        SketchGeometry.Line first = (SketchGeometry.Line) firstEntity;
+        SketchGeometry.Line second = (SketchGeometry.Line) secondEntity;
+        SketchGeometry.Point intersection = trimIntersection(first, second);
+        if (intersection == null) return "Parallel lines cannot be extended to meet";
+        boolean firstHasIntersection = trimPointOnSegment(intersection, first);
+        boolean secondHasIntersection = trimPointOnSegment(intersection, second);
+        if (firstHasIntersection && secondHasIntersection) {
+            return "Selected lines already meet — use Trim to remove extra sides";
+        }
+
+        ArrayList<SketchEntity> replacements = new ArrayList<>();
+        replacements.add(firstHasIntersection ? first : trimLineKeepingFarSide(first, intersection));
+        replacements.add(secondHasIntersection ? second : trimLineKeepingFarSide(second, intersection));
+        try {
+            long before = sketchDocument.revision();
+            sketchDocument.replaceAllAndSolve(replacements, sketchConstraintSolver);
+            if (sketchDocument.revision() == before) return "Extend unchanged";
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("extend")) return "Extend rollback: parity failed";
+            invalidate();
+            return "Extend completed — endpoints meet at intersection";
+        } catch (RuntimeException e) {
+            lastMirrorError = "extend: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return "Extend could not be solved; geometry was left unchanged";
+        }
+    }
     @Override public String chamferSelectedLines(float setback) { String out=super.chamferSelectedLines(setback); syncMirror("sketch-chamfer"); return out; }
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
     @Override public String joinSelectedLines() { String out=super.joinSelectedLines(); syncMirror("join"); return out; }
