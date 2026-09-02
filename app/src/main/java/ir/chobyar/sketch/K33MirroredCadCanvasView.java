@@ -473,7 +473,16 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override protected boolean isModelEndpointConstraintAuthorityEnabled() { return true; }
+    @Override protected boolean isModelDirectionalConstraintAuthorityEnabled() { return true; }
     @Override protected boolean isModelEqualConstraintAuthorityEnabled() { return true; }
+
+    @Override protected void onAutomaticDirectionalInferenceCommitted(
+            char axis, boolean perpendicular, Object previousLine) {
+        committedDirectionalAxis = axis;
+        committedDirectionalPerpendicular = perpendicular;
+        committedDirectionalPreviousLineId = previousLine instanceof Entity
+                ? ((Entity) previousLine).stableId() : null;
+    }
 
     private static boolean equalRadiusEntity(SketchEntity entity) {
         return entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc;
@@ -668,6 +677,10 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     private boolean adoptLegacyGestureCandidate(String stableId, String source) {
+        char directionalAxis = committedDirectionalAxis;
+        boolean directionalPerpendicular = committedDirectionalPerpendicular;
+        String directionalPreviousLineId = committedDirectionalPreviousLineId;
+        clearCommittedDirectionalInference();
         try {
             if (!restoreLegacySelectedStableId(stableId)) {
                 syncMirror(source + "-id-fallback");
@@ -703,6 +716,23 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                         generated.add(SketchConstraint.pointOnEntity(UUID.randomUUID().toString(),
                                 stableId, drivenPoint, snap.targetEntityId));
                     }
+                }
+            }
+
+            if (candidate instanceof SketchGeometry.Line) {
+                if (directionalAxis == 'H') {
+                    generated.add(SketchConstraint.horizontal(
+                            UUID.randomUUID().toString(), stableId));
+                } else if (directionalAxis == 'V') {
+                    generated.add(SketchConstraint.vertical(
+                            UUID.randomUUID().toString(), stableId));
+                }
+                if (directionalPerpendicular
+                        && directionalPreviousLineId != null
+                        && !stableId.equals(directionalPreviousLineId)
+                        && sketchDocument.entity(directionalPreviousLineId) instanceof SketchGeometry.Line) {
+                    generated.add(SketchConstraint.perpendicular(
+                            UUID.randomUUID().toString(), directionalPreviousLineId, stableId));
                 }
             }
 
@@ -755,6 +785,15 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     private RoutedSnap committedCreateSnap;
+    private char committedDirectionalAxis;
+    private boolean committedDirectionalPerpendicular;
+    private String committedDirectionalPreviousLineId;
+
+    private void clearCommittedDirectionalInference() {
+        committedDirectionalAxis = 0;
+        committedDirectionalPerpendicular = false;
+        committedDirectionalPreviousLineId = null;
+    }
 
     private int pointIndexAt(String entityId, double xMm, double yMm) {
         SketchEntity entity = sketchDocument.entity(entityId);
@@ -1134,6 +1173,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             if (action == MotionEvent.ACTION_MOVE) updatePendingPointLockGesture(event);
         }
         boolean commitAttempt = isGestureCreateCommitAttempt(toolBefore, action, drawingBefore);
+        if (commitAttempt) clearCommittedDirectionalInference();
         String authorityId = commitAttempt ? UUID.randomUUID().toString() : null;
         boolean prepared = commitAttempt && prepareTransactionalDocument("gesture-create-prepare");
 
