@@ -76,12 +76,13 @@ public final class LegacySketchStateBridge {
                             row.getString("kind").trim().toUpperCase(java.util.Locale.US));
                     String primary = normalizedId(row.getString("primaryEntityId"));
                     String secondary = normalizedOptionalId(row.optString("secondaryEntityId", null));
+                    String tertiary = normalizedOptionalId(row.optString("tertiaryEntityId", null));
                     int primaryPoint = row.optInt("primaryPointIndex", -1);
                     int secondaryPoint = row.optInt("secondaryPointIndex", -1);
                     double value = row.has("value") ? row.getDouble("value") : Double.NaN;
                     boolean driving = row.optBoolean("driving", true);
                     constraints.add(new SketchConstraint(id, kind, primary, primaryPoint,
-                            secondary, secondaryPoint, value, driving));
+                            secondary, secondaryPoint, tertiary, value, driving));
                 }
             }
             return new Result(modeled, constraints, ignored);
@@ -231,6 +232,7 @@ public final class LegacySketchStateBridge {
         if (!a.primaryEntityId.equals(b.primaryEntityId)) return false;
         if (a.primaryPointIndex != b.primaryPointIndex || a.secondaryPointIndex != b.secondaryPointIndex) return false;
         if (a.secondaryEntityId == null ? b.secondaryEntityId != null : !a.secondaryEntityId.equals(b.secondaryEntityId)) return false;
+        if (a.tertiaryEntityId == null ? b.tertiaryEntityId != null : !a.tertiaryEntityId.equals(b.tertiaryEntityId)) return false;
         if (a.driving != b.driving) return false;
         if (Double.isNaN(a.value) || Double.isNaN(b.value)) return Double.isNaN(a.value) && Double.isNaN(b.value);
         return near(a.value, b.value);
