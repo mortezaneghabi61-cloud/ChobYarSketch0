@@ -109,7 +109,7 @@ public class DeterministicSketchConstraintSolverTest {
                 Collections.singletonList(SketchConstraint.tangent("t", "a", "b")));
         assertEquals(SketchConstraintSolver.Status.UNSUPPORTED, result.status);
         assertFalse(result.solved());
-        assertTrue(result.message.contains("not yet supported"));
+        assertTrue(result.message.contains("requires one line and one circle/arc"));
     }
 
     private static SketchGeometry.Line solvedLine(SketchConstraintSolver.Result result, String id) {
