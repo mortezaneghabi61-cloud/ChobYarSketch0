@@ -76,6 +76,7 @@ run_contract K314SymmetryAuthorityInstrumentationTest symmetry-authority 'OK (5 
 run_contract K315ShaprLabRenderAuthorityInstrumentationTest shaprlab-render-authority 'OK (3 tests)'
 run_contract K316ConcentricAuthorityInstrumentationTest concentric-authority 'OK (5 tests)'
 run_contract K317DirectionalRenderAuthorityInstrumentationTest directional-render-authority 'OK (4 tests)'
+run_contract K318DisconnectAuthorityInstrumentationTest disconnect-authority 'OK (4 tests)'
 run_contract K36dMidpointAuthorityInstrumentationTest midpoint-authority 'OK (5 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
