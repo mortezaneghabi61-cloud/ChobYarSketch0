@@ -11,7 +11,9 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
 
 import ir.chobyar.sketch.core.SketchConstraint;
 
@@ -21,8 +23,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Production-canvas regression tests for persistent parametric Sketch constraints.
- * Each relationship is applied, geometry is deliberately disturbed, then the
- * real solver is allowed to redraw and must restore the relationship.
+ * Model-owned relationships are reasserted by semantic transactions; rendering
+ * remains presentation-only for migrated authority slices such as Tangent and Symmetry.
  */
 @RunWith(AndroidJUnit4.class)
 public final class SketchConstraintSolverInstrumentationTest {
@@ -188,12 +190,12 @@ public final class SketchConstraintSolverInstrumentationTest {
         Instrumentation inst = InstrumentationRegistry.getInstrumentation();
         try (ActivityScenario<ChobYarActivity> scenario = ActivityScenario.launch(ChobYarActivity.class)) {
             inst.waitForIdleSync();
-            final String[] stableIds = new String[4];
+            final String[] stableIds = new String[5];
             scenario.onActivity(activity -> {
                 Shapr3DGuideCadCanvasView c = canvas(activity);
                 reset(c);
 
-                assertTrue("Production canvas must expose model-owned Tangent authority",
+                assertTrue("Production canvas must expose model-owned Tangent/Symmetry authority",
                         c instanceof K33MirroredCadCanvasView);
                 K33MirroredCadCanvasView model = (K33MirroredCadCanvasView)c;
 
@@ -213,13 +215,12 @@ public final class SketchConstraintSolverInstrumentationTest {
                 CadCanvasView.Entity axis = make(c, "LINE 220 200 220 360");
                 stableIds[2] = source.stableId();
                 stableIds[3] = mirror.stableId();
+                stableIds[4] = axis.stableId();
                 select(c, source, mirror, axis);
                 String sym = c.applySymmetryConstraint();
                 assertTrue("Symmetry rejected: " + sym, sym.contains("Symmetry"));
+                assertModelOwnedSymmetry(model, stableIds[2], stableIds[3], stableIds[4]);
                 assertMirrorAcrossVertical(source, mirror, 220f);
-                PointF mp = endpoint(mirror, 1);
-                mirror.moveControlPoint(1, mp.x + 40f, mp.y - 25f);
-                c.invalidate();
             });
 
             inst.waitForIdleSync();
@@ -230,6 +231,7 @@ public final class SketchConstraintSolverInstrumentationTest {
                 CadCanvasView.Entity source = entityByStableId(c, stableIds[2]);
                 CadCanvasView.Entity mirror = entityByStableId(c, stableIds[3]);
                 assertModelOwnedTangent(c, stableIds[1], stableIds[0]);
+                assertModelOwnedSymmetry(c, stableIds[2], stableIds[3], stableIds[4]);
                 assertSupportingLineTangent(tangent, circle);
                 assertNoEndpointOnCurve(tangent, circle);
                 assertMirrorAcrossVertical(source, mirror, 220f);
@@ -250,10 +252,11 @@ public final class SketchConstraintSolverInstrumentationTest {
                 CadCanvasView.Entity source = entityByStableId(c, stableIds[2]);
                 CadCanvasView.Entity mirror = entityByStableId(c, stableIds[3]);
                 assertModelOwnedTangent(c, stableIds[1], stableIds[0]);
+                assertModelOwnedSymmetry(c, stableIds[2], stableIds[3], stableIds[4]);
                 assertSupportingLineTangent(tangent, circle);
                 assertNoEndpointOnCurve(tangent, circle);
                 assertMirrorAcrossVertical(source, mirror, 220f);
-                Log.i(TAG, "TANGENT_SYMMETRY_RESULT tangent=true symmetry=true persistent=true");
+                Log.i(TAG, "TANGENT_SYMMETRY_RESULT tangent=true symmetry=true persistent=true modelOwned=true");
             });
         }
     }
@@ -444,6 +447,40 @@ public final class SketchConstraintSolverInstrumentationTest {
         assertEquals("Exactly one model-owned stable-ID Tangent must persist", 1, tangentCount);
         assertEquals("Tangent must not persist an implicit endpoint contact constraint", 0, hiddenContactCount);
         c.requireSketchMirrorParity();
+    }
+
+    private static void assertModelOwnedSymmetry(K33MirroredCadCanvasView c,
+                                                 String sourceId, String mirrorId, String axisId) {
+        int symmetryCount = 0;
+        int hiddenContactCount = 0;
+        for (SketchConstraint constraint : c.sketchConstraints()) {
+            boolean referencesAnySymmetryPair = constraint.referencedEntityIds().contains(sourceId)
+                    && constraint.referencedEntityIds().contains(mirrorId);
+            if (constraint.kind == SketchConstraint.Kind.SYMMETRY
+                    && sourceId.equals(constraint.primaryEntityId)
+                    && mirrorId.equals(constraint.secondaryEntityId)
+                    && axisId.equals(constraint.tertiaryEntityId)) symmetryCount++;
+            if ((constraint.kind == SketchConstraint.Kind.COINCIDENT
+                    || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY)
+                    && referencesAnySymmetryPair) hiddenContactCount++;
+        }
+        assertEquals("Exactly one model-owned three-stable-ID Symmetry must persist", 1, symmetryCount);
+        assertEquals("Symmetry must not create hidden endpoint-contact metadata", 0, hiddenContactCount);
+        assertEquals("Migrated Symmetry must not populate legacy object-identity truth",
+                0, legacySymmetryTruthCount(c));
+        c.requireSketchMirrorParity();
+    }
+
+    private static int legacySymmetryTruthCount(K33MirroredCadCanvasView c) {
+        try {
+            Field field = ShaprLabCanvasView.class.getDeclaredField("symmetryRelations");
+            field.setAccessible(true);
+            Object value = field.get(c);
+            if (value instanceof Collection) return ((Collection<?>) value).size();
+            throw new AssertionError("Unexpected legacy symmetryRelations store: " + value);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Cannot inspect legacy Symmetry authority", e);
+        }
     }
 
     private static void assertSupportingLineTangent(CadCanvasView.Entity line,
