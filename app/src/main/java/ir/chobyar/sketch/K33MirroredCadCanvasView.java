@@ -1762,7 +1762,47 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return modelConstraintFailure("constraint-concentric", e);
         }
     }
-    @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
+
+    private static boolean isDisconnectableModelConstraint(SketchConstraint constraint) {
+        return constraint != null && (constraint.kind == SketchConstraint.Kind.COINCIDENT
+                || constraint.kind == SketchConstraint.Kind.POINT_ON_ENTITY
+                || constraint.kind == SketchConstraint.Kind.MIDPOINT);
+    }
+
+    @Override public String disconnectSelectedConnections() {
+        if (!prepareTransactionalSelection("constraint-disconnect-prepare")) return "Select geometry first";
+        Set<String> selectedIds = sketchDocument.selectionIds();
+        if (selectedIds.isEmpty()) return "Select geometry first";
+
+        ArrayList<String> removeIds = new ArrayList<>();
+        for (SketchConstraint constraint : sketchDocument.constraints()) {
+            if (!isDisconnectableModelConstraint(constraint)) continue;
+            for (String selectedId : selectedIds) {
+                if (constraint.references(selectedId)) {
+                    removeIds.add(constraint.id);
+                    break;
+                }
+            }
+        }
+        if (removeIds.isEmpty()) return "No connections to disconnect";
+
+        try {
+            int removed = sketchDocument.removeConstraints(removeIds);
+            if (removed <= 0) return "No connections to disconnect";
+            if (removed != removeIds.size()) {
+                if (sketchDocument.canUndo()) sketchDocument.undo();
+                return "Disconnect rollback: incomplete model mutation";
+            }
+            coreSaveUndo();
+            if (!finishTransactionalMutation("constraint-disconnect")) {
+                return "Disconnect rollback: parity failed";
+            }
+            invalidate();
+            return removed + " connection(s) disconnected";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-disconnect", e);
+        }
+    }
 
     private boolean hasWholeFixed(String entityId) {
         for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
