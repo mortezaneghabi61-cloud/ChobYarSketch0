@@ -42,8 +42,8 @@ import ir.chobyar.sketch.core.SketchSnapService;
  * moves Line DISTANCE, Circle/Arc RADIUS and binary Line ANGLE driving
  * dimensions into the same model authority. K3.11 adds model-owned EQUAL for
  * line length and circle/arc radius. K3.13 adds model-owned line-to-curve
- * TANGENT. Remaining annotations and constraint kinds stay legacy-owned until
- * their dedicated authority slices.
+ * TANGENT. K3.14 adds model-owned three-line SYMMETRY. Remaining annotations
+ * and constraint kinds stay legacy-owned until their dedicated authority slices.
  */
 public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     private static final float LEGACY_SNAP_RADIUS_PX = 30f;
@@ -286,7 +286,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case PARALLEL:
                 case PERPENDICULAR:
                 case EQUAL:
-                case TANGENT: score += 60; break;
+                case TANGENT:
+                case SYMMETRY: score += 60; break;
                 default: score += 30; break;
             }
         }
@@ -432,6 +433,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
                     && c.kind != SketchConstraint.Kind.EQUAL
                     && c.kind != SketchConstraint.Kind.TANGENT
+                    && c.kind != SketchConstraint.Kind.SYMMETRY
                     && c.kind != SketchConstraint.Kind.COINCIDENT
                     && c.kind != SketchConstraint.Kind.POINT_ON_ENTITY
                     && c.kind != SketchConstraint.Kind.MIDPOINT
@@ -945,6 +947,8 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                         ax, ay - 10f, modelConstraintTextPaint);
             } else if (constraint.kind == SketchConstraint.Kind.TANGENT) {
                 canvas.drawText("T", ax, ay - 10f, modelConstraintTextPaint);
+            } else if (constraint.kind == SketchConstraint.Kind.SYMMETRY) {
+                canvas.drawText("S", ax, ay - 10f, modelConstraintTextPaint);
             } else if ((constraint.kind == SketchConstraint.Kind.PARALLEL
                     || constraint.kind == SketchConstraint.Kind.PERPENDICULAR)
                     && constraint.secondaryEntityId != null) {
@@ -1554,7 +1558,43 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
     }
 
     @Override public String applyEqualConstraint() { String out=super.applyEqualConstraint(); syncMirror("constraint-equal-post"); return out; }
-    @Override public String applySymmetryConstraint() { String out=super.applySymmetryConstraint(); syncMirror("constraint-symmetry"); return out; }
+
+    @Override public String applySymmetryConstraint() {
+        if (!prepareTransactionalSelection("constraint-symmetry-prepare")) {
+            return "Symmetry requires source, mirror and axis lines";
+        }
+        List<String> ids = selectedModelLineIds();
+        if (ids.size() != 3 || sketchDocument.selectionIds().size() != 3) {
+            return "Symmetry requires source, mirror and axis lines";
+        }
+        String sourceId = ids.get(0);
+        String mirrorId = ids.get(1);
+        String axisId = ids.get(2);
+        for (SketchConstraint existing : sketchDocument.constraints()) {
+            if (existing.kind != SketchConstraint.Kind.SYMMETRY) continue;
+            if (sourceId.equals(existing.primaryEntityId)
+                    && mirrorId.equals(existing.secondaryEntityId)
+                    && axisId.equals(existing.tertiaryEntityId)) {
+                return "Symmetry already applied";
+            }
+        }
+        try {
+            SketchConstraint symmetry = SketchConstraint.symmetry(
+                    UUID.randomUUID().toString(), sourceId, mirrorId, axisId);
+            sketchDocument.addConstraintsAndSolve(
+                    java.util.Collections.singletonList(symmetry), sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("constraint-symmetry")) {
+                return "Symmetry constraint rollback: parity failed";
+            }
+            invalidate();
+            return "Symmetry applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-symmetry", e);
+        }
+    }
+
     @Override public String applyMidpointConstraint() {
         if (!prepareTransactionalSelection("constraint-midpoint-prepare")) {
             return "Midpoint requires exactly two lines";
@@ -1730,6 +1770,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 row.put("primaryPointIndex",c.primaryPointIndex);
                 if (c.secondaryEntityId!=null) row.put("secondaryEntityId",c.secondaryEntityId);
                 row.put("secondaryPointIndex",c.secondaryPointIndex);
+                if (c.tertiaryEntityId!=null) row.put("tertiaryEntityId",c.tertiaryEntityId);
                 if (!Double.isNaN(c.value)) row.put("value",c.value);
                 row.put("driving",c.driving);
                 rows.put(row);
