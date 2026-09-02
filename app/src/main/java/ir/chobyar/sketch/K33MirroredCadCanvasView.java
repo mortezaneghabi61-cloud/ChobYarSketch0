@@ -1477,7 +1477,76 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    @Override public String trimSelectedLines() { String out=super.trimSelectedLines(); syncMirror("trim"); return out; }
+    private static SketchGeometry.Point trimIntersection(
+            SketchGeometry.Line first, SketchGeometry.Line second) {
+        double x1 = first.a.xMm, y1 = first.a.yMm;
+        double x2 = first.b.xMm, y2 = first.b.yMm;
+        double x3 = second.a.xMm, y3 = second.a.yMm;
+        double x4 = second.b.xMm, y4 = second.b.yMm;
+        double den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.abs(den) < 1.0e-6) return null;
+        double c1 = x1 * y2 - y1 * x2;
+        double c2 = x3 * y4 - y3 * x4;
+        double x = (c1 * (x3 - x4) - (x1 - x2) * c2) / den;
+        double y = (c1 * (y3 - y4) - (y1 - y2) * c2) / den;
+        return new SketchGeometry.Point(x, y);
+    }
+
+    private static boolean trimPointOnSegment(
+            SketchGeometry.Point point, SketchGeometry.Line line) {
+        double length = Math.hypot(line.b.xMm - line.a.xMm, line.b.yMm - line.a.yMm);
+        double sum = Math.hypot(point.xMm - line.a.xMm, point.yMm - line.a.yMm)
+                + Math.hypot(line.b.xMm - point.xMm, line.b.yMm - point.yMm);
+        return Math.abs(sum - length) <= Math.max(0.05d, length * 0.0005d);
+    }
+
+    private static SketchGeometry.Line trimLineKeepingFarSide(
+            SketchGeometry.Line line, SketchGeometry.Point intersection) {
+        double da = Math.hypot(line.a.xMm - intersection.xMm, line.a.yMm - intersection.yMm);
+        double db = Math.hypot(line.b.xMm - intersection.xMm, line.b.yMm - intersection.yMm);
+        return da <= db
+                ? new SketchGeometry.Line(line.id(), intersection, line.b)
+                : new SketchGeometry.Line(line.id(), line.a, intersection);
+    }
+
+    @Override public String trimSelectedLines() {
+        if (!prepareTransactionalSelection("trim-prepare")) return "Select exactly two lines for Trim";
+        List<String> ids = selectedModelLineIds();
+        if (ids.size() != 2 || sketchDocument.selectionIds().size() != 2) {
+            return "Select exactly two lines for Trim";
+        }
+        SketchEntity firstEntity = sketchDocument.entity(ids.get(0));
+        SketchEntity secondEntity = sketchDocument.entity(ids.get(1));
+        if (!(firstEntity instanceof SketchGeometry.Line)
+                || !(secondEntity instanceof SketchGeometry.Line)) {
+            return "Select exactly two lines for Trim";
+        }
+        SketchGeometry.Line first = (SketchGeometry.Line) firstEntity;
+        SketchGeometry.Line second = (SketchGeometry.Line) secondEntity;
+        SketchGeometry.Point intersection = trimIntersection(first, second);
+        if (intersection == null) return "Parallel lines cannot be trimmed";
+        if (!trimPointOnSegment(intersection, first) || !trimPointOnSegment(intersection, second)) {
+            return "Intersection is outside segment — use Extend";
+        }
+
+        ArrayList<SketchEntity> replacements = new ArrayList<>();
+        replacements.add(trimLineKeepingFarSide(first, intersection));
+        replacements.add(trimLineKeepingFarSide(second, intersection));
+        try {
+            long before = sketchDocument.revision();
+            sketchDocument.replaceAllAndSolve(replacements, sketchConstraintSolver);
+            if (sketchDocument.revision() == before) return "Trim unchanged";
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("trim")) return "Trim rollback: parity failed";
+            invalidate();
+            return "Trim completed — nearest sides removed";
+        } catch (RuntimeException e) {
+            lastMirrorError = "trim: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return "Trim could not be solved; geometry was left unchanged";
+        }
+    }
     @Override public String extendSelectedLines() { String out=super.extendSelectedLines(); syncMirror("extend"); return out; }
     @Override public String chamferSelectedLines(float setback) { String out=super.chamferSelectedLines(setback); syncMirror("sketch-chamfer"); return out; }
     @Override public String filletSelectedLines(float radius) { String out=super.filletSelectedLines(radius); syncMirror("sketch-fillet"); return out; }
