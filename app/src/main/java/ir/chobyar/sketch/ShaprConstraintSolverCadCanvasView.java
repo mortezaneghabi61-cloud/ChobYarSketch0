@@ -424,9 +424,7 @@ public class ShaprConstraintSolverCadCanvasView extends ShaprSketchStateCadCanva
 
     @Override
     protected void onDraw(Canvas canvas){
-        solveNow(4);
         super.onDraw(canvas);
-        solveNow(2);
         if (!is3DOverview()) drawSolverErrors(canvas);
     }
 

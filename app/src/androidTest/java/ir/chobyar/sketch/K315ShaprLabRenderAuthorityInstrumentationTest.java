@@ -68,7 +68,6 @@ public final class K315ShaprLabRenderAuthorityInstrumentationTest {
             assertEquals("Midpoint applied", cad.applyMidpointConstraint());
             cad.requireSketchMirrorParity();
 
-            String persistenceBefore = cad.exportSketchProjectState();
             long transitionsBefore = cad.sketchAuthorityTransitionCount();
             int constraintsBefore = cad.sketchConstraintCount();
             List<String> entityIdsBefore = entityIds(cad);
@@ -80,6 +79,7 @@ public final class K315ShaprLabRenderAuthorityInstrumentationTest {
             driven.x2 += 29f;
             driven.y2 += 43f;
             float[] drift = legacyLineSignature(driven);
+            String persistenceBeforeDraw = cad.exportSketchProjectState();
 
             Bitmap bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
             cad.onDraw(new Canvas(bitmap));
@@ -90,7 +90,7 @@ public final class K315ShaprLabRenderAuthorityInstrumentationTest {
             assertEquals(constraintsBefore, cad.sketchConstraintCount());
             assertEquals(entityIdsBefore, entityIds(cad));
             assertEquals(constraintIdsBefore, constraintIds(cad));
-            assertEquals(persistenceBefore, cad.exportSketchProjectState());
+            assertEquals(persistenceBeforeDraw, cad.exportSketchProjectState());
             assertEquals(0, relationCount(cad, "midpointRelations"));
             assertTrue(hasConstraint(cad, SketchConstraint.Kind.MIDPOINT, drivenId, hostId));
             return true;
