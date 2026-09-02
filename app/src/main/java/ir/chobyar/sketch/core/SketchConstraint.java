@@ -21,6 +21,7 @@ public final class SketchConstraint {
         PARALLEL,
         PERPENDICULAR,
         TANGENT,
+        SYMMETRY,
         EQUAL,
         DISTANCE,
         RADIUS,
@@ -35,12 +36,25 @@ public final class SketchConstraint {
     public final int primaryPointIndex;
     public final String secondaryEntityId;
     public final int secondaryPointIndex;
+    /** Optional third stable-id reference. K3.14 uses it for the Symmetry axis. */
+    public final String tertiaryEntityId;
     public final double value;
     public final boolean driving;
 
+    /** Backward-compatible constructor for all one- and two-entity constraints. */
     public SketchConstraint(String id, Kind kind,
                             String primaryEntityId, int primaryPointIndex,
                             String secondaryEntityId, int secondaryPointIndex,
+                            double value, boolean driving) {
+        this(id, kind, primaryEntityId, primaryPointIndex,
+                secondaryEntityId, secondaryPointIndex, null, value, driving);
+    }
+
+    /** Stable-id constructor for constraints that can reference three entities. */
+    public SketchConstraint(String id, Kind kind,
+                            String primaryEntityId, int primaryPointIndex,
+                            String secondaryEntityId, int secondaryPointIndex,
+                            String tertiaryEntityId,
                             double value, boolean driving) {
         this.id = normalizeRequired(id, "constraint id");
         this.kind = kind == null ? failKind() : kind;
@@ -48,6 +62,7 @@ public final class SketchConstraint {
         this.primaryPointIndex = requirePointIndex(primaryPointIndex, "primary point index");
         this.secondaryEntityId = normalizeOptional(secondaryEntityId);
         this.secondaryPointIndex = requirePointIndex(secondaryPointIndex, "secondary point index");
+        this.tertiaryEntityId = normalizeOptional(tertiaryEntityId);
         this.value = this.kind == Kind.LINE_ANGLE ? normalizeLineAngle(value) : value;
         this.driving = driving;
         validateShape();
@@ -83,6 +98,12 @@ public final class SketchConstraint {
 
     public static SketchConstraint tangent(String id, String a, String b) {
         return binary(id, Kind.TANGENT, a, b);
+    }
+
+    /** source, driven mirror, then symmetry axis. */
+    public static SketchConstraint symmetry(String id, String source, String mirror, String axis) {
+        return new SketchConstraint(id, Kind.SYMMETRY,
+                source, -1, mirror, -1, axis, Double.NaN, true);
     }
 
     public static SketchConstraint equal(String id, String a, String b) {
@@ -143,13 +164,14 @@ public final class SketchConstraint {
 
     public SketchConstraint copy() {
         return new SketchConstraint(id, kind, primaryEntityId, primaryPointIndex,
-                secondaryEntityId, secondaryPointIndex, value, driving);
+                secondaryEntityId, secondaryPointIndex, tertiaryEntityId, value, driving);
     }
 
     public Set<String> referencedEntityIds() {
         LinkedHashSet<String> out = new LinkedHashSet<>();
         out.add(primaryEntityId);
         if (secondaryEntityId != null) out.add(secondaryEntityId);
+        if (tertiaryEntityId != null) out.add(tertiaryEntityId);
         return Collections.unmodifiableSet(out);
     }
 
@@ -157,7 +179,8 @@ public final class SketchConstraint {
         if (entityId == null) return false;
         String normalized = entityId.trim();
         return primaryEntityId.equals(normalized)
-                || (secondaryEntityId != null && secondaryEntityId.equals(normalized));
+                || (secondaryEntityId != null && secondaryEntityId.equals(normalized))
+                || (tertiaryEntityId != null && tertiaryEntityId.equals(normalized));
     }
 
     private void validateShape() {
@@ -167,6 +190,7 @@ public final class SketchConstraint {
                 || kind == Kind.PARALLEL
                 || kind == Kind.PERPENDICULAR
                 || kind == Kind.TANGENT
+                || kind == Kind.SYMMETRY
                 || kind == Kind.EQUAL
                 || kind == Kind.ANGLE;
         if (needsSecondary && secondaryEntityId == null) {
@@ -174,6 +198,19 @@ public final class SketchConstraint {
         }
         if (!needsSecondary && secondaryEntityId != null) {
             throw new IllegalArgumentException(kind + " does not accept a secondary entity");
+        }
+
+        if (kind == Kind.SYMMETRY) {
+            if (tertiaryEntityId == null) {
+                throw new IllegalArgumentException("SYMMETRY requires a tertiary axis entity");
+            }
+            if (primaryEntityId.equals(secondaryEntityId)
+                    || primaryEntityId.equals(tertiaryEntityId)
+                    || secondaryEntityId.equals(tertiaryEntityId)) {
+                throw new IllegalArgumentException("SYMMETRY requires three distinct entities");
+            }
+        } else if (tertiaryEntityId != null) {
+            throw new IllegalArgumentException(kind + " does not accept a tertiary entity");
         }
 
         boolean dimension = kind == Kind.DISTANCE || kind == Kind.RADIUS

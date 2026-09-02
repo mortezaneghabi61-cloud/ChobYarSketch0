@@ -11,8 +11,9 @@ import java.util.Map;
  *
  * The K3 slice is deliberately fail-closed: a constraint kind/geometry pairing
  * that is not implemented returns UNSUPPORTED rather than becoming decorative
- * metadata. K3.13 adds model-owned line-to-circle/arc TANGENT while keeping
- * point/whole FIXED anchors authoritative during each solver application.
+ * metadata. K3.13 adds model-owned line-to-circle/arc TANGENT. K3.14 adds
+ * three-entity line SYMMETRY while keeping point/whole FIXED anchors
+ * authoritative during each solver application.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -150,7 +151,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
     private static String unsupportedReason(SketchConstraint c, Map<String, SketchEntity> entities) {
         SketchEntity a = entities.get(c.primaryEntityId);
         SketchEntity b = c.secondaryEntityId == null ? null : entities.get(c.secondaryEntityId);
-        if (a == null || (c.secondaryEntityId != null && b == null)) {
+        SketchEntity d = c.tertiaryEntityId == null ? null : entities.get(c.tertiaryEntityId);
+        if (a == null || (c.secondaryEntityId != null && b == null)
+                || (c.tertiaryEntityId != null && d == null)) {
             return "Constraint references missing geometry: " + c.id;
         }
         switch (c.kind) {
@@ -185,6 +188,18 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return radiusOf(tangentCurve) > EPS ? null : "TANGENT requires a positive curve radius";
             }
+            case SYMMETRY:
+                if (!(a instanceof SketchGeometry.Line)
+                        || !(b instanceof SketchGeometry.Line)
+                        || !(d instanceof SketchGeometry.Line)) {
+                    return "SYMMETRY currently requires source, mirror and axis lines";
+                }
+                if (isDegenerateLine((SketchGeometry.Line) a)
+                        || isDegenerateLine((SketchGeometry.Line) b)
+                        || isDegenerateLine((SketchGeometry.Line) d)) {
+                    return "SYMMETRY requires non-degenerate source, mirror and axis lines";
+                }
+                return null;
             case COINCIDENT:
                 if (!(a instanceof SketchGeometry.Line) || !(b instanceof SketchGeometry.Line)) {
                     return "COINCIDENT currently requires two line endpoints";
@@ -246,7 +261,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
-                return "Constraint kind not yet supported by K3.13 solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.14 solver: " + c.kind;
         }
     }
 
@@ -295,6 +310,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 break;
             case TANGENT:
                 applyTangent(c, entities, fixed);
+                break;
+            case SYMMETRY:
+                applySymmetry(c, entities, fixed);
                 break;
             case COINCIDENT: {
                 SketchGeometry.Line driven = line(entities, c.primaryEntityId);
@@ -393,6 +411,24 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 pivot, preferred, center, radius, current.lengthMm());
         if (target == null) return;
         entities.put(lineId, withEndpoint(current, movingIndex, target));
+    }
+
+    private static void applySymmetry(SketchConstraint c,
+                                      LinkedHashMap<String, SketchEntity> entities,
+                                      FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.secondaryEntityId)) return;
+        SketchGeometry.Line source = line(entities, c.primaryEntityId);
+        SketchGeometry.Line currentMirror = line(entities, c.secondaryEntityId);
+        SketchGeometry.Line axis = line(entities, c.tertiaryEntityId);
+        SketchGeometry.Point reflectedA = reflectAcrossSupportingLine(source.a, axis);
+        SketchGeometry.Point reflectedB = reflectAcrossSupportingLine(source.b, axis);
+
+        double sameMove = distance(currentMirror.a, reflectedA) + distance(currentMirror.b, reflectedB);
+        double swappedMove = distance(currentMirror.a, reflectedB) + distance(currentMirror.b, reflectedA);
+        SketchGeometry.Point targetA = sameMove <= swappedMove ? reflectedA : reflectedB;
+        SketchGeometry.Point targetB = sameMove <= swappedMove ? reflectedB : reflectedA;
+        entities.put(c.secondaryEntityId,
+                new SketchGeometry.Line(currentMirror.id(), targetA, targetB));
     }
 
     private static SketchGeometry.Line translateFreeLineToTangent(
@@ -600,6 +636,21 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 (line.a.yMm + line.b.yMm) * 0.5);
     }
 
+    private static SketchGeometry.Point reflectAcrossSupportingLine(
+            SketchGeometry.Point point, SketchGeometry.Line axis) {
+        double dx = axis.b.xMm - axis.a.xMm;
+        double dy = axis.b.yMm - axis.a.yMm;
+        double lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared <= EPS) throw new IllegalStateException("Degenerate Symmetry axis");
+        double t = ((point.xMm - axis.a.xMm) * dx + (point.yMm - axis.a.yMm) * dy)
+                / lengthSquared;
+        double projectionX = axis.a.xMm + t * dx;
+        double projectionY = axis.a.yMm + t * dy;
+        return new SketchGeometry.Point(
+                2.0 * projectionX - point.xMm,
+                2.0 * projectionY - point.yMm);
+    }
+
     private static SketchGeometry.Line alignAxis(SketchGeometry.Line line, boolean horizontal) {
         double cx = (line.a.xMm + line.b.xMm) * 0.5;
         double cy = (line.a.yMm + line.b.yMm) * 0.5;
@@ -741,6 +792,11 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 SketchEntity tangentCurve = primary instanceof SketchGeometry.Line ? secondary : primary;
                 return tangentResidual(tangentLine, curveCenter(tangentCurve), radiusOf(tangentCurve));
             }
+            case SYMMETRY:
+                return symmetryResidual(
+                        line(entities, c.primaryEntityId),
+                        line(entities, c.secondaryEntityId),
+                        line(entities, c.tertiaryEntityId));
             default:
                 break;
         }
@@ -788,6 +844,16 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 - dy * (center.xMm - line.a.xMm);
         double supportingDistance = Math.abs(cross) / length;
         return Math.abs(supportingDistance - radius);
+    }
+
+    private static double symmetryResidual(SketchGeometry.Line source,
+                                           SketchGeometry.Line mirror,
+                                           SketchGeometry.Line axis) {
+        SketchGeometry.Point reflectedA = reflectAcrossSupportingLine(source.a, axis);
+        SketchGeometry.Point reflectedB = reflectAcrossSupportingLine(source.b, axis);
+        double same = Math.max(distance(mirror.a, reflectedA), distance(mirror.b, reflectedB));
+        double swapped = Math.max(distance(mirror.a, reflectedB), distance(mirror.b, reflectedA));
+        return Math.min(same, swapped);
     }
 
     private static double normalizedCrossResidual(SketchGeometry.Line a, SketchGeometry.Line b) {

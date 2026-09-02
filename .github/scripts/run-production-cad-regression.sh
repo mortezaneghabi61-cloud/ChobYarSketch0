@@ -72,6 +72,7 @@ run_contract K310DrivingDimensionActivityLifecycleInstrumentationTest driving-di
 run_contract K311EqualConstraintAuthorityInstrumentationTest equal-constraint-authority 'OK (4 tests)'
 run_contract K312SingleLineAngleAuthorityInstrumentationTest single-line-angle-authority 'OK (5 tests)'
 run_contract K313TangentAuthorityInstrumentationTest tangent-authority 'OK (6 tests)'
+run_contract K314SymmetryAuthorityInstrumentationTest symmetry-authority 'OK (5 tests)'
 run_contract K36dMidpointAuthorityInstrumentationTest midpoint-authority 'OK (5 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
 run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
