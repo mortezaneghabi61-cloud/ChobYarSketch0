@@ -268,6 +268,17 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return out;
     }
 
+    private List<String> selectedModelCurveIds() {
+        ArrayList<String> out = new ArrayList<>();
+        for (String id : sketchDocument.selectionIds()) {
+            SketchEntity entity = sketchDocument.entity(id);
+            if (entity instanceof SketchGeometry.Circle || entity instanceof SketchGeometry.Arc) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
     private int constraintAuthorityScore(String entityId) {
         int score = 0;
         for (SketchConstraint c : sketchDocument.constraintsForEntity(entityId)) {
@@ -286,6 +297,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 case PARALLEL:
                 case PERPENDICULAR:
                 case EQUAL:
+                case CONCENTRIC:
                 case TANGENT:
                 case SYMMETRY: score += 60; break;
                 default: score += 30; break;
@@ -431,6 +443,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                     && c.kind != SketchConstraint.Kind.VERTICAL
                     && c.kind != SketchConstraint.Kind.PARALLEL
                     && c.kind != SketchConstraint.Kind.PERPENDICULAR
+                    && c.kind != SketchConstraint.Kind.CONCENTRIC
                     && c.kind != SketchConstraint.Kind.EQUAL
                     && c.kind != SketchConstraint.Kind.TANGENT
                     && c.kind != SketchConstraint.Kind.SYMMETRY
@@ -1670,7 +1683,45 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         }
     }
 
-    @Override public String applyConcentricConstraint() { String out=super.applyConcentricConstraint(); syncMirror("constraint-concentric"); return out; }
+    @Override public String applyConcentricConstraint() {
+        if (!prepareTransactionalSelection("constraint-concentric-prepare")) {
+            return "Concentric requires exactly two circles/arcs";
+        }
+        List<String> ids = selectedModelCurveIds();
+        if (ids.size() != 2 || sketchDocument.selectionIds().size() != 2) {
+            return "Concentric requires exactly two circles/arcs";
+        }
+        // Preserve the established Concentric interaction contract: the first
+        // selected curve is the anchor and the second is driven. FIXED on the
+        // driven center must therefore conflict atomically instead of silently
+        // reversing authority.
+        String anchorId = ids.get(0);
+        String drivenId = ids.get(1);
+        for (SketchConstraint existing : sketchDocument.constraints()) {
+            if (existing.kind != SketchConstraint.Kind.CONCENTRIC
+                    || existing.secondaryEntityId == null) continue;
+            boolean same = anchorId.equals(existing.primaryEntityId)
+                    && drivenId.equals(existing.secondaryEntityId);
+            boolean reverse = drivenId.equals(existing.primaryEntityId)
+                    && anchorId.equals(existing.secondaryEntityId);
+            if (same || reverse) return "Concentric already applied";
+        }
+        try {
+            SketchConstraint concentric = SketchConstraint.concentric(
+                    UUID.randomUUID().toString(), anchorId, drivenId);
+            sketchDocument.addConstraintsAndSolve(
+                    java.util.Collections.singletonList(concentric), sketchConstraintSolver);
+            coreSaveUndo();
+            replaySolvedLineGeometryToLegacy();
+            if (!finishTransactionalMutation("constraint-concentric")) {
+                return "Concentric constraint rollback: parity failed";
+            }
+            invalidate();
+            return "Concentric applied";
+        } catch (RuntimeException e) {
+            return modelConstraintFailure("constraint-concentric", e);
+        }
+    }
     @Override public String disconnectSelectedConnections() { String out=super.disconnectSelectedConnections(); syncMirror("constraint-disconnect"); return out; }
 
     private boolean hasWholeFixed(String entityId) {

@@ -13,7 +13,8 @@ import java.util.Map;
  * that is not implemented returns UNSUPPORTED rather than becoming decorative
  * metadata. K3.13 adds model-owned line-to-circle/arc TANGENT. K3.14 adds
  * three-entity line SYMMETRY while keeping point/whole FIXED anchors
- * authoritative during each solver application.
+ * authoritative during each solver application. K3.16 adds model-owned
+ * Circle/Arc CONCENTRIC while preserving each curve's radius and arc span.
  */
 public final class DeterministicSketchConstraintSolver implements SketchConstraintSolver {
     private static final int MAX_ITERATIONS = 32;
@@ -164,6 +165,12 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
             case PERPENDICULAR:
                 return a instanceof SketchGeometry.Line && b instanceof SketchGeometry.Line
                         ? null : c.kind + " requires two lines";
+            case CONCENTRIC:
+                if (b == null || a.id().equals(b.id())) {
+                    return "CONCENTRIC requires two distinct entities";
+                }
+                return isRadiusEntity(a) && isRadiusEntity(b)
+                        ? null : "CONCENTRIC requires two circles/arcs";
             case EQUAL:
                 if (b == null || a.id().equals(b.id())) return "EQUAL requires two distinct entities";
                 if (a instanceof SketchGeometry.Line && b instanceof SketchGeometry.Line) {
@@ -261,7 +268,7 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return "FIXED point currently supports line endpoints and circle/arc centers";
             default:
-                return "Constraint kind not yet supported by K3.14 solver: " + c.kind;
+                return "Constraint kind not yet supported by K3.16 solver: " + c.kind;
         }
     }
 
@@ -304,6 +311,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 entities.put(c.secondaryEntityId,
                         rotateRelative(line(entities, c.primaryEntityId),
                                 line(entities, c.secondaryEntityId), false));
+                break;
+            case CONCENTRIC:
+                applyConcentric(c, entities, fixed);
                 break;
             case EQUAL:
                 applyEqual(c, entities, fixed);
@@ -378,6 +388,24 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
         SketchGeometry.Arc arc = (SketchGeometry.Arc) driven;
         entities.put(c.secondaryEntityId,
                 new SketchGeometry.Arc(arc.id(), arc.center, targetRadius, arc.startDeg, arc.sweepDeg));
+    }
+
+    private static void applyConcentric(SketchConstraint c,
+                                        LinkedHashMap<String, SketchEntity> entities,
+                                        FixedState fixed) {
+        if (fixed.wholeEntities.containsKey(c.secondaryEntityId)) return;
+        SketchGeometry.Point center = curveCenter(entities.get(c.primaryEntityId));
+        SketchEntity driven = entities.get(c.secondaryEntityId);
+        SketchGeometry.Point target = new SketchGeometry.Point(center.xMm, center.yMm);
+        if (driven instanceof SketchGeometry.Circle) {
+            SketchGeometry.Circle circle = (SketchGeometry.Circle) driven;
+            entities.put(c.secondaryEntityId,
+                    new SketchGeometry.Circle(circle.id(), target, circle.radiusMm));
+            return;
+        }
+        SketchGeometry.Arc arc = (SketchGeometry.Arc) driven;
+        entities.put(c.secondaryEntityId,
+                new SketchGeometry.Arc(arc.id(), target, arc.radiusMm, arc.startDeg, arc.sweepDeg));
     }
 
     private static void applyTangent(SketchConstraint c,
@@ -784,6 +812,9 @@ public final class DeterministicSketchConstraintSolver implements SketchConstrai
                 }
                 return Math.abs(radiusOf(a) - radiusOf(b));
             }
+            case CONCENTRIC:
+                return distance(curveCenter(entities.get(c.primaryEntityId)),
+                        curveCenter(entities.get(c.secondaryEntityId)));
             case TANGENT: {
                 SketchEntity primary = entities.get(c.primaryEntityId);
                 SketchEntity secondary = entities.get(c.secondaryEntityId);

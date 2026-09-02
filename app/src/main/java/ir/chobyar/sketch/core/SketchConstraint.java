@@ -20,6 +20,7 @@ public final class SketchConstraint {
         VERTICAL,
         PARALLEL,
         PERPENDICULAR,
+        CONCENTRIC,
         TANGENT,
         SYMMETRY,
         EQUAL,
@@ -94,6 +95,10 @@ public final class SketchConstraint {
 
     public static SketchConstraint perpendicular(String id, String a, String b) {
         return binary(id, Kind.PERPENDICULAR, a, b);
+    }
+
+    public static SketchConstraint concentric(String id, String anchor, String driven) {
+        return binary(id, Kind.CONCENTRIC, anchor, driven);
     }
 
     public static SketchConstraint tangent(String id, String a, String b) {
@@ -189,6 +194,7 @@ public final class SketchConstraint {
                 || kind == Kind.MIDPOINT
                 || kind == Kind.PARALLEL
                 || kind == Kind.PERPENDICULAR
+                || kind == Kind.CONCENTRIC
                 || kind == Kind.TANGENT
                 || kind == Kind.SYMMETRY
                 || kind == Kind.EQUAL
@@ -198,6 +204,9 @@ public final class SketchConstraint {
         }
         if (!needsSecondary && secondaryEntityId != null) {
             throw new IllegalArgumentException(kind + " does not accept a secondary entity");
+        }
+        if (kind == Kind.CONCENTRIC && primaryEntityId.equals(secondaryEntityId)) {
+            throw new IllegalArgumentException("CONCENTRIC requires two distinct entities");
         }
 
         if (kind == Kind.SYMMETRY) {
