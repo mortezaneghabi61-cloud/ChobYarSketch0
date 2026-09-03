@@ -292,6 +292,81 @@ def payload() -> dict:
     }
 
 
+def public_report_payload() -> dict:
+    full = payload()
+    perf = full.get('performance') or {}
+    forward = full.get('forward_test') or {}
+    backtest = full.get('backtest') or {}
+    decision = full.get('decision') or {}
+    agents = decision.get('agents') or []
+    agent_summary = {'buy': 0, 'sell': 0, 'wait': 0, 'unavailable': 0}
+    for row in agents:
+        if not isinstance(row, dict) or row.get('available') is False:
+            agent_summary['unavailable'] += 1
+            continue
+        vote = row.get('vote')
+        if vote == 1:
+            agent_summary['buy'] += 1
+        elif vote == -1:
+            agent_summary['sell'] += 1
+        else:
+            agent_summary['wait'] += 1
+    live = full.get('live_gate') or {}
+    return {
+        'ok': True,
+        'public_report': True,
+        'report_version': 1,
+        'server_time_utc': full.get('server_time_utc'),
+        'services': full.get('services'),
+        'mode': full.get('mode'),
+        'live_locked': not bool(live.get('live_orders_possible')),
+        'decision': {
+            'ts': decision.get('ts'),
+            'signal': decision.get('signal'),
+            'action': decision.get('action'),
+            'executed': decision.get('executed'),
+            'risk_reason': decision.get('risk_reason'),
+            'agent_summary': agent_summary,
+        },
+        'performance': {
+            'equity': perf.get('equity'),
+            'realized_pnl': perf.get('realized_pnl'),
+            'return_pct': perf.get('return_pct'),
+            'closed_trades': perf.get('closed_trades'),
+            'wins': perf.get('wins'),
+            'losses': perf.get('losses'),
+            'win_rate': perf.get('win_rate'),
+            'max_drawdown_pct': perf.get('max_drawdown_pct'),
+            'current_drawdown_pct': perf.get('current_drawdown_pct'),
+        },
+        'forward_test': {
+            'start_timestamp': forward.get('start_timestamp'),
+            'current_equity': forward.get('current_equity'),
+            'closed_trades': forward.get('closed_trades'),
+            'wins': forward.get('wins'),
+            'losses': forward.get('losses'),
+            'realized_pnl': forward.get('realized_pnl'),
+            'max_drawdown_pct': forward.get('max_drawdown_pct'),
+            'cycles': forward.get('cycles'),
+            'uptime_seconds': forward.get('uptime_seconds'),
+        },
+        'backtest': {
+            'ok': backtest.get('ok'),
+            'source': backtest.get('source'),
+            'strategy_model': backtest.get('strategy_model'),
+            'full_fidelity_multiagent': backtest.get('full_fidelity_multiagent'),
+            'candles': backtest.get('candles'),
+            'history_days': backtest.get('history_days'),
+            'return_pct': backtest.get('return_pct'),
+            'closed_trades': backtest.get('closed_trades'),
+            'wins': backtest.get('wins'),
+            'losses': backtest.get('losses'),
+            'win_rate': backtest.get('win_rate'),
+            'max_drawdown_pct': backtest.get('max_drawdown_pct'),
+        },
+    }
+
+
 def prune_nonces() -> None:
     cutoff = time.time() - NONCE_TTL
     for nonce, seen_at in list(seen_nonces.items()):
@@ -354,6 +429,9 @@ class Handler(BaseHTTPRequestHandler):
                 'ok': True,
                 'service': 'chobyar-status',
             })
+            return
+        if path == '/public-report':
+            self.send_json(200, public_report_payload())
             return
         if path != '/status':
             self.send_json(404, {'ok': False, 'error': 'not_found'})
