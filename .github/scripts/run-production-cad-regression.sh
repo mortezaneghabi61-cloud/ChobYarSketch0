@@ -80,6 +80,7 @@ run_contract K318DisconnectAuthorityInstrumentationTest disconnect-authority 'OK
 run_contract K319LinearArrayAuthorityInstrumentationTest linear-array-authority 'OK (4 tests)'
 run_contract K320TrimAuthorityInstrumentationTest trim-authority 'OK (4 tests)'
 run_contract K321ExtendAuthorityInstrumentationTest extend-authority 'OK (4 tests)'
+# K3.22 must remain in Production/Consolidated to enforce model-owned stable-ID/history authority.
 run_contract K322OffsetAuthorityInstrumentationTest offset-authority 'OK (4 tests)'
 run_contract K36dMidpointAuthorityInstrumentationTest midpoint-authority 'OK (5 tests)'
 run_contract PinchZoomInstrumentationTest pinch 'OK (1 test)'
