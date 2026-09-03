@@ -23,6 +23,18 @@ jobs:
         env:
           PYTHONPATH: ops/chobyar-trader/v4
         run: python3 ops/chobyar-trader/v4/test_v4.py -v
+      - name: Backtest sample and approved-risk ratchet
+        run: |
+          grep -q '^DEFAULT_LIMIT = 24 \* 90$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^POSITION = 0.25$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^STOP = 0.015$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^TAKE = 0.03$' ops/chobyar-trader/v4/backtest.py
+          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'chobyar-backtest.timer' ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'BACKTEST_TIMER=ACTIVE' ops/chobyar-trader/install-v4-paper.sh
       - name: No live execution surface
         run: |
           if grep -RniE '(/order|submit_order|create_order|place_order|leverage|martingale)' ops/chobyar-trader/v4; then
