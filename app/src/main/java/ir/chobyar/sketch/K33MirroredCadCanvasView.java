@@ -1459,6 +1459,14 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 ? "Select geometry first"
                 : "Offset unavailable: " + lastMirrorError;
     }
+    if (sketchDocument.selectionIds().size() <= 1) {
+        if (selected == null) return "Select geometry first";
+        String selectedId = selected.stableId();
+        if (selectedId == null || selectedId.trim().isEmpty()) {
+            return "Offset unavailable: selected geometry has no stable ID";
+        }
+        sketchDocument.selectOnly(selectedId);
+    }
 
     ArrayList<SketchEntity> copies = new ArrayList<>();
     ArrayList<String> copyIds = new ArrayList<>();
