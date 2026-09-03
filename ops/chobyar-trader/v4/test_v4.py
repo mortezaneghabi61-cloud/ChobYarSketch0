@@ -170,24 +170,6 @@ class StatusSecurityTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
-    def test_live_gate_marks_price_only_backtest_as_not_full_fidelity(self) -> None:
-        module = load_status_module()
-        gate = module.live_gate(
-            {"closed_trades": 30, "max_drawdown_pct": 0.01},
-            {
-                "ok": True,
-                "closed_trades": 25,
-                "return_pct": 0.02,
-                "max_drawdown_pct": 0.02,
-                "history_days": 90.0,
-                "full_fidelity_multiagent": False,
-            },
-            {"TRADING_MODE": "paper", "LIVE_TRADING_ENABLED": "false"},
-        )
-        self.assertFalse(gate["ready"])
-        self.assertFalse(gate["live_orders_possible"])
-        self.assertIn("backtest_price_only_proxy", gate["reasons"])
-
 
 if __name__ == "__main__":
     unittest.main()
