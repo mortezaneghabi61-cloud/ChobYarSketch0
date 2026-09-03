@@ -25,6 +25,14 @@ jobs:
           python3 -m py_compile ops/chobyar-trader/v3/status_server_v51.py
           PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_specialists.py -v
           bash -n ops/chobyar-trader/upgrade-v51-specialist-monitor.sh
+      - name: Deployed baseline is v4.8.1
+        run: |
+          status=ops/chobyar-trader/v3/status_server_v51.py
+          install=ops/chobyar-trader/upgrade-v51-specialist-monitor.sh
+          grep -q 'import status_server_v481 as v481' "$status"
+          grep -q 'status_server_v481.py' "$install"
+          grep -q 'status service is not on v4.8.1 baseline' "$install"
+          ! grep -q "grep -q '/opt/chobyar-trader/app/status_server_v48.py'" "$install"
       - name: Shadow authority remains disabled
         run: |
           f=ops/chobyar-trader/v3/status_server_v51.py
