@@ -1,0 +1,61 @@
+name: ChobYar Trader v4.7 Position Telemetry Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/status_server_v47.py'
+      - 'ops/chobyar-trader/v3/test_status_position.py'
+      - 'ops/chobyar-trader/upgrade-v47-position-telemetry.sh'
+      - 'ops/chobyar-trader/monitor/app.js'
+      - '.github/workflows/chobyar-trader-v47-position.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  position-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and projection tests
+        run: |
+          bash -n ops/chobyar-trader/upgrade-v47-position-telemetry.sh
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v47.py
+          PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_position.py -v
+      - name: Position projection is minimal and explicit
+        run: |
+          f=ops/chobyar-trader/v3/status_server_v47.py
+          grep -q "'open': True" "$f"
+          grep -q "'open': False" "$f"
+          grep -q "'side': 'LONG'" "$f"
+          grep -q "'side': 'FLAT'" "$f"
+          grep -q "'entry_price':" "$f"
+          grep -q "'unrealized_pnl':" "$f"
+          ! grep -qE "['\"]btc_qty['\"][[:space:]]*:" "$f"
+          ! grep -qE "['\"]cash_usdt['\"][[:space:]]*:" "$f"
+      - name: Monitor consumes explicit position only
+        run: |
+          f=ops/chobyar-trader/monitor/app.js
+          grep -q 'const p = report.position' "$f"
+          grep -q 'typeof p.open !== "boolean"' "$f"
+          grep -q 'p.entry_price' "$f"
+          grep -q 'p.unrealized_pnl' "$f"
+          grep -q 'از تغییر Equity برای حدس' "$f"
+      - name: Read-only and secret-free contract
+        run: |
+          files='ops/chobyar-trader/v3/status_server_v47.py ops/chobyar-trader/v3/test_status_position.py'
+          ! grep -qiE 'STATUS_HMAC_SECRET|API_KEY|APIKEY|submit_order|create_order|place_order|enable_live|martingale|leverage' $files
+          grep -q 'base.public_report_payload = public_report_payload' ops/chobyar-trader/v3/status_server_v47.py
+          ! grep -qiE 'do_POST|do_PUT|do_DELETE|do_PATCH' ops/chobyar-trader/v3/status_server_v47.py
+      - name: Trader and risk remain locked
+        run: |
+          f=ops/chobyar-trader/upgrade-v47-position-telemetry.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
