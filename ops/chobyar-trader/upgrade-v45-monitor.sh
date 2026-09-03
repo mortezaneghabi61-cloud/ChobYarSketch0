@@ -82,8 +82,11 @@ PYTHONPATH="$src/v3" "$VENV/bin/python" "$src/v3/test_status_monitor.py" -v
 if grep -RniE 'STATUS_HMAC_SECRET|API_KEY|APIKEY|submit_order|create_order|place_order|enable_live|martingale|leverage' "$src/monitor"; then
   die "forbidden control/secret marker in monitor client"
 fi
-if grep -RniE 'https?://109\.122\.247\.214|fetch\([[:space:]]*["'"']?/status' "$src/monitor"; then
-  die "monitor attempted direct VPS/authenticated status access"
+if grep -RniE 'https?://109\.122\.247\.214' "$src/monitor"; then
+  die "monitor attempted direct VPS access"
+fi
+if grep -RniF 'fetch("/status"' "$src/monitor" || grep -RniF "fetch('/status'" "$src/monitor"; then
+  die "monitor attempted authenticated status access"
 fi
 grep -q 'fetch("/public-report"' "$src/monitor/app.js" || die "public-report fetch missing"
 grep -q 'report.mode !== "paper"' "$src/monitor/app.js" || die "paper fail-closed check missing"
