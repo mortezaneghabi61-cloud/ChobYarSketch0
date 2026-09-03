@@ -1,0 +1,79 @@
+name: ChobYar Trader v5.1 Specialist Monitor Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/status_server_v51.py'
+      - 'ops/chobyar-trader/v3/test_status_specialists.py'
+      - 'ops/chobyar-trader/monitor/specialist_monitor.js'
+      - 'ops/chobyar-trader/monitor/specialist_monitor.css'
+      - 'ops/chobyar-trader/monitor/sw.js'
+      - 'ops/chobyar-trader/upgrade-v51-specialist-monitor.sh'
+      - '.github/workflows/chobyar-trader-v51-specialist-monitor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  specialist-monitor-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and projection tests
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v51.py
+          PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_specialists.py -v
+          bash -n ops/chobyar-trader/upgrade-v51-specialist-monitor.sh
+      - name: Deployed baseline is v4.8.1
+        run: |
+          status=ops/chobyar-trader/v3/status_server_v51.py
+          install=ops/chobyar-trader/upgrade-v51-specialist-monitor.sh
+          grep -q 'import status_server_v481 as v481' "$status"
+          grep -q 'status_server_v481.py' "$install"
+          grep -q 'status service is not on v4.8.1 baseline' "$install"
+          ! grep -q "grep -q '/opt/chobyar-trader/app/status_server_v48.py'" "$install"
+      - name: Shadow authority remains disabled
+        run: |
+          f=ops/chobyar-trader/v3/status_server_v51.py
+          grep -q "execution_authority': False" "$f"
+          grep -q "automatic_promotion_enabled': False" "$f"
+          grep -q "automatic_reweighting_enabled': False" "$f"
+          grep -q "foreign_execution_enabled': False" "$f"
+          grep -q "geo_bypass_supported': False" "$f"
+          ! grep -qE "['\"]btc_qty['\"][[:space:]]*:" "$f"
+      - name: Public projection excludes credentials and control paths
+        run: |
+          files='ops/chobyar-trader/v3/status_server_v51.py ops/chobyar-trader/monitor/specialist_monitor.js ops/chobyar-trader/monitor/specialist_monitor.css'
+          ! grep -qiE 'API_KEY|APIKEY|submit_order|create_order|place_order|withdraw|/api/v5/trade/|enable_live' $files
+          ! grep -qiE 'fetch\([^)]*/status' ops/chobyar-trader/monitor/specialist_monitor.js
+      - name: Tablet UI is explicit shadow-only
+        run: |
+          js=ops/chobyar-trader/monitor/specialist_monitor.js
+          grep -q 'شورای متخصص‌های v5' "$js"
+          grep -q 'SHADOW ONLY' "$js"
+          grep -q 'NO EXECUTION' "$js"
+          grep -q 'NO AUTO PROMOTION' "$js"
+          grep -q 'Risk Veto' "$js"
+          grep -q 'Regime' "$js" || grep -q 'رژیم بازار' "$js"
+          grep -q 'v5SpecialistPanel' "$js"
+      - name: PWA cache advances safely
+        run: |
+          sw=ops/chobyar-trader/monitor/sw.js
+          grep -q 'chobyar-monitor-shell-v4' "$sw"
+          grep -q 'Never cache public-report\|Never cache /public-report\|Never cache public-report snapshots\|Telemetry is network-only' "$sw"
+          grep -q 'cache: "no-store"' "$sw"
+      - name: Upgrade preserves Paper risk and Trader process
+        run: |
+          f=ops/chobyar-trader/upgrade-v51-specialist-monitor.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'systemctl restart chobyar-status.service' "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
+          grep -q 'chobyar-v5-shadow.timer' "$f"
+          grep -q 'chobyar-v5-scorecard.timer' "$f"

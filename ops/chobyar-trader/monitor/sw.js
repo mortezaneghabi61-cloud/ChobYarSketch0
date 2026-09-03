@@ -1,6 +1,7 @@
 "use strict";
 
-const CACHE = "chobyar-monitor-shell-v3";
+// Prior proven shell generation: chobyar-monitor-shell-v3. v4 only advances the cache generation.
+const CACHE = "chobyar-monitor-shell-v4";
 const SHELL = [
   "/monitor/",
   "/monitor/style.css",
@@ -27,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Telemetry is always network-only. Never cache /public-report snapshots.
+  // Telemetry is network-only. Never cache /public-report snapshots.
   if (url.pathname === "/public-report") {
     event.respondWith(fetch(event.request, { cache: "no-store" }));
     return;
