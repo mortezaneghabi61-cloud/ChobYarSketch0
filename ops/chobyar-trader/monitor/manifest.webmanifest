@@ -1,0 +1,19 @@
+{
+  "name": "ChobYar Trader Monitor",
+  "short_name": "ChobYar Trader",
+  "description": "Read-only Paper trader monitoring dashboard",
+  "start_url": "/monitor/",
+  "scope": "/monitor/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07101c",
+  "theme_color": "#08111f",
+  "icons": [
+    {
+      "src": "/monitor/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

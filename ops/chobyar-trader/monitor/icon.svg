@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ChobYar Trader Monitor">
+  <rect width="512" height="512" rx="116" fill="#08111f"/>
+  <path d="M96 356V156c0-26 21-48 48-48h224c26 0 48 22 48 48v200c0 27-22 48-48 48H144c-27 0-48-21-48-48Z" fill="#0e1b2d" stroke="#274464" stroke-width="16"/>
+  <path d="M142 320l68-72 55 45 104-117" fill="none" stroke="#60a5fa" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="142" cy="320" r="18" fill="#4ade80"/>
+  <circle cx="210" cy="248" r="18" fill="#fbbf24"/>
+  <circle cx="265" cy="293" r="18" fill="#60a5fa"/>
+  <circle cx="369" cy="176" r="18" fill="#4ade80"/>
+  <path d="M154 384h204" stroke="#274464" stroke-width="14" stroke-linecap="round"/>
+</svg>

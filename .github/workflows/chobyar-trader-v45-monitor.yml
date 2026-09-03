@@ -1,0 +1,60 @@
+name: ChobYar Trader v4.5 Monitor Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/monitor/**'
+      - 'ops/chobyar-trader/v3/status_server_v45.py'
+      - 'ops/chobyar-trader/v3/test_status_monitor.py'
+      - 'ops/chobyar-trader/upgrade-v45-monitor.sh'
+      - '.github/workflows/chobyar-trader-v45-monitor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and shell syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v45.py
+          bash -n ops/chobyar-trader/upgrade-v45-monitor.sh
+
+      - name: Read-only monitor unit tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v3
+        run: python3 ops/chobyar-trader/v3/test_status_monitor.py -v
+
+      - name: Client fail-closed contract
+        run: |
+          grep -q 'fetch("/public-report"' ops/chobyar-trader/monitor/app.js
+          grep -q 'credentials: "omit"' ops/chobyar-trader/monitor/app.js
+          grep -q 'report.mode !== "paper"' ops/chobyar-trader/monitor/app.js
+          grep -q 'report.live_locked !== true' ops/chobyar-trader/monitor/app.js
+          grep -q 'Never cache /public-report' ops/chobyar-trader/monitor/sw.js
+          ! grep -RniE 'STATUS_HMAC_SECRET|API_KEY|APIKEY|submit_order|create_order|place_order|enable_live|martingale|leverage' ops/chobyar-trader/monitor
+          ! grep -RniE 'https?://109\.122\.247\.214' ops/chobyar-trader/monitor
+          ! grep -q '<input' ops/chobyar-trader/monitor/index.html
+          ! grep -q '<form' ops/chobyar-trader/monitor/index.html
+
+      - name: Status extension stays narrow
+        run: |
+          grep -q "'/monitor/'" ops/chobyar-trader/v3/status_server_v45.py
+          grep -q "_original_do_GET(self)" ops/chobyar-trader/v3/status_server_v45.py
+          grep -q "form-action 'none'" ops/chobyar-trader/v3/status_server_v45.py
+          ! grep -qiE 'submit_order|create_order|place_order|martingale|leverage' ops/chobyar-trader/v3/status_server_v45.py
+
+      - name: Trader and risk remain locked
+        run: |
+          ! grep -E 'systemctl[[:space:]]+(restart|start|stop)[[:space:]]+chobyar-trader' ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "TRADER_RESTARTED=NO" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "TRADING_MODE=paper" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "LIVE_TRADING_ENABLED=false" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/upgrade-v45-monitor.sh
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/upgrade-v45-monitor.sh
