@@ -53,7 +53,7 @@ log "Downloading authenticated status files from exact commit"
 curl -fsSL --retry 3 --connect-timeout 10 "$RAW/status_server.py" -o "$TMP_DIR/status_server.py"
 curl -fsSL --retry 3 --connect-timeout 10 "$RAW/status_client.py" -o "$TMP_DIR/status_client.py"
 printf '%s  %s\n' \
-  'e22b0c63d6c0d73ad937d58112daa2eadcec99946fbb02f828499602ec736d30' status_server.py \
+  '56e51529edb63a1ef92856166166d76375ef95afe2993c433d3a3288c1f37fbc' status_server.py \
   '2b76ec3b5f82e566799f219c3188eb6c986d45f971fa755deb77a571892fe219' status_client.py \
   > "$TMP_DIR/SHA256SUMS"
 (cd "$TMP_DIR" && sha256sum -c SHA256SUMS)
@@ -65,8 +65,6 @@ mkdir -p "$backup"
 chmod 700 "$backup"
 [[ -f "$APP_SUBDIR/status_server.py" ]] && cp -a "$APP_SUBDIR/status_server.py" "$backup/status_server.py"
 [[ -f "$STATUS_SERVICE" ]] && cp -a "$STATUS_SERVICE" "$backup/chobyar-status.service"
-cp -a "$ENV_FILE" "$backup/.env.after-auth"
-chmod 600 "$backup/.env.after-auth"
 
 install -m 755 "$TMP_DIR/status_server.py" "$APP_SUBDIR/status_server.py"
 install -m 700 "$TMP_DIR/status_client.py" "$BIN_DIR/status_client.py"
