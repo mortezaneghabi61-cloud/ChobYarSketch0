@@ -1,0 +1,68 @@
+name: ChobYar Trader v4.8.1 Position UI Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/status_server_v481.py'
+      - 'ops/chobyar-trader/monitor/index_v481.html'
+      - 'ops/chobyar-trader/monitor/position_detail.js'
+      - 'ops/chobyar-trader/monitor/position_detail.css'
+      - 'ops/chobyar-trader/monitor/sw.js'
+      - 'ops/chobyar-trader/upgrade-v481-position-ui-wire.sh'
+      - '.github/workflows/chobyar-trader-v481-position-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  position-ui-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v481.py
+          bash -n ops/chobyar-trader/upgrade-v481-position-ui-wire.sh
+      - name: Shell loads detail assets
+        run: |
+          html=ops/chobyar-trader/monitor/index_v481.html
+          grep -q '/monitor/position_detail.js' "$html"
+          grep -q '/monitor/position_detail.css' "$html"
+          grep -q '/monitor/app.js' "$html"
+      - name: Strict monitor allow-list expands only for UI assets
+        run: |
+          f=ops/chobyar-trader/v3/status_server_v481.py
+          grep -q "'/monitor/': ('index_v481.html'" "$f"
+          grep -q "'/monitor/position_detail.js'" "$f"
+          grep -q "'/monitor/position_detail.css'" "$f"
+          ! grep -qiE '/status.*position|/order|/trade|submit_order|create_order|place_order|enable_live' "$f"
+      - name: Detail UI remains read-only
+        run: |
+          js=ops/chobyar-trader/monitor/position_detail.js
+          css=ops/chobyar-trader/monitor/position_detail.css
+          grep -q 'قیمت فعلی' "$js"
+          grep -q 'Stop Loss' "$js"
+          grep -q 'Take Profit' "$js"
+          grep -q 'position-range' "$js"
+          grep -q 'position-progress' "$css"
+          ! grep -qiE 'fetch\(|XMLHttpRequest|WebSocket|submit_order|create_order|place_order|enable_live|API_KEY|STATUS_HMAC_SECRET' "$js" "$css"
+      - name: PWA cache v3 contains detail assets and never caches telemetry
+        run: |
+          sw=ops/chobyar-trader/monitor/sw.js
+          grep -q 'chobyar-monitor-shell-v3' "$sw"
+          grep -q '/monitor/position_detail.js' "$sw"
+          grep -q '/monitor/position_detail.css' "$sw"
+          grep -q 'Never cache /public-report' "$sw"
+          grep -q 'cache: "no-store"' "$sw"
+      - name: Upgrade preserves Paper risk and Trader process
+        run: |
+          f=ops/chobyar-trader/upgrade-v481-position-ui-wire.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
