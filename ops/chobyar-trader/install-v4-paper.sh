@@ -8,6 +8,8 @@ ENV_FILE="$APP_DIR/.env"
 VENV="$APP_DIR/.venv"
 TRADER_UNIT="/etc/systemd/system/chobyar-trader.service"
 STATUS_UNIT="/etc/systemd/system/chobyar-status.service"
+BACKTEST_UNIT="/etc/systemd/system/chobyar-backtest.service"
+BACKTEST_TIMER="/etc/systemd/system/chobyar-backtest.timer"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run as root"
@@ -37,12 +39,18 @@ src="$work/repo/ops/chobyar-trader"
 "$VENV/bin/python" -m py_compile "$src/v4/common.py" "$src/v4/trader.py" "$src/v4/backtest.py" "$src/v3/status_server.py" "$src/v3/status_client.py"
 PYTHONPATH="$src/v4" "$VENV/bin/python" "$src/v4/test_v4.py" -v
 PYTHONPATH="$src/v4" "$VENV/bin/python" "$src/v4/backtest.py" --output "$work/backtest.json"
-"$VENV/bin/python" -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["ok"] and d["candles"] >= 80 and d["lookahead_policy"] == "close[i-1] signal; open[i] execution"' "$work/backtest.json"
+"$VENV/bin/python" -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["ok"]; assert d["candles"] >= 2000; assert d["history_days"] >= 80; assert d["source"] == "wallex_public_ohlc_chunked"; assert d["full_fidelity_multiagent"] is False; assert d["lookahead_policy"] == "close[i-1] signal; open[i] execution"' "$work/backtest.json"
 
 mkdir -p "$backup" "$APP_DIR/app" "$APP_DIR/bin" "$APP_DIR/state" "$APP_DIR/logs"
 chmod 700 "$APP_DIR" "$backup" "$APP_DIR/bin"
 # Deliberately exclude .env: secrets are neither copied nor printed.
-for file in "$APP_DIR/app/trader.py" "$APP_DIR/app/common.py" "$APP_DIR/app/backtest.py" "$APP_DIR/app/status_server.py" "$APP_DIR/bin/status_client.py" "$TRADER_UNIT" "$STATUS_UNIT"; do
+for file in \
+  "$APP_DIR/app/trader.py" \
+  "$APP_DIR/app/common.py" \
+  "$APP_DIR/app/backtest.py" \
+  "$APP_DIR/app/status_server.py" \
+  "$APP_DIR/bin/status_client.py" \
+  "$TRADER_UNIT" "$STATUS_UNIT" "$BACKTEST_UNIT" "$BACKTEST_TIMER"; do
   [[ -f "$file" ]] && cp -a "$file" "$backup/$(basename "$file")"
 done
 
@@ -113,16 +121,49 @@ ReadOnlyPaths=/opt/chobyar-trader
 WantedBy=multi-user.target
 UNIT
 
+install -m 644 /dev/stdin "$BACKTEST_UNIT" <<'UNIT'
+[Unit]
+Description=ChobYar Trader v4 Public Wallex Backtest Refresh
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/chobyar-trader/app
+ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/backtest.py --output /opt/chobyar-trader/state/backtest_latest.json
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/chobyar-trader/state
+Environment=PYTHONDONTWRITEBYTECODE=1
+UNIT
+
+install -m 644 /dev/stdin "$BACKTEST_TIMER" <<'UNIT'
+[Unit]
+Description=Refresh ChobYar paper backtest every 6 hours
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=chobyar-backtest.service
+[Install]
+WantedBy=timers.target
+UNIT
+
 systemctl daemon-reload
 systemctl enable chobyar-trader.service chobyar-status.service >/dev/null
+systemctl enable --now chobyar-backtest.timer >/dev/null
 systemctl restart chobyar-trader.service
 systemctl restart chobyar-status.service
 sleep 3
 systemctl is-active --quiet chobyar-trader.service || die "trader service inactive"
 systemctl is-active --quiet chobyar-status.service || die "status service inactive"
+systemctl is-active --quiet chobyar-backtest.timer || die "backtest timer inactive"
 port="$(awk -F= '$1=="STATUS_PORT" {print $2}' "$ENV_FILE" | tail -n1)"; port="${port:-8787}"
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/health")" == 200 ]] || die "health validation failed"
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/status")" == 401 ]] || die "unauthenticated status was not rejected"
 "$APP_DIR/bin/chobyar-status" >/dev/null || die "authenticated signed status validation failed"
 grep -qx 'TRADING_MODE=paper' "$ENV_FILE" && grep -qx 'LIVE_TRADING_ENABLED=false' "$ENV_FILE" || die "paper lock changed"
-printf 'DEPLOYED_SHA=%s\nPAPER_STATUS=PASS\nLIVE_GATE=LOCKED\nSTATUS_AUTH=PASS\n' "$EXPECTED_SHA"
+printf 'DEPLOYED_SHA=%s\nPAPER_STATUS=PASS\nLIVE_GATE=LOCKED\nSTATUS_AUTH=PASS\nBACKTEST_TIMER=ACTIVE\n' "$EXPECTED_SHA"
