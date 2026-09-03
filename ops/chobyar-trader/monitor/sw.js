@@ -2,7 +2,7 @@
 
 const CACHE = "chobyar-monitor-shell-v1";
 const SHELL = [
-  "/monitor",
+  "/monitor/",
   "/monitor/style.css",
   "/monitor/app.js",
   "/monitor/manifest.webmanifest",
