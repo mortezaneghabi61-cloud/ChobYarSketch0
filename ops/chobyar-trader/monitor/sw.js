@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE = "chobyar-monitor-shell-v1";
+const CACHE = "chobyar-monitor-shell-v2";
 const SHELL = [
   "/monitor/",
   "/monitor/style.css",
