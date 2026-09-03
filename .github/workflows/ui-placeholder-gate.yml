@@ -1,0 +1,78 @@
+name: UI Placeholder Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/src/main/**'
+      - '.github/scripts/ui_placeholder_audit.py'
+      - '.github/workflows/ui-placeholder-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-placeholder-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "EXPECTED_HEAD=$EXPECTED"
+          echo "ACTUAL_HEAD=$ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Self-test placeholder detector
+        run: python3 .github/scripts/ui_placeholder_audit.py --self-test
+
+      - name: Measure exact candidate placeholder debt
+        id: head
+        shell: bash
+        run: |
+          set -euo pipefail
+          COUNT="$(python3 .github/scripts/ui_placeholder_audit.py --count-only)"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PLACEHOLDERS=$COUNT"
+
+      - name: Fetch exact pull-request base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$BASE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/ui-placeholder-base" "$BASE_SHA"
+
+      - name: Enforce no-regression ratchet against exact base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          HEAD_COUNT: ${{ steps.head.outputs.count }}
+        run: |
+          set -euo pipefail
+          BASE_COUNT="$(python3 .github/scripts/ui_placeholder_audit.py --count-only --root "$RUNNER_TEMP/ui-placeholder-base")"
+          echo "BASE_PLACEHOLDERS=$BASE_COUNT"
+          echo "CANDIDATE_PLACEHOLDERS=$HEAD_COUNT"
+          if [ "$HEAD_COUNT" -gt "$BASE_COUNT" ]; then
+            echo "UI placeholder regression: candidate increased debt from $BASE_COUNT to $HEAD_COUNT" >&2
+            exit 1
+          fi
+          echo "UI_PLACEHOLDER_RATCHET_OK base=$BASE_COUNT candidate=$HEAD_COUNT reduced=$((BASE_COUNT-HEAD_COUNT))"
+
+      - name: Manual hard-zero verification
+        if: github.event_name != 'pull_request'
+        run: python3 .github/scripts/ui_placeholder_audit.py

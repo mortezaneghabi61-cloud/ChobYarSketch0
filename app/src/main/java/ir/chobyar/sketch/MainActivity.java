@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
         root.addView(makeViewRail(), frameWrap(Gravity.END | Gravity.BOTTOM, 0, 0, 10, 20));
 
         status = new TextView(this);
-        status.setText("cm | text/touch: text text • text text: Zoom/Pan");
+        status.setText(s(R.string.workspace_status_default));
         status.setTextSize(11);
         status.setTextColor(Color.rgb(65, 72, 82));
         status.setGravity(Gravity.CENTER);
@@ -88,56 +88,62 @@ public class MainActivity extends Activity {
         bar.setBackground(round(Color.argb(247,255,255,255), Color.rgb(218,223,230), 17));
         bar.setElevation(dp(5));
 
-        bar.addView(iconBtn("⌂", "text", () -> Toast.makeText(this, "Project ChobYar", Toast.LENGTH_SHORT).show()));
+        bar.addView(iconBtn("⌂", s(R.string.home),
+                () -> Toast.makeText(this, s(R.string.project_chobyar), Toast.LENGTH_SHORT).show()));
 
         TextView title = new TextView(this);
-        title.setText("ChobYar  •  Modeltext");
+        title.setText(s(R.string.workspace_title));
         title.setTextSize(14);
         title.setTextColor(Color.rgb(35, 42, 52));
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(46), 1f);
         bar.addView(title, tp);
 
-        bar.addView(iconBtn("↶", "Undo", () -> { cad.undo(); say("text text text"); }));
-        bar.addView(iconBtn("⇩", "text DXF", this::exportDxf));
-        bar.addView(iconBtn("⋯", "text", this::showMoreMenu));
+        bar.addView(iconBtn("↶", s(R.string.undo), () -> {
+            cad.undo();
+            say(s(R.string.undo_complete));
+        }));
+        bar.addView(iconBtn("⇩", s(R.string.export_dxf), this::exportDxf));
+        bar.addView(iconBtn("⋯", s(R.string.more), this::showMoreMenu));
         return bar;
     }
 
     private View makeMainRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("⌕", "Tools", this::showAllTools));
-        rail.addView(railBtn("✎", "Sketch", this::showSketchMenu));
-        rail.addView(railBtn("＋", "Add", this::showInsertMenu));
-        rail.addView(railBtn("⌖", "Create", this::showConstructMenu));
-        rail.addView(railBtn("↗", "Transform", this::showTransformMenu));
-        rail.addView(railBtn("⌁", "Tools", this::showToolsMenu));
+        rail.addView(railBtn("⌕", s(R.string.tools), this::showAllTools));
+        rail.addView(railBtn("✎", s(R.string.sketch), this::showSketchMenu));
+        rail.addView(railBtn("＋", s(R.string.add), this::showInsertMenu));
+        rail.addView(railBtn("⌖", s(R.string.construct), this::showConstructMenu));
+        rail.addView(railBtn("↗", s(R.string.transform), this::showTransformMenu));
+        rail.addView(railBtn("⌁", s(R.string.tools), this::showToolsMenu));
         return rail;
     }
 
     private LinearLayout makeAdaptiveRail() {
         LinearLayout rail = verticalRail();
         rail.setBackground(round(Color.argb(248, 235, 244, 255), Color.rgb(145, 181, 235), 17));
-        rail.addView(railBtn("⌨", "Dimension", this::showExactDimension));
-        rail.addView(railBtn("⌖", "Snap Move", () -> say(cad.beginAnchorMove())));
-        rail.addView(railBtn("⟳", "text", () -> promptCommand("text — degrees", "text: 45", "ROTATE ")));
-        rail.addView(railBtn("↕", "Offset", () -> promptCommand("Offset — cm", "text: 1.8", "OFFSET ")));
-        rail.addView(railBtn("⋯", "text", this::showTransformMenu));
-        rail.addView(railBtn("⌫", "Delete", this::deleteSelectedQuick));
+        rail.addView(railBtn("⌨", s(R.string.dimension), this::showExactDimension));
+        rail.addView(railBtn("⌖", s(R.string.snap_move), () -> say(cad.beginAnchorMove())));
+        rail.addView(railBtn("⟳", s(R.string.rotate), () -> promptCommand(
+                s(R.string.rotate_degrees_title), s(R.string.example_45), "ROTATE ")));
+        rail.addView(railBtn("↕", s(R.string.offset), () -> promptCommand(
+                s(R.string.offset_cm_title), s(R.string.example_1_8), "OFFSET ")));
+        rail.addView(railBtn("⋯", s(R.string.more), this::showTransformMenu));
+        rail.addView(railBtn("⌫", s(R.string.delete), this::deleteSelectedQuick));
         return rail;
     }
 
     private LinearLayout makeConstraintRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("⌁", "Snap", () -> {
+        rail.addView(railBtn("⌁", s(R.string.snap), () -> {
             cad.toggleSnap();
             say(cad.isSnapEnabled() ? "Snap On" : "Snap Off");
         }));
-        rail.addView(railBtn("⊥", "Ortho", () -> {
+        rail.addView(railBtn("⊥", s(R.string.ortho), () -> {
             cad.toggleOrtho();
             say(cad.isOrthoEnabled() ? "Lock Horizontal/Vertical On" : "Lock Horizontal/Vertical Off");
         }));
-        rail.addView(railBtn("#", "Grid", () -> {
+        rail.addView(railBtn("#", s(R.string.grid), () -> {
             cad.toggleGrid();
             say(cad.isShowGrid() ? "Grid On" : "Grid Off");
         }));
@@ -146,17 +152,22 @@ public class MainActivity extends Activity {
 
     private View makeModeRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("↔", "Dimension", () -> setTool(CadCanvasView.TOOL_MEASURE, "Measure")));
-        rail.addView(railBtn("☑", "textSelection", () -> say(cad.toggleMultiSelectMode())));
+        rail.addView(railBtn("↔", s(R.string.dimension),
+                () -> setTool(CadCanvasView.TOOL_MEASURE, s(R.string.measure))));
+        rail.addView(railBtn("☑", s(R.string.multi_select), () -> say(cad.toggleMultiSelectMode())));
         return rail;
     }
 
     private View makeViewRail() {
         LinearLayout rail = verticalRail();
-        rail.addView(railBtn("◇", "Fit", () -> { cad.fitAll(); say("text text text Plane"); }));
-        rail.addView(railBtn("⌁", "Snap", this::showSnapMenu));
-        rail.addView(railBtn("cm", "text", () -> Toast.makeText(this, "text text: cm (cm)", Toast.LENGTH_SHORT).show()));
-        rail.addView(railBtn("◫", "View", this::showViewMenu));
+        rail.addView(railBtn("◇", s(R.string.fit), () -> {
+            cad.fitAll();
+            say(s(R.string.fit_complete));
+        }));
+        rail.addView(railBtn("⌁", s(R.string.snap), this::showSnapMenu));
+        rail.addView(railBtn("cm", s(R.string.units), () ->
+                Toast.makeText(this, s(R.string.units_cm_message), Toast.LENGTH_SHORT).show()));
+        rail.addView(railBtn("◫", s(R.string.view), this::showViewMenu));
         return rail;
     }
 
@@ -221,75 +232,100 @@ public class MainActivity extends Activity {
 
     private void setTool(int tool, String name) {
         cad.setTool(tool);
-        say("Sketch • " + name + " — Dimension text text text Show text text");
+        say(s(R.string.sketch_tool_status, name));
     }
 
     private void showSketchMenu() {
         String[] items = {
-                "／ Line", "□ Rectangle", "○ Circle", "⌒ Arc", "⬡ Polygon",
-                "• Point", "✎ text Unlocked", "↔ Measure", "┼ Guide"
+                "／ " + s(R.string.line),
+                "□ " + s(R.string.rectangle),
+                "○ " + s(R.string.circle),
+                "⌒ " + s(R.string.arc),
+                "⬡ " + s(R.string.polygon),
+                "• " + s(R.string.point),
+                "✎ " + s(R.string.freehand),
+                "↔ " + s(R.string.measure),
+                "┼ " + s(R.string.guide)
         };
         new AlertDialog.Builder(this)
-                .setTitle("Sketch / text text")
+                .setTitle(s(R.string.sketch_tools_title))
                 .setItems(items, (d, w) -> {
                     switch (w) {
-                        case 0: setTool(CadCanvasView.TOOL_LINE, "Line"); break;
-                        case 1: setTool(CadCanvasView.TOOL_RECT, "Rectangle"); break;
-                        case 2: setTool(CadCanvasView.TOOL_CIRCLE, "Circle"); break;
-                        case 3: setTool(CadCanvasView.TOOL_ARC, "Arc"); break;
+                        case 0: setTool(CadCanvasView.TOOL_LINE, s(R.string.line)); break;
+                        case 1: setTool(CadCanvasView.TOOL_RECT, s(R.string.rectangle)); break;
+                        case 2: setTool(CadCanvasView.TOOL_CIRCLE, s(R.string.circle)); break;
+                        case 3: setTool(CadCanvasView.TOOL_ARC, s(R.string.arc)); break;
                         case 4: showPolygonToolDialog(); break;
-                        case 5: setTool(CadCanvasView.TOOL_POINT, "Point"); break;
-                        case 6: setTool(CadCanvasView.TOOL_FREE, "text Unlocked"); break;
-                        case 7: setTool(CadCanvasView.TOOL_MEASURE, "Measure"); break;
-                        default: setTool(CadCanvasView.TOOL_GUIDE, "Guide"); break;
+                        case 5: setTool(CadCanvasView.TOOL_POINT, s(R.string.point)); break;
+                        case 6: setTool(CadCanvasView.TOOL_FREE, s(R.string.freehand)); break;
+                        case 7: setTool(CadCanvasView.TOOL_MEASURE, s(R.string.measure)); break;
+                        default: setTool(CadCanvasView.TOOL_GUIDE, s(R.string.guide)); break;
                     }
                 }).show();
     }
 
     private void showInsertMenu() {
-        String[] items = {"• Point text", "┼ Guide / Guide", "⬡ Polygon"};
+        String[] items = {
+                "• " + s(R.string.point_entity),
+                "┼ " + s(R.string.guide_item),
+                "⬡ " + s(R.string.polygon)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Add")
+                .setTitle(s(R.string.add))
                 .setItems(items, (d, w) -> {
-                    if (w == 0) setTool(CadCanvasView.TOOL_POINT, "Point text");
-                    else if (w == 1) setTool(CadCanvasView.TOOL_GUIDE, "Guide");
+                    if (w == 0) setTool(CadCanvasView.TOOL_POINT, s(R.string.point));
+                    else if (w == 1) setTool(CadCanvasView.TOOL_GUIDE, s(R.string.guide));
                     else showPolygonToolDialog();
                 }).show();
     }
 
     private void showConstructMenu() {
-        String[] items = {"┼ Create Guide", "Axestext X/Y", "Grid", "Show/Hide Guide"};
+        String[] items = {
+                "┼ " + s(R.string.create_guide),
+                s(R.string.axes_xy),
+                s(R.string.grid),
+                s(R.string.show_hide_guides)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Construct / Geometry text")
+                .setTitle(s(R.string.construction_geometry))
                 .setItems(items, (d, w) -> {
-                    if (w == 0) setTool(CadCanvasView.TOOL_GUIDE, "Guide");
-                    else if (w == 1) { cad.toggleAxes(); say(cad.isShowAxes()?"Axes On":"Axes Hide"); }
-                    else if (w == 2) { cad.toggleGrid(); say(cad.isShowGrid()?"Grid On":"Grid Off"); }
-                    else { cad.toggleGuides(); say(cad.isShowGuides()?"Guide On":"Guide Hide"); }
+                    if (w == 0) setTool(CadCanvasView.TOOL_GUIDE, s(R.string.guide));
+                    else if (w == 1) { cad.toggleAxes(); say(cad.isShowAxes() ? s(R.string.axes_on) : s(R.string.axes_hidden)); }
+                    else if (w == 2) { cad.toggleGrid(); say(cad.isShowGrid() ? "Grid On" : "Grid Off"); }
+                    else { cad.toggleGuides(); say(cad.isShowGuides() ? s(R.string.guide_on) : s(R.string.guide_hidden)); }
                 }).show();
     }
 
     private void showTransformMenu() {
         String[] items = {
-                "⌨ Exact Dimension", "⌖ text text Snap", "↔ Move text", "⧉ Copy",
-                "⟳ Rotate", "↗ Scale", "⇄ Mirror X", "⇅ Mirror Y",
-                "Array", "Offset", "text", "text text"
+                "⌨ " + s(R.string.exact_dimension),
+                "⌖ " + s(R.string.snap_move),
+                "↔ " + s(R.string.move),
+                "⧉ " + s(R.string.copy),
+                "⟳ " + s(R.string.rotate),
+                "↗ " + s(R.string.scale),
+                "⇄ " + s(R.string.mirror_x),
+                "⇅ " + s(R.string.mirror_y),
+                s(R.string.array),
+                s(R.string.offset),
+                s(R.string.group),
+                s(R.string.ungroup)
         };
         new AlertDialog.Builder(this)
-                .setTitle("Transform / Transform")
+                .setTitle(s(R.string.transform_title))
                 .setMessage(cad.selectedInfo())
                 .setItems(items, (d, w) -> {
                     switch (w) {
                         case 0: showExactDimension(); break;
                         case 1: say(cad.beginAnchorMove()); break;
-                        case 2: promptCommand("Move — cm", "dx dy, text: 5 0", "MOVE "); break;
-                        case 3: promptCommand("Copy — cm", "dx dy, text: 10 0", "COPY "); break;
-                        case 4: promptCommand("Rotate — degrees", "text: 45", "ROTATE "); break;
-                        case 5: promptCommand("Scale", "text: 1.5", "SCALE "); break;
-                        case 6: promptCommand("Mirror X — cm", "Axis, text: 0", "MIRROR X "); break;
-                        case 7: promptCommand("Mirror Y — cm", "Axis, text: 0", "MIRROR Y "); break;
-                        case 8: promptCommand("Array", "text dx dy, text: 4 10 0", "ARRAY "); break;
-                        case 9: promptCommand("Offset — cm", "text: 1.8", "OFFSET "); break;
+                        case 2: promptCommand(s(R.string.move_cm_title), s(R.string.example_dxdy_5_0), "MOVE "); break;
+                        case 3: promptCommand(s(R.string.copy_cm_title), s(R.string.example_dxdy_10_0), "COPY "); break;
+                        case 4: promptCommand(s(R.string.rotate_degrees_title), s(R.string.example_45), "ROTATE "); break;
+                        case 5: promptCommand(s(R.string.scale_title), s(R.string.example_1_5), "SCALE "); break;
+                        case 6: promptCommand(s(R.string.mirror_x_cm_title), s(R.string.example_axis_0), "MIRROR X "); break;
+                        case 7: promptCommand(s(R.string.mirror_y_cm_title), s(R.string.example_axis_0), "MIRROR Y "); break;
+                        case 8: promptCommand(s(R.string.array), s(R.string.example_array), "ARRAY "); break;
+                        case 9: promptCommand(s(R.string.offset_cm_title), s(R.string.example_1_8), "OFFSET "); break;
                         case 10: say(cad.groupSelected()); break;
                         default: say(cad.ungroupSelected()); break;
                     }
@@ -298,17 +334,17 @@ public class MainActivity extends Activity {
 
     private void showToolsMenu() {
         String[] items = {
-                "Trim", "Extend", "Fillet", "Chamfer", "Join",
-                "Material", "text", "DXF text", "3D / Extrude"
+                s(R.string.trim), s(R.string.extend), s(R.string.fillet), s(R.string.chamfer), s(R.string.join),
+                s(R.string.material), s(R.string.layers), s(R.string.export_dxf), s(R.string.solid_3d_extrude)
         };
         new AlertDialog.Builder(this)
-                .setTitle("Tools")
+                .setTitle(s(R.string.tools))
                 .setItems(items, (d, w) -> {
                     switch (w) {
                         case 0: say(cad.trimSelectedLines()); break;
                         case 1: say(cad.extendSelectedLines()); break;
-                        case 2: promptCommand("Fillet — Radius cm", "text: 1", "FILLET "); break;
-                        case 3: promptCommand("Chamfer — cm", "text: 1", "CHAMFER "); break;
+                        case 2: promptCommand(s(R.string.fillet_radius_cm_title), s(R.string.example_1), "FILLET "); break;
+                        case 3: promptCommand(s(R.string.chamfer_cm_title), s(R.string.example_1), "CHAMFER "); break;
                         case 4: say(cad.joinSelectedLines()); break;
                         case 5: showMaterialMenu(); break;
                         case 6: showLayerMenu(); break;
@@ -319,36 +355,43 @@ public class MainActivity extends Activity {
     }
 
     private void showAllTools() {
-        String[] items = {"Sketch", "Transform", "Construct", "Tools", "Selection"};
+        String[] items = {
+                s(R.string.sketch), s(R.string.transform), s(R.string.construct), s(R.string.tools), s(R.string.selection)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Toolstext")
+                .setTitle(s(R.string.all_tools))
                 .setItems(items, (d, w) -> {
                     if (w == 0) showSketchMenu();
                     else if (w == 1) showTransformMenu();
                     else if (w == 2) showConstructMenu();
                     else if (w == 3) showToolsMenu();
-                    else setTool(CadCanvasView.TOOL_SELECT, "Selection");
+                    else setTool(CadCanvasView.TOOL_SELECT, s(R.string.selection));
                 }).show();
     }
 
     private void showSnapMenu() {
-        String[] items = {"Snap On/Off", "Ortho Horizontal/Vertical", "Grid", "Guide", "text"};
+        String[] items = {
+                "Snap On/Off", "Ortho Horizontal/Vertical", s(R.string.grid), s(R.string.guide), s(R.string.dimensions)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Snaps / Guides")
+                .setTitle(s(R.string.snaps_guides))
                 .setItems(items, (d, w) -> {
                     if (w == 0) cad.toggleSnap();
                     else if (w == 1) cad.toggleOrtho();
                     else if (w == 2) cad.toggleGrid();
                     else if (w == 3) cad.toggleGuides();
                     else cad.toggleDimensions();
-                    say("text Snap/View text text");
+                    say(s(R.string.snap_view_updated));
                 }).show();
     }
 
     private void showViewMenu() {
-        String[] items = {"Fit All", "Zoom In", "Zoom Out", "Axis X/Y", "Grid", "text"};
+        String[] items = {
+                s(R.string.fit_all), s(R.string.zoom_in), s(R.string.zoom_out), s(R.string.axis_xy),
+                s(R.string.grid), s(R.string.dimensions)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("View / Show")
+                .setTitle(s(R.string.view))
                 .setItems(items, (d, w) -> {
                     if (w == 0) cad.fitAll();
                     else if (w == 1) cad.zoomBy(1.8f);
@@ -356,20 +399,23 @@ public class MainActivity extends Activity {
                     else if (w == 3) cad.toggleAxes();
                     else if (w == 4) cad.toggleGrid();
                     else cad.toggleDimensions();
-                    say("Show text text");
+                    say(s(R.string.view_settings_updated));
                 }).show();
     }
 
     private void showMoreMenu() {
-        String[] items = {"text DXF", "text", "Material", "text text text text", "text ChobYar"};
+        String[] items = {
+                s(R.string.export_dxf), s(R.string.layers), s(R.string.material),
+                s(R.string.clear_workspace), s(R.string.about_chobyar)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("ChobYar")
+                .setTitle(s(R.string.app_name))
                 .setItems(items, (d, w) -> {
                     if (w == 0) exportDxf();
                     else if (w == 1) showLayerMenu();
                     else if (w == 2) showMaterialMenu();
                     else if (w == 3) confirmClear();
-                    else Toast.makeText(this, "ChobYar CAD — cm", Toast.LENGTH_SHORT).show();
+                    else Toast.makeText(this, s(R.string.about_chobyar_message), Toast.LENGTH_SHORT).show();
                 }).show();
     }
 
@@ -380,18 +426,23 @@ public class MainActivity extends Activity {
         input.setText("6");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
-                .setTitle("Polygon — text side")
-                .setMessage("3 until 64 side")
+                .setTitle(s(R.string.polygon_sides_title))
+                .setMessage(s(R.string.polygon_sides_message))
                 .setView(input)
-                .setPositiveButton("text", (d, w) -> {
+                .setPositiveButton(s(R.string.create), (d, w) -> {
                     try {
                         int sides = Integer.parseInt(normalizeDigits(input.getText().toString().trim()));
-                        if (sides < 3 || sides > 64) { say("text side text text 3 text 64 text"); return; }
+                        if (sides < 3 || sides > 64) {
+                            say(s(R.string.polygon_sides_range_error));
+                            return;
+                        }
                         cad.executeCommand("POLYSIDES " + sides);
-                        setTool(CadCanvasView.TOOL_POLYGON, sides + " text");
-                    } catch (Exception e) { say("text side is invalid"); }
+                        setTool(CadCanvasView.TOOL_POLYGON, s(R.string.sides_format, sides));
+                    } catch (Exception e) {
+                        say(s(R.string.polygon_sides_invalid));
+                    }
                 })
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton(s(R.string.cancel), null).show();
     }
 
     private void showExactDimension() {
@@ -406,16 +457,19 @@ public class MainActivity extends Activity {
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setHint(cad.exactDimensionHint());
         String current = cad.exactDimensionCurrentValue();
-        if (!current.isEmpty()) { input.setText(current); input.setSelectAllOnFocus(true); }
+        if (!current.isEmpty()) {
+            input.setText(current);
+            input.setSelectAllOnFocus(true);
+        }
         new AlertDialog.Builder(this)
                 .setTitle(cad.exactDimensionTitle())
                 .setMessage(cad.exactDimensionHint())
                 .setView(input)
-                .setPositiveButton("Apply", (d, w) -> {
+                .setPositiveButton(s(R.string.apply), (d, w) -> {
                     say(cad.applySelectedDimension(input.getText().toString()));
                     cad.dispatchWorkspaceState();
                 })
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton(s(R.string.cancel), null).show();
     }
 
     private void promptCommand(String title, String hint, String prefix) {
@@ -426,41 +480,50 @@ public class MainActivity extends Activity {
                 .setTitle(title)
                 .setMessage(cad.selectedInfo())
                 .setView(input)
-                .setPositiveButton("Apply", (d, w) -> {
+                .setPositiveButton(s(R.string.apply), (d, w) -> {
                     say(cad.executeCommand(prefix + normalizeDigits(input.getText().toString().trim())));
                     cad.dispatchWorkspaceState();
                 })
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton(s(R.string.cancel), null).show();
     }
 
     private void showLayerMenu() {
-        String[] items = {"text text", "text Selection text text", "Hide text text", "Show text"};
+        String[] items = {
+                s(R.string.set_current_layer), s(R.string.assign_selection_layer),
+                s(R.string.hide_layer), s(R.string.show_layer)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Items / Layers")
-                .setMessage("text text: " + cad.getCurrentLayer())
+                .setTitle(s(R.string.items_layers))
+                .setMessage(s(R.string.current_layer_format, cad.getCurrentLayer()))
                 .setItems(items, (d, w) -> {
-                    if (w == 0) promptCommand("text text text", "text: MDF18", "LAYER ");
-                    else if (w == 1) promptCommand("text text text", "text: text", "ASSIGNLAYER ");
-                    else if (w == 2) promptCommand("Hide text text", "text text", "LAYERHIDE ");
-                    else promptCommand("Show text", "text text", "LAYERSHOW ");
+                    if (w == 0) promptCommand(s(R.string.set_current_layer_title), s(R.string.layer_name_example), "LAYER ");
+                    else if (w == 1) promptCommand(s(R.string.assign_selection_layer_title), s(R.string.layer_name_hint), "ASSIGNLAYER ");
+                    else if (w == 2) promptCommand(s(R.string.hide_layer_title), s(R.string.layer_name_hint), "LAYERHIDE ");
+                    else promptCommand(s(R.string.show_layer_title), s(R.string.layer_name_hint), "LAYERSHOW ");
                 }).show();
     }
 
     private void showMaterialMenu() {
-        String[] items = {"WOOD — Wood", "MDF", "METAL — Metal", "GLASS — Glass", "DEFAULT"};
+        String[] items = {
+                s(R.string.material_wood), s(R.string.material_mdf), s(R.string.material_metal),
+                s(R.string.material_glass), s(R.string.material_default)
+        };
         String[] values = {"WOOD", "MDF", "METAL", "GLASS", "DEFAULT"};
         new AlertDialog.Builder(this)
-                .setTitle("Material")
+                .setTitle(s(R.string.material))
                 .setItems(items, (d, w) -> say(cad.setMaterial(values[w]))).show();
     }
 
     private void show3dMenu() {
-        String[] items = {"Extrude / Push-Pull", "Revolve", "Loft", "Sweep", "Shell", "Union", "Subtract", "Intersect"};
+        String[] items = {
+                s(R.string.extrude_push_pull), s(R.string.revolve), s(R.string.loft), s(R.string.sweep),
+                s(R.string.shell), s(R.string.union), s(R.string.subtract), s(R.string.intersect)
+        };
         new AlertDialog.Builder(this)
                 .setTitle("3D")
-                .setMessage("Extrude text Preview 2.5D text; Toolstext Solid text text text text text text text.")
+                .setMessage(s(R.string.solid_tools_message))
                 .setItems(items, (d, w) -> {
-                    if (w == 0) promptCommand("Extrude — cm", "Height; text: 1.8", "EXTRUDE ");
+                    if (w == 0) promptCommand(s(R.string.extrude_cm_title), s(R.string.height_example_1_8), "EXTRUDE ");
                     else {
                         String[] c = {"", "REVOLVE", "LOFT", "SWEEP", "SHELL", "UNION", "SUBTRACT", "INTERSECT"};
                         say(cad.executeCommand(c[w]));
@@ -470,24 +533,41 @@ public class MainActivity extends Activity {
 
     private void deleteSelectedQuick() {
         String info = cad.selectedInfo();
-        if (info == null || info.startsWith("None")) { say("First text text text Selection text"); return; }
+        if (info == null || info.startsWith("None")) {
+            say(s(R.string.select_entity_first));
+            return;
+        }
         new AlertDialog.Builder(this)
-                .setTitle("Delete Selection?")
+                .setTitle(s(R.string.delete_selection_title))
                 .setMessage(info)
-                .setPositiveButton("Delete", (d, w) -> { cad.deleteSelected(); say("Selection Delete text"); })
-                .setNegativeButton("Cancel", null).show();
+                .setPositiveButton(s(R.string.delete), (d, w) -> {
+                    cad.deleteSelected();
+                    say(s(R.string.selection_deleted));
+                })
+                .setNegativeButton(s(R.string.cancel), null).show();
     }
 
     private void confirmClear() {
         new AlertDialog.Builder(this)
-                .setTitle("text text text text?")
-                .setMessage("Undo text text text text text text text.")
-                .setPositiveButton("text text", (d, w) -> { cad.clearAll(); say("Plane text text"); })
-                .setNegativeButton("Cancel", null).show();
+                .setTitle(s(R.string.clear_workspace_title))
+                .setMessage(s(R.string.clear_workspace_message))
+                .setPositiveButton(s(R.string.clear_all), (d, w) -> {
+                    cad.clearAll();
+                    say(s(R.string.workspace_cleared));
+                })
+                .setNegativeButton(s(R.string.cancel), null).show();
     }
 
-    private void say(String s) {
-        if (status != null && s != null && !s.trim().isEmpty()) status.setText(s);
+    private void say(String message) {
+        if (status != null && message != null && !message.trim().isEmpty()) status.setText(message);
+    }
+
+    private String s(int resId) {
+        return getString(resId);
+    }
+
+    private String s(int resId, Object... args) {
+        return getString(resId, args);
     }
 
     private void exportDxf() {
@@ -507,9 +587,9 @@ public class MainActivity extends Activity {
         try (OutputStream out = getContentResolver().openOutputStream(uri)) {
             if (out == null) throw new IllegalStateException("No output stream");
             out.write(cad.buildDxf().getBytes(StandardCharsets.UTF_8));
-            Toast.makeText(this, "text DXF Save text", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, s(R.string.dxf_saved), Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Error text Save DXF", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, s(R.string.dxf_save_failed), Toast.LENGTH_LONG).show();
         }
         enterImmersiveMode();
     }
@@ -532,12 +612,11 @@ public class MainActivity extends Activity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private static String normalizeDigits(String s) {
-        if (s == null) return "";
-        StringBuilder b = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            b.append(c);
+    private static String normalizeDigits(String input) {
+        if (input == null) return "";
+        StringBuilder b = new StringBuilder(input.length());
+        for (int i = 0; i < input.length(); i++) {
+            b.append(input.charAt(i));
         }
         return b.toString();
     }
