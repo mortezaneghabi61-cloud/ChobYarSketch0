@@ -35,7 +35,7 @@ src="$work/repo/ops/chobyar-trader"
 [[ -f "$src/v4/trader.py" && -f "$src/v4/backtest.py" && -f "$src/v3/status_server.py" ]] || die "commit lacks v4 files"
 
 "$VENV/bin/python" -m py_compile "$src/v4/common.py" "$src/v4/trader.py" "$src/v4/backtest.py" "$src/v3/status_server.py" "$src/v3/status_client.py"
-PYTHONPATH="$src/v4" "$VENV/bin/python" -m unittest -v "$src/v4/test_v4.py"
+PYTHONPATH="$src/v4" "$VENV/bin/python" "$src/v4/test_v4.py" -v
 PYTHONPATH="$src/v4" "$VENV/bin/python" "$src/v4/backtest.py" --output "$work/backtest.json"
 "$VENV/bin/python" -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["ok"] and d["candles"] >= 80 and d["lookahead_policy"] == "close[i-1] signal; open[i] execution"' "$work/backtest.json"
 
