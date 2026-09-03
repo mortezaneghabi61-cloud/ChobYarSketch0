@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,6 +15,7 @@ from urllib.parse import urlparse
 APP_DIR = Path('/opt/chobyar-trader')
 STATE_FILE = APP_DIR / 'state' / 'paper_state.json'
 BACKTEST_FILE = APP_DIR / 'state' / 'backtest_latest.json'
+FORWARD_FILE = APP_DIR / 'state' / 'forward_test.json'
 AUDIT_FILE = APP_DIR / 'logs' / 'audit.jsonl'
 ENV_FILE = APP_DIR / '.env'
 
@@ -26,6 +28,7 @@ SAFE_ENV_KEYS = {
 NONCE_TTL = 120
 MAX_CLOCK_SKEW = 60
 seen_nonces: dict[str, float] = {}
+nonce_lock = threading.Lock()
 
 
 def utc_now() -> str:
@@ -211,9 +214,13 @@ def payload() -> dict:
     env = read_safe_env()
     state = read_json(STATE_FILE)
     backtest = read_json(BACKTEST_FILE)
+    forward = read_json(FORWARD_FILE)
     last = read_last_cycle()
     audit_rows = read_recent_audit()
     perf = performance_from_state(state, last, audit_rows)
+    perf['unrealized_pnl'] = ((float(last.get('local_mid')) - float(state.get('entry_price'))) * float(state.get('btc_qty'))
+                              if last.get('local_mid') is not None and state.get('entry_price') is not None and state.get('btc_qty') else 0.0)
+    perf['current_drawdown_pct'] = forward.get('current_drawdown_pct')
     agents = []
     for row in (last.get('agents') or last.get('votes') or []):
         if isinstance(row, dict):
@@ -268,8 +275,11 @@ def payload() -> dict:
             'cash_usdt': state.get('cash_usdt'),
             'btc_qty': state.get('btc_qty'),
             'entry_price': state.get('entry_price'),
+            'unrealized_pnl': ((float(last.get('local_mid')) - float(state.get('entry_price'))) * float(state.get('btc_qty'))
+                               if last.get('local_mid') is not None and state.get('entry_price') is not None and state.get('btc_qty') else 0.0),
         },
         'performance': perf,
+        'forward_test': forward,
         'backtest': backtest,
         'live_gate': live_gate(perf, backtest, env),
         'security': {
@@ -307,14 +317,18 @@ def auth_ok(handler: BaseHTTPRequestHandler, path: str) -> bool:
         return False
     if abs(int(time.time()) - ts) > MAX_CLOCK_SKEW:
         return False
-    prune_nonces()
-    if nonce in seen_nonces:
-        return False
+    with nonce_lock:
+        prune_nonces()
+        if nonce in seen_nonces:
+            return False
     message = f'{ts_raw}\n{nonce}\nGET\n{path}'.encode('utf-8')
     expected = hmac.new(secret.encode('utf-8'), message, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature.lower()):
         return False
-    seen_nonces[nonce] = time.time()
+    with nonce_lock:
+        if nonce in seen_nonces:
+            return False
+        seen_nonces[nonce] = time.time()
     return True
 
 
@@ -336,13 +350,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path in ('/', '/health'):
-            env = read_safe_env()
             self.send_json(200, {
                 'ok': True,
-                'service': service_active('chobyar-trader'),
-                'mode': env.get('TRADING_MODE', 'unknown'),
-                'live_trading_enabled': env.get('LIVE_TRADING_ENABLED', 'unknown'),
-                'status_auth_required': True,
+                'service': 'chobyar-status',
             })
             return
         if path != '/status':

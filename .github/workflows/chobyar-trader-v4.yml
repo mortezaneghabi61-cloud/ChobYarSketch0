@@ -1,0 +1,33 @@
+name: ChobYar Trader v4 Paper Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/**'
+      - '.github/workflows/chobyar-trader-v4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and shell syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v4/*.py ops/chobyar-trader/v3/*.py
+          bash -n ops/chobyar-trader/install-v4-paper.sh
+      - name: Deterministic and fail-closed tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_v4.py
+      - name: No live execution surface
+        run: |
+          if grep -RniE '(/order|submit_order|create_order|place_order|leverage|martingale)' ops/chobyar-trader/v4; then
+            echo 'Forbidden live-order or leverage surface detected' >&2
+            exit 1
+          fi
+          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/install-v4-paper.sh

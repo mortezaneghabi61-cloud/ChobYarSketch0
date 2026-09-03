@@ -18,7 +18,9 @@ def read_env() -> dict[str, str]:
     for raw in ENV.read_text(encoding='utf-8').splitlines():
         if '=' in raw and not raw.lstrip().startswith('#'):
             k, v = raw.split('=', 1)
-            out[k.strip()] = v.strip()
+            key = k.strip()
+            if key in {'STATUS_HMAC_SECRET', 'STATUS_PORT'}:
+                out[key] = v.strip()
     return out
 
 
