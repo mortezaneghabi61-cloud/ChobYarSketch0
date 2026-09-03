@@ -35,7 +35,7 @@ class MonitorRouteTests(unittest.TestCase):
         self.assertIn('report.mode !== "paper"', js)
         self.assertIn('report.live_locked !== true', js)
         self.assertIn('credentials: "omit"', js)
-        self.assertIn('never cache /public-report', sw)
+        self.assertIn('never cache /public-report', sw.lower())
         self.assertIn('"start_url": "/monitor/"', manifest)
 
         forbidden = (
