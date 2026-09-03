@@ -1,0 +1,62 @@
+name: ChobYar Trader v4 Paper Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/**'
+      - '.github/workflows/chobyar-trader-v4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and shell syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v4/*.py ops/chobyar-trader/v3/*.py
+          bash -n ops/chobyar-trader/install-v4-paper.sh
+          bash -n ops/chobyar-trader/upgrade-v42-global-sources.sh
+      - name: Deterministic and fail-closed tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: |
+          python3 ops/chobyar-trader/v4/test_v4.py -v
+          python3 ops/chobyar-trader/v4/test_global_sources.py -v
+      - name: Global-source resilience contract
+        run: |
+          grep -q '"okx"' ops/chobyar-trader/v4/global_sources.py
+          grep -q '"kucoin"' ops/chobyar-trader/v4/global_sources.py
+          grep -q '"coinbase"' ops/chobyar-trader/v4/global_sources.py
+          grep -q '"kraken"' ops/chobyar-trader/v4/global_sources.py
+          grep -q 'fetch_global_snapshot(trader.AUDIT)' ops/chobyar-trader/v4/trader_entry.py
+          grep -q 'GLOBAL_SOURCE_FALLBACKS=ACTIVE' ops/chobyar-trader/upgrade-v42-global-sources.sh
+      - name: Backtest sample and approved-risk ratchet
+        run: |
+          grep -q '^DEFAULT_LIMIT = 24 \* 90$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^POSITION = 0.25$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^STOP = 0.015$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^TAKE = 0.03$' ops/chobyar-trader/v4/backtest.py
+          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
+          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/upgrade-v42-global-sources.sh
+          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/upgrade-v42-global-sources.sh
+          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/upgrade-v42-global-sources.sh
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/upgrade-v42-global-sources.sh
+          grep -q 'chobyar-backtest.timer' ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'BACKTEST_TIMER=ACTIVE' ops/chobyar-trader/install-v4-paper.sh
+      - name: No live execution surface
+        run: |
+          if grep -RniE '(/order|submit_order|create_order|place_order|leverage|martingale)' ops/chobyar-trader/v4; then
+            echo 'Forbidden live-order or leverage surface detected' >&2
+            exit 1
+          fi
+          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/install-v4-paper.sh
+          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/upgrade-v42-global-sources.sh
+          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/upgrade-v42-global-sources.sh
