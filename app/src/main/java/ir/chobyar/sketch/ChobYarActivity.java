@@ -109,7 +109,7 @@ public final class ChobYarActivity extends Activity {
         b.addView(topAction("⌂",this::showProjectMenu),new LinearLayout.LayoutParams(dp(42),dp(48)));
         workspaceTitle=label("ChobYar 3D",13,true);workspaceTitle.setGravity(Gravity.CENTER);
         b.addView(workspaceTitle,new LinearLayout.LayoutParams(0,dp(48),1f));
-        modeButton=topAction("text",this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
+        modeButton=topAction(s(R.string.launcher_3d),this::finishSketchView);modeButton.setTextSize(9);modeButton.setVisibility(View.GONE);
         b.addView(modeButton,new LinearLayout.LayoutParams(dp(48),dp(40)));
         b.addView(topAction("↶",this::undoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
         b.addView(topAction("↷",this::redoAction),new LinearLayout.LayoutParams(dp(38),dp(48)));
@@ -130,8 +130,8 @@ public final class ChobYarActivity extends Activity {
     private View viewTools(){
         LinearLayout b=rail(true);
         Cube cube=new Cube();b.addView(cube,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        b.addView(tool("+","text",()->zoomView(1.6f)));
-        b.addView(tool("−","text",()->zoomView(0.625f)));
+        b.addView(tool("+",s(R.string.zoom_in),()->zoomView(1.6f)));
+        b.addView(tool("−",s(R.string.zoom_out),()->zoomView(0.625f)));
         b.addView(tool("◇","Fit",()->{cad.fitAll();syncGpuCamera();status("Fit");}));
         snapButton=tool("⌁","Snap",()->{cad.toggleSnap();updateSnap();});b.addView(snapButton);
         b.addView(tool("mm","Units",()->status("Project Units: mm")));
@@ -142,7 +142,7 @@ public final class ChobYarActivity extends Activity {
     private void zoomView(float factor){
         cad.zoomBy(factor);
         syncGpuCamera();
-        status(factor>1f?"text text":"text text");
+        status(factor>1f?s(R.string.zoom_in_status):s(R.string.zoom_out_status));
     }
 
     private void undoAction(){
@@ -154,7 +154,7 @@ public final class ChobYarActivity extends Activity {
             status("Undo is empty");
             return;
         }
-        cad.undo();status("text");scheduleRecoverySnapshot();
+        cad.undo();status(s(R.string.undo_complete));scheduleRecoverySnapshot();
     }
 
     private void redoAction(){
@@ -162,7 +162,7 @@ public final class ChobYarActivity extends Activity {
             status(cad.redoLastFeature());scheduleRecoverySnapshot();
             return;
         }
-        status(cad.redoSketch()?"text":"Redo is empty");scheduleRecoverySnapshot();
+        status(cad.redoSketch()?s(R.string.redo_complete):"Redo is empty");scheduleRecoverySnapshot();
     }
 
     private View bottomLeftControls(){
@@ -376,7 +376,7 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
         adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
-        adaptive.addView(tool("●","Solid text",cad::showSolidManager));finishManualPaletteLayout();
+        adaptive.addView(tool("●",s(R.string.solid_tools),cad::showSolidManager));finishManualPaletteLayout();
     }
 
     private void showTransformPalette(){
@@ -482,21 +482,21 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void newProject(){
-        new AlertDialog.Builder(this).setTitle("New Project").setMessage("Workspace text text text. text text text First text text Save text.")
+        new AlertDialog.Builder(this).setTitle("New Project").setMessage(s(R.string.new_project_message))
                 .setPositiveButton("Create",(d,w)->{
                     if(workspace.state().sessionActive())cancelWorkspaceTool();
                     cad.clearAll();appearance.restore(CadMaterialPreset.of(CadMaterialPreset.Preset.WOOD),gpuSurface::setAppearance);
                     sectionView.restore(false,SectionViewController.Axis.Z,0.0,false);currentInternalProjectId=null;currentInternalProjectName=null;currentSelectionKind="NONE";
-                    if(recoveryStore!=null)recoveryStore.clear();syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("New Project Ready text");scheduleRecoverySnapshot();
+                    if(recoveryStore!=null)recoveryStore.clear();syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(s(R.string.new_project_ready));scheduleRecoverySnapshot();
                 }).setNegativeButton("Cancel",null).show();
     }
 
     private void showInternalProjects(){
-        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast("Create Projecttext text Done text");return;}
+        try{internalProjects.ensureFurnitureSamples(this);}catch(Exception e){toast(s(R.string.project_templates_failed));return;}
         java.util.List<InternalProjectRepository.Entry> entries=internalProjects.entries();
         String[] rows=new String[entries.size()];for(int i=0;i<rows.length;i++){InternalProjectRepository.Entry p=entries.get(i);rows[i]=(p.builtIn?"◆ ":"● ")+p.name;}
         new AlertDialog.Builder(this).setTitle("Projects")
-                .setMessage("text Project text Sketch text History text text text Bodytext text Transformtext. Projecttext ◆ text text Save text text text text.")
+                .setMessage(s(R.string.projects_message))
                 .setItems(rows,(d,w)->openInternalProject(entries.get(w))).setNegativeButton("Close",null).show();
     }
 
@@ -504,21 +504,21 @@ public final class ChobYarActivity extends Activity {
         try{
             String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,internalProjects.load(entry.id));
             currentInternalProjectId=entry.id;currentInternalProjectName=entry.name;syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);persistRecoverySnapshot();
-            status(entry.name+" text text • "+result);
-        }catch(Exception e){toast("text Project text text Done text");}
+            status(s(R.string.project_opened_format,entry.name,result));
+        }catch(Exception e){toast(s(R.string.project_open_failed));}
     }
 
     private void saveInsideApp(){
         EditText input=new EditText(this);input.setSingleLine();input.setText(currentInternalProjectName==null?"New Project ChobYar":currentInternalProjectName);input.setSelectAllOnFocus(true);
         boolean copy=currentInternalProjectId!=null&&InternalProjectRepository.isBuiltIn(currentInternalProjectId);
-        new AlertDialog.Builder(this).setTitle(copy?"Save text Project text":"Save Project").setMessage("Sketch, Bodytext, History, View text Dimensiontext Save text.").setView(input)
+        new AlertDialog.Builder(this).setTitle(copy?s(R.string.save_project_copy):"Save Project").setMessage(s(R.string.project_save_message)).setView(input)
                 .setPositiveButton("Save",(d,w)->{
                     try{
                         String name=input.getText().toString().trim();if(name.isEmpty())throw new IllegalArgumentException();
                         String id=(currentInternalProjectId==null||InternalProjectRepository.isBuiltIn(currentInternalProjectId))?internalProjects.createId(name):currentInternalProjectId;
                         internalProjects.save(id,name,CadProjectPersistenceController.encode(cad,appearance,sectionView));
-                        currentInternalProjectId=id;currentInternalProjectName=name;updateWorkspaceChrome();persistRecoverySnapshot();toast(copy?"text Project text text Save text":"Project text text Save text");
-                    }catch(Exception e){toast("Save text text Done text");}
+                        currentInternalProjectId=id;currentInternalProjectName=name;updateWorkspaceChrome();persistRecoverySnapshot();toast(copy?s(R.string.project_copy_saved):s(R.string.project_saved));
+                    }catch(Exception e){toast(s(R.string.project_save_failed));}
                 }).setNegativeButton("Cancel",null).show();
     }
 
@@ -532,7 +532,7 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void more(){
-        String[] x={"Items / Layers","Export DXF","Export STEP / STL","Reference Image","Materials / Appearance","Top View","Front View","Right View","Isometric View","Snaps / Guides","Project Units: mm","Guidetext Workspace"};
+        String[] x={"Items / Layers","Export DXF","Export STEP / STL","Reference Image","Materials / Appearance","Top View","Front View","Right View","Isometric View","Snaps / Guides","Project Units: mm",s(R.string.workspace_guide)};
         new AlertDialog.Builder(this).setTitle("ChobYar 3D").setItems(x,(d,w)->{
             if(w==0)showItems();else if(w==1)exportDxf();else if(w==2)showCadExport();else if(w==3){if(cad.hasReferenceImage())cad.showReferenceImageSettings();else importReferenceImage();}
             else if(w==4)showMaterialPalette();else if(w==5)setView("TOP");else if(w==6)setView("FRONT");else if(w==7)setView("RIGHT");
@@ -550,8 +550,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showWorkspaceHelp(){
-        new AlertDialog.Builder(this).setTitle("Guidetext Workspace")
-                .setMessage("text: text text Selection text \n text: text, text text text \n  \n text Face, Edge text Body text touch text until text Toolstext text text text Selection text text. All Dimensiontext mm text. text Workspace text text text text Save text.")
+        new AlertDialog.Builder(this).setTitle(s(R.string.workspace_guide))
+                .setMessage(s(R.string.workspace_guide_message))
                 .setPositiveButton("OK",null).show();
     }
 
@@ -562,13 +562,13 @@ public final class ChobYarActivity extends Activity {
         EditText offsetInput=new EditText(this);offsetInput.setSingleLine(true);offsetInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         offsetInput.setText(String.format(java.util.Locale.US,"%.1f",sectionView.offsetMm()));box.addView(offsetInput,new LinearLayout.LayoutParams(dp(280),dp(48)));
         new AlertDialog.Builder(this).setTitle("Section View")
-                .setMessage("text text text Viewtext text text text text; Geometry OCCT, History, text text Export Transform text.")
+                .setMessage(s(R.string.section_view_message))
                 .setView(box).setSingleChoiceItems(choices,sectionView.selectedIndex(),(d,w)->{
                     if(w==0)sectionView.disable();else if(w==1)sectionView.enable(SectionViewController.Axis.Z);else if(w==2)sectionView.enable(SectionViewController.Axis.X);else if(w==3)sectionView.enable(SectionViewController.Axis.Y);else sectionView.flip();
                     syncGpuMesh();status(sectionView.summary());scheduleRecoverySnapshot();
                 }).setPositiveButton("Apply Distance",(d,w)->{
                     try{sectionView.setOffsetMm(Double.parseDouble(offsetInput.getText().toString().trim()));}
-                    catch(Exception ignored){status("Offset invalid text");return;}
+                    catch(Exception ignored){status(s(R.string.section_offset_invalid));return;}
                     if(!sectionView.isEnabled())sectionView.enable(SectionViewController.Axis.Z);
                     syncGpuMesh();status(sectionView.summary());scheduleRecoverySnapshot();
                 }).setNegativeButton("Close",null).show();
@@ -578,7 +578,7 @@ public final class ChobYarActivity extends Activity {
         CadMaterialPreset.Preset[] presets=CadMaterialPreset.Preset.values();CadMaterialPreset.State current=appearance.state();String[] names=new String[presets.length];
         for(int i=0;i<presets.length;i++){CadMaterialPreset.Preset p=presets[i];names[i]=(p==current.preset?"✓ ":"")+p.key.toUpperCase(java.util.Locale.US)+" • "+p.label;}
         new AlertDialog.Builder(this).setTitle("Materials / Appearance")
-                .setMessage("text text text Transform text; Geometry, text, History text text CAD text text.")
+                .setMessage(s(R.string.materials_message))
                 .setItems(names,(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(presets[w],gpuSurface::setAppearance);showAppearanceEditor(state);scheduleRecoverySnapshot();})
                 .setNegativeButton("Close",null).show();
     }
@@ -595,7 +595,7 @@ public final class ChobYarActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(initial.preset.label+" • Appearance").setView(box)
                 .setPositiveButton("Apply",(d,w)->{
                     try{int color=parseAppearanceColor(colorInput.getText().toString());appearance.setColor(color,null);CadMaterialPreset.State state=appearance.setRoughness(Math.max(.04f,roughness.getProgress()/100f),gpuSurface::setAppearance);status("Material • "+state.summary());scheduleRecoverySnapshot();}
-                    catch(Exception e){toast("text Paint text text #B98758 text");}
+                    catch(Exception e){toast(s(R.string.invalid_hex_color));}
                 }).setNeutralButton("Reset",(d,w)->{CadMaterialPreset.State state=appearance.applyPreset(initial.preset,gpuSurface::setAppearance);status("Material • "+state.summary());scheduleRecoverySnapshot();})
                 .setNegativeButton("Cancel",null).show();
     }
@@ -606,13 +606,13 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void showCadExport(){
-        String[] formats={"STEP • Model text text text","STL • text text text / CAM"};
+        String[] formats={s(R.string.export_step_description),s(R.string.export_stl_description)};
         new AlertDialog.Builder(this).setTitle("Export CAD").setItems(formats,(d,w)->exportCad(w)).setNegativeButton("Cancel",null).show();
     }
 
     private void exportCad(int format){
         String ext=format==0?"step":"stl";File file=new File(getCacheDir(),"ChobYar-Model."+ext);
-        if(!cad.exportVisibleCad(file.getAbsolutePath(),format)){toast("Body text text text text text");return;}
+        if(!cad.exportVisibleCad(file.getAbsolutePath(),format)){toast(s(R.string.no_visible_body_export));return;}
         pendingCadExport=file;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(format==0?"model/step":"model/stl");
         intent.putExtra(Intent.EXTRA_TITLE,file.getName());startActivityForResult(intent,REQUEST_EXPORT_CAD);
     }
@@ -622,15 +622,15 @@ public final class ChobYarActivity extends Activity {
         if(requestCode==REQUEST_EXPORT_DXF){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                if(out==null)throw new IllegalStateException();out.write(cad.buildDxf().getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast("text DXF Save text");
-            }catch(Exception e){toast("Save DXF Done text");}return;
+                if(out==null)throw new IllegalStateException();out.write(cad.buildDxf().getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();toast(s(R.string.dxf_saved));
+            }catch(Exception e){toast(s(R.string.dxf_save_failed));}return;
         }
         if(requestCode==REQUEST_SAVE_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
                 if(out==null)throw new IllegalStateException();String json=CadProjectPersistenceController.encode(cad,appearance,sectionView);
-                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();persistRecoverySnapshot();toast("Project Save text");
-            }catch(Exception e){toast("Save Project Done text");}return;
+                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();persistRecoverySnapshot();toast(s(R.string.project_file_saved));
+            }catch(Exception e){toast(s(R.string.project_file_save_failed));}return;
         }
         if(requestCode==REQUEST_OPEN_PROJECT){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
@@ -640,18 +640,18 @@ public final class ChobYarActivity extends Activity {
                 String raw=new String(buffer.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
                 String result=CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,raw);
                 currentInternalProjectId=null;currentInternalProjectName=null;currentSelectionKind="NONE";syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);persistRecoverySnapshot();status(result);
-            }catch(Exception e){toast("text Project Done text");}return;
+            }catch(Exception e){toast(s(R.string.project_file_open_failed));}return;
         }
         if(requestCode==REQUEST_REFERENCE_IMAGE){
             if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
             try{Bitmap bitmap=decodeReferenceBitmap(data);status(cad.setReferenceImage(bitmap,"Reference Image"));cad.showReferenceImageSettings();scheduleRecoverySnapshot();}
-            catch(Exception e){toast("text text text Done text");}return;
+            catch(Exception e){toast(s(R.string.reference_image_import_failed));}return;
         }
         if(requestCode!=REQUEST_EXPORT_CAD||resultCode!=RESULT_OK||data==null||data.getData()==null||pendingCadExport==null)return;
         File exportFile=pendingCadExport;
         try(FileInputStream in=new FileInputStream(exportFile);OutputStream out=getContentResolver().openOutputStream(data.getData())){
-            if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){if(n>0)out.write(buffer,0,n);}out.flush();toast("text CAD Save text");
-        }catch(Exception e){toast("Save text Done text");}finally{pendingCadExport=null;if(exportFile.exists())exportFile.delete();}
+            if(out==null)throw new IllegalStateException();byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){if(n>0)out.write(buffer,0,n);}out.flush();toast(s(R.string.cad_export_saved));
+        }catch(Exception e){toast(s(R.string.cad_export_save_failed));}finally{pendingCadExport=null;if(exportFile.exists())exportFile.delete();}
     }
 
     private Bitmap decodeReferenceBitmap(Intent data)throws Exception{
@@ -667,14 +667,14 @@ public final class ChobYarActivity extends Activity {
 
     private void showItems(){
         String[] bodies=cad.itemRows();boolean image=cad.hasReferenceImage();
-        if(bodies.length==0&&!image){toast("text Body text text text text text");return;}
+        if(bodies.length==0&&!image){toast(s(R.string.no_items));return;}
         String[] rows=new String[bodies.length+(image?1:0)];System.arraycopy(bodies,0,rows,0,bodies.length);if(image)rows[rows.length-1]="▧ Reference Image";
-        new AlertDialog.Builder(this).setTitle("Items").setMessage("Bodytext text text text text text Selection text text text.")
+        new AlertDialog.Builder(this).setTitle("Items").setMessage(s(R.string.items_message))
                 .setItems(rows,(d,w)->{if(image&&w==rows.length-1)cad.showReferenceImageSettings();else{status(cad.selectItem(w));showItemActions(w);}}).setNegativeButton("Close",null).show();
     }
 
     private void showItemActions(int index){
-        String[] actions={"Show / Hide","Transform text","Fit All"};
+        String[] actions={"Show / Hide",s(R.string.rename),"Fit All"};
         new AlertDialog.Builder(this).setTitle("Body").setItems(actions,(d,w)->{
             if(w==0){status(cad.toggleItemVisibility(index));showItems();}else if(w==1)renameItem(index);else{cad.fitAll();status("Fit");}
         }).setNegativeButton("Close",null).show();
@@ -682,7 +682,7 @@ public final class ChobYarActivity extends Activity {
 
     private void renameItem(int index){
         EditText e=new EditText(this);e.setSingleLine();
-        new AlertDialog.Builder(this).setTitle("Transform text Body").setView(e)
+        new AlertDialog.Builder(this).setTitle(s(R.string.rename_body)).setView(e)
                 .setPositiveButton("Save",(d,w)->{status(cad.renameItem(index,e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("Cancel",null).show();
     }
 
@@ -722,9 +722,12 @@ public final class ChobYarActivity extends Activity {
         try{
             CadProjectPersistenceController.restore(cad,appearance,sectionView,gpuSurface::setAppearance,snapshot.payload);
             currentInternalProjectId=null;currentInternalProjectName=snapshot.name==null||snapshot.name.trim().isEmpty()?null:snapshot.name;currentSelectionKind="NONE";
-            syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status("text Workspace text text");
+            syncGpuMesh();updateWorkspaceChrome();cad.post(cad::fitAll);status(s(R.string.workspace_recovered));
         }catch(Exception e){recoveryStore.clear();}
     }
+
+    private String s(int resId){return getString(resId);}
+    private String s(int resId,Object... args){return getString(resId,args);}
 
     private void status(String s){
         if(instructionChip==null||s==null||s.trim().isEmpty()||workspace.state().sessionActive())return;
