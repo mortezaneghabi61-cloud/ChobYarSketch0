@@ -1,0 +1,49 @@
+name: ChobYar Trader v4.4 Agent Scorecard Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/agent_scorecard.py'
+      - 'ops/chobyar-trader/v4/test_agent_scorecard.py'
+      - 'ops/chobyar-trader/v3/status_server_v44.py'
+      - 'ops/chobyar-trader/v3/test_status_scorecard.py'
+      - 'ops/chobyar-trader/upgrade-v44-agent-scorecard.sh'
+      - '.github/workflows/chobyar-trader-v44-scorecard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and shell syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v4/agent_scorecard.py ops/chobyar-trader/v3/status_server_v44.py
+          bash -n ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+      - name: Scorecard unit tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 ops/chobyar-trader/v4/test_agent_scorecard.py -v
+      - name: Sanitized status projection tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v3
+        run: python3 ops/chobyar-trader/v3/test_status_scorecard.py -v
+      - name: Observation-only contract
+        run: |
+          grep -q 'weights_changed.*False' ops/chobyar-trader/v4/agent_scorecard.py
+          grep -q 'automatic_reweighting_enabled.*False' ops/chobyar-trader/v4/agent_scorecard.py
+          grep -q 'weights_changed.*False' ops/chobyar-trader/v3/status_server_v44.py
+          grep -q 'automatic_reweighting_enabled.*False' ops/chobyar-trader/v3/status_server_v44.py
+          ! grep -qiE 'submit_order|create_order|place_order|martingale|leverage' ops/chobyar-trader/v4/agent_scorecard.py ops/chobyar-trader/v3/status_server_v44.py
+          ! grep -q 'EnvironmentFile=' ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+      - name: Approved risk remains locked
+        run: |
+          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
+          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/upgrade-v44-agent-scorecard.sh
