@@ -51,6 +51,32 @@ public final class K322OffsetAuthorityInstrumentationTest {
             assertLine(lines.get(1), 0, 5, 10, 5);
             assertFalse(seedId.equals(lines.get(1).id()));
             assertEquals(lines.get(1).id(), cad.selected.stableId());
+
+            // Production command smoke exposed a Rect-specific projection drift:
+            // legacy Offset used float scaling while model authority used doubles.
+            // Lock the real RECT -> MOVE -> COPY -> OFFSET sequence into K3.22.
+            K33MirroredCadCanvasView rectCad = canvas();
+            assertTrue(rectCad.executeCommand("RECT 100 120 600 400").contains("Rectangle"));
+            rectCad.moveSelected(25f, -10f);
+            rectCad.copySelected(50f, 0f);
+            long rectSyncBefore = rectCad.sketchMirrorSyncCount();
+            long rectTransitionBefore = rectCad.sketchAuthorityTransitionCount();
+
+            String rectOffset = rectCad.offsetSelected(18f);
+            assertTrue("Rectangle Offset rejected: " + rectOffset,
+                    rectOffset.startsWith("Offset = 18.0 mm"));
+            rectCad.requireSketchMirrorParity();
+            assertEquals(rectSyncBefore, rectCad.sketchMirrorSyncCount());
+            assertEquals(rectTransitionBefore + 1L, rectCad.sketchAuthorityTransitionCount());
+            assertStableIdsMatchLegacy(rectCad);
+
+            SketchGeometry.Rect rect = rectById(rectCad, rectCad.selected.stableId());
+            assertEquals(157.0, rect.origin.xMm, EPS);
+            assertEquals(92.0, rect.origin.yMm, EPS);
+            assertEquals(636.0, Math.hypot(rect.u.xMm, rect.u.yMm), EPS);
+            assertEquals(436.0, Math.hypot(rect.v.xMm, rect.v.yMm), EPS);
+            assertEquals(636.0, rectCad.selected.bounds().width(), EPS);
+            assertEquals(436.0, rectCad.selected.bounds().height(), EPS);
             return true;
         });
     }
@@ -207,6 +233,15 @@ public final class K322OffsetAuthorityInstrumentationTest {
     private static SketchGeometry.Circle circleById(K33MirroredCadCanvasView cad, String id) {
         for (SketchGeometry.Circle circle : modelCircles(cad)) if (id.equals(circle.id())) return circle;
         throw new AssertionError("missing model circle " + id);
+    }
+
+    private static SketchGeometry.Rect rectById(K33MirroredCadCanvasView cad, String id) {
+        for (SketchEntity entity : cad.sketchMirrorEntities()) {
+            if (entity instanceof SketchGeometry.Rect && id.equals(entity.id())) {
+                return (SketchGeometry.Rect) entity;
+            }
+        }
+        throw new AssertionError("missing model rectangle " + id);
     }
 
     private static SketchGeometry.Line seedIdDifferentLine(List<SketchGeometry.Line> lines, String seedId) {
