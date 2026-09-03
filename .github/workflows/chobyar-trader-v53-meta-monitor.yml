@@ -1,0 +1,75 @@
+name: ChobYar Trader v5.3 Meta Monitor Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/status_server_v53.py'
+      - 'ops/chobyar-trader/v3/test_status_meta.py'
+      - 'ops/chobyar-trader/monitor/meta_monitor.js'
+      - 'ops/chobyar-trader/monitor/meta_monitor.css'
+      - 'ops/chobyar-trader/monitor/sw.js'
+      - 'ops/chobyar-trader/upgrade-v53-meta-monitor.sh'
+      - '.github/workflows/chobyar-trader-v53-meta-monitor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meta-monitor-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile, projection tests, shell syntax
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v53.py
+          PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_meta.py -v
+          bash -n ops/chobyar-trader/upgrade-v53-meta-monitor.sh
+
+      - name: Public meta projection remains sanitized and read-only
+        run: |
+          f=ops/chobyar-trader/v3/status_server_v53.py
+          grep -q "execution_authority': False" "$f"
+          grep -q "report_version.*6" "$f"
+          grep -q "'v5_meta'" "$f"
+          ! grep -qE "['\"]btc_qty['\"][[:space:]]*:" "$f"
+          files='ops/chobyar-trader/v3/status_server_v53.py ops/chobyar-trader/monitor/meta_monitor.js ops/chobyar-trader/monitor/meta_monitor.css'
+          ! grep -qiE 'API_KEY|APIKEY|STATUS_HMAC_SECRET|submit_order|create_order|place_order|withdraw|/api/v5/trade/|enable_live' $files
+
+      - name: Tablet UI exposes meta guards without controls
+        run: |
+          js=ops/chobyar-trader/monitor/meta_monitor.js
+          grep -q 'v5MetaPanel' "$js"
+          grep -q 'Meta Intelligence v5.2' "$js"
+          grep -q 'Data Integrity' "$js"
+          grep -q 'Uncertainty' "$js"
+          grep -q 'Execution Stress' "$js"
+          grep -q 'Regime Transition' "$js"
+          grep -q 'Fragility' "$js"
+          grep -q 'Meta Hold' "$js"
+          grep -q 'READ ONLY' "$js"
+          ! grep -qiE 'button|submit|execute|order' "$js"
+
+      - name: PWA cache advances and telemetry remains network-only
+        run: |
+          sw=ops/chobyar-trader/monitor/sw.js
+          grep -q 'chobyar-monitor-shell-v5' "$sw"
+          grep -q 'chobyar-monitor-shell-v4' "$sw"
+          grep -q 'Telemetry is network-only' "$sw"
+          grep -q 'cache: "no-store"' "$sw"
+
+      - name: Upgrade preserves v5.2 shadow, Paper risk, and Trader process
+        run: |
+          f=ops/chobyar-trader/upgrade-v53-meta-monitor.sh
+          grep -q 'shadow_runner_v52.py' "$f"
+          grep -q 'TRADING_MODE=paper' "$f"
+          grep -q 'LIVE_TRADING_ENABLED=false' "$f"
+          grep -q 'MAX_POSITION_PCT=0.25' "$f"
+          grep -q 'STOP_LOSS_PCT=0.015' "$f"
+          grep -q 'TAKE_PROFIT_PCT=0.03' "$f"
+          grep -q 'MAX_DAILY_LOSS_PCT=0.03' "$f"
+          grep -q 'systemctl restart chobyar-status.service' "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          grep -q 'SHADOW_RUNNER=V5.2_UNCHANGED' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop)[[:space:]]+chobyar-v5-shadow' "$f"

@@ -1,7 +1,8 @@
 "use strict";
 
-// Prior proven shell generation: chobyar-monitor-shell-v3. v4 only advances the cache generation.
-const CACHE = "chobyar-monitor-shell-v4";
+// Prior proven shell generations: chobyar-monitor-shell-v3 and chobyar-monitor-shell-v4.
+// v5 advances the cache generation so the tablet receives Meta Intelligence UI assets.
+const CACHE = "chobyar-monitor-shell-v5";
 const SHELL = [
   "/monitor/",
   "/monitor/style.css",
