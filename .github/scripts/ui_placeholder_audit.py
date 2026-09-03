@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Fail-closed audit for placeholder UI strings in production sources.
+"""Audit migration-placeholder UI text in production sources.
 
-The current ChobYar UI contains migration artifacts where the literal token
-"text" (including fused forms such as "Modeltext" and "textSelection") reached
-user-visible labels, dialogs, resources and status messages. This gate scans
-production Java/Kotlin string literals plus XML element text values.
+The migration artifact is the literal token "text" (including fused forms such
+as "Modeltext" and "textSelection") in user-visible production strings. The
+audit scans Java/Kotlin string literals plus XML element text values.
 
-A legitimate occurrence can be suppressed only on the same source line with
-`ui-placeholder-ok`; suppressions stay review-visible and should be rare.
+Normal PR validation uses this script as a ratchet: a candidate may never have
+more violations than its exact base. Manual validation still supports the hard
+zero check. A legitimate occurrence can be suppressed only on the same source
+line with `ui-placeholder-ok`; suppressions stay review-visible and should be
+rare.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import argparse
 import re
-import sys
 
-ROOTS = (
+RELATIVE_ROOTS = (
     Path("app/src/main/java"),
     Path("app/src/main/res"),
 )
@@ -40,7 +42,6 @@ def suspicious_value(value: str) -> bool:
     if FUSED_PREFIX.search(value):
         return True
     if FUSED_SUFFIX.search(value):
-        # Do not flag ordinary English words that merely end in "text".
         words = {w.lower() for w in re.findall(r"[A-Za-z0-9_]+", value)}
         if words.issubset({"context", "plaintext"}):
             return False
@@ -72,8 +73,8 @@ def scan_xml_file(path: Path, source: str) -> list[Violation]:
     for line_no, line in enumerate(source.splitlines(), 1):
         if ALLOW_MARKER in line:
             continue
-        # Attribute names/values can legitimately contain identifiers such as
-        # android:text; only user-visible element text is in scope here.
+        # XML attributes can legitimately contain names such as android:text;
+        # only element text is treated as user-visible copy here.
         for match in XML_TEXT.finditer(line):
             value = match.group(1).strip()
             if value and suspicious_value(value):
@@ -91,14 +92,17 @@ def scan_file(path: Path) -> list[Violation]:
     return scan_code_file(path, source)
 
 
-def discover() -> list[Violation]:
+def discover(root: Path) -> list[Violation]:
     violations: list[Violation] = []
-    for root in ROOTS:
-        if not root.exists():
+    root = root.resolve()
+    for relative_root in RELATIVE_ROOTS:
+        scan_root = root / relative_root
+        if not scan_root.exists():
             continue
-        for path in sorted(root.rglob("*")):
+        for path in sorted(scan_root.rglob("*")):
             if path.is_file() and path.suffix.lower() in EXTENSIONS:
-                violations.extend(scan_file(path))
+                for item in scan_file(path):
+                    violations.append(Violation(item.path.relative_to(root), item.line, item.literal))
     return violations
 
 
@@ -129,28 +133,41 @@ def self_test() -> None:
     print("UI placeholder audit self-test passed for code literals and XML text values.")
 
 
-def main() -> int:
-    if "--self-test" in sys.argv[1:]:
-        self_test()
-        return 0
-
-    violations = discover()
-    if not violations:
-        print("UI placeholder gate passed: zero suspicious production UI values.")
-        return 0
-
-    print("UI placeholder gate failed: suspicious production UI values remain.\n")
+def report(violations: list[Violation]) -> None:
     counts: dict[Path, int] = {}
     for item in violations:
         counts[item.path] = counts.get(item.path, 0) + 1
         print(f"{item.path}:{item.line}: {item.literal}")
-
     print("\nViolations by file:")
     for path, count in sorted(counts.items(), key=lambda x: (-x[1], str(x[0]))):
         print(f"{count:4d}  {path}")
     print(f"\nTotal suspicious UI values: {len(violations)}")
     print(f"Files affected: {len(counts)}")
-    print("Fail-closed: replace the placeholder with intentional UI copy or add a reviewed ui-placeholder-ok suppression for a genuinely legitimate occurrence.")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=".", help="repository root to scan")
+    parser.add_argument("--count-only", action="store_true", help="print only the numeric violation count and exit zero")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+
+    if args.self_test:
+        self_test()
+        return 0
+
+    violations = discover(Path(args.root))
+    if args.count_only:
+        print(len(violations))
+        return 0
+
+    if not violations:
+        print("UI placeholder hard-zero check passed: zero suspicious production UI values.")
+        return 0
+
+    print("UI placeholder hard-zero check failed: suspicious production UI values remain.\n")
+    report(violations)
+    print("Fail-closed: replace placeholders with intentional copy; reviewed suppressions are only for genuinely legitimate occurrences.")
     return 1
 
 
