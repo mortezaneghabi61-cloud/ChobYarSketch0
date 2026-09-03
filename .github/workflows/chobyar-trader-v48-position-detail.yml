@@ -66,4 +66,8 @@ jobs:
           grep -q "TAKE_PROFIT_PCT=0.03" "$f"
           grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
           grep -q 'TRADER_RESTARTED=NO' "$f"
-          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader|submit_order|create_order|place_order|enable_live|martingale|leverage' "$f"
+          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
+          if grep -v 'grep -RniE' "$f" | grep -qiE 'submit_order|create_order|place_order|enable_live|martingale|leverage'; then
+            echo 'forbidden execution/control marker in upgrade logic' >&2
+            exit 1
+          fi
