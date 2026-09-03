@@ -7,8 +7,6 @@ const SHELL = [
   "/monitor/app.js",
   "/monitor/position_detail.css",
   "/monitor/position_detail.js",
-  "/monitor/specialist_monitor.css",
-  "/monitor/specialist_monitor.js",
   "/monitor/manifest.webmanifest",
   "/monitor/icon.svg"
 ];
