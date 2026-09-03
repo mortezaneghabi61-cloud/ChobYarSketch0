@@ -1376,7 +1376,147 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         return false;
     }
 
-    @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }
+    private SketchEntity modelOffsetCopy(SketchEntity source, String id, double distance) {
+    if (source == null || id == null || id.trim().isEmpty()
+            || Double.isNaN(distance) || Double.isInfinite(distance)) return null;
+    if (source instanceof SketchGeometry.Line) {
+        SketchGeometry.Line line = (SketchGeometry.Line) source;
+        double dx = line.b.xMm - line.a.xMm;
+        double dy = line.b.yMm - line.a.yMm;
+        double length = Math.hypot(dx, dy);
+        if (!(length > 1.0e-9)) return null;
+        double ox = -dy / length * distance;
+        double oy = dx / length * distance;
+        return new SketchGeometry.Line(id,
+                new SketchGeometry.Point(line.a.xMm + ox, line.a.yMm + oy),
+                new SketchGeometry.Point(line.b.xMm + ox, line.b.yMm + oy));
+    }
+    if (source instanceof SketchGeometry.Circle) {
+        SketchGeometry.Circle circle = (SketchGeometry.Circle) source;
+        double radius = circle.radiusMm + distance;
+        if (!(radius > 1.0e-9)) return null;
+        return new SketchGeometry.Circle(id,
+                new SketchGeometry.Point(circle.center.xMm, circle.center.yMm), radius);
+    }
+    if (source instanceof SketchGeometry.Arc) {
+        SketchGeometry.Arc arc = (SketchGeometry.Arc) source;
+        double radius = arc.radiusMm + distance;
+        if (!(radius > 1.0e-9)) return null;
+        return new SketchGeometry.Arc(id,
+                new SketchGeometry.Point(arc.center.xMm, arc.center.yMm),
+                radius, arc.startDeg, arc.sweepDeg);
+    }
+    if (source instanceof SketchGeometry.Rect) {
+        SketchGeometry.Rect rect = (SketchGeometry.Rect) source;
+        double uLength = Math.hypot(rect.u.xMm, rect.u.yMm);
+        double vLength = Math.hypot(rect.v.xMm, rect.v.yMm);
+        double nextU = uLength + 2.0d * distance;
+        double nextV = vLength + 2.0d * distance;
+        if (!(uLength > 1.0e-9) || !(vLength > 1.0e-9)
+                || !(nextU > 1.0e-9) || !(nextV > 1.0e-9)) return null;
+        double su = nextU / uLength;
+        double sv = nextV / vLength;
+        SketchGeometry.Vector u = new SketchGeometry.Vector(rect.u.xMm * su, rect.u.yMm * su);
+        SketchGeometry.Vector v = new SketchGeometry.Vector(rect.v.xMm * sv, rect.v.yMm * sv);
+        double cx = rect.origin.xMm + (rect.u.xMm + rect.v.xMm) * 0.5d;
+        double cy = rect.origin.yMm + (rect.u.yMm + rect.v.yMm) * 0.5d;
+        return new SketchGeometry.Rect(id,
+                new SketchGeometry.Point(cx - (u.xMm + v.xMm) * 0.5d,
+                        cy - (u.yMm + v.yMm) * 0.5d), u, v);
+    }
+    if (source instanceof ir.chobyar.sketch.core.SketchPolygon) {
+        ir.chobyar.sketch.core.SketchPolygon polygon =
+                (ir.chobyar.sketch.core.SketchPolygon) source;
+        List<SketchGeometry.Point> vertices = polygon.vertices();
+        if (vertices.isEmpty()) return null;
+        double cx = 0.0d, cy = 0.0d;
+        for (SketchGeometry.Point point : vertices) {
+            cx += point.xMm;
+            cy += point.yMm;
+        }
+        cx /= vertices.size();
+        cy /= vertices.size();
+        SketchGeometry.Point first = vertices.get(0);
+        double radius = Math.hypot(first.xMm - cx, first.yMm - cy);
+        double nextRadius = radius + distance;
+        if (!(radius > 1.0e-9) || !(nextRadius > 1.0e-9)) return null;
+        double scale = nextRadius / radius;
+        ArrayList<SketchGeometry.Point> scaled = new ArrayList<>(vertices.size());
+        for (SketchGeometry.Point point : vertices) {
+            scaled.add(new SketchGeometry.Point(
+                    cx + (point.xMm - cx) * scale,
+                    cy + (point.yMm - cy) * scale));
+        }
+        return new ir.chobyar.sketch.core.SketchPolygon(id, scaled);
+    }
+    return null;
+}
+
+@Override public String offsetSelected(float distance) {
+    if (Float.isNaN(distance) || Float.isInfinite(distance)) return "Offset distance is invalid";
+    if (!prepareTransactionalSelection("offset-prepare")) {
+        return lastMirrorError == null || lastMirrorError.isEmpty()
+                ? "Select geometry first"
+                : "Offset unavailable: " + lastMirrorError;
+    }
+    if (sketchDocument.selectionIds().size() <= 1) {
+        if (selected == null) return "Select geometry first";
+        String selectedId = selected.stableId();
+        if (selectedId == null || selectedId.trim().isEmpty()) {
+            return "Offset unavailable: selected geometry has no stable ID";
+        }
+        sketchDocument.selectOnly(selectedId);
+    }
+
+    ArrayList<SketchEntity> copies = new ArrayList<>();
+    ArrayList<String> copyIds = new ArrayList<>();
+    try {
+        for (String sourceId : sketchDocument.selectionIds()) {
+            SketchEntity source = sketchDocument.entity(sourceId);
+            String copyId = UUID.randomUUID().toString();
+            SketchEntity copy = modelOffsetCopy(source, copyId, distance);
+            if (copy == null) continue;
+            if (!copy.isValid()) {
+                lastMirrorError = "offset-plan: invalid generated geometry";
+                return "Offset could not create valid copies";
+            }
+            copyIds.add(copyId);
+            copies.add(copy);
+        }
+    } catch (RuntimeException e) {
+        lastMirrorError = "offset-plan: "
+                + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        return "Offset could not create valid copies";
+    }
+    if (copies.isEmpty()) return "Offset is unavailable for selected geometry";
+
+    try {
+        sketchDocument.addAll(copies);
+        sketchDocument.setSelection(new LinkedHashSet<>(copyIds));
+        int legacyCountBefore = entities.size();
+        String out = super.offsetSelected(distance);
+        if (entities.size() != legacyCountBefore + copies.size()) {
+            finishTransactionalMutation("offset-projection-count");
+            return "Offset rollback: projection failed";
+        }
+        for (int i = 0; i < copyIds.size(); i++) {
+            selected = entities.get(legacyCountBefore + i);
+            if (!restoreLegacySelectedStableId(copyIds.get(i))) {
+                finishTransactionalMutation("offset-id-injection");
+                return "Offset rollback: stable-id projection failed";
+            }
+        }
+        restoreLegacySelectionFromModel();
+        if (!finishTransactionalMutation("offset")) return "Offset rollback: parity failed";
+        invalidate();
+        return out;
+    } catch (RuntimeException e) {
+        lastMirrorError = "offset-projection: "
+                + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        finishTransactionalMutation("offset-exception");
+        return "Offset rollback: projection failed";
+    }
+}
     @Override public String rotateSelected(float deg) {
         if (!selectedHasPointFixed()) { String out=super.rotateSelected(deg); syncMirror("rotate"); return out; }
         if (!prepareTransactionalSelection("rotate-point-fixed-prepare")) return "Select geometry first";
