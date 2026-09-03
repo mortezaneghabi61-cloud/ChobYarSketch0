@@ -185,4 +185,11 @@
     <string name="circle_diameter_hint">Circle diameter; example: 80</string>
     <string name="polygon_radius_hint">Polygon radius; example: 80</string>
     <string name="exact_dimension_single_selection_required">Exact Dimension requires exactly one selected shape.</string>
+
+    <string name="shapr_lab_already_created">Action Mount LAB already created</string>
+    <string name="shapr_lab_created_toast">LAB created: Angle, Offset, Symmetry, Equal, Midpoint, Tangent, and Lock are ready.</string>
+    <string name="shapr_lab_chip_build">LAB • Build Action Mount</string>
+    <string name="shapr_lab_menu_created">✓ Action Mount LAB created</string>
+    <string name="shapr_lab_equal">= Equal</string>
+    <string name="shapr_lab_message">Build the Action Mount regression sketch, then use the tools below to validate constraint behavior.</string>
 </resources>
