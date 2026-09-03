@@ -1,0 +1,31 @@
+name: ChobYar Trader v4.3 Strategy Research
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/research_strategy.py'
+      - '.github/workflows/chobyar-trader-v43-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  walk-forward:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install research dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet httpx
+      - name: Compile research-only evaluator
+        run: python3 -m py_compile ops/chobyar-trader/v4/research_strategy.py ops/chobyar-trader/v4/backtest.py
+      - name: Verify approved risk remains unchanged
+        run: |
+          grep -q '^POSITION = 0.25$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^STOP = 0.015$' ops/chobyar-trader/v4/backtest.py
+          grep -q '^TAKE = 0.03$' ops/chobyar-trader/v4/backtest.py
+          ! grep -qiE 'leverage|martingale|all[-_ ]?in' ops/chobyar-trader/v4/research_strategy.py
+      - name: Run 90-day Wallex walk-forward research
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 ops/chobyar-trader/v4/research_strategy.py
