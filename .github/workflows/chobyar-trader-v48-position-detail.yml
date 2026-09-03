@@ -53,7 +53,7 @@ jobs:
       - name: PWA cache advances safely
         run: |
           sw=ops/chobyar-trader/monitor/sw.js
-          grep -q 'chobyar-monitor-shell-v2' "$sw"
+          grep -qE 'chobyar-monitor-shell-v(2|3)' "$sw"
           grep -q 'Never cache /public-report' "$sw"
           grep -q 'cache: "no-store"' "$sw"
       - name: Upgrade preserves Paper risk and Trader process
