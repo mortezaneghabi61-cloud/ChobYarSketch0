@@ -14,15 +14,17 @@ FEE = 0.002
 POSITION = 0.25
 STOP = 0.015
 TAKE = 0.03
+DEFAULT_LIMIT = 24 * 90
+WALLEX_CHUNK_HOURS = 24 * 14
 
 
-def parse_wallex(payload: dict[str, Any], limit: int = 720) -> list[list[float]]:
+def parse_wallex(payload: dict[str, Any], limit: int | None = None) -> list[list[float]]:
     if payload.get("s") != "ok":
         raise RuntimeError("Wallex public OHLC rejected")
     columns = [payload.get(key) or [] for key in ("t", "o", "h", "l", "c", "v")]
     size = min((len(column) for column in columns), default=0)
-    if size < 80:
-        raise RuntimeError("Wallex public OHLC returned insufficient candles")
+    if size <= 0:
+        raise RuntimeError("Wallex public OHLC returned no candles")
     rows = [
         [
             float(columns[0][i]),
@@ -34,56 +36,55 @@ def parse_wallex(payload: dict[str, Any], limit: int = 720) -> list[list[float]]
         ]
         for i in range(size)
     ]
-    rows.sort(key=lambda row: row[0])
-    return rows[-limit:]
+    deduped = {int(row[0]): row for row in rows}
+    ordered = [deduped[key] for key in sorted(deduped)]
+    return ordered[-limit:] if limit is not None else ordered
 
 
-def fetch_wallex(limit: int = 720) -> list[list[float]]:
+def merge_rows(chunks: list[list[list[float]]], limit: int) -> list[list[float]]:
+    by_ts: dict[int, list[float]] = {}
+    for chunk in chunks:
+        for row in chunk:
+            by_ts[int(row[0])] = row
+    ordered = [by_ts[key] for key in sorted(by_ts)]
+    return ordered[-limit:]
+
+
+def fetch_wallex(limit: int = DEFAULT_LIMIT) -> list[list[float]]:
     import httpx
 
     now = int(time.time())
-    # Ask for extra history because exchanges may omit empty candles.
-    start = now - max(limit * 3600 * 2, 35 * 24 * 3600)
-    response = httpx.get(
-        "https://api.wallex.ir/v1/udf/history",
-        params={"symbol": "BTCUSDT", "resolution": "60", "from": start, "to": now},
-        timeout=20,
-        headers={"User-Agent": "ChobYar-Trader/4-paper-backtest"},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise RuntimeError("Wallex public OHLC malformed")
-    return parse_wallex(payload, limit)
+    # Request 72 extra hours, then trim to the exact target. Chunking avoids
+    # silently accepting an exchange-side row cap as a complete history.
+    start = now - (limit + 72) * 3600
+    chunks: list[list[list[float]]] = []
+    cursor = start
+    span = WALLEX_CHUNK_HOURS * 3600
+    while cursor < now:
+        end = min(cursor + span, now)
+        response = httpx.get(
+            "https://api.wallex.ir/v1/udf/history",
+            params={"symbol": "BTCUSDT", "resolution": "60", "from": cursor, "to": end},
+            timeout=20,
+            headers={"User-Agent": "ChobYar-Trader/4-paper-backtest"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("Wallex public OHLC malformed")
+        chunks.append(parse_wallex(payload))
+        if end >= now:
+            break
+        cursor = end
+    rows = merge_rows(chunks, limit)
+    validate(rows)
+    return rows
 
 
-def fetch_kraken(limit: int = 720) -> list[list[float]]:
-    import httpx
-
-    response = httpx.get(
-        "https://api.kraken.com/0/public/OHLC",
-        params={"pair": "XBTUSDT", "interval": 60},
-        timeout=20,
-        headers={"User-Agent": "ChobYar-Trader/4-paper-backtest"},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if payload.get("error"):
-        raise RuntimeError("Kraken public OHLC rejected")
-    rows = next(value for key, value in payload["result"].items() if key != "last")
-    return [[float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[6])] for row in rows[-limit:]]
-
-
-def fetch_history(limit: int = 720) -> tuple[list[list[float]], str]:
-    failures: list[str] = []
-    for source, loader in (("wallex_public_ohlc", fetch_wallex), ("kraken_public_ohlc", fetch_kraken)):
-        try:
-            rows = loader(limit)
-            validate(rows)
-            return rows, source
-        except Exception as exc:
-            failures.append(f"{source}:{type(exc).__name__}")
-    raise RuntimeError("historical public market data unavailable: " + ",".join(failures))
+def fetch_history(limit: int = DEFAULT_LIMIT) -> tuple[list[list[float]], str]:
+    # Fail closed on the same Iranian market used by the paper engine. Do not
+    # silently substitute another exchange when Wallex history is unavailable.
+    return fetch_wallex(limit), "wallex_public_ohlc_chunked"
 
 
 def validate(rows: list[list[float]]) -> None:
@@ -98,6 +99,22 @@ def validate(rows: list[list[float]]) -> None:
         previous = row[0]
 
 
+def history_quality(rows: list[list[float]]) -> dict[str, Any]:
+    gaps = []
+    for previous, current in zip(rows, rows[1:]):
+        delta = float(current[0]) - float(previous[0])
+        if delta > 5400:
+            gaps.append(delta)
+    duration = max(0.0, (rows[-1][0] - rows[0][0]) / 86400.0)
+    return {
+        "history_start_ts": int(rows[0][0]),
+        "history_end_ts": int(rows[-1][0]),
+        "history_days": duration,
+        "gap_count_over_90m": len(gaps),
+        "max_gap_hours": (max(gaps) / 3600.0) if gaps else 1.0,
+    }
+
+
 def simulate(rows: list[list[float]], source: str = "deterministic_input") -> dict[str, Any]:
     validate(rows)
     cash, qty, entry, entry_fee = 10.0, 0.0, None, 0.0
@@ -105,7 +122,9 @@ def simulate(rows: list[list[float]], source: str = "deterministic_input") -> di
     closed = wins = losses = 0
     peak = 10.0
     max_dd = 0.0
-    curve = []
+    curve: list[list[float]] = []
+    trade_pnls: list[float] = []
+    bars_in_market = 0
     pending = 0
     for i, row in enumerate(rows):
         ts, opened, high, low, close, _volume = row
@@ -120,6 +139,8 @@ def simulate(rows: list[list[float]], source: str = "deterministic_input") -> di
             pending = 0
         if qty > 0 and entry:
             exit_price = None
+            # Conservative intrabar ordering: if both levels are touched in the
+            # same hourly candle, assume the stop was hit first.
             if low <= entry * (1 - STOP):
                 exit_price = entry * (1 - STOP)
             elif high >= entry * (1 + TAKE):
@@ -130,6 +151,7 @@ def simulate(rows: list[list[float]], source: str = "deterministic_input") -> di
                 cash += qty * exit_price - exit_fee
                 fees += exit_fee
                 realized += pnl
+                trade_pnls.append(pnl)
                 closed += 1
                 if pnl > 0:
                     wins += 1
@@ -140,7 +162,10 @@ def simulate(rows: list[list[float]], source: str = "deterministic_input") -> di
                 qty = 0
                 entry = None
                 entry_fee = 0
-        equity = cash + qty * close
+        if qty > 0:
+            bars_in_market += 1
+        # Conservative mark-to-market includes the simulated future exit fee.
+        equity = cash + qty * close * (1 - FEE)
         peak = max(peak, equity)
         dd = (peak - equity) / peak
         max_dd = max(max_dd, dd)
@@ -149,28 +174,48 @@ def simulate(rows: list[list[float]], source: str = "deterministic_input") -> di
             completed = [r[4] for r in rows[i - 20:i]]
             fast, slow = statistics.fmean(completed[-5:]), statistics.fmean(completed)
             pending = 1 if fast > slow * 1.001 else 0
-    final = cash + qty * rows[-1][4]
-    buy_hold = 10.0 * (rows[-1][4] / rows[0][1])
+
+    final = cash + qty * rows[-1][4] * (1 - FEE)
+    benchmark_notional = 10.0 / (1 + FEE)
+    benchmark_qty = benchmark_notional / rows[0][1]
+    buy_hold = benchmark_qty * rows[-1][4] * (1 - FEE)
+    quality = history_quality(rows)
+    avg_trade = statistics.fmean(trade_pnls) if trade_pnls else None
+    strategy_return = final / 10.0 - 1
+    benchmark_return = buy_hold / 10.0 - 1
+
     return {
         "ok": True,
         "source": source,
+        "strategy_model": "price_only_proxy_v2",
+        "full_fidelity_multiagent": False,
+        "coverage": ["wallex_hourly_ohlc", "fees", "position_sizing", "stop_loss", "take_profit"],
+        "missing_historical_features": ["order_book", "tape_order_flow", "global_context"],
         "candles": len(rows),
+        **quality,
         "initial_equity": 10.0,
         "final_equity": final,
         "pnl": final - 10.0,
-        "return_pct": final / 10.0 - 1,
+        "return_pct": strategy_return,
         "benchmark_buy_hold_equity": buy_hold,
-        "benchmark_buy_hold_return_pct": buy_hold / 10.0 - 1,
+        "benchmark_buy_hold_return_pct": benchmark_return,
+        "return_vs_buy_hold_pct": strategy_return - benchmark_return,
         "closed_trades": closed,
         "wins": wins,
         "losses": losses,
         "win_rate": wins / closed if closed else None,
+        "average_closed_trade_pnl": avg_trade,
+        "expectancy_per_closed_trade": avg_trade,
+        "closed_trades_per_30d": (closed / quality["history_days"] * 30.0) if quality["history_days"] > 0 else None,
         "max_drawdown_pct": max_dd,
         "profit_factor": gross_profit / gross_loss if gross_loss else ("inf" if gross_profit else None),
         "fees_paid": fees,
+        "exposure_pct": bars_in_market / len(rows),
+        "open_position_at_end": qty > 0,
         "stop_loss_pct": STOP,
         "take_profit_pct": TAKE,
         "position_pct": POSITION,
+        "intrabar_policy": "stop_first_if_stop_and_take_hit_same_candle",
         "lookahead_policy": "close[i-1] signal; open[i] execution",
         "equity_curve": curve,
     }
@@ -180,12 +225,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path)
     parser.add_argument("--output", type=Path, default=Path("/opt/chobyar-trader/state/backtest_latest.json"))
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     args = parser.parse_args()
+    if args.limit < 80:
+        raise SystemExit("backtest limit must be at least 80 candles")
     if args.input:
         rows = json.loads(args.input.read_text(encoding="utf-8"))
         source = "input_file"
     else:
-        rows, source = fetch_history()
+        rows, source = fetch_history(args.limit)
     atomic_json(args.output, simulate(rows, source))
 
 
