@@ -1,0 +1,64 @@
+name: ChobYar Trader v5.2 Meta Intelligence Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/meta_intelligence.py'
+      - 'ops/chobyar-trader/v5/shadow_runner_v52.py'
+      - 'ops/chobyar-trader/v5/test_meta_intelligence.py'
+      - 'ops/chobyar-trader/upgrade-v52-meta-intelligence.sh'
+      - '.github/workflows/chobyar-trader-v52-meta-intelligence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meta-intelligence-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and unit tests
+        run: |
+          PYTHONPATH=ops/chobyar-trader/v5 python3 -m py_compile \
+            ops/chobyar-trader/v5/meta_intelligence.py \
+            ops/chobyar-trader/v5/shadow_runner_v52.py
+          PYTHONPATH=ops/chobyar-trader/v5 python3 ops/chobyar-trader/v5/test_meta_intelligence.py -v
+          bash -n ops/chobyar-trader/upgrade-v52-meta-intelligence.sh
+      - name: Meta layer is downgrade-only
+        run: |
+          f=ops/chobyar-trader/v5/meta_intelligence.py
+          grep -q 'final_action = "WAIT" if holds else candidate_action' "$f"
+          grep -q 'never_inflates_raw_confidence' "$f"
+          grep -q 'execution_authority.*False' "$f"
+          grep -q 'automatic_promotion_enabled.*False' "$f"
+          grep -q 'automatic_reweighting_enabled.*False' "$f"
+          grep -q 'foreign_execution_enabled.*False' "$f"
+          grep -q 'geo_bypass_supported.*False' "$f"
+      - name: Six professional guards are present
+        run: |
+          f=ops/chobyar-trader/v5/meta_intelligence.py
+          grep -q 'calibrate_specialists' "$f"
+          grep -q 'data_integrity' "$f"
+          grep -q 'regime_transition_risk' "$f"
+          grep -q 'execution_stress' "$f"
+          grep -q 'epistemic_uncertainty' "$f"
+          grep -q 'decision_fragility' "$f"
+      - name: No credential or execution surface
+        run: |
+          files='ops/chobyar-trader/v5/meta_intelligence.py ops/chobyar-trader/v5/shadow_runner_v52.py'
+          ! grep -qiE 'API_KEY|APIKEY|STATUS_HMAC_SECRET|submit_order|create_order|place_order|withdraw|enable_live|/api/v5/trade/|martingale|leverage' $files
+      - name: Installer preserves approved Paper risk and processes
+        run: |
+          f=ops/chobyar-trader/upgrade-v52-meta-intelligence.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          grep -q 'STATUS_RESTARTED=NO' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-status' "$f"
+          grep -q '! grep -q .EnvironmentFile. "$SHADOW_UNIT"' "$f"
