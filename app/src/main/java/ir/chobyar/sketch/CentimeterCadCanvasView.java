@@ -100,11 +100,11 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
 
     @Override
     public String applySelectedDimension(String raw) {
-        if (raw == null || raw.trim().isEmpty()) return "text text text";
+        if (raw == null || raw.trim().isEmpty()) return getContext().getString(R.string.exact_dimension_value_required);
         try {
             return super.applySelectedDimension(raw);
         } catch (Exception e) {
-            return "Dimension text text mm text text text";
+            return getContext().getString(R.string.exact_dimension_invalid_mm);
         }
     }
 
@@ -126,9 +126,9 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         String type = e.getClass().getSimpleName();
         if ("LineEntity".equals(type)) return "Only Length Line; Example: 800";
         if ("RectEntity".equals(type)) return "Width and Height; Example: 600 400";
-        if ("CircleEntity".equals(type)) return "text Diameter Circle; text: 80";
+        if ("CircleEntity".equals(type)) return getContext().getString(R.string.circle_diameter_hint);
         if ("ArcEntity".equals(type)) return "Radius Arc only; Example: 50";
-        if ("PolygonEntity".equals(type)) return "text Radius Polygon; text: 80";
+        if ("PolygonEntity".equals(type)) return getContext().getString(R.string.polygon_radius_hint);
         return "No numerical editing is defined for this figure";
     }
 
@@ -136,7 +136,7 @@ public class CentimeterCadCanvasView extends AdvancedCadCanvasView {
         Object e = singleSelected();
         if (e == null) {
             return selectionCount() > 1
-                    ? "text Exact Dimension text text text text Selection text."
+                    ? getContext().getString(R.string.exact_dimension_single_selection_required)
                     : "Select geometry first.";
         }
         return selectedInfo() + "\n\n" + exactDimensionHint() + " mm";
