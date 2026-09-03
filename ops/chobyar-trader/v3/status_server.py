@@ -32,22 +32,27 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def read_env_all() -> dict[str, str]:
+def read_env_keys(keys: set[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     try:
         for raw in ENV_FILE.read_text(encoding='utf-8').splitlines():
             if '=' not in raw or raw.lstrip().startswith('#'):
                 continue
             key, value = raw.split('=', 1)
-            out[key.strip()] = value.strip()
+            key = key.strip()
+            if key in keys:
+                out[key] = value.strip()
     except Exception:
         pass
     return out
 
 
 def read_safe_env() -> dict[str, str]:
-    env = read_env_all()
-    return {k: env[k] for k in SAFE_ENV_KEYS if k in env}
+    return read_env_keys(SAFE_ENV_KEYS)
+
+
+def read_auth_env() -> dict[str, str]:
+    return read_env_keys({'STATUS_REQUIRE_AUTH', 'STATUS_HMAC_SECRET', 'STATUS_PORT'})
 
 
 def read_json(path: Path) -> dict:
@@ -285,7 +290,7 @@ def prune_nonces() -> None:
 
 
 def auth_ok(handler: BaseHTTPRequestHandler, path: str) -> bool:
-    env = read_env_all()
+    env = read_auth_env()
     if env.get('STATUS_REQUIRE_AUTH', 'true').lower() != 'true':
         return False
     secret = env.get('STATUS_HMAC_SECRET', '')
@@ -346,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
         if not auth_ok(self, path):
             self.send_json(401, {'ok': False, 'error': 'authentication_required'})
             return
-        secret = read_env_all().get('STATUS_HMAC_SECRET', '')
+        secret = read_auth_env().get('STATUS_HMAC_SECRET', '')
         self.send_json(200, payload(), response_secret=secret)
 
     def log_message(self, fmt: str, *args) -> None:
@@ -354,6 +359,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    env = read_env_all()
+    env = read_auth_env()
     port = int(env.get('STATUS_PORT', '8787'))
     ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()
