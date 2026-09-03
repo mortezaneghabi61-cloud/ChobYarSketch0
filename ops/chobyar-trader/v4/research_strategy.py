@@ -20,16 +20,17 @@ class Variant:
     regime_slope_window: int = 0
     return_window: int = 0
     min_return: float = 0.0
+    fresh_trigger: bool = False
 
 
-# Small, predefined regime set. No parameter sweep is performed.
+# Research round 3: prevent repeated re-entry while the same signal stays high.
 VARIANTS = (
     Variant("baseline_v2"),
-    Variant("regime50_200", regime_mid=50, regime_long=200),
-    Variant("regime20_50_200", regime_short=20, regime_mid=50, regime_long=200),
-    Variant("regime100_slope24", regime_long=100, regime_slope_window=24),
-    Variant("regime200_slope24", regime_long=200, regime_slope_window=24),
-    Variant("regime50_200_weekly1", regime_mid=50, regime_long=200, return_window=168, min_return=0.01),
+    Variant("baseline_fresh", fresh_trigger=True),
+    Variant("regime50_200_fresh", regime_mid=50, regime_long=200, fresh_trigger=True),
+    Variant("regime20_50_200_fresh", regime_short=20, regime_mid=50, regime_long=200, fresh_trigger=True),
+    Variant("regime100_slope24_fresh", regime_long=100, regime_slope_window=24, fresh_trigger=True),
+    Variant("regime20_50_200_weekly1_fresh", regime_short=20, regime_mid=50, regime_long=200, return_window=168, min_return=0.01, fresh_trigger=True),
 )
 
 
@@ -87,6 +88,7 @@ def simulate_variant(rows: list[list[float]], variant: Variant) -> dict[str, Any
     trade_pnls: list[float] = []
     bars_in_market = 0
     pending = False
+    previous_signal = False
 
     for i, row in enumerate(rows):
         _ts, opened, high, low, close, _volume = row
@@ -129,10 +131,14 @@ def simulate_variant(rows: list[list[float]], variant: Variant) -> dict[str, Any
         peak = max(peak, equity)
         max_dd = max(max_dd, (peak - equity) / peak if peak > 0 else 0.0)
 
-        if qty == 0 and not pending:
+        current_signal = entry_signal(rows[: i + 1], variant)
+        trigger = current_signal and (not previous_signal if variant.fresh_trigger else True)
+        if qty == 0 and not pending and trigger:
             # Signal uses candles through i only; any order executes at i+1 open.
-            if entry_signal(rows[: i + 1], variant):
-                pending = True
+            pending = True
+        # Always update while in-position too. A stopped trade cannot re-enter until
+        # the complete signal first turns false and then rises again.
+        previous_signal = current_signal
 
     final = cash + qty * rows[-1][4] * (1 - FEE)
     avg = statistics.fmean(trade_pnls) if trade_pnls else None
@@ -208,7 +214,7 @@ def main() -> None:
         "ok": True,
         "source": source,
         "research_only": True,
-        "research_round": "regime_filters_v1",
+        "research_round": "fresh_crossover_reentry_v1",
         "risk_unchanged": {
             "position_pct": POSITION,
             "stop_loss_pct": STOP,
@@ -219,9 +225,10 @@ def main() -> None:
             "candles": len(rows),
             "train_hours": len(train),
             "holdout_hours": len(holdout),
-            "selection_policy": "small predefined regime set; train and holdout positive; full >=20 trades; holdout >=5 trades; holdout DD <= baseline holdout and <=8%",
+            "selection_policy": "small predefined fresh-trigger set; train and holdout positive; full >=20 trades; holdout >=5 trades; holdout DD <= baseline holdout and <=8%",
             "lookahead_policy": "signal through candle i close; execution at candle i+1 open",
             "intrabar_policy": "stop_first_if_stop_and_take_hit_same_candle",
+            "reentry_policy": "fresh-trigger variants require false->true signal transition before a new entry",
         },
         "baseline_holdout": baseline_holdout,
         "results": results,
