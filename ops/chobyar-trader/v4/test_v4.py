@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from backtest import simulate
+from backtest import parse_wallex, simulate
 from common import SecretFreeAudit
 
 
@@ -40,6 +40,22 @@ class BacktestTests(unittest.TestCase):
     def test_rejects_unsorted_candles(self) -> None:
         rows = candles(); rows[2][0] = rows[1][0]
         with self.assertRaises(ValueError): simulate(rows)
+
+    def test_wallex_udf_parser(self) -> None:
+        rows = candles(100)
+        payload = {
+            "s": "ok",
+            "t": [int(row[0]) for row in rows],
+            "o": [str(row[1]) for row in rows],
+            "h": [str(row[2]) for row in rows],
+            "l": [str(row[3]) for row in rows],
+            "c": [str(row[4]) for row in rows],
+            "v": [str(row[5]) for row in rows],
+        }
+        parsed = parse_wallex(payload)
+        self.assertEqual(len(parsed), 100)
+        self.assertEqual(parsed[0][0], rows[0][0])
+        self.assertEqual(parsed[-1][4], rows[-1][4])
 
 
 class AuditTests(unittest.TestCase):
