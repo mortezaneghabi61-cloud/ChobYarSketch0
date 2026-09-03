@@ -1,0 +1,200 @@
+name: K3.22 Branch Patch
+
+on:
+  push:
+    branches:
+      - k3-22-offset-authority
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact event revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Verify exact staging revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Apply fail-closed K3.22 Offset production patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
+          text = path.read_text()
+          old = '    @Override public String offsetSelected(float distance) { String out=super.offsetSelected(distance); syncMirror("offset"); return out; }'
+          new = '''    private SketchEntity modelOffsetCopy(SketchEntity source, String id, double distance) {
+              if (source == null || id == null || id.trim().isEmpty()
+                      || Double.isNaN(distance) || Double.isInfinite(distance)) return null;
+              if (source instanceof SketchGeometry.Line) {
+                  SketchGeometry.Line line = (SketchGeometry.Line) source;
+                  double dx = line.b.xMm - line.a.xMm;
+                  double dy = line.b.yMm - line.a.yMm;
+                  double length = Math.hypot(dx, dy);
+                  if (!(length > 1.0e-9)) return null;
+                  double ox = -dy / length * distance;
+                  double oy = dx / length * distance;
+                  return new SketchGeometry.Line(id,
+                          new SketchGeometry.Point(line.a.xMm + ox, line.a.yMm + oy),
+                          new SketchGeometry.Point(line.b.xMm + ox, line.b.yMm + oy));
+              }
+              if (source instanceof SketchGeometry.Circle) {
+                  SketchGeometry.Circle circle = (SketchGeometry.Circle) source;
+                  double radius = circle.radiusMm + distance;
+                  if (!(radius > 1.0e-9)) return null;
+                  return new SketchGeometry.Circle(id,
+                          new SketchGeometry.Point(circle.center.xMm, circle.center.yMm), radius);
+              }
+              if (source instanceof SketchGeometry.Arc) {
+                  SketchGeometry.Arc arc = (SketchGeometry.Arc) source;
+                  double radius = arc.radiusMm + distance;
+                  if (!(radius > 1.0e-9)) return null;
+                  return new SketchGeometry.Arc(id,
+                          new SketchGeometry.Point(arc.center.xMm, arc.center.yMm),
+                          radius, arc.startDeg, arc.sweepDeg);
+              }
+              if (source instanceof SketchGeometry.Rect) {
+                  SketchGeometry.Rect rect = (SketchGeometry.Rect) source;
+                  double uLength = Math.hypot(rect.u.xMm, rect.u.yMm);
+                  double vLength = Math.hypot(rect.v.xMm, rect.v.yMm);
+                  double nextU = uLength + 2.0d * distance;
+                  double nextV = vLength + 2.0d * distance;
+                  if (!(uLength > 1.0e-9) || !(vLength > 1.0e-9)
+                          || !(nextU > 1.0e-9) || !(nextV > 1.0e-9)) return null;
+                  double su = nextU / uLength;
+                  double sv = nextV / vLength;
+                  SketchGeometry.Vector u = new SketchGeometry.Vector(rect.u.xMm * su, rect.u.yMm * su);
+                  SketchGeometry.Vector v = new SketchGeometry.Vector(rect.v.xMm * sv, rect.v.yMm * sv);
+                  double cx = rect.origin.xMm + (rect.u.xMm + rect.v.xMm) * 0.5d;
+                  double cy = rect.origin.yMm + (rect.u.yMm + rect.v.yMm) * 0.5d;
+                  return new SketchGeometry.Rect(id,
+                          new SketchGeometry.Point(cx - (u.xMm + v.xMm) * 0.5d,
+                                  cy - (u.yMm + v.yMm) * 0.5d), u, v);
+              }
+              if (source instanceof ir.chobyar.sketch.core.SketchPolygon) {
+                  ir.chobyar.sketch.core.SketchPolygon polygon =
+                          (ir.chobyar.sketch.core.SketchPolygon) source;
+                  List<SketchGeometry.Point> vertices = polygon.vertices();
+                  if (vertices.isEmpty()) return null;
+                  double cx = 0.0d, cy = 0.0d;
+                  for (SketchGeometry.Point point : vertices) {
+                      cx += point.xMm;
+                      cy += point.yMm;
+                  }
+                  cx /= vertices.size();
+                  cy /= vertices.size();
+                  SketchGeometry.Point first = vertices.get(0);
+                  double radius = Math.hypot(first.xMm - cx, first.yMm - cy);
+                  double nextRadius = radius + distance;
+                  if (!(radius > 1.0e-9) || !(nextRadius > 1.0e-9)) return null;
+                  double scale = nextRadius / radius;
+                  ArrayList<SketchGeometry.Point> scaled = new ArrayList<>(vertices.size());
+                  for (SketchGeometry.Point point : vertices) {
+                      scaled.add(new SketchGeometry.Point(
+                              cx + (point.xMm - cx) * scale,
+                              cy + (point.yMm - cy) * scale));
+                  }
+                  return new ir.chobyar.sketch.core.SketchPolygon(id, scaled);
+              }
+              return null;
+          }
+
+          @Override public String offsetSelected(float distance) {
+              if (Float.isNaN(distance) || Float.isInfinite(distance)) return "Offset distance is invalid";
+              if (!prepareTransactionalSelection("offset-prepare")) {
+                  return lastMirrorError == null || lastMirrorError.isEmpty()
+                          ? "Select geometry first"
+                          : "Offset unavailable: " + lastMirrorError;
+              }
+
+              ArrayList<SketchEntity> copies = new ArrayList<>();
+              ArrayList<String> copyIds = new ArrayList<>();
+              try {
+                  for (String sourceId : sketchDocument.selectionIds()) {
+                      SketchEntity source = sketchDocument.entity(sourceId);
+                      String copyId = UUID.randomUUID().toString();
+                      SketchEntity copy = modelOffsetCopy(source, copyId, distance);
+                      if (copy == null) continue;
+                      if (!copy.isValid()) {
+                          lastMirrorError = "offset-plan: invalid generated geometry";
+                          return "Offset could not create valid copies";
+                      }
+                      copyIds.add(copyId);
+                      copies.add(copy);
+                  }
+              } catch (RuntimeException e) {
+                  lastMirrorError = "offset-plan: "
+                          + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                  return "Offset could not create valid copies";
+              }
+              if (copies.isEmpty()) return "Offset is unavailable for selected geometry";
+
+              try {
+                  sketchDocument.addAll(copies);
+                  sketchDocument.setSelection(new LinkedHashSet<>(copyIds));
+                  int legacyCountBefore = entities.size();
+                  String out = super.offsetSelected(distance);
+                  if (entities.size() != legacyCountBefore + copies.size()) {
+                      finishTransactionalMutation("offset-projection-count");
+                      return "Offset rollback: projection failed";
+                  }
+                  for (int i = 0; i < copyIds.size(); i++) {
+                      selected = entities.get(legacyCountBefore + i);
+                      if (!restoreLegacySelectedStableId(copyIds.get(i))) {
+                          finishTransactionalMutation("offset-id-injection");
+                          return "Offset rollback: stable-id projection failed";
+                      }
+                  }
+                  restoreLegacySelectionFromModel();
+                  if (!finishTransactionalMutation("offset")) return "Offset rollback: parity failed";
+                  invalidate();
+                  return out;
+              } catch (RuntimeException e) {
+                  lastMirrorError = "offset-projection: "
+                          + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                  finishTransactionalMutation("offset-exception");
+                  return "Offset rollback: projection failed";
+              }
+          }'''
+
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'FAIL-CLOSED: expected one Offset authority seam, found {count}')
+          path.write_text(text.replace(old, new, 1))
+
+          workflow = Path('.github/workflows/k322-branch-patch.yml')
+          if not workflow.exists():
+              raise SystemExit('FAIL-CLOSED: staging workflow missing')
+          workflow.unlink()
+          PY
+
+          mapfile -t changed < <(git diff --name-only)
+          printf 'changed=%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | grep -Fxq '.github/workflows/k322-branch-patch.yml'
+          printf '%s\n' "${changed[@]}" | grep -Fxq 'app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java'
+          git diff --check
+
+      - name: Commit branch-only patch if head is still exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin k3-22-offset-authority --depth=1
+          test "$(git rev-parse origin/k3-22-offset-authority)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java .github/workflows/k322-branch-patch.yml
+          git commit -m 'K3.22: make Offset model-owned and transactional'
+          git push origin HEAD:k3-22-offset-authority
