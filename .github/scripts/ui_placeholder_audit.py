@@ -3,8 +3,8 @@
 
 The current ChobYar UI contains migration artifacts where the literal token
 "text" (including fused forms such as "Modeltext" and "textSelection") reached
-user-visible labels, dialogs and status messages. This gate deliberately scans
-only production sources/resources and reports every suspicious string literal.
+user-visible labels, dialogs, resources and status messages. This gate scans
+production Java/Kotlin string literals plus XML element text values.
 
 A legitimate occurrence can be suppressed only on the same source line with
 `ui-placeholder-ok`; suppressions stay review-visible and should be rare.
@@ -23,6 +23,7 @@ ROOTS = (
 EXTENSIONS = {".java", ".kt", ".xml"}
 ALLOW_MARKER = "ui-placeholder-ok"
 STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
+XML_TEXT = re.compile(r">([^<]+)<")
 FUSED_PREFIX = re.compile(r"\btext[A-Z][A-Za-z0-9_]*")
 FUSED_SUFFIX = re.compile(r"[A-Za-z0-9_]+text\b", re.IGNORECASE)
 STANDALONE = re.compile(r"\btext\b", re.IGNORECASE)
@@ -35,8 +36,7 @@ class Violation:
     literal: str
 
 
-def suspicious_literal(literal: str) -> bool:
-    value = literal[1:-1]
+def suspicious_value(value: str) -> bool:
     if FUSED_PREFIX.search(value):
         return True
     if FUSED_SUFFIX.search(value):
@@ -48,12 +48,11 @@ def suspicious_literal(literal: str) -> bool:
     return STANDALONE.search(value) is not None
 
 
-def scan_file(path: Path) -> list[Violation]:
-    try:
-        source = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return []
+def suspicious_literal(literal: str) -> bool:
+    return suspicious_value(literal[1:-1])
 
+
+def scan_code_file(path: Path, source: str) -> list[Violation]:
     violations: list[Violation] = []
     for line_no, line in enumerate(source.splitlines(), 1):
         stripped = line.lstrip()
@@ -66,6 +65,30 @@ def scan_file(path: Path) -> list[Violation]:
             if suspicious_literal(literal):
                 violations.append(Violation(path, line_no, literal))
     return violations
+
+
+def scan_xml_file(path: Path, source: str) -> list[Violation]:
+    violations: list[Violation] = []
+    for line_no, line in enumerate(source.splitlines(), 1):
+        if ALLOW_MARKER in line:
+            continue
+        # Attribute names/values can legitimately contain identifiers such as
+        # android:text; only user-visible element text is in scope here.
+        for match in XML_TEXT.finditer(line):
+            value = match.group(1).strip()
+            if value and suspicious_value(value):
+                violations.append(Violation(path, line_no, repr(value)))
+    return violations
+
+
+def scan_file(path: Path) -> list[Violation]:
+    try:
+        source = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+    if path.suffix.lower() == ".xml":
+        return scan_xml_file(path, source)
+    return scan_code_file(path, source)
 
 
 def discover() -> list[Violation]:
@@ -98,7 +121,12 @@ def self_test() -> None:
         assert suspicious_literal(literal), f"expected placeholder detection: {literal}"
     for literal in must_pass:
         assert not suspicious_literal(literal), f"unexpected placeholder detection: {literal}"
-    print("UI placeholder audit self-test passed.")
+
+    xml_fail = '<string name="bad">DXF text</string>'
+    xml_pass = '<string name="good">Export DXF</string>'
+    assert scan_xml_file(Path("strings.xml"), xml_fail), "expected XML placeholder detection"
+    assert not scan_xml_file(Path("strings.xml"), xml_pass), "unexpected XML placeholder detection"
+    print("UI placeholder audit self-test passed for code literals and XML text values.")
 
 
 def main() -> int:
@@ -108,10 +136,10 @@ def main() -> int:
 
     violations = discover()
     if not violations:
-        print("UI placeholder gate passed: zero suspicious production string literals.")
+        print("UI placeholder gate passed: zero suspicious production UI values.")
         return 0
 
-    print("UI placeholder gate failed: suspicious production string literals remain.\n")
+    print("UI placeholder gate failed: suspicious production UI values remain.\n")
     counts: dict[Path, int] = {}
     for item in violations:
         counts[item.path] = counts.get(item.path, 0) + 1
@@ -120,7 +148,7 @@ def main() -> int:
     print("\nViolations by file:")
     for path, count in sorted(counts.items(), key=lambda x: (-x[1], str(x[0]))):
         print(f"{count:4d}  {path}")
-    print(f"\nTotal suspicious string literals: {len(violations)}")
+    print(f"\nTotal suspicious UI values: {len(violations)}")
     print(f"Files affected: {len(counts)}")
     print("Fail-closed: replace the placeholder with intentional UI copy or add a reviewed ui-placeholder-ok suppression for a genuinely legitimate occurrence.")
     return 1
