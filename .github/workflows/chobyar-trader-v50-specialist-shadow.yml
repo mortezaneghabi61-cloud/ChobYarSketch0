@@ -1,0 +1,65 @@
+name: ChobYar Trader v5 Specialist Shadow Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/**'
+      - 'ops/chobyar-trader/upgrade-v50-specialist-shadow.sh'
+      - '.github/workflows/chobyar-trader-v50-specialist-shadow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  specialist-shadow-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and unit test specialists
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v5/specialist_council.py ops/chobyar-trader/v5/shadow_runner.py ops/chobyar-trader/v5/specialist_scorecard.py
+          PYTHONPATH=ops/chobyar-trader/v5 python3 ops/chobyar-trader/v5/test_specialist_council.py -v
+          PYTHONPATH=ops/chobyar-trader/v5 python3 ops/chobyar-trader/v5/test_specialist_scorecard.py -v
+          bash -n ops/chobyar-trader/upgrade-v50-specialist-shadow.sh
+      - name: Shadow council has no execution authority
+        run: |
+          f=ops/chobyar-trader/v5/specialist_council.py
+          grep -q '"mode": "shadow_observation_only"' "$f"
+          grep -q '"execution_authority": False' "$f"
+          grep -q '"foreign_execution_enabled": False' "$f"
+          grep -q '"geo_bypass_supported": False' "$f"
+          grep -q '"automatic_promotion_enabled": False' "$f"
+          grep -q '"automatic_reweighting_enabled": False' "$f"
+      - name: Public-data-only specialist sources
+        run: |
+          d=ops/chobyar-trader/v5
+          ! grep -RniE 'API_KEY|APIKEY|STATUS_HMAC_SECRET|submit_order|create_order|place_order|/api/v5/trade/|enable_live|withdraw' "$d" --include='*.py'
+          grep -q 'https://api.wallex.ir/v1/udf/history' "$d/shadow_runner.py"
+          grep -q '/api/v5/market/tickers' "$d/shadow_runner.py"
+          grep -q '/api/v5/public/open-interest' "$d/shadow_runner.py"
+          grep -q '/api/v5/public/funding-rate-history' "$d/shadow_runner.py"
+      - name: Five specialists and regime-aware scorecard
+        run: |
+          f=ops/chobyar-trader/v5/specialist_council.py
+          for name in regime_structure microstructure_liquidity derivatives_positioning cross_market_breadth adversarial_risk; do grep -q "\"$name\"" "$f"; done
+          s=ops/chobyar-trader/v5/specialist_scorecard.py
+          grep -q 'minimum_directional_samples_per_regime' "$s"
+          grep -q 'automatic_promotion_enabled.*False' "$s"
+          grep -q 'execution_authority.*False' "$s"
+      - name: Installer preserves Paper engine and secrets boundary
+        run: |
+          f=ops/chobyar-trader/upgrade-v50-specialist-shadow.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          grep -q 'STATUS_RESTARTED=NO' "$f"
+          grep -q 'FOREIGN_EXECUTION=DISABLED' "$f"
+          grep -q 'GEO_BYPASS=UNSUPPORTED' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
+          ! grep -qE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-status' "$f"
+          grep -q '! grep -Rni.*EnvironmentFile' "$f"
