@@ -55,6 +55,37 @@ jobs:
           print('TELEMETRY_CONTRACT=PASS')
           PY
 
+      - name: Probe deployed sanitized VPS report
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
+            'http://109.122.247.214:8787/public-report' \
+            -o report.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('report.json').read_text(encoding='utf-8'))
+          forbidden_top = {'paper', 'market', 'risk', 'security'}
+          sensitive_markers = ('secret', 'token', 'password', 'passwd', 'api_key', 'apikey', 'authorization', 'cookie')
+          assert report.get('ok') is True
+          assert report.get('public_report') is True
+          assert report.get('mode') == 'paper'
+          assert report.get('live_locked') is True
+          assert not (forbidden_top & set(report))
+          def walk(obj):
+              if isinstance(obj, dict):
+                  for key, value in obj.items():
+                      lower = str(key).lower()
+                      assert not any(marker in lower for marker in sensitive_markers), key
+                      walk(value)
+              elif isinstance(obj, list):
+                  for value in obj:
+                      walk(value)
+          walk(report)
+          print('TELEMETRY_PROBE=PASS')
+          print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+          PY
+
   poll:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
