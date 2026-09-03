@@ -113,7 +113,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
      * ChobYar command input is cm, therefore the values below are divided by 10.
      */
     public String buildActionMountLab() {
-        if (labBuilt) return "Action Mount LAB text createdtext";
+        if (labBuilt) return getResources().getString(R.string.shapr_lab_already_created);
 
         createSketchSpace("LAB • Action Mount");
 
@@ -175,7 +175,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
         labBuilt = true;
         invalidate();
         Toast.makeText(getContext(),
-                "LAB created: Angle, Offset, Symmetry, Equal, Midpoint, Tangent text Lock text text text",
+                getResources().getString(R.string.shapr_lab_created_toast),
                 Toast.LENGTH_LONG).show();
         return "Action Mount LAB created";
     }
@@ -301,7 +301,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
         labChip.set(right-w,204f,right,204f+CHIP_H);
         canvas.drawRoundRect(labChip,14f,14f,chipFill);
         canvas.drawRoundRect(labChip,14f,14f,chipStroke);
-        canvas.drawText(labBuilt?"LAB • Action Mount":"LAB • text text",labChip.centerX(),labChip.centerY()+7f,chipText);
+        canvas.drawText(labBuilt?"LAB • Action Mount":getResources().getString(R.string.shapr_lab_chip_build),labChip.centerX(),labChip.centerY()+7f,chipText);
     }
 
     private void drawRelationBadges(Canvas canvas) {
@@ -335,8 +335,8 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
 
     private void showLabMenu() {
         String[] items={
-                labBuilt?"✓ Action Mount LAB createdtext":"Create Action Mount LAB",
-                "= Equal / text",
+                labBuilt?getResources().getString(R.string.shapr_lab_menu_created):"Create Action Mount LAB",
+                getResources().getString(R.string.shapr_lab_equal),
                 "S Symmetry / Symmetry",
                 "M Midpoint / Midpoint Line",
                 "T Tangent / Tangent",
@@ -344,7 +344,7 @@ public class ShaprLabCanvasView extends ParametricSketchCanvasView {
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("ChobYar • Shapr LAB")
-                .setMessage("text text text text text text ChobYar created text until text Toolstext text text.")
+                .setMessage(getResources().getString(R.string.shapr_lab_message))
                 .setItems(items,(d,w)->{
                     String result;
                     if(w==0)result=buildActionMountLab();
