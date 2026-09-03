@@ -31,43 +31,19 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path('app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java')
           text = path.read_text()
-          old = '''    if (!prepareTransactionalSelection("offset-prepare")) {
-        return lastMirrorError == null || lastMirrorError.isEmpty()
-                ? "Select geometry first"
-                : "Offset unavailable: " + lastMirrorError;
-    }
-
-    ArrayList<SketchEntity> copies = new ArrayList<>();'''
-          new = '''    if (!prepareTransactionalSelection("offset-prepare")) {
-        return lastMirrorError == null || lastMirrorError.isEmpty()
-                ? "Select geometry first"
-                : "Offset unavailable: " + lastMirrorError;
-    }
-    if (sketchDocument.selectionIds().size() <= 1) {
-        if (selected == null) return "Select geometry first";
-        String selectedId = selected.stableId();
-        if (selectedId == null || selectedId.trim().isEmpty()) {
-            return "Offset unavailable: selected geometry has no stable ID";
-        }
-        sketchDocument.selectOnly(selectedId);
-    }
-
-    ArrayList<SketchEntity> copies = new ArrayList<>();'''
-
+          old = '    if (!prepareTransactionalSelection("offset-prepare")) {\n        return lastMirrorError == null || lastMirrorError.isEmpty()\n                ? "Select geometry first"\n                : "Offset unavailable: " + lastMirrorError;\n    }\n\n    ArrayList<SketchEntity> copies = new ArrayList<>();'
+          new = '    if (!prepareTransactionalSelection("offset-prepare")) {\n        return lastMirrorError == null || lastMirrorError.isEmpty()\n                ? "Select geometry first"\n                : "Offset unavailable: " + lastMirrorError;\n    }\n    if (sketchDocument.selectionIds().size() <= 1) {\n        if (selected == null) return "Select geometry first";\n        String selectedId = selected.stableId();\n        if (selectedId == null || selectedId.trim().isEmpty()) {\n            return "Offset unavailable: selected geometry has no stable ID";\n        }\n        sketchDocument.selectOnly(selectedId);\n    }\n\n    ArrayList<SketchEntity> copies = new ArrayList<>();'
           count = text.count(old)
           if count != 1:
               raise SystemExit(f'FAIL-CLOSED: expected one Offset selection seam, found {count}')
           path.write_text(text.replace(old, new, 1))
-
           workflow = Path('.github/workflows/k322-branch-patch2.yml')
           if not workflow.exists():
               raise SystemExit('FAIL-CLOSED: staging workflow missing')
           workflow.unlink()
           PY
-
           mapfile -t changed < <(git diff --name-only)
           printf 'changed=%s\n' "${changed[*]}"
           test "${#changed[@]}" -eq 2
