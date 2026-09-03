@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from typing import Any, Callable
-
-import httpx
+from typing import Any
 
 
 SOURCE_SPECS = (
@@ -53,8 +51,10 @@ def parse_source(name: str, data: Any) -> tuple[float, float | None]:
 
 def fetch_global_snapshot(
     audit: Any | None = None,
-    client: httpx.Client | None = None,
+    client: Any | None = None,
 ) -> tuple[float | None, float | None, list[str], float | None]:
+    import httpx
+
     owned = client is None
     http = client or httpx.Client(timeout=4.0, headers={"User-Agent": "ChobYar-Trader/4-paper"})
     prices: list[float] = []
