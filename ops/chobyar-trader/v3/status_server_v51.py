@@ -3,10 +3,11 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-import status_server_v48 as v48
+import status_server_v481 as v481
 
+v48 = v481.v48
 base = v48.base
-v45 = v48.v45
+v45 = v481.v45
 _original_public_report = base.public_report_payload
 
 V5_SHADOW_FILE = base.APP_DIR / 'state' / 'v5_shadow_latest.json'
