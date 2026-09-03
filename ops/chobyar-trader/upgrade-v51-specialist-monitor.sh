@@ -72,9 +72,13 @@ PYTHONPATH="$src/v3" "$VENV/bin/python" -m py_compile "$src/v3/status_server_v51
 PYTHONPATH="$src/v3" "$VENV/bin/python" "$src/v3/test_status_specialists.py" -v
 bash -n "$src/upgrade-v51-specialist-monitor.sh"
 
+# The test fixture intentionally contains a fake API-key sentinel (SHOULD_NOT_LEAK)
+# to prove sanitization. Secret/execution scanning therefore applies only to
+# production telemetry/UI files; the security test itself remains mandatory above.
+grep -q 'SHOULD_NOT_LEAK' "$src/v3/test_status_specialists.py" || fail "sanitization sentinel missing"
 if grep -RniE 'API_KEY|APIKEY|submit_order|create_order|place_order|withdraw|enable_live|/api/v5/trade/' \
-  "$src/v3/status_server_v51.py" "$src/v3/test_status_specialists.py" "$src/monitor/specialist_monitor.js" "$src/monitor/specialist_monitor.css"; then
-  fail "forbidden secret/execution marker in specialist monitor"
+  "$src/v3/status_server_v51.py" "$src/monitor/specialist_monitor.js" "$src/monitor/specialist_monitor.css"; then
+  fail "forbidden secret/execution marker in specialist monitor production files"
 fi
 ! grep -qE "['\"]btc_qty['\"][[:space:]]*:" "$src/v3/status_server_v51.py" || fail "position size exposed"
 grep -q "execution_authority': False" "$src/v3/status_server_v51.py" || fail "shadow execution lock missing"
