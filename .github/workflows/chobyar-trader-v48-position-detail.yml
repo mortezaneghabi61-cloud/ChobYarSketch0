@@ -1,0 +1,69 @@
+name: ChobYar Trader v4.8 Position Detail Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/status_server_v48.py'
+      - 'ops/chobyar-trader/v3/test_status_position_detail.py'
+      - 'ops/chobyar-trader/monitor/position_detail.js'
+      - 'ops/chobyar-trader/monitor/position_detail.css'
+      - 'ops/chobyar-trader/monitor/sw.js'
+      - 'ops/chobyar-trader/upgrade-v48-position-detail.sh'
+      - '.github/workflows/chobyar-trader-v48-position-detail.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  position-detail-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and projection tests
+        run: |
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v48.py
+          PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_position_detail.py -v
+          bash -n ops/chobyar-trader/upgrade-v48-position-detail.sh
+      - name: Position targets are explicit and fail-closed
+        run: |
+          f=ops/chobyar-trader/v3/status_server_v48.py
+          grep -q "EXPECTED_STOP = 0.015" "$f"
+          grep -q "EXPECTED_TAKE = 0.03" "$f"
+          grep -q "'targets_verified': False" "$f"
+          grep -q "'mark_price':" "$f"
+          grep -q "'unrealized_return_pct':" "$f"
+          grep -q "'stop_loss_price':" "$f"
+          grep -q "'take_profit_price':" "$f"
+          grep -q "'distance_to_stop_pct':" "$f"
+          grep -q "'distance_to_take_pct':" "$f"
+          ! grep -qE "['\"]btc_qty['\"][[:space:]]*:" "$f"
+      - name: Tablet UI shows targets without controls
+        run: |
+          js=ops/chobyar-trader/monitor/position_detail.js
+          css=ops/chobyar-trader/monitor/position_detail.css
+          grep -q 'قیمت فعلی' "$js"
+          grep -q 'Stop Loss' "$js"
+          grep -q 'Take Profit' "$js"
+          grep -q 'فاصله تا SL' "$js"
+          grep -q 'فاصله تا TP' "$js"
+          grep -q 'position-range' "$js"
+          grep -q 'position-progress' "$css"
+          ! grep -qiE 'submit_order|create_order|place_order|enable_live|fetch\(.*/status|API_KEY|STATUS_HMAC_SECRET' "$js" "$css"
+      - name: PWA cache advances safely
+        run: |
+          sw=ops/chobyar-trader/monitor/sw.js
+          grep -q 'chobyar-monitor-shell-v2' "$sw"
+          grep -q 'Never cache /public-report' "$sw"
+          grep -q 'cache: "no-store"' "$sw"
+      - name: Upgrade preserves Paper risk and Trader process
+        run: |
+          f=ops/chobyar-trader/upgrade-v48-position-detail.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader|submit_order|create_order|place_order|enable_live|martingale|leverage' "$f"
