@@ -179,4 +179,10 @@
     <string name="rename">Rename</string>
     <string name="rename_body">Rename Body</string>
     <string name="workspace_recovered">Recovered previous workspace</string>
+
+    <string name="exact_dimension_value_required">Enter a dimension value.</string>
+    <string name="exact_dimension_invalid_mm">Enter a valid dimension in millimeters.</string>
+    <string name="circle_diameter_hint">Circle diameter; example: 80</string>
+    <string name="polygon_radius_hint">Polygon radius; example: 80</string>
+    <string name="exact_dimension_single_selection_required">Exact Dimension requires exactly one selected shape.</string>
 </resources>
