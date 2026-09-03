@@ -28,6 +28,7 @@ on:
       - 'app/src/androidTest/java/ir/chobyar/sketch/K319*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K320*InstrumentationTest.java'
       - 'app/src/androidTest/java/ir/chobyar/sketch/K321*InstrumentationTest.java'
+      - 'app/src/androidTest/java/ir/chobyar/sketch/K322*InstrumentationTest.java'
       - 'app/src/main/java/ir/chobyar/sketch/ShaprLabCanvasView.java'
       - 'app/src/main/java/ir/chobyar/sketch/ShaprConstraintSolverCadCanvasView.java'
       - '.github/workflows/k3-sketch-authority-parity.yml'
@@ -94,7 +95,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run K3.3 through K3.21 authority regressions
+      - name: Run K3.3 through K3.22 authority regressions
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35
@@ -163,6 +164,8 @@ jobs:
             grep -q 'OK (4 tests)' test-artifacts/k3-trim-authority.txt
             adb shell am instrument -w -e class ir.chobyar.sketch.K321ExtendAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-extend-authority.txt
             grep -q 'OK (4 tests)' test-artifacts/k3-extend-authority.txt
+            adb shell am instrument -w -e class ir.chobyar.sketch.K322OffsetAuthorityInstrumentationTest ir.chobyar.sketch.test/androidx.test.runner.AndroidJUnitRunner | tee test-artifacts/k3-offset-authority.txt
+            grep -q 'OK (4 tests)' test-artifacts/k3-offset-authority.txt
 
       - name: Upload K3 authority evidence
         if: always()

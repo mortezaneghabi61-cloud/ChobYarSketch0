@@ -121,6 +121,46 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
         return super.executeCommand(raw);
     }
 
+    /**
+     * Legacy rectangle Offset is a projection seam for K3.22.  Its historical
+     * implementation scales Float points, while SketchDocument computes the
+     * authoritative Rect in double precision.  Re-running both algorithms can
+     * leave the derived legacy origin two float ULPs away from model truth.
+     * Align only the generated legacy Rect origin to the double-derived target;
+     * dimensions/orientation remain the candidate's and no parity tolerance is
+     * widened.
+     */
+    @Override
+    public String offsetSelected(float distance){
+        float targetOriginX=Float.NaN,targetOriginY=Float.NaN;
+        if(selected!=null&&"Rectangle".equals(selected.shortName())
+                &&!Float.isNaN(distance)&&!Float.isInfinite(distance)){
+            List<ControlPoint> points=selected.controlPoints();
+            if(points.size()==4){
+                ControlPoint p0=points.get(0),p1=points.get(1),p2=points.get(2),p3=points.get(3);
+                double ux=p1.x-p0.x,uy=p1.y-p0.y,vx=p3.x-p0.x,vy=p3.y-p0.y;
+                double uLength=Math.hypot(ux,uy),vLength=Math.hypot(vx,vy);
+                double nextU=uLength+2.0d*distance,nextV=vLength+2.0d*distance;
+                if(uLength>1.0e-9d&&vLength>1.0e-9d&&nextU>1.0e-9d&&nextV>1.0e-9d){
+                    double scaleU=nextU/uLength,scaleV=nextV/vLength;
+                    double centerX=(p0.x+p2.x)*0.5d,centerY=(p0.y+p2.y)*0.5d;
+                    targetOriginX=(float)(centerX-(ux*scaleU+vx*scaleV)*0.5d);
+                    targetOriginY=(float)(centerY-(uy*scaleU+vy*scaleV)*0.5d);
+                }
+            }
+        }
+        String result=super.offsetSelected(distance);
+        if(!Float.isNaN(targetOriginX)&&!Float.isNaN(targetOriginY)
+                &&selected!=null&&"Rectangle".equals(selected.shortName())){
+            List<ControlPoint> candidate=selected.controlPoints();
+            if(candidate.size()==4){
+                selected.translate(targetOriginX-candidate.get(0).x,targetOriginY-candidate.get(0).y);
+                invalidate();
+            }
+        }
+        return result;
+    }
+
     /** Manual 26.100 Project: only the explicitly selected exact Body is projected. */
     public String projectExactBodyEdges(){
         List<Long> handles=projectSourceHandles();
@@ -147,7 +187,6 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     protected double[] exactProjectDescriptors(long handle){
         return NativeBRepKernel.occtEdgeDescriptors(handle);
     }
-
     /** Package-visible deterministic mapper used by x86 emulator tests. */
     String projectExactDescriptorsForTest(double[] descriptors){
         List<double[]> batches=new ArrayList<>();
