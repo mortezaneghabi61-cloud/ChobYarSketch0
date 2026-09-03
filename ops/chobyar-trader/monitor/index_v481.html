@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#08111f" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ChobYar Trader" />
+  <title>ChobYar Trader Monitor</title>
+  <link rel="manifest" href="/monitor/manifest.webmanifest" />
+  <link rel="icon" href="/monitor/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/monitor/style.css" />
+  <link rel="stylesheet" href="/monitor/position_detail.css" />
+</head>
+<body>
+  <div id="criticalGate" class="critical-gate" hidden>
+    <div class="critical-card">
+      <div class="critical-icon">!</div>
+      <h1>FAIL-CLOSED</h1>
+      <p id="criticalMessage">وضعیت ایمن Paper تأیید نشد.</p>
+      <p class="muted">تا برگشتن گزارش به <b>PAPER</b> و <b>LIVE LOCKED</b> داشبورد عادی متوقف می‌شود.</p>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="/monitor/icon.svg" alt="" class="brand-icon" />
+      <div>
+        <h1>ChobYar Trader Monitor</h1>
+        <div class="subtitle">مانیتور فقط خواندنی · Read-only monitor</div>
+      </div>
+    </div>
+    <div class="header-status">
+      <span id="connectionBadge" class="badge neutral"><span class="dot"></span> در حال اتصال</span>
+      <span id="modeBadge" class="badge neutral">MODE —</span>
+      <span id="liveBadge" class="badge neutral">LIVE —</span>
+      <div class="last-update">
+        <span>آخرین بروزرسانی</span>
+        <strong id="lastUpdate">—</strong>
+        <small id="dataAge">—</small>
+      </div>
+    </div>
+  </header>
+
+  <main id="dashboard" class="dashboard">
+    <section class="metric-grid" aria-label="عملکرد">
+      <article class="metric-card hero"><span>Equity</span><strong id="equity">—</strong><small>USDT</small></article>
+      <article class="metric-card"><span>سود/زیان محقق‌شده</span><strong id="realizedPnl">—</strong><small>Realized PnL</small></article>
+      <article class="metric-card"><span>بازده</span><strong id="returnPct">—</strong><small>Return</small></article>
+      <article class="metric-card"><span>Drawdown فعلی</span><strong id="currentDd">—</strong><small>Current DD</small></article>
+      <article class="metric-card"><span>Max Drawdown</span><strong id="maxDd">—</strong><small>Forward</small></article>
+      <article class="metric-card"><span>چرخه‌ها</span><strong id="cycles">—</strong><small>Forward cycles</small></article>
+      <article class="metric-card"><span>معاملات بسته</span><strong id="closedTrades">—</strong><small>Forward</small></article>
+      <article class="metric-card"><span>برد / باخت</span><strong id="winsLosses">—</strong><small>Wins / Losses</small></article>
+    </section>
+
+    <section class="two-col">
+      <article class="panel position-panel">
+        <div class="panel-title"><h2>پوزیشن فعلی</h2><span class="tiny-badge">Position</span></div>
+        <div id="positionContent" class="empty-state">
+          <strong>اطلاعات پوزیشن در گزارش عمومی موجود نیست</strong>
+          <p>این مانیتور از تغییر Equity برای حدس‌زدن پوزیشن استفاده نمی‌کند.</p>
+        </div>
+      </article>
+
+      <article class="panel decision-panel">
+        <div class="panel-title"><h2>آخرین تصمیم</h2><span id="decisionTime" class="tiny-badge">—</span></div>
+        <div class="decision-main">
+          <div id="decisionSignal" class="signal wait">WAIT</div>
+          <div class="decision-meta">
+            <div><span>Action</span><strong id="decisionAction">—</strong></div>
+            <div><span>Executed</span><strong id="decisionExecuted">—</strong></div>
+            <div><span>Reason</span><strong id="decisionReason">—</strong></div>
+          </div>
+        </div>
+        <div class="vote-grid">
+          <div class="vote buy"><span>BUY</span><strong id="voteBuy">0</strong></div>
+          <div class="vote sell"><span>SELL</span><strong id="voteSell">0</strong></div>
+          <div class="vote wait"><span>WAIT</span><strong id="voteWait">0</strong></div>
+          <div class="vote unavailable"><span>UNAVAILABLE</span><strong id="voteUnavailable">0</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="two-col wide-left">
+      <article class="panel chart-panel">
+        <div class="panel-title"><h2>نمودار Equity این تبلت</h2><span class="tiny-badge">Local history</span></div>
+        <canvas id="equityChart" height="240" aria-label="Equity chart"></canvas>
+        <p class="footnote">فقط snapshotهای امن در حافظه محلی همین مرورگر نگهداری می‌شوند.</p>
+      </article>
+
+      <article class="panel services-panel">
+        <div class="panel-title"><h2>سلامت سرویس‌ها</h2><span class="tiny-badge">Services</span></div>
+        <div id="servicesList" class="service-list"></div>
+        <div class="uptime-row"><span>Forward uptime</span><strong id="uptime">—</strong></div>
+      </article>
+    </section>
+
+    <section class="panel scorecard-panel">
+      <div class="panel-title scorecard-title">
+        <div><h2>Agent Scorecard</h2><p class="muted">کیفیت رأی ایجنت‌ها در Forward Test</p></div>
+        <div class="scorecard-summary">
+          <span>نمونه‌ها: <strong id="sampledRows">—</strong></span>
+          <span>حداقل: <strong id="minimumSamples">—</strong></span>
+          <span id="weightReviewBadge" class="badge neutral">Weight review: NOT READY</span>
+        </div>
+      </div>
+      <div id="scorecardGrid" class="scorecard-grid"></div>
+    </section>
+
+    <section class="two-col">
+      <article class="panel backtest-panel">
+        <div class="panel-title"><h2>Backtest</h2><span id="backtestStatus" class="tiny-badge">—</span></div>
+        <div id="backtestWarning" class="warning" hidden>این بک‌تست Full-fidelity Multi-Agent نیست؛ فقط proxy تاریخی است.</div>
+        <div class="stats-table">
+          <div><span>مدل</span><strong id="btModel">—</strong></div>
+          <div><span>منبع</span><strong id="btSource">—</strong></div>
+          <div><span>روز / کندل</span><strong id="btHistory">—</strong></div>
+          <div><span>معاملات</span><strong id="btTrades">—</strong></div>
+          <div><span>برد / باخت</span><strong id="btWinsLosses">—</strong></div>
+          <div><span>Win rate</span><strong id="btWinRate">—</strong></div>
+          <div><span>Return</span><strong id="btReturn">—</strong></div>
+          <div><span>Max DD</span><strong id="btDd">—</strong></div>
+        </div>
+      </article>
+
+      <article class="panel log-panel">
+        <div class="panel-title"><h2>رویدادهای مانیتور</h2><span class="tiny-badge">Local only</span></div>
+        <div id="eventLog" class="event-log"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <span>ChobYar Trader Monitor</span>
+    <span>هیچ مسیر BUY/SELL، تغییر Risk یا فعال‌سازی Live در این صفحه وجود ندارد.</span>
+  </footer>
+
+  <script src="/monitor/app.js" defer></script>
+  <script src="/monitor/position_detail.js" defer></script>
+</body>
+</html>
