@@ -14,8 +14,8 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || fail "run as root"
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "exact 40-character commit SHA required"
 [[ -f "$ENV_FILE" && -x "$VENV/bin/python" && -f "$STATUS_UNIT" ]] || fail "existing installation incomplete"
-[[ -f "$APP_DIR/app/status_server_v48.py" ]] || fail "v4.8 status baseline missing"
-grep -q '/opt/chobyar-trader/app/status_server_v48.py' "$STATUS_UNIT" || fail "status service is not on v4.8 baseline"
+[[ -f "$APP_DIR/app/status_server_v481.py" ]] || fail "v4.8.1 status baseline missing"
+grep -q '/opt/chobyar-trader/app/status_server_v481.py' "$STATUS_UNIT" || fail "status service is not on v4.8.1 baseline"
 systemctl is-active --quiet chobyar-v5-shadow.timer || fail "v5 shadow timer inactive"
 systemctl is-active --quiet chobyar-v5-scorecard.timer || fail "v5 scorecard timer inactive"
 [[ -f "$APP_DIR/state/v5_shadow_latest.json" && -f "$APP_DIR/state/v5_specialist_scorecard.json" ]] || fail "v5 shadow state missing"
@@ -101,10 +101,10 @@ from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 text = p.read_text(encoding='utf-8')
-v48 = '/opt/chobyar-trader/app/status_server_v48.py'
+v481 = '/opt/chobyar-trader/app/status_server_v481.py'
 v51 = '/opt/chobyar-trader/app/status_server_v51.py'
-if v48 in text:
-    text = text.replace(v48, v51)
+if v481 in text:
+    text = text.replace(v481, v51)
 elif v51 not in text:
     raise SystemExit('unexpected status ExecStart')
 p.write_text(text, encoding='utf-8')
