@@ -1,0 +1,62 @@
+name: ChobYar Trader v4.6 Monitor HTTPS Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/upgrade-v46-monitor-https.sh'
+      - 'ops/chobyar-trader/upgrade-v45-monitor.sh'
+      - 'ops/chobyar-trader/v3/status_server_v45.py'
+      - 'ops/chobyar-trader/v3/test_status_monitor.py'
+      - 'ops/chobyar-trader/monitor/**'
+      - '.github/workflows/chobyar-trader-v46-monitor-https.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  https-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and monitor tests
+        run: |
+          bash -n ops/chobyar-trader/upgrade-v46-monitor-https.sh
+          bash -n ops/chobyar-trader/upgrade-v45-monitor.sh
+          python3 -m py_compile ops/chobyar-trader/v3/status_server_v45.py
+          PYTHONPATH=ops/chobyar-trader/v3 python3 ops/chobyar-trader/v3/test_status_monitor.py -v
+      - name: Trusted IP certificate contract
+        run: |
+          f=ops/chobyar-trader/upgrade-v46-monitor-https.sh
+          grep -q 'PUBLIC_IP="109.122.247.214"' "$f"
+          grep -q -- '--preferred-profile shortlived' "$f"
+          grep -q -- '--ip-address "$PUBLIC_IP"' "$f"
+          grep -q 'Certbot >=5.4' "$f"
+          grep -q 'https://${PUBLIC_IP}/monitor/' "$f"
+          ! grep -qE 'curl .* (-k|--insecure)' "$f"
+      - name: HTTPS route exposure stays read-only
+        run: |
+          f=ops/chobyar-trader/upgrade-v46-monitor-https.sh
+          grep -q 'location ^~ /monitor/' "$f"
+          grep -q 'location = /public-report' "$f"
+          grep -q 'location = /health' "$f"
+          grep -A2 'location = /status' "$f" | grep -q 'return 404'
+          ! grep -qiE 'proxy_pass.*(/status|/order|/trade)|submit_order|create_order|place_order|enable_live' "$f"
+      - name: Renewal automation contract
+        run: |
+          f=ops/chobyar-trader/upgrade-v46-monitor-https.sh
+          grep -q 'OnUnitActiveSec=12h' "$f"
+          grep -q 'certbot-renew\|CERT_RENEW_TIMER' "$f" || grep -q 'chobyar-cert-renew.timer' "$f"
+          grep -q 'ExecStart=.* renew --quiet' "$f"
+          grep -q 'ExecStartPost=/usr/bin/systemctl reload nginx' "$f"
+      - name: Trader and risk remain locked
+        run: |
+          f=ops/chobyar-trader/upgrade-v46-monitor-https.sh
+          grep -q "TRADING_MODE=paper" "$f"
+          grep -q "LIVE_TRADING_ENABLED=false" "$f"
+          grep -q "MAX_POSITION_PCT=0.25" "$f"
+          grep -q "STOP_LOSS_PCT=0.015" "$f"
+          grep -q "TAKE_PROFIT_PCT=0.03" "$f"
+          grep -q "MAX_DAILY_LOSS_PCT=0.03" "$f"
+          grep -q 'TRADER_RESTARTED=NO' "$f"
+          ! grep -qiE 'systemctl[[:space:]]+(restart|stop|start)[[:space:]]+chobyar-trader' "$f"
