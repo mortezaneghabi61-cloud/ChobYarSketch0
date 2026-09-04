@@ -112,8 +112,8 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
     }
 
     private void activate(int t,String s){custom=NONE;stroke.clear();super.setTool(t);msg(s);}
-    private void startEllipse(){super.setTool(TOOL_SELECT);custom=ELLIPSE;start=null;msg("Ellipse: text Center touch text text text X/Y text");}
-    private void startSpline(){super.setTool(TOOL_SELECT);custom=SPLINE;stroke.clear();msg("Spline: text text text text text text text text text");}
+    private void startEllipse(){super.setTool(TOOL_SELECT);custom=ELLIPSE;start=null;msg("Ellipse: touch the center, then drag to set the X/Y radii");}
+    private void startSpline(){super.setTool(TOOL_SELECT);custom=SPLINE;stroke.clear();msg("Spline: draw a continuous stroke to create the curve");}
 
     @Override public boolean onTouchEvent(MotionEvent e){
         if(custom==NONE)return super.onTouchEvent(e);
@@ -123,7 +123,7 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
             if(a==MotionEvent.ACTION_DOWN){start=world(e.getX(),e.getY());return true;}
             if(a==MotionEvent.ACTION_UP&&start!=null){
                 PointF q=world(e.getX(),e.getY());float rx=Math.abs(q.x-start.x),ry=Math.abs(q.y-start.y);
-                if(rx<.5f||ry<.5f){msg("Ellipse text text text");return true;}
+                if(rx<.5f||ry<.5f){msg("Ellipse is too small");return true;}
                 List<PointF> p=new ArrayList<>();
                 for(int i=0;i<96;i++){double t=2*Math.PI*i/96d;p.add(new PointF(start.x+(float)Math.cos(t)*rx,start.y+(float)Math.sin(t)*ry));}
                 Object x=addPolyline(p,true);custom=NONE;start=null;if(x!=null)msg("Ellipse created");dispatchWorkspaceState();return true;
@@ -134,7 +134,7 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
         if(custom==SPLINE){
             if(a==MotionEvent.ACTION_DOWN){stroke.clear();stroke.add(world(e.getX(),e.getY()));lastSX=e.getX();lastSY=e.getY();return true;}
             if(a==MotionEvent.ACTION_MOVE){float dx=e.getX()-lastSX,dy=e.getY()-lastSY;if(dx*dx+dy*dy>=36f){stroke.add(world(e.getX(),e.getY()));lastSX=e.getX();lastSY=e.getY();}return true;}
-            if(a==MotionEvent.ACTION_UP){stroke.add(world(e.getX(),e.getY()));if(stroke.size()<3){msg("text Spline text text");stroke.clear();return true;}Object x=addPolyline(smooth(stroke,5),false);custom=NONE;stroke.clear();if(x!=null)msg("Spline text created");dispatchWorkspaceState();return true;}
+            if(a==MotionEvent.ACTION_UP){stroke.add(world(e.getX(),e.getY()));if(stroke.size()<3){msg("Spline needs at least three points");stroke.clear();return true;}Object x=addPolyline(smooth(stroke,5),false);custom=NONE;stroke.clear();if(x!=null)msg("Spline created");dispatchWorkspaceState();return true;}
             if(a==MotionEvent.ACTION_CANCEL){custom=NONE;stroke.clear();return true;}
         }
         return true;
@@ -167,7 +167,7 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
         new AlertDialog.Builder(getContext()).setTitle("Move / Rotate Sketch").setView(b).setPositiveButton("Apply",(d,w)->{
             try{float dx=lengthMm(x.getText().toString()),dy=lengthMm(y.getText().toString()),deg=Float.parseFloat(digits(r.getText().toString()));
                 if(Math.abs(dx)>1e-6||Math.abs(dy)>1e-6)moveSelected(dx,dy);if(Math.abs(deg)>1e-6)msg(rotateSelected(deg));dispatchWorkspaceState();
-            }catch(Exception ex){msg("text is invalid");}
+            }catch(Exception ex){msg("Transform is invalid");}
         }).setNegativeButton("Cancel",null).show();
     }
 
@@ -182,26 +182,26 @@ public class OcctShaprCadCanvasView extends OcctMeasureCadCanvasView {
     }
 
     private String circularPattern(int count,float cx,float cy,float total){
-        List<Object> s=selection();if(s.isEmpty())return"Select geometry first";if(count<2||count>200)return"Count text text 2 text 200 text";
+        List<Object> s=selection();if(s.isEmpty())return"Select geometry first";if(count<2||count>200)return"Count must be between 2 and 200";
         try{saveUndo();List<Object> seed=new ArrayList<>(s);Object last=null;float step=total/count;
             for(int i=1;i<count;i++)for(Object e:seed){Object c=call(e,"copy");if(c==null)continue;call(c,"rotate",new Class<?>[]{float.class,float.class,float.class},cx,cy,step*i);entities().add(c);last=c;}
-            if(last!=null)selectOne(last);invalidate();dispatchWorkspaceState();return"Circular Pattern: "+count+" text";
-        }catch(Exception ex){return"Circular Pattern text text";}
+            if(last!=null)selectOne(last);invalidate();dispatchWorkspaceState();return"Circular Pattern: "+count+" instances";
+        }catch(Exception ex){return"Circular Pattern failed";}
     }
 
     private String projectReference(){
-        List<Object> s=selection();if(s.isEmpty())return"First Sketch text Edge text Selection text";
-        try{saveUndo();Object last=null;for(Object e:s){Object c=call(e,"copy");if(c==null)continue;setConstruction(c,true);entities().add(c);last=c;}if(last!=null)selectOne(last);invalidate();dispatchWorkspaceState();return"Projection text created";}catch(Exception ex){return"Project text text";}
+        List<Object> s=selection();if(s.isEmpty())return"Select sketch geometry before projecting";
+        try{saveUndo();Object last=null;for(Object e:s){Object c=call(e,"copy");if(c==null)continue;setConstruction(c,true);entities().add(c);last=c;}if(last!=null)selectOne(last);invalidate();dispatchWorkspaceState();return"Projection created";}catch(Exception ex){return"Project failed";}
     }
 
     private String toggleConstruction(){
         List<Object> s=selection();if(s.isEmpty())return"Select a sketch first";
-        try{boolean make=false;for(Object e:s){Field f=findField(e.getClass(),"construction");if(f==null||!f.getBoolean(e)){make=true;break;}}for(Object e:s)setConstruction(e,make);invalidate();dispatchWorkspaceState();return make?"Construction On text":"Construction Off text";}catch(Exception ex){return"Construction is unavailable";}
+        try{boolean make=false;for(Object e:s){Field f=findField(e.getClass(),"construction");if(f==null||!f.getBoolean(e)){make=true;break;}}for(Object e:s)setConstruction(e,make);invalidate();dispatchWorkspaceState();return make?"Construction On":"Construction Off";}catch(Exception ex){return"Construction is unavailable";}
     }
     private void setConstruction(Object e,boolean v)throws Exception{Field f=findField(e.getClass(),"construction");if(f!=null){f.setBoolean(e,v);return;}Method m=findMethod(e.getClass(),"setConstruction",boolean.class);if(m!=null)m.invoke(e,v);}
 
     private Object addPolyline(List<PointF> p,boolean closed){
-        try{if(polylineCtor==null||p.size()<2)return null;saveUndo();Object e=polylineCtor.newInstance(p,closed);Method m=findMethod(e.getClass(),"setLayer",String.class);if(m!=null)m.invoke(e,getCurrentLayer());entities().add(e);selectOne(e);invalidate();return e;}catch(Exception ex){msg("Create Geometry Done text");return null;}
+        try{if(polylineCtor==null||p.size()<2)return null;saveUndo();Object e=polylineCtor.newInstance(p,closed);Method m=findMethod(e.getClass(),"setLayer",String.class);if(m!=null)m.invoke(e,getCurrentLayer());entities().add(e);selectOne(e);invalidate();return e;}catch(Exception ex){msg("Geometry creation failed");return null;}
     }
 
     @SuppressWarnings("unchecked") private List<Object> entities()throws Exception{return(List<Object>)entitiesField.get(this);}
