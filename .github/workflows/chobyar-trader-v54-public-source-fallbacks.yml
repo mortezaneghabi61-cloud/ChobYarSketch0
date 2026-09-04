@@ -52,23 +52,25 @@ jobs:
           grep -q 'EXECUTION_AUTHORITY=NONE' ops/chobyar-trader/v5/shadow_runner_v52.py
           grep -q 'public_source_fallbacks.install' ops/chobyar-trader/v5/shadow_runner_v52.py
 
-      - name: Probe Bybit public fallback endpoints
+      - name: Probe KuCoin public fallback endpoints
         run: |
           set -Eeuo pipefail
           PYTHONPATH=ops/chobyar-trader/v5 python - <<'PY'
           import httpx
           import public_source_fallbacks as s
           with httpx.Client(timeout=8.0, headers={'User-Agent': 'ChobYar-Trader/5.4-github-source-probe'}) as client:
-              breadth = s.fetch_bybit_breadth(client)
-              funding, z, samples = s.fetch_bybit_funding(client)
-              oi = s.fetch_bybit_open_interest(client)
+              breadth = s.fetch_kucoin_breadth(client)
+              funding, z, samples = s.fetch_kucoin_funding(client)
+              oi, oi_change = s.fetch_kucoin_open_interest(client)
           assert set(s.REQUIRED_BREADTH).issubset(breadth)
           assert funding is not None and z is not None and samples >= s.MIN_FUNDING_SAMPLES
           assert oi is not None and oi > 0
+          assert oi_change is not None
           print('PUBLIC_SOURCE_PROBE=PASS')
-          print('BREADTH_SYMBOLS=' + str(len(breadth)))
-          print('FUNDING_SAMPLES=' + str(samples))
-          print('OPEN_INTEREST=AVAILABLE')
+          print('KUCOIN_BREADTH_SYMBOLS=' + str(len(breadth)))
+          print('KUCOIN_FUNDING_SAMPLES=' + str(samples))
+          print('KUCOIN_OPEN_INTEREST=AVAILABLE')
+          print('KUCOIN_OI_CHANGE=AVAILABLE')
           PY
 
       - name: Confirm unchanged council thresholds
