@@ -45,23 +45,23 @@ final class WorkspaceController {
         String instruction(){
             if(tool==Tool.MOVE_ROTATE){
                 return phase==Phase.SELECT_PRIMARY
-                        ? "text, text text Bodytext text text text Selection text"
-                        : "text text text text text; text text text text Tools text text text";
+                        ? "Select a body to move or rotate."
+                        : "Drag the gizmo to move or rotate the body; use the Tools panel for exact values.";
             }
             if(tool==Tool.ALIGN){
-                if(phase==Phase.SELECT_PRIMARY)return "text text text text text text Selection text";
-                if(phase==Phase.SELECT_SECONDARY)return "Face, Edge text Axis text text Selection text";
-                return "Preview text text text; touch Align text Same/Opposed text change text";
+                if(phase==Phase.SELECT_PRIMARY)return "Select the face, edge, or body you want to align.";
+                if(phase==Phase.SELECT_SECONDARY)return "Select a target face, edge, or axis.";
+                return "Preview the alignment; tap Align to switch between Same and Opposed orientation.";
             }
             if(tool==Tool.EXTRUDE){
                 return phase==Phase.SELECT_PRIMARY
-                        ? "text text text text text Selection text"
-                        : "text text text text Height text text text mm text text";
+                        ? "Select a sketch profile or region to extrude."
+                        : "Drag the height handle or enter an exact height in mm.";
             }
             if(tool==Tool.REVOLVE){
-                if(phase==Phase.SELECT_PRIMARY)return "text text text text Selection text";
-                if(phase==Phase.SELECT_SECONDARY)return "Line text Axis text text Selection text";
-                return "text=Angle, text=Height; text text Angle=360×text text Height=Pitch×text";
+                if(phase==Phase.SELECT_PRIMARY)return "Select a sketch profile or region to revolve.";
+                if(phase==Phase.SELECT_SECONDARY)return "Select a line to use as the revolve axis.";
+                return "Set Angle and Height; for a threaded revolve use Angle = 360° × turns and Height = Pitch × turns.";
             }
             return "";
         }
