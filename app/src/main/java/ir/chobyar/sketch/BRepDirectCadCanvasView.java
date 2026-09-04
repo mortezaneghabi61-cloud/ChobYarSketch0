@@ -58,18 +58,18 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         Object body=selectedBody();
         String bodyLabel=body==null?"No body selected":bodyName(body);
         String[] items={
-                "✥ Tools text Edge / Face (Fillet, Chamfer, Push/Pull, Shell)",
-                "⌘ B-Rep Inspector / Createtext Body",
+                "✥ Edge / Face Tools (Fillet, Chamfer, Push/Pull, Shell)",
+                "⌘ B-Rep Inspector / Body Topology",
                 "▱ Dimension Face selected",
                 "— Dimension Edge selected",
-                "↔ Move Body text X / Y / Z",
-                "⟳ Rotate Body text X / Y / Z",
-                "↶ Undo text text/text Body",
-                "✓ text text Topology"
+                "↔ Move Body along X / Y / Z",
+                "⟳ Rotate Body about X / Y / Z",
+                "↶ Undo last Body Move/Rotate",
+                "✓ Check Body Topology"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Edit 3D • B-Rep")
-                .setMessage(bodyLabel+" \n  \n text text: text First. \n text text: Topology, Dimensiontext text text Transform text text text text text.")
+                .setMessage(bodyLabel+" \n  \n Direct tools: edit the selected body. \n B-Rep tools: inspect topology, measure faces and edges, and transform the body.")
                 .setItems(items,(d,w)->{
                     if(w==0)super.showDirectManager();
                     else if(w==1)showTopologyInspector();
@@ -101,8 +101,8 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         if(body==null){toast("Select a body first");return;}
         BRepTopology t=topology(body);
         String message=t.isClosedManifold()
-                ?"✓ Body text text text text Manifold text. text Edge text text text Face text text."
-                :"⚠ Topology text text text text. \n Boundary Edge: "+t.boundaryEdgeCount+"\nNon-manifold Edge: "+t.nonManifoldEdgeCount;
+                ?"✓ Body topology is a closed manifold. Every edge is shared by exactly two faces."
+                :"⚠ Topology is not a closed manifold. \n Boundary Edge: "+t.boundaryEdgeCount+"\nNon-manifold Edge: "+t.nonManifoldEdgeCount;
         message+="\n\nVertex: "+t.vertices.size()+" • Edge: "+t.edges.size()+" • Face: "+t.faces.size();
         new AlertDialog.Builder(getContext()).setTitle("Topology Health").setMessage(message).setPositiveButton("OK",null).show();
     }
@@ -112,7 +112,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         SolidCSG.Polygon selected=selectedFace();
         if(body==null||selected==null){ensure3D();toast("Select the target face first");return;}
         BRepTopology.TopoFace f=topology(body).findFace(selected);
-        if(f==null){toast("Face text Topology was not found");return;}
+        if(f==null){toast("Selected face was not found in topology.");return;}
         new AlertDialog.Builder(getContext())
                 .setTitle("Face • "+f.id)
                 .setMessage(BRepTopology.faceInfo(f))
@@ -123,7 +123,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         Object body=selectedBody();
         Geometry3D.Vec3 a=selectedEdgeA(),b=selectedEdgeB();
         if(body==null||a==null||b==null||selectedEdgeBody()!=body){
-            ensure3D();toast("First text Tools text, Edge text Selection text");return;
+            ensure3D();toast("Open Edge tools first, then select an edge.");return;
         }
         float mm=b.sub(a).length();
         Geometry3D.Vec3 d=b.sub(a).normalized();
@@ -144,15 +144,15 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         EditText z=axisInput(box,"Z", "0mm");
         new AlertDialog.Builder(getContext())
                 .setTitle("Move Body • mm")
-                .setMessage("text text/text text text text Axis text mm text text; text: -15")
+                .setMessage("Enter translation along each axis in millimeters; example: -15")
                 .setView(box)
-                .setPositiveButton("text",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{
                         float dx=parseLengthMm(x.getText().toString());
                         float dy=parseLengthMm(y.getText().toString());
                         float dz=parseLengthMm(z.getText().toString());
                         toast(moveBody(body,dx,dy,dz));
-                    }catch(Exception e){toast("text X/Y/Z was entered incorrectly");}
+                    }catch(Exception e){toast("X/Y/Z values are invalid.");}
                 }).setNegativeButton("Cancel",null).show();
     }
 
@@ -165,8 +165,8 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
     }
 
     private String moveBody(Object body,float dx,float dy,float dz) {
-        if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)<1e-6f)return"text text text";
-        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body text text";
+        if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)<1e-6f)return"Move distance is zero.";
+        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body geometry is unavailable.";
         pushTransformUndo(body,c);
         setBodyCsg(body,transform(c,p->new Geometry3D.Vec3(p.x+dx,p.y+dy,p.z+dz)));
         clearSubSelection();ensure3D();invalidate();
@@ -186,18 +186,18 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
         input.setText("90");input.setSelectAllOnFocus(true);
         String axis=axisIndex==0?"X":axisIndex==1?"Y":"Z";
-        new AlertDialog.Builder(getContext()).setTitle("Rotate text "+axis)
-                .setMessage("Angle text text degrees; Center text = Center Body")
+        new AlertDialog.Builder(getContext()).setTitle("Rotate • "+axis)
+                .setMessage("Enter angle in degrees; rotation center = body center.")
                 .setView(input)
-                .setPositiveButton("text",(d,w)->{
+                .setPositiveButton("Apply",(d,w)->{
                     try{float deg=Float.parseFloat(normalizeDigits(input.getText().toString()));toast(rotateBody(body,axisIndex,deg));}
                     catch(Exception e){toast("Angle was entered incorrectly");}
                 }).setNegativeButton("Cancel",null).show();
     }
 
     private String rotateBody(Object body,int axisIndex,float deg) {
-        if(Math.abs(deg)<1e-5f)return"Angle text text";
-        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body text text";
+        if(Math.abs(deg)<1e-5f)return"Rotation angle is zero.";
+        SolidCSG c=bodyCsg(body);if(c==null||c.isEmpty())return"Body geometry is unavailable.";
         Geometry3D.Vec3 center=bodyCenter(c);
         Geometry3D.Vec3 axis=axisIndex==0?new Geometry3D.Vec3(1,0,0):axisIndex==1?new Geometry3D.Vec3(0,1,0):new Geometry3D.Vec3(0,0,1);
         double rad=Math.toRadians(deg);
@@ -212,7 +212,7 @@ public class BRepDirectCadCanvasView extends DirectModelCadCanvasView {
         ArrayDeque<SolidCSG> stack=transformUndo.get(body);
         if(stack==null||stack.isEmpty())return"Undo Transform is empty";
         setBodyCsg(body,stack.removeLast());clearSubSelection();invalidate();
-        return"text Move/Rotate text";
+        return"Move/Rotate undone.";
     }
 
     private void pushTransformUndo(Object body,SolidCSG csg) {
