@@ -85,21 +85,23 @@ fi
 grep -q 'import public_source_fallbacks' "$src/v5/shadow_runner_v52.py" || fail "fallback wiring missing"
 grep -q 'EXECUTION_AUTHORITY=NONE' "$src/v5/shadow_runner_v52.py" || fail "execution lock output missing"
 
-# Pre-write VPS reachability proof for the fallback venue. Public market data only.
+# Pre-write VPS reachability proof for KuCoin public market data. No credentials.
 PYTHONPATH="$src/v5" "$VENV/bin/python" - <<'PY'
 import httpx
 import public_source_fallbacks as s
 with httpx.Client(timeout=8.0, headers={"User-Agent": "ChobYar-Trader/5.4-public-source-probe"}) as client:
-    breadth = s.fetch_bybit_breadth(client)
-    funding, funding_z, funding_samples = s.fetch_bybit_funding(client)
-    oi = s.fetch_bybit_open_interest(client)
+    breadth = s.fetch_kucoin_breadth(client)
+    funding, funding_z, funding_samples = s.fetch_kucoin_funding(client)
+    oi, oi_change = s.fetch_kucoin_open_interest(client)
 assert set(s.REQUIRED_BREADTH).issubset(breadth)
 assert funding is not None and funding_z is not None and funding_samples >= s.MIN_FUNDING_SAMPLES
 assert oi is not None and oi > 0
+assert oi_change is not None
 print("V5_FALLBACK_VPS_PROBE=PASS")
-print("BYBIT_BREADTH_SYMBOLS=" + str(len(breadth)))
-print("BYBIT_FUNDING_SAMPLES=" + str(funding_samples))
-print("BYBIT_OPEN_INTEREST=AVAILABLE")
+print("KUCOIN_BREADTH_SYMBOLS=" + str(len(breadth)))
+print("KUCOIN_FUNDING_SAMPLES=" + str(funding_samples))
+print("KUCOIN_OPEN_INTEREST=AVAILABLE")
+print("KUCOIN_OI_CHANGE=AVAILABLE")
 PY
 
 mkdir -p "$backup"
@@ -140,13 +142,15 @@ assert r.get('foreign_execution_enabled') is False
 assert r.get('geo_bypass_supported') is False
 assert len(r.get('specialists') or []) == 5
 health = r.get('source_health') or {}
-assert health.get('breadth_source') in {'okx', 'bybit'}
-assert health.get('funding_source') in {'okx', 'bybit'}
-assert health.get('open_interest_source') in {'okx', 'bybit'}
+assert health.get('breadth_source') in {'okx', 'kucoin'}
+assert health.get('funding_source') in {'okx', 'kucoin'}
+assert health.get('open_interest_source') in {'okx', 'kucoin'}
 assert set(health.get('resolved_breadth_symbols') or []) >= {'BTC-USDT','ETH-USDT','SOL-USDT'}
 assert int(health.get('resolved_funding_samples') or 0) >= 5
+assert health.get('oi_change_available') is True
 specialists = {x.get('agent'): x for x in (r.get('specialists') or []) if isinstance(x, dict)}
 assert specialists.get('cross_market_breadth', {}).get('available') is True
+assert specialists.get('derivatives_positioning', {}).get('available') is True
 consensus = r.get('shadow_consensus') or {}
 assert int(consensus.get('available_directional_specialists') or 0) >= 3
 assert consensus.get('action') in {'BUY','SELL','WAIT'}
@@ -155,6 +159,8 @@ print('BREADTH_SOURCE=' + str(health.get('breadth_source')))
 print('FUNDING_SOURCE=' + str(health.get('funding_source')))
 print('OPEN_INTEREST_SOURCE=' + str(health.get('open_interest_source')))
 print('OI_CHANGE_AVAILABLE=' + str(bool(health.get('oi_change_available'))).upper())
+print('DERIVATIVES_AVAILABLE=' + str(bool(specialists.get('derivatives_positioning', {}).get('available'))).upper())
+print('BREADTH_AVAILABLE=' + str(bool(specialists.get('cross_market_breadth', {}).get('available'))).upper())
 print('DIRECTIONAL_SPECIALISTS_AVAILABLE=' + str(consensus.get('available_directional_specialists')))
 print('SHADOW_ACTION=' + str(consensus.get('action')))
 PY
@@ -166,5 +172,5 @@ grep -qx 'STOP_LOSS_PCT=0.015' "$ENV_FILE" || fail "risk changed"
 grep -qx 'TAKE_PROFIT_PCT=0.03' "$ENV_FILE" || fail "risk changed"
 grep -qx 'MAX_DAILY_LOSS_PCT=0.03' "$ENV_FILE" || fail "risk changed"
 
-printf 'DEPLOYED_SHA=%s\nPAPER_STATUS=PASS\nLIVE_GATE=LOCKED\nV5_PUBLIC_SOURCE_FALLBACKS=ACTIVE\nOKX_PRIMARY=YES\nBYBIT_FALLBACK=YES\nCOUNCIL_THRESHOLDS=UNCHANGED\nRISK=UNCHANGED\nEXECUTION_AUTHORITY=NONE\nAUTO_PROMOTION=DISABLED\nTRADER_RESTARTED=NO\nSTATUS_RESTARTED=NO\nSHADOW_EXECSTART=UNCHANGED\n' "$EXPECTED_SHA"
+printf 'DEPLOYED_SHA=%s\nPAPER_STATUS=PASS\nLIVE_GATE=LOCKED\nV5_PUBLIC_SOURCE_FALLBACKS=ACTIVE\nOKX_PRIMARY=YES\nKUCOIN_FALLBACK=YES\nCOUNCIL_THRESHOLDS=UNCHANGED\nRISK=UNCHANGED\nEXECUTION_AUTHORITY=NONE\nAUTO_PROMOTION=DISABLED\nTRADER_RESTARTED=NO\nSTATUS_RESTARTED=NO\nSHADOW_EXECSTART=UNCHANGED\n' "$EXPECTED_SHA"
 changed=0
