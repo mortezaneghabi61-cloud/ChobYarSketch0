@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import public_source_fallbacks
 import shadow_runner as base
 from meta_intelligence import enhance_council
 
@@ -23,17 +24,19 @@ def read_scorecard(app_dir: Path) -> dict[str, Any]:
 
 def run(app_dir: Path) -> dict[str, Any]:
     scorecard = read_scorecard(app_dir)
-    original = base.run_council
+    original_council = base.run_council
+    restore_sources = public_source_fallbacks.install(base)
 
     def enhanced(ctx):
-        raw = original(ctx)
+        raw = original_council(ctx)
         return enhance_council(ctx, raw, scorecard, now_ts=time.time())
 
     base.run_council = enhanced
     try:
         return base.run(app_dir)
     finally:
-        base.run_council = original
+        base.run_council = original_council
+        restore_sources()
 
 
 def main() -> None:
@@ -43,6 +46,7 @@ def main() -> None:
     report = run(args.app_dir)
     meta = report.get("meta_intelligence") or {}
     consensus = report.get("shadow_consensus") or {}
+    health = report.get("source_health") or {}
     print("V5_META_SHADOW=PASS")
     print(f"REGIME={report['regime']['label']}")
     print(f"SHADOW_ACTION={consensus.get('action')}")
@@ -52,6 +56,10 @@ def main() -> None:
     print(f"DATA_INTEGRITY={float((meta.get('data_integrity') or {}).get('score') or 0.0):.3f}")
     print(f"UNCERTAINTY={float((meta.get('epistemic_uncertainty') or {}).get('score') or 0.0):.3f}")
     print(f"EXECUTION_STRESS={float((meta.get('execution_stress') or {}).get('score') or 0.0):.3f}")
+    print("BREADTH_SOURCE=" + str(health.get("breadth_source") or "none"))
+    print("FUNDING_SOURCE=" + str(health.get("funding_source") or "none"))
+    print("OPEN_INTEREST_SOURCE=" + str(health.get("open_interest_source") or "none"))
+    print("OI_CHANGE_AVAILABLE=" + str(bool(health.get("oi_change_available"))).upper())
     print("EXECUTION_AUTHORITY=NONE")
 
 

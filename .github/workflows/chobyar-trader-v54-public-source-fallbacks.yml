@@ -1,0 +1,82 @@
+name: ChobYar Trader v5.4 Public Source Fallback Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/public_source_fallbacks.py'
+      - 'ops/chobyar-trader/v5/shadow_runner_v52.py'
+      - 'ops/chobyar-trader/v5/test_public_source_fallbacks.py'
+      - 'ops/chobyar-trader/upgrade-v54-public-source-fallbacks.sh'
+      - '.github/workflows/chobyar-trader-v54-public-source-fallbacks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-source-fallback-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install public-data client
+        run: python -m pip install --disable-pip-version-check httpx
+
+      - name: Compile and run v5 safety regressions
+        run: |
+          set -Eeuo pipefail
+          python -m py_compile \
+            ops/chobyar-trader/v5/public_source_fallbacks.py \
+            ops/chobyar-trader/v5/shadow_runner_v52.py
+          PYTHONPATH=ops/chobyar-trader/v5 python ops/chobyar-trader/v5/test_public_source_fallbacks.py -v
+          PYTHONPATH=ops/chobyar-trader/v5 python ops/chobyar-trader/v5/test_specialist_council.py -v
+          PYTHONPATH=ops/chobyar-trader/v5 python ops/chobyar-trader/v5/test_meta_intelligence.py -v
+          bash -n ops/chobyar-trader/upgrade-v54-public-source-fallbacks.sh
+
+      - name: Enforce no execution or credential surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE 'API_KEY|APIKEY|STATUS_HMAC_SECRET|submit_order|create_order|place_order|withdraw|enable_live|/api/v5/trade/|martingale|leverage' \
+            ops/chobyar-trader/v5/public_source_fallbacks.py \
+            ops/chobyar-trader/v5/shadow_runner_v52.py; then
+            echo 'Forbidden credential/execution marker found' >&2
+            exit 1
+          fi
+          grep -q 'EXECUTION_AUTHORITY=NONE' ops/chobyar-trader/v5/shadow_runner_v52.py
+          grep -q 'public_source_fallbacks.install' ops/chobyar-trader/v5/shadow_runner_v52.py
+
+      - name: Probe KuCoin public fallback endpoints
+        run: |
+          set -Eeuo pipefail
+          PYTHONPATH=ops/chobyar-trader/v5 python - <<'PY'
+          import httpx
+          import public_source_fallbacks as s
+          with httpx.Client(timeout=8.0, headers={'User-Agent': 'ChobYar-Trader/5.4-github-source-probe'}) as client:
+              breadth = s.fetch_kucoin_breadth(client)
+              funding, z, samples = s.fetch_kucoin_funding(client)
+              oi, oi_change = s.fetch_kucoin_open_interest(client)
+          assert set(s.REQUIRED_BREADTH).issubset(breadth)
+          assert funding is not None and z is not None and samples >= s.MIN_FUNDING_SAMPLES
+          assert oi is not None and oi > 0
+          assert oi_change is not None
+          print('PUBLIC_SOURCE_PROBE=PASS')
+          print('KUCOIN_BREADTH_SYMBOLS=' + str(len(breadth)))
+          print('KUCOIN_FUNDING_SAMPLES=' + str(samples))
+          print('KUCOIN_OPEN_INTEREST=AVAILABLE')
+          print('KUCOIN_OI_CHANGE=AVAILABLE')
+          PY
+
+      - name: Confirm unchanged council thresholds
+        run: |
+          set -Eeuo pipefail
+          grep -q 'len(available) < 3' ops/chobyar-trader/v5/specialist_council.py
+          grep -q 'score >= 1.25' ops/chobyar-trader/v5/specialist_council.py
+          grep -q 'score <= -1.25' ops/chobyar-trader/v5/specialist_council.py
+          echo 'COUNCIL_THRESHOLDS=UNCHANGED'
