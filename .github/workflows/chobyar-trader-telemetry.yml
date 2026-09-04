@@ -55,11 +55,11 @@ jobs:
           print('TELEMETRY_CONTRACT=PASS')
           PY
 
-      - name: Probe deployed sanitized VPS report
+      - name: Probe deployed sanitized VPS report over HTTPS
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
-            'http://109.122.247.214:8787/public-report' \
+            'https://109.122.247.214/public-report' \
             -o report.json
           python3 - <<'PY'
           import json
@@ -90,11 +90,11 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - name: Fetch and validate sanitized VPS report
+      - name: Fetch and validate sanitized VPS report over HTTPS
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
-            'http://109.122.247.214:8787/public-report' \
+            'https://109.122.247.214/public-report' \
             -o report.json
           python3 - <<'PY'
           import json
