@@ -56,7 +56,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
         List<Runnable> actions = new ArrayList<>();
 
         if (selection.isEmpty()) {
-            labels.add("✎ First text text Selection text");
+            labels.add("✎ Select geometry first");
             actions.add(this::showSelectionHelp);
         } else {
             if (!lines.isEmpty()) {
@@ -65,7 +65,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             }
 
             if (lines.size() == 1) {
-                labels.add("∠ Angle text Line");
+                labels.add("∠ Angle • Line");
                 actions.add(() -> runParentVoid("showAngleEditor"));
             }
 
@@ -76,23 +76,23 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
                 labels.add("∥ Parallel");
                 actions.add(() -> runParentString("applyParallelConstraint"));
 
-                labels.add("● text text Line");
+                labels.add("● Coincident • Lines");
                 actions.add(() -> runParentString("applyManualCoincident"));
 
-                labels.add("M text text Midpoint Line");
+                labels.add("M Midpoint • Line");
                 actions.add(this::applyEasyMidpoint);
 
-                labels.add("= text text Length");
+                labels.add("= Equal Length");
                 actions.add(this::applyEqualEasy);
 
-                labels.add("∠ Angle text text Line");
+                labels.add("∠ Angle • Lines");
                 actions.add(() -> runParentVoid("showAngleEditor"));
             }
 
             if (selection.size() >= 2 && allSameEqualFamily(selection)) {
                 String equalLabel = lines.size() == selection.size()
-                        ? "= text text Length All Linetext"
-                        : "= text text Radius Circle/Arc";
+                        ? "= Equal Length • All Lines"
+                        : "= Equal Radius • Circle/Arc";
                 if (!labels.contains(equalLabel)) {
                     labels.add(equalLabel);
                     actions.add(this::applyEqualEasy);
@@ -100,28 +100,28 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             }
 
             if (selection.size() == 2 && lines.size() == 1 && curves == 1) {
-                labels.add("T Tangent Line text Circle/Arc");
+                labels.add("T Tangent • Line + Circle/Arc");
                 actions.add(this::applyTangentEasy);
             }
 
             if (selection.size() == 3 && lines.size() == 3) {
-                labels.add("S Symmetry — Axis text text text text");
+                labels.add("S Symmetry • 3 Lines");
                 actions.add(this::applyEasySymmetry);
             }
 
-            labels.add("🔒 Lock / text text Selection");
+            labels.add("🔒 Lock / Unlock Selection");
             actions.add(() -> toast(toggleSelectedLock()));
         }
 
         labels.add(isAutoConstraintsEnabled()
-                ? "⚙ Auto Constraints On — Offtext text"
-                : "⚙ Auto Constraints Off — Ontext text");
+                ? "⚙ Auto Constraints On — Turn Off"
+                : "⚙ Auto Constraints Off — Turn On");
         actions.add(this::toggleAutoConstraintsEasy);
 
-        labels.add("☷ text Sketchtext");
+        labels.add("☷ Sketch Manager");
         actions.add(() -> runParentVoid("showSketchManager"));
 
-        labels.add("? Guidetext text text");
+        labels.add("? Selection Guide");
         actions.add(this::showSelectionHelp);
 
         String[] items = labels.toArray(new String[0]);
@@ -135,28 +135,28 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
 
     public String smartSelectionHint() {
         List<Object> s = selectionObjects();
-        if (s.isEmpty()) return "text not selected. First text text text Line/Circle text Selection text; text Toolstext text text Selection text text text.";
+        if (s.isEmpty()) return "No geometry selected. Select a line, circle, or arc first; available constraint tools adapt to the current selection.";
 
         List<Object> l = lines(s);
         int curves = countCurves(s);
-        if (s.size() == 1 && l.size() == 1) return "1 Line selected: Angle, Horizontal/Vertical text Lock text text text.";
-        if (s.size() == 2 && l.size() == 2) return "2 Line selected: Perpendicular, Parallel, text, Midpoint, Equal text Angle text Linetext text text text.";
-        if (s.size() == 2 && l.size() == 1 && curves == 1) return "1 Line + 1 Circle/Arc: text Tangent / Tangent text Apply text.";
-        if (s.size() == 3 && l.size() == 3) return "3 Line selected: text Line Midpoint text text Axis Symmetry text text text Symmetry text Apply text.";
-        if (allSameEqualFamily(s) && s.size() >= 2) return s.size() + " text text selected: Equal text text text Dimensiontext Ready text.";
-        return s.size() + " text selected. text Constraints text text text text Show text text.";
+        if (s.size() == 1 && l.size() == 1) return "1 line selected: Angle, Horizontal/Vertical, and Lock are available.";
+        if (s.size() == 2 && l.size() == 2) return "2 lines selected: Perpendicular, Parallel, Coincident, Midpoint, Equal, and Angle are available.";
+        if (s.size() == 2 && l.size() == 1 && curves == 1) return "1 line + 1 circle/arc: Tangent is available.";
+        if (s.size() == 3 && l.size() == 3) return "3 lines selected: Symmetry is available; the most central line is chosen as the symmetry axis.";
+        if (allSameEqualFamily(s) && s.size() >= 2) return s.size() + " compatible entities selected: Equal can match their length or radius.";
+        return s.size() + " entities selected. Available constraints are shown for this selection.";
     }
 
     private void showSelectionHelp() {
         new AlertDialog.Builder(getContext())
-                .setTitle("text text Constraints — text")
+                .setTitle("Constraint Selection Guide")
                 .setMessage(
-                        "1 Line: Angle text Horizontal/Vertical \n  \n " +
-                        "2 Line: Perpendicular, Parallel, text, Angle text text text Midpoint \n  \n " +
+                        "1 Line: Angle and Horizontal/Vertical \n  \n " +
+                        "2 Lines: Perpendicular, Parallel, Coincident, Angle, Equal, and Midpoint \n  \n " +
                         "1 Line + 1 Circle/Arc: Tangent \n  \n " +
-                        "2 text text Line/Circle text: Equal \n  \n " +
-                        "3 Line: text text + text Axis = Symmetry \n  \n " +
-                        "text text text text text text text; text text text Selection, text text text text text.")
+                        "2+ matching Lines or Circles/Arcs: Equal \n  \n " +
+                        "3 Lines: Symmetry; the central line is detected as the axis \n  \n " +
+                        "Select geometry first; the menu only shows constraints valid for the current selection.")
                 .setPositiveButton("Got it", null)
                 .show();
     }
@@ -176,7 +176,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
     private void applyEasyMidpoint() {
         List<Object> l = lines(selectionObjects());
         if (l.size() != 2) {
-            toast("text Midpoint, text Line text Selection text");
+            toast("Midpoint requires exactly 2 selected lines.");
             return;
         }
         Object a = l.get(0), b = l.get(1);
@@ -193,7 +193,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
     private void applyEasySymmetry() {
         List<Object> l = lines(selectionObjects());
         if (l.size() != 3) {
-            toast("text Symmetry, text Line text Selection text");
+            toast("Symmetry requires exactly 3 selected lines.");
             return;
         }
         Object axis = bestAxis(l.get(0), l.get(1), l.get(2));
@@ -225,9 +225,9 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             boolean next = !autoConstraintsField.getBoolean(this);
             autoConstraintsField.setBoolean(this, next);
             invalidate();
-            toast(next ? "Auto Constraints On text" : "Auto Constraints Off text");
+            toast(next ? "Auto Constraints On" : "Auto Constraints Off");
         } catch (Exception e) {
-            toast("text Auto Constraints is unavailable");
+            toast("Auto Constraints is unavailable");
         }
     }
 
@@ -243,7 +243,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             Object r = m.invoke(this);
             if (r != null) toast(String.valueOf(r));
         } catch (Exception e) {
-            toast("text text text text Selection text text text text");
+            toast("This constraint could not be applied to the current selection.");
         }
     }
 
@@ -253,7 +253,7 @@ public class EasyCadCanvasView extends ShaprLabCanvasView {
             m.setAccessible(true);
             m.invoke(this);
         } catch (Exception e) {
-            toast("text Tools text is unavailable");
+            toast("This tool is unavailable.");
         }
     }
 
