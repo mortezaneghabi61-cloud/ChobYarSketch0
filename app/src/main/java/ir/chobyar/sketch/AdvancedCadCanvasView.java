@@ -46,55 +46,55 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
     /** Trim crossing line segments to their intersection, keeping the longer side of each line. */
     public String trimSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "text Trim text text Line text text textSelection Selection text";
+        if (pair == null) return "Trim requires exactly two selected lines.";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF p = infiniteIntersection(a, b);
-        if (p == null) return "text text Line Parallel text";
+        if (p == null) return "The selected lines are parallel; Trim cannot find an intersection.";
         if (!pointOnSegment(p, a, 0.05f) || !pointOnSegment(p, b, 0.05f))
-            return "place text text Linetext; text text text Extend text text";
+            return "The selected segments do not cross; use Extend first.";
 
         saveUndo();
         keepFarSideAt(pair.get(0), a, p);
         keepFarSideAt(pair.get(1), b, p);
         invalidate();
-        return "Trim completed — text text text Line Delete text";
+        return "Trim completed — both lines were shortened to the intersection.";
     }
 
     /** Extends only the selected lines that do not currently reach the common infinite-line intersection. */
     public String extendSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "text Extend text text Line text text textSelection Selection text";
+        if (pair == null) return "Extend requires exactly two selected lines.";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF p = infiniteIntersection(a, b);
-        if (p == null) return "Linetext Parallel text text text";
+        if (p == null) return "The selected lines are parallel and cannot be extended to an intersection.";
 
         boolean aHas = pointOnSegment(p, a, 0.05f);
         boolean bHas = pointOnSegment(p, b, 0.05f);
-        if (aHas && bHas) return "text Line text text text text text text; Trim text text text";
+        if (aHas && bHas) return "Both lines already reach the intersection; use Trim if you need to shorten them.";
 
         saveUndo();
         if (!aHas) moveNearestEndpoint(pair.get(0), a, p);
         if (!bHas) moveNearestEndpoint(pair.get(1), b, p);
         invalidate();
-        return "Extend completed text Linetext text place Intersection text";
+        return "Extend completed — the selected lines now meet at the intersection.";
     }
 
     /** Creates a straight chamfer between two selected line directions. */
     public String chamferSelectedLines(float setback) {
-        if (setback <= 0f) return "Distance text text text text text text";
+        if (setback <= 0f) return "Chamfer distance must be greater than zero.";
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "text Chamfer text text Line text Selection text";
+        if (pair == null) return "Chamfer requires exactly two selected lines.";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF corner = infiniteIntersection(a, b);
-        if (corner == null) return "Roy Linetext Parallel Chamfer created text";
+        if (corner == null) return "Parallel lines cannot create a chamfer.";
 
         Branch ba = keptBranch(a, corner);
         Branch bb = keptBranch(b, corner);
         if (ba.length <= setback || bb.length <= setback)
-            return "Distance text text Length text text Linetext text text";
+            return "Chamfer distance exceeds the available length on one of the selected lines.";
 
         PointF pa = add(corner, mul(ba.u, setback));
         PointF pb = add(corner, mul(bb.u, setback));
@@ -110,13 +110,13 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
 
     /** Creates a tangent circular fillet between two selected line directions. */
     public String filletSelectedLines(float radius) {
-        if (radius <= 0f) return "Radius Fillet text text text text text";
+        if (radius <= 0f) return "Fillet radius must be greater than zero.";
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "text Fillet text text Line text Selection text";
+        if (pair == null) return "Fillet requires exactly two selected lines.";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
         PointF corner = infiniteIntersection(a, b);
-        if (corner == null) return "Roy Linetext Parallel Fillet created text";
+        if (corner == null) return "Parallel lines cannot create a fillet.";
 
         Branch ba = keptBranch(a, corner);
         Branch bb = keptBranch(b, corner);
@@ -124,11 +124,11 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         double theta = Math.acos(dot);
         double degrees = Math.toDegrees(theta);
         if (degrees < 5.0 || degrees > 175.0)
-            return "Angle text Line text Fillet text text";
+            return "The angle between the selected lines is not suitable for a fillet.";
 
         float tangent = (float)(radius / Math.tan(theta / 2.0));
         if (tangent <= 0f || tangent >= ba.length || tangent >= bb.length)
-            return "Radius Fillet text Length text Linetext text text";
+            return "Fillet radius exceeds the available length on one of the selected lines.";
 
         PointF pa = add(corner, mul(ba.u, tangent));
         PointF pb = add(corner, mul(bb.u, tangent));
@@ -152,18 +152,18 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
     /** Joins two almost-collinear lines that touch or have only a small gap. */
     public String joinSelectedLines() {
         List<Object> pair = twoSelectedLines();
-        if (pair == null) return "text Join text text Line text Selection text";
+        if (pair == null) return "Join requires exactly two selected lines.";
         LineData a = readLine(pair.get(0));
         LineData b = readLine(pair.get(1));
-        if (a == null || b == null) return "text text Line text Join text";
+        if (a == null || b == null) return "The selected geometry is not a valid pair of lines.";
 
         PointF da = unit(a.x2-a.x1, a.y2-a.y1);
         PointF db = unit(b.x2-b.x1, b.y2-b.y1);
         float cross = Math.abs(da.x*db.y-da.y*db.x);
-        if (cross > 0.025f) return "text Line textRighttext text";
+        if (cross > 0.025f) return "The selected lines are not collinear enough to join.";
 
         EndpointPair nearest = nearestEndpointPair(a, b);
-        if (nearest.distance > 5f) return "Distance text Line text Join text text 5 mm text";
+        if (nearest.distance > 5f) return "The gap between the selected lines is greater than 5 mm.";
 
         PointF farA = nearest.aIndex == 0 ? new PointF(a.x2,a.y2) : new PointF(a.x1,a.y1);
         PointF farB = nearest.bIndex == 0 ? new PointF(b.x2,b.y2) : new PointF(b.x1,b.y1);
@@ -175,7 +175,7 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
         one.add(pair.get(0));
         setSmartSelection(one);
         invalidate();
-        return "text Line Join became";
+        return "The selected lines were joined into one line.";
     }
 
     @Override
@@ -189,11 +189,11 @@ public class AdvancedCadCanvasView extends SmartCadCanvasView {
             if ("TR".equals(cmd) || "TRIM".equals(cmd)) return trimSelectedLines();
             if ("EX".equals(cmd) || "EXTEND".equals(cmd)) return extendSelectedLines();
             if ("F".equals(cmd) || "FILLET".equals(cmd)) {
-                if (a.length < 2) return "Radius Fillet text text text";
+                if (a.length < 2) return "FILLET requires a radius.";
                 return filletSelectedLines(Float.parseFloat(a[1]));
             }
             if ("CHA".equals(cmd) || "CHAMFER".equals(cmd)) {
-                if (a.length < 2) return "Distance Chamfer text text text";
+                if (a.length < 2) return "CHAMFER requires a distance.";
                 return chamferSelectedLines(Float.parseFloat(a[1]));
             }
             if ("J".equals(cmd) || "JOIN".equals(cmd)) return joinSelectedLines();
