@@ -30,17 +30,17 @@ public final class RevolveThreadContractInstrumentationTest {
         WorkspaceController.State profile=controller.begin(WorkspaceController.Tool.REVOLVE);
         assertEquals(WorkspaceController.Phase.SELECT_PRIMARY,profile.phase);
         assertFalse(profile.canCommit());
-        assertTrue(profile.instruction().contains("text"));
+        assertEquals("Select a sketch profile or region to revolve.",profile.instruction());
 
         WorkspaceController.State axis=controller.primaryAccepted();
         assertEquals(WorkspaceController.Phase.SELECT_SECONDARY,axis.phase);
         assertFalse(axis.canCommit());
-        assertTrue(axis.instruction().contains("Axis"));
+        assertEquals("Select a line to use as the revolve axis.",axis.instruction());
 
         WorkspaceController.State preview=controller.previewReady();
         assertEquals(WorkspaceController.Phase.PREVIEW,preview.phase);
         assertTrue(preview.canCommit());
-        assertTrue(preview.instruction().contains("text"));
+        assertEquals("Set Angle and Height; for a threaded revolve use Angle = 360° × turns and Height = Pitch × turns.",preview.instruction());
         assertTrue(preview.instruction().contains("Height"));
         assertTrue(preview.instruction().contains("Pitch"));
     }
