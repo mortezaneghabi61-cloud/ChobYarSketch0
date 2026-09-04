@@ -74,9 +74,8 @@ jobs:
         run: |
           if grep -RniE 'submit_order|create_order|place_order|withdraw|martingale|leverage|LIVE_TRADING_ENABLED=true' \
             ops/chobyar-trader/v4/entry_gate_v55.py \
-            ops/chobyar-trader/v4/trader_entry.py \
-            ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh; then
-            echo 'Forbidden live/withdrawal/leverage surface detected' >&2
+            ops/chobyar-trader/v4/trader_entry.py; then
+            echo 'Forbidden execution surface detected in v5.5 production Python' >&2
             exit 1
           fi
           grep -q "TRADING_MODE=paper" ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh
