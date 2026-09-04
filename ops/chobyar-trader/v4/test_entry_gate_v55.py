@@ -82,8 +82,13 @@ class EntryGateV55Test(unittest.TestCase):
         self.assertEqual(result.reason, "v5_confirmed_buy")
         self.assertEqual(result.v5_action, "BUY")
 
-    def test_v5_wait_blocks_entry(self):
+    def test_v5_wait_pre_meta_blocks_entry(self):
         result = self.evaluate(report(consensus={"action": "WAIT", "pre_meta_action": "WAIT"}))
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.reason, "v5_pre_meta_action_not_buy")
+
+    def test_v5_final_wait_blocks_entry(self):
+        result = self.evaluate(report(consensus={"action": "WAIT", "pre_meta_action": "BUY"}))
         self.assertFalse(result.allowed)
         self.assertEqual(result.reason, "v5_final_action_not_buy")
 
