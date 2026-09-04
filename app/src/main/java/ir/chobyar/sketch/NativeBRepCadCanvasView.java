@@ -21,21 +21,21 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
 
     @Override
     public void showSolidManager(){
-        String nativeState=NativeBRepKernel.isAvailable()?"Native C++ text":"Native C++ is unavailable";
-        String occtState=NativeBRepKernel.occtAvailable()?"OCCT Exact B-Rep text":"OCCT text text ABI text text";
+        String nativeState=NativeBRepKernel.isAvailable()?"Native C++ loaded":"Native C++ is unavailable";
+        String occtState=NativeBRepKernel.occtAvailable()?"OCCT Exact B-Rep loaded":"OCCT unavailable for this ABI";
         String[] items={
-                "▣ Toolstext Solid / Exact Edge text",
-                "⚙ Native + OCCT Kernel / text text",
-                "✓ Native Self-Test / text JNI text Geometry",
+                "▣ Solid Tools / Exact Edge Tools",
+                "⚙ Native + OCCT Kernel / Status",
+                "✓ Native Self-Test / JNI Geometry",
                 "◆ OCCT Exact B-Rep Self-Test",
-                "▣−◯ OCCT Box − Cylinder / Boolean text",
-                "◎ text Sphere ↔ Sphere text C++",
-                "◯ text Plane ↔ Sphere text C++"
+                "▣−◯ OCCT Box − Cylinder / Boolean Test",
+                "◎ Sphere ↔ Sphere / Native C++",
+                "◯ Plane ↔ Sphere / Native C++"
         };
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Native B-Rep")
                 .setMessage(nativeState+"\n"+occtState
-                        +" \n  \n text arm64, Extrude/Revolve/Sweep/Loft, Boolean text Edit 3D text text Open CASCADE text TopoDS_Shape text created text.")
+                        +" \n  \n On arm64, Extrude/Revolve/Sweep/Loft, Boolean and Edit 3D can create and modify Open CASCADE TopoDS_Shape bodies.")
                 .setItems(items,(d,w)->{
                     if(w==0)NativeBRepCadCanvasView.super.showSolidManager();
                     else if(w==1)showNativeStatus();
@@ -67,7 +67,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         msg.append("Backend: ").append(NativeBRepKernel.version());
         msg.append("\nABI bridge: ").append(NativeBRepKernel.isAvailable()?"✓ Loaded":"✗ Not loaded");
         if(!NativeBRepKernel.isAvailable())msg.append("\nError: ").append(NativeBRepKernel.loadError());
-        msg.append("\nOCCT: ").append(NativeBRepKernel.occtAvailable()?"✓ "+NativeBRepKernel.occtVersion():"○ text Native fallback");
+        msg.append("\nOCCT: ").append(NativeBRepKernel.occtAvailable()?"✓ "+NativeBRepKernel.occtVersion():"○ Native fallback");
         msg.append("\n\nNative capabilities:");
         msg.append("\n").append((flags&1)!=0?"✓":"○").append(" Plane ↔ Sphere exact");
         msg.append("\n").append((flags&2)!=0?"✓":"○").append(" Sphere ↔ Sphere exact");
@@ -81,15 +81,15 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
         msg.append("\n").append((flags&512)!=0?"✓":"○").append(" Edge Fillet / Chamfer exact");
         msg.append("\n").append((flags&1024)!=0?"✓":"○").append(" Face Push/Pull / Shell exact");
         msg.append("\n").append((flags&2048)!=0?"✓":"○").append(" Body Move / Rotate exact");
-        msg.append(" \n  \n text text mm text text Show Dimensiontext cm + mm text text.");
-        msg.append(" \n  \n text text text: text text Edge/Face text text Direct Edittext text History text text text text Featuretext.");
+        msg.append(" \n  \n All native dimensions use mm; displayed dimensions may also show cm + mm.");
+        msg.append(" \n  \n Direct-edit status: Edge/Face tools operate through Direct Edit while History keeps parametric features.");
         new AlertDialog.Builder(getContext()).setTitle("Native / OCCT B-Rep Kernel")
                 .setMessage(msg.toString()).setPositiveButton("OK",null).show();
     }
 
     private void showOcctBooleanDemo(){
         if(!NativeBRepKernel.occtAvailable()){
-            toast("OCCT Roy text ABI text text; text arm64 text text text");
+            toast("OCCT is unavailable for this ABI; use an arm64 build with OCCT libraries.");
             return;
         }
         long box=0,cylinder=0,cut=0;
@@ -97,9 +97,9 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
             box=NativeBRepKernel.occtCreateBox(100,80,20);
             cylinder=NativeBRepKernel.occtCreateCylinder(50,40,0,10,20);
             cut=NativeBRepKernel.occtBoolean(NativeBRepKernel.OCCT_SUBTRACT,box,cylinder);
-            if(box==0||cylinder==0||cut==0){toast("OCCT Boolean Done text");return;}
+            if(box==0||cylinder==0||cut==0){toast("OCCT Boolean operation failed.");return;}
             double[] s=NativeBRepKernel.occtShapeStats(cut);
-            if(s.length<4){toast("text B-Rep text text");return;}
+            if(s.length<4){toast("B-Rep shape statistics are unavailable.");return;}
             double expected=100.0*80.0*20.0-Math.PI*10.0*10.0*20.0;
             String msg="Box: 10 cm × 8 cm × 2 cm\n"
                     +"Cylinder cutter: Ø 2 cm / 20 mm\n"
@@ -109,7 +109,7 @@ public class NativeBRepCadCanvasView extends ExactBooleanCadCanvasView {
                     +"Difference: "+num(Math.abs(s[0]-expected))+" mm³\n"
                     +"Face: "+(int)s[1]+"   Edge: "+(int)s[2]+"   Solid: "+(int)s[3]+"\n\n"
                     +NativeBRepKernel.occtShapeSummary(cut)
-                    +" \n  \n text text TopoDS_Shape text OCCT text; Polygon text text text text text Boolean text text.";
+                    +" \n  \n This result is an OCCT TopoDS_Shape; the polygon view is only a display projection of the exact Boolean result.";
             new AlertDialog.Builder(getContext()).setTitle("OCCT Exact Box − Cylinder")
                     .setMessage(msg).setPositiveButton("OK",null).show();
         }finally{
