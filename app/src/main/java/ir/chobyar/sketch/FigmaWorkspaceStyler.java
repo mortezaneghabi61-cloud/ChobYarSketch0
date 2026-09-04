@@ -35,17 +35,17 @@ final class FigmaWorkspaceStyler {
         LABELS.put("⌕\nSearch","⌕ \n Search");
         LABELS.put("✎\nSketch","✎ \n Sketch");
         LABELS.put("＋\nAdd","＋ \n Add");
-        LABELS.put("↗\nTransform","↗ \n text");
+        LABELS.put("↗\nTransform","↗ \n Transform");
         LABELS.put("⌁\nTools","⌁ \n Tools");
-        LABELS.put("mm\nUnits","mm \n text");
+        LABELS.put("mm\nUnits","mm \n Units");
         LABELS.put("×\nClose","× \n Close");
         LABELS.put("×\nDeselect All","× \n Cancel Selection");
         LABELS.put("◉\nMaterial","◉ \n Material");
-        LABELS.put("◫\nSection","◫ \n text");
+        LABELS.put("◫\nSection","◫ \n Section");
         LABELS.put("⌨\nMeasure","⌨ \n Dimension");
         LABELS.put("⌖\nMeasure","⌖ \n Dimension");
         LABELS.put("⌫\nDelete","⌫ \n Delete");
-        LABELS.put("▧\nImage","▧ \n text");
+        LABELS.put("▧\nImage","▧ \n Image");
         LABELS.put("▱\nHistory","▱\nHistory");
     }
 
