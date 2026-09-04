@@ -31,8 +31,8 @@ public final class WorkspaceSessionInstrumentationTest {
         assertEquals(WorkspaceController.Phase.PREVIEW,state.phase);
         assertEquals(WorkspaceController.Selection.BODY,state.selection);
         assertTrue(state.canCommit());
-        assertTrue(state.instruction().contains("text"));
-        assertTrue(state.instruction().contains("text"));
+        assertEquals("Drag the gizmo to move or rotate the body; use the Tools panel for exact values.",state.instruction());
+        assertTrue(state.instruction().contains("Tools panel"));
     }
 
     @Test public void moveRotateWithoutSelectionWaitsThenBecomesPreviewAfterBodyPick() {
@@ -60,12 +60,12 @@ public final class WorkspaceSessionInstrumentationTest {
         WorkspaceController.State target=controller.primaryAccepted();
         assertEquals(WorkspaceController.Phase.SELECT_SECONDARY,target.phase);
         assertFalse(target.canCommit());
-        assertTrue(target.instruction().contains("text"));
+        assertEquals("Select a target face, edge, or axis.",target.instruction());
 
         WorkspaceController.State preview=controller.previewReady();
         assertEquals(WorkspaceController.Phase.PREVIEW,preview.phase);
         assertTrue(preview.canCommit());
-        assertTrue(preview.instruction().contains("Same/Opposed"));
+        assertEquals("Preview the alignment; tap Align to switch between Same and Opposed orientation.",preview.instruction());
     }
 
     @Test public void finishReturnsToolToIdleWithoutDroppingModelingMode() {
