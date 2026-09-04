@@ -67,7 +67,7 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
                 .setTitle("Measure • Measure Sketch")
                 .setMessage(m.details)
                 .setPositiveButton("Close", null)
-                .setNeutralButton("Measure PointtextPoint", (d,w) -> OcctMeasureCadCanvasView.super.setTool(TOOL_MEASURE))
+                .setNeutralButton("Measure Point-to-Point", (d,w) -> OcctMeasureCadCanvasView.super.setTool(TOOL_MEASURE))
                 .show();
     }
 
@@ -78,10 +78,10 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             double bx = num(b,"x2")-num(b,"x1"), by = num(b,"y2")-num(b,"y1");
             double la = Math.hypot(ax,ay), lb = Math.hypot(bx,by);
             double angle = angleBetween(ax,ay,bx,by);
-            String details = "text Line selected \n  \n "
+            String details = "First two selected lines \n  \n "
                     + "Line 1: " + dualLength(la) + "\n"
                     + "Line 2: " + dualLength(lb) + "\n"
-                    + "Angle text text Line: " + fmt(angle) + "°";
+                    + "Angle between Lines: " + fmt(angle) + "°";
             return new Metric("Angle " + fmt(angle) + "°", details);
         }
 
@@ -97,16 +97,16 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             totalLength += m.perimeterOrLength;
             if (m.area >= 0d) { totalArea += m.area; areaCount++; }
         }
-        StringBuilder head = new StringBuilder("text Selection: ").append(selected.size()).append("\n");
-        if (totalLength > 0) head.append("text Length/text: ").append(dualLength(totalLength)).append("\n");
-        if (areaCount > 0) head.append("text text text: ").append(dualArea(totalArea)).append("\n");
+        StringBuilder head = new StringBuilder("Selection: ").append(selected.size()).append("\n");
+        if (totalLength > 0) head.append("Total Length/Perimeter: ").append(dualLength(totalLength)).append("\n");
+        if (areaCount > 0) head.append("Total Area: ").append(dualArea(totalArea)).append("\n");
         head.append("\n").append(rows);
         String shortText = totalLength > 0 ? "Σ " + dualLength(totalLength) : "Measure";
         return new Metric(shortText, head.toString(), totalLength, areaCount>0?totalArea:-1d);
     }
 
     private Metric inspectOne(Object e) {
-        if (e == null) return new Metric("", "text text not selected");
+        if (e == null) return new Metric("", "No geometry selected");
         String type = e.getClass().getSimpleName();
 
         if ("LineEntity".equals(type)) {
@@ -115,7 +115,7 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             double angle=Math.toDegrees(Math.atan2(dy,dx));
             if(angle<0) angle+=180d;
             if(angle>=180d) angle-=180d;
-            String d="Line \n Length: "+dualLength(len)+" \n Angle text text X: "+fmt(angle)+"°";
+            String d="Line \n Length: "+dualLength(len)+" \n Angle from X-axis: "+fmt(angle)+"°";
             return new Metric(dualLength(len)+" • "+fmt(angle)+"°", d, len, -1d);
         }
 
@@ -129,21 +129,21 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
             double perimeter=2d*Math.PI*r, area=Math.PI*r*r;
             String d="Circle \n Radius: "+dualLength(r)
                     +" \n Diameter: "+dualLength(2d*r)
-                    +" \n text: "+dualLength(perimeter)
-                    +" \n text: "+dualArea(area)
-                    +" \n Angle text: 360°";
-            return new Metric("text "+dualLength(perimeter)+" • text "+dualArea(area),d,perimeter,area);
+                    +" \n Circumference: "+dualLength(perimeter)
+                    +" \n Area: "+dualArea(area)
+                    +" \n Central Angle: 360°";
+            return new Metric("Circumference "+dualLength(perimeter)+" • Area "+dualArea(area),d,perimeter,area);
         }
 
         if ("ArcEntity".equals(type)) {
             double r=Math.abs(num(e,"r")), sweep=Math.abs(num(e,"sweep"));
             double arcLength=Math.toRadians(sweep)*r;
             double chord=2d*r*Math.sin(Math.toRadians(sweep)/2d);
-            String d="text \n Radius: "+dualLength(r)
-                    +" \n Angle text: "+fmt(sweep)+"°"
-                    +" \n Length text: "+dualLength(arcLength)
-                    +" \n text: "+dualLength(Math.abs(chord));
-            return new Metric("text "+dualLength(arcLength)+" • "+fmt(sweep)+"°",d,arcLength,-1d);
+            String d="Arc \n Radius: "+dualLength(r)
+                    +" \n Sweep Angle: "+fmt(sweep)+"°"
+                    +" \n Arc Length: "+dualLength(arcLength)
+                    +" \n Chord: "+dualLength(Math.abs(chord));
+            return new Metric("Arc Length "+dualLength(arcLength)+" • "+fmt(sweep)+"°",d,arcLength,-1d);
         }
 
         if ("PolygonEntity".equals(type)) {
@@ -153,26 +153,26 @@ public class OcctMeasureCadCanvasView extends OcctStableCadCanvasView {
         if ("PolylineEntity".equals(type)) {
             List<PointF> p=points(e,"points");
             boolean closed=bool(e,"closed");
-            if(closed) return polygonMetric("Polyline text",p,true);
+            if(closed) return polygonMetric("Closed Polyline",p,true);
             double len=pathLength(p,false);
             String angles=vertexAngles(p,false);
-            String d="Polyline text \n Length text: "+dualLength(len)+(angles.isEmpty()?"":" \n Angle text: "+angles);
+            String d="Polyline \n Length: "+dualLength(len)+(angles.isEmpty()?"":" \n Vertex Angles: "+angles);
             return new Metric("Length "+dualLength(len),d,len,-1d);
         }
 
-        return new Metric("", "text text text text text text text text text: \n "+type);
+        return new Metric("", "Measurement is unavailable for geometry type: \n "+type);
     }
 
     private Metric polygonMetric(String label,List<PointF> p,boolean closed) {
-        if(p==null||p.size()<2) return new Metric("",label+" invalid text");
+        if(p==null||p.size()<2) return new Metric("",label+" has invalid geometry");
         double perimeter=pathLength(p,closed);
         double area=closed&&p.size()>=3?Math.abs(shoelace(p)):-1d;
         String angles=closed&&p.size()>=3?vertexAngles(p,true):"";
         StringBuilder d=new StringBuilder(label)
-                .append(" \n text: ").append(dualLength(perimeter));
-        if(area>=0)d.append(" \n text: ").append(dualArea(area));
-        if(!angles.isEmpty())d.append(" \n Angle text: ").append(angles);
-        String shortText="text "+dualLength(perimeter)+(area>=0?" • text "+dualArea(area):"");
+                .append(" \n Perimeter: ").append(dualLength(perimeter));
+        if(area>=0)d.append(" \n Area: ").append(dualArea(area));
+        if(!angles.isEmpty())d.append(" \n Vertex Angles: ").append(angles);
+        String shortText="Perimeter "+dualLength(perimeter)+(area>=0?" • Area "+dualArea(area):"");
         return new Metric(shortText,d.toString(),perimeter,area);
     }
 
