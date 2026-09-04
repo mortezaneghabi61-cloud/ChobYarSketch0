@@ -9,6 +9,15 @@ adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
+focus_touch_target() {
+  adb shell input keyevent KEYCODE_WAKEUP || true
+  adb shell am force-stop ir.chobyar.sketch || true
+  adb shell am start -W -n ir.chobyar.sketch/.ChobYarActivity \
+    | tee test-artifacts/touch-target-launch.txt
+  grep -Fq 'Status: ok' test-artifacts/touch-target-launch.txt
+  sleep 1
+}
+
 run_contract() {
   local class="$1"
   local slug="$2"
@@ -17,6 +26,10 @@ run_contract() {
   local instrument_status=0
 
   while true; do
+    if [[ "$class" == "TouchInputContractInstrumentationTest" ]]; then
+      focus_touch_target
+    fi
+
     adb logcat -c
     set +e
     adb shell am instrument -w -e class "ir.chobyar.sketch.${class}" \
