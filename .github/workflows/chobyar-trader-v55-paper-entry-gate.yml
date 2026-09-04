@@ -1,0 +1,83 @@
+name: ChobYar Trader v5.5 Paper Entry Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/entry_gate_v55.py'
+      - 'ops/chobyar-trader/v4/trader_entry.py'
+      - 'ops/chobyar-trader/v4/test_entry_gate_v55.py'
+      - 'ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh'
+      - '.github/workflows/chobyar-trader-v55-paper-entry-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-entry-confirmation:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Compile and shell syntax
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v4/trader.py \
+            ops/chobyar-trader/v4/trader_entry.py \
+            ops/chobyar-trader/v4/global_sources.py \
+            ops/chobyar-trader/v4/entry_gate_v55.py
+          bash -n ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh
+      - name: v5.5 deterministic entry-gate tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 ops/chobyar-trader/v4/test_entry_gate_v55.py -v
+      - name: Existing Paper regression
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: |
+          python3 ops/chobyar-trader/v4/test_v4.py -v
+          python3 ops/chobyar-trader/v4/test_global_sources.py -v
+      - name: Existing v5 Meta regression
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5
+        run: |
+          python3 ops/chobyar-trader/v5/test_specialist_council.py -v
+          python3 ops/chobyar-trader/v5/test_meta_intelligence.py -v
+          python3 ops/chobyar-trader/v5/test_public_source_fallbacks.py -v
+      - name: Entry-only fail-closed contract
+        run: |
+          grep -q 'if action != "BUY"' ops/chobyar-trader/v4/trader_entry.py
+          grep -q 'return action, score, reason' ops/chobyar-trader/v4/trader_entry.py
+          grep -q 'v5_report_stale' ops/chobyar-trader/v4/entry_gate_v55.py
+          grep -q 'v5_final_action_not_buy' ops/chobyar-trader/v4/entry_gate_v55.py
+          grep -q 'v5_meta_hold' ops/chobyar-trader/v4/entry_gate_v55.py
+          grep -q 'v5_risk_veto' ops/chobyar-trader/v4/entry_gate_v55.py
+          grep -q 'v4_tape_conflicts_with_buy' ops/chobyar-trader/v4/entry_gate_v55.py
+          grep -q 'execution_authority.*False' ops/chobyar-trader/v4/entry_gate_v55.py
+      - name: Approved risk and legacy exit thresholds unchanged
+        run: |
+          grep -q 'MAX_POSITION_PCT = finite(os.getenv("MAX_POSITION_PCT", "0.25"), 0.25)' ops/chobyar-trader/v4/trader.py
+          grep -q 'STOP_LOSS_PCT = finite(os.getenv("STOP_LOSS_PCT", "0.015"), 0.015)' ops/chobyar-trader/v4/trader.py
+          grep -q 'TAKE_PROFIT_PCT = finite(os.getenv("TAKE_PROFIT_PCT", "0.03"), 0.03)' ops/chobyar-trader/v4/trader.py
+          grep -q 'MAX_DAILY_LOSS_PCT = finite(os.getenv("MAX_DAILY_LOSS_PCT", "0.03"), 0.03)' ops/chobyar-trader/v4/trader.py
+          grep -q 'ENTRY_THRESHOLD = finite(os.getenv("ENTRY_SCORE_THRESHOLD", "2.4"), 2.4)' ops/chobyar-trader/v4/trader.py
+          grep -q 'EXIT_THRESHOLD = finite(os.getenv("EXIT_SCORE_THRESHOLD", "-2.0"), -2.0)' ops/chobyar-trader/v4/trader.py
+          grep -q 'if change <= -STOP_LOSS_PCT' ops/chobyar-trader/v4/trader.py
+          grep -q 'if change >= TAKE_PROFIT_PCT' ops/chobyar-trader/v4/trader.py
+          grep -q 'if score <= EXIT_THRESHOLD' ops/chobyar-trader/v4/trader.py
+      - name: No live, withdrawal or leverage surface
+        run: |
+          if grep -RniE 'submit_order|create_order|place_order|withdraw|martingale|leverage|LIVE_TRADING_ENABLED=true' \
+            ops/chobyar-trader/v4/entry_gate_v55.py \
+            ops/chobyar-trader/v4/trader_entry.py \
+            ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh; then
+            echo 'Forbidden live/withdrawal/leverage surface detected' >&2
+            exit 1
+          fi
+          grep -q "TRADING_MODE=paper" ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh
+          grep -q "LIVE_TRADING_ENABLED=false" ops/chobyar-trader/upgrade-v55-paper-entry-gate.sh
