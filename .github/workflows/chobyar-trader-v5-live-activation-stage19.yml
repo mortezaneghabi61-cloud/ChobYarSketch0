@@ -1,0 +1,69 @@
+name: ChobYar Trader v5 Live Activation Stage 19
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py'
+      - '.github/workflows/chobyar-trader-v5-live-activation-stage19.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage19-live-activation-boundary:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact tested revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "STAGE19_EXACT_HEAD expected=${expected} actual=${actual}"
+          test "$actual" = "$expected"
+
+      - name: Compile Stage 19 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py
+
+      - name: Run Stage 19 tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ops/chobyar-trader/v5/execution_safety
+          python3 -m pytest -q test_live_activation_stage19.py
+
+      - name: Enforce non-executing boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          files='ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py'
+          ! grep -Eiq '(/v1/account/orders|\.post\(|\.put\(|\.patch\(|\.delete\(|requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete))' $files
+          grep -q 'live_ready=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'execution_authority=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'order_submission_authority=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'current_runtime_must_still_be_paper' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'current_live_gate_must_still_be_false' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'approved_live_cap_must_equal_10_usdt' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'withdrawal_permission_must_remain_off' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          grep -q 'open_orders_must_be_zero_before_transition' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+
+      - name: Verify production runtime remains paper-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'MODE != "paper" or LIVE != "false"' ops/chobyar-trader/v5/execution_safety/trader.py
+          ! grep -Eq '/v1/account/orders|\.post\(' ops/chobyar-trader/v5/execution_safety/trader.py
