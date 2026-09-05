@@ -61,7 +61,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             sourceEntities.add(profile);if(axis!=null)sourceEntities.add(axis);
         }
         @Override String detail(){
-            String thread=Math.abs(heightMm)<1e-5f?"":" • H "+fmt(heightMm)+" mm • "+fmt(Math.abs(angleDeg)/360f)+" text • Pitch "+fmt(pitchMm())+" mm";
+            String thread=Math.abs(heightMm)<1e-5f?"":" • H "+fmt(heightMm)+" mm • "+fmt(Math.abs(angleDeg)/360f)+" turns • Pitch "+fmt(pitchMm())+" mm";
             return "Revolve • "+fmt(angleDeg)+"°"+thread+(axisEntity!=null?" • Axis Line":" • Axis "+(xAxis?"X":"Y"))+(broken?" • ⚠":"");
         }
         float pitchMm(){float turns=Math.abs(angleDeg)/360f;return turns<1e-5f?0f:Math.abs(heightMm)/turns;}
