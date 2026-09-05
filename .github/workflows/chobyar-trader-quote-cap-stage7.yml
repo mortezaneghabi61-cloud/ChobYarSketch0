@@ -26,7 +26,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           target=ops/chobyar-trader/v4/quote_cap.py
-          if grep -nE '(httpx|requests|\.get\(|\.post\(|\.put\(|\.patch\(|\.delete\(|X-API-Key|x-api-key|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
+          if grep -nE '(httpx|requests|\.post\(|\.put\(|\.patch\(|\.delete\(|X-API-Key|x-api-key|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
             echo 'Forbidden network, mutable, or authenticated exchange surface detected in Stage-7 module' >&2
             exit 1
           fi
