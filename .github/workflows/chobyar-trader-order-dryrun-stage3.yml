@@ -1,0 +1,34 @@
+name: ChobYar Trader Order Dry Run Stage 3
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/order_dryrun.py'
+      - 'ops/chobyar-trader/v4/test_order_dryrun.py'
+      - '.github/workflows/chobyar-trader-order-dryrun-stage3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  order-dryrun-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/order_dryrun.py ops/chobyar-trader/v4/test_order_dryrun.py
+      - name: Deterministic Stage-3 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_order_dryrun.py
+      - name: No exchange mutation surface
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/order_dryrun.py
+          if grep -nE '(\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|X-API-Key|api\.wallex\.ir)' "$target"; then
+            echo 'Forbidden exchange mutation or authenticated network surface detected in Stage-3 dry-run module' >&2
+            exit 1
+          fi
+          grep -q 'evaluate_live_safety(env)' "$target"
+          grep -q 'stage3_dry_run_validated_no_submission' "$target"
