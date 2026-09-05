@@ -1,0 +1,54 @@
+name: ChobYar Trader v5 Live Cap Stage 16
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_cap_stage16.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_cap_stage16.py'
+      - '.github/workflows/chobyar-trader-v5-live-cap-stage16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-cap-stage16:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Frozen v4 remains untouched
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = 'b4b7cddde55cf683b42a31b24bd598ce2c78abb2'
+
+      - name: Compile Stage-16
+        run: python3 -m py_compile "$V5/live_cap_stage16.py" "$V5/test_live_cap_stage16.py"
+
+      - name: Deterministic Stage-16 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: python3 "$V5/test_live_cap_stage16.py" -v
+
+      - name: Approved cap is exactly 10 USDT
+        run: |
+          set -Eeuo pipefail
+          grep -q 'OPERATOR_APPROVED_MAX_ORDER_USDT = Decimal("10")' "$V5/live_cap_stage16.py"
+          grep -q 'ready_to_change_live_env=False' "$V5/live_cap_stage16.py"
+          grep -q 'live_ready=False' "$V5/live_cap_stage16.py"
+          grep -q 'execution_authority=False' "$V5/live_cap_stage16.py"
+
+      - name: No exchange mutation surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE '\.(post|put|patch|delete)\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(' \
+            "$V5/live_cap_stage16.py" "$V5/test_live_cap_stage16.py"; then
+            echo 'Forbidden mutable exchange surface in Stage-16' >&2
+            exit 1
+          fi
