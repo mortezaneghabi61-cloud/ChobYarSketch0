@@ -1,0 +1,51 @@
+name: ChobYar Trader v5 Live Guard Stage 18
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/**'
+      - '.github/workflows/chobyar-trader-v5-live-guard-stage18.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage18-live-guard:
+    runs-on: ubuntu-24.04
+    env:
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and test stage18
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile "$V5/live_guard_stage18.py" "$V5/test_live_guard_stage18.py"
+          python3 "$V5/test_live_guard_stage18.py" -v
+
+      - name: Assert approved boundary
+        run: |
+          grep -q 'APPROVED_SYMBOL = "BTCUSDT"' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_QUOTE_ASSET = "USDT"' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_MAX_POSITION_PCT = Decimal("0.25")' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_STOP_LOSS_PCT = Decimal("0.015")' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_TAKE_PROFIT_PCT = Decimal("0.03")' "$V5/live_guard_stage18.py"
+          grep -q 'APPROVED_MAX_DAILY_LOSS_PCT = Decimal("0.03")' "$V5/live_guard_stage18.py"
+
+      - name: No execution or mutation authority in stage18
+        run: |
+          if grep -nEi '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(' "$V5/live_guard_stage18.py" "$V5/test_live_guard_stage18.py"; then
+            echo 'Forbidden mutable exchange surface detected in Stage-18' >&2
+            exit 1
+          fi
+          grep -q 'live_ready=False' "$V5/live_guard_stage18.py"
+          grep -q 'execution_authority=False' "$V5/live_guard_stage18.py"
