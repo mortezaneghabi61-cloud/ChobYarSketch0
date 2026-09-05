@@ -40,20 +40,10 @@ class Client:
     def get(self, path):
         self.paths.append(path)
         if path == "/v1/markets":
-            return Response({
-                "success": True,
-                "result": {
-                    "symbols": {
-                        "BTCUSDT": {
-                            "symbol": "BTCUSDT",
-                            "stepSize": 6,
-                            "tickSize": 2,
-                            "minNotional": "10",
-                            "maxNotional": "100000",
-                        }
-                    }
-                },
-            })
+            return Response({"success": True, "result": {"symbols": {"BTCUSDT": {
+                "symbol": "BTCUSDT", "stepSize": 6, "tickSize": 2,
+                "minNotional": "10", "maxNotional": "100000",
+            }}}})
         if path == "/hector/web/v1/markets":
             return Response({"result": [{"symbol": "BTCUSDT", "is_spot": True}]})
         raise AssertionError(path)
@@ -61,13 +51,10 @@ class Client:
 
 class Stage11Tests(unittest.TestCase):
     def test_metadata_notional_is_quote_asset(self):
-        rules = parse_quote_market_rules({
-            "success": True,
-            "result": {"symbols": {"BTCUSDT": {
-                "symbol": "BTCUSDT", "stepSize": 6, "tickSize": 2,
-                "minNotional": "10", "maxNotional": "100",
-            }}},
-        }, "BTCUSDT")
+        rules = parse_quote_market_rules({"success": True, "result": {"symbols": {"BTCUSDT": {
+            "symbol": "BTCUSDT", "stepSize": 6, "tickSize": 2,
+            "minNotional": "10", "maxNotional": "100",
+        }}}}, "BTCUSDT")
         self.assertEqual(rules.quote_asset, "USDT")
         self.assertEqual(rules.min_notional_quote, Decimal("10"))
 
@@ -95,7 +82,7 @@ class Stage11Tests(unittest.TestCase):
     def test_live_enabled_is_fail_closed(self):
         env = dict(BASE_ENV)
         env["LIVE_TRADING_ENABLED"] = "true"
-        with self.assertRaisesRegex(RuntimeError, "stage1_blocked"):
+        with self.assertRaisesRegex(RuntimeError, "v5_safety_blocked"):
             run_quote_order_preflight(
                 env=env,
                 client=Client(),
