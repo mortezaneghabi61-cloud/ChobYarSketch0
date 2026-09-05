@@ -1,0 +1,35 @@
+name: ChobYar Trader Read Balance Stage 2
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/wallex_readonly.py'
+      - 'ops/chobyar-trader/v4/test_wallex_readonly.py'
+      - '.github/workflows/chobyar-trader-read-balance-stage2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/wallex_readonly.py ops/chobyar-trader/v4/test_wallex_readonly.py
+      - name: Deterministic read-balance tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_wallex_readonly.py
+      - name: GET-only exchange surface
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/wallex_readonly.py
+          if grep -nE '(\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
+            echo 'Forbidden mutable exchange surface detected in stage-2 module' >&2
+            exit 1
+          fi
+          grep -q 'BALANCES_PATH = "/v1/account/balances"' "$target"
+          grep -q 'client.get(' "$target"
+          grep -q 'evaluate_live_safety(env)' "$target"
