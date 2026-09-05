@@ -1,0 +1,35 @@
+name: ChobYar Trader Market Metadata Stage 4
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/market_metadata.py'
+      - 'ops/chobyar-trader/v4/test_market_metadata.py'
+      - '.github/workflows/chobyar-trader-market-metadata-stage4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  market-metadata-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/order_dryrun.py ops/chobyar-trader/v4/market_metadata.py ops/chobyar-trader/v4/test_market_metadata.py
+      - name: Deterministic Stage-4 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_market_metadata.py
+      - name: GET-only public market metadata surface
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/market_metadata.py
+          if grep -nE '(\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|X-API-Key|x-api-key)' "$target"; then
+            echo 'Forbidden mutable or authenticated exchange surface detected in Stage-4 module' >&2
+            exit 1
+          fi
+          grep -q 'MARKETS_PATH = "/v1/markets"' "$target"
+          grep -q 'client.get(MARKETS_PATH)' "$target"
+          grep -q 'evaluate_order_dry_run' "$target"
