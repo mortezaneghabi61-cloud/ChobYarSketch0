@@ -44,38 +44,42 @@ def evaluate_manual_live_arm_request(request: ManualLiveArmRequest) -> ManualLiv
     symbol = (request.symbol or "").strip().upper()
     quote_asset = (request.quote_asset or "").strip().upper()
 
-    common = dict(
-        symbol=symbol,
-        quote_asset=quote_asset,
-        ready_to_request_manual_trade_permission=False,
-        ready_to_change_live_env=False,
-        live_ready=False,
-        execution_authority=False,
-    )
+    def blocked(reason: str) -> ManualLiveArmDecision:
+        return ManualLiveArmDecision(
+            allowed=False,
+            reason=reason,
+            symbol=symbol,
+            quote_asset=quote_asset,
+            approved_max_order_quote=None,
+            ready_to_request_manual_trade_permission=False,
+            ready_to_change_live_env=False,
+            live_ready=False,
+            execution_authority=False,
+        )
 
     if not request.final_readiness_passed:
-        return ManualLiveArmDecision(False, "final_readiness_required", None, **common)
+        return blocked("final_readiness_required")
     if symbol != "BTCUSDT" or quote_asset != "USDT":
-        return ManualLiveArmDecision(False, "only_btcusdt_usdt_is_approved_for_stage15", None, **common)
+        return blocked("only_btcusdt_usdt_is_approved_for_stage15")
     if not request.read_permission_enabled:
-        return ManualLiveArmDecision(False, "read_permission_required", None, **common)
+        return blocked("read_permission_required")
     if request.trade_permission_enabled:
-        return ManualLiveArmDecision(False, "trade_permission_must_still_be_off_before_manual_arm", None, **common)
+        return blocked("trade_permission_must_still_be_off_before_manual_arm")
     if request.withdrawal_permission_enabled:
-        return ManualLiveArmDecision(False, "withdrawal_permission_must_remain_off", None, **common)
+        return blocked("withdrawal_permission_must_remain_off")
     if not request.exact_ip_allowlist:
-        return ManualLiveArmDecision(False, "single_expected_ip_allowlist_required", None, **common)
+        return blocked("single_expected_ip_allowlist_required")
     if request.leverage_enabled or request.margin_enabled or request.futures_enabled or request.otc_enabled:
-        return ManualLiveArmDecision(False, "non_spot_authority_must_remain_disabled", None, **common)
+        return blocked("non_spot_authority_must_remain_disabled")
     if not request.explicit_confirmation:
-        return ManualLiveArmDecision(False, "explicit_manual_live_arm_confirmation_required", None, **common)
+        return blocked("explicit_manual_live_arm_confirmation_required")
 
     try:
         cap = Decimal((request.approved_max_order_quote or "").strip())
     except (InvalidOperation, ValueError):
-        return ManualLiveArmDecision(False, "approved_quote_cap_invalid", None, **common)
+        return blocked("approved_quote_cap_invalid")
     if not cap.is_finite() or cap <= 0:
-        return ManualLiveArmDecision(False, "approved_quote_cap_must_be_positive", None, **common)
+        return blocked("approved_quote_cap_must_be_positive")
 
     return ManualLiveArmDecision(
         allowed=True,
