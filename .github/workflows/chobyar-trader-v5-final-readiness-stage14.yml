@@ -39,7 +39,7 @@ jobs:
       - name: No execution authority contract
         run: |
           set -Eeuo pipefail
-          grep -q 'live_ready=False' "$V5/final_readiness.py"
+          grep -q 'live_ready is always False' "$V5/final_readiness.py"
           grep -q 'trade_enabled=False' "$V5/test_final_readiness.py"
           grep -q 'withdrawal_enabled=False' "$V5/test_final_readiness.py"
           grep -q 'LIVE_TRADING_ENABLED.*false' "$V5/test_final_readiness.py"
