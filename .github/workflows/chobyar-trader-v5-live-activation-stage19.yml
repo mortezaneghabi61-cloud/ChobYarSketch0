@@ -2,9 +2,10 @@ name: ChobYar Trader v5 Live Activation Stage 19
 
 on:
   pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
     paths:
-      - 'ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py'
-      - 'ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py'
+      - 'ops/chobyar-trader/v5/execution_safety/**'
       - '.github/workflows/chobyar-trader-v5-live-activation-stage19.yml'
   workflow_dispatch:
 
@@ -14,6 +15,8 @@ permissions:
 jobs:
   stage19-live-activation-boundary:
     runs-on: ubuntu-24.04
+    env:
+      V5: ops/chobyar-trader/v5/execution_safety
     steps:
       - name: Checkout exact tested revision
         uses: actions/checkout@v4
@@ -31,39 +34,39 @@ jobs:
           echo "STAGE19_EXACT_HEAD expected=${expected} actual=${actual}"
           test "$actual" = "$expected"
 
-      - name: Compile Stage 19 boundary
+      - name: Compile and test Stage 19 boundary
         shell: bash
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
         run: |
           set -euo pipefail
-          python3 -m py_compile \
-            ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py \
-            ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py
-
-      - name: Run Stage 19 tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd ops/chobyar-trader/v5/execution_safety
-          python3 -m pytest -q test_live_activation_stage19.py
+          python3 -m py_compile "$V5/live_activation_stage19.py" "$V5/test_live_activation_stage19.py"
+          python3 "$V5/test_live_activation_stage19.py" -v
 
       - name: Enforce non-executing boundary
         shell: bash
         run: |
           set -euo pipefail
-          files='ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py ops/chobyar-trader/v5/execution_safety/test_live_activation_stage19.py'
-          ! grep -Eiq '(/v1/account/orders|\.post\(|\.put\(|\.patch\(|\.delete\(|requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete))' $files
-          grep -q 'live_ready=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'execution_authority=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'order_submission_authority=False' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'current_runtime_must_still_be_paper' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'current_live_gate_must_still_be_false' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'approved_live_cap_must_equal_10_usdt' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'withdrawal_permission_must_remain_off' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
-          grep -q 'open_orders_must_be_zero_before_transition' ops/chobyar-trader/v5/execution_safety/live_activation_stage19.py
+          files="$V5/live_activation_stage19.py $V5/test_live_activation_stage19.py"
+          if grep -nEiq '(/v1/account/orders|\.post\(|\.put\(|\.patch\(|\.delete\(|requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete))' $files; then
+            echo 'Forbidden mutable exchange surface detected in Stage-19' >&2
+            exit 1
+          fi
+          grep -q 'live_ready=False' "$V5/live_activation_stage19.py"
+          grep -q 'execution_authority=False' "$V5/live_activation_stage19.py"
+          grep -q 'order_submission_authority=False' "$V5/live_activation_stage19.py"
+          grep -q 'current_runtime_must_still_be_paper' "$V5/live_activation_stage19.py"
+          grep -q 'current_live_gate_must_still_be_false' "$V5/live_activation_stage19.py"
+          grep -q 'approved_live_cap_must_equal_10_usdt' "$V5/live_activation_stage19.py"
+          grep -q 'withdrawal_permission_must_remain_off' "$V5/live_activation_stage19.py"
+          grep -q 'open_orders_must_be_zero_before_transition' "$V5/live_activation_stage19.py"
 
       - name: Verify production runtime remains paper-only
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'MODE != "paper" or LIVE != "false"' ops/chobyar-trader/v5/execution_safety/trader.py
-          ! grep -Eq '/v1/account/orders|\.post\(' ops/chobyar-trader/v5/execution_safety/trader.py
+          grep -q 'MODE != "paper" or LIVE != "false"' "$V5/trader.py"
+          if grep -Eq '/v1/account/orders|\.post\(' "$V5/trader.py"; then
+            echo 'Unexpected order submission surface found in production runtime' >&2
+            exit 1
+          fi
