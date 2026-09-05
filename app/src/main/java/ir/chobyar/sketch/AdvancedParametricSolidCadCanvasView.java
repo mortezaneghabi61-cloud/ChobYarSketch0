@@ -561,7 +561,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         List<Object> all=entities();
         if(firstNumber<1||secondNumber<1||firstNumber>all.size()||secondNumber>all.size())
             return "LOFT3D — Entity numbers are out of range; Available entities: "+all.size();
-        if(firstNumber==secondNumber)return "text text Loft text text text";
+        if(firstNumber==secondNumber)return "LOFT3D — Profiles must use different entity numbers";
         return createLoft(all.get(firstNumber-1),all.get(secondNumber-1));
     }
 
