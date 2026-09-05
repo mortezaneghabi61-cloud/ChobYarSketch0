@@ -74,7 +74,6 @@ def parse_quote_market_rules(payload: object, symbol: str) -> QuoteMarketRules:
         raise RuntimeError("symbol_quote_not_approved")
     if not isinstance(payload, Mapping) or payload.get("success") is not True:
         raise RuntimeError("quote_market_metadata_invalid_payload")
-
     result = payload.get("result")
     symbols = result.get("symbols") if isinstance(result, Mapping) else None
     raw = symbols.get(wanted) if isinstance(symbols, Mapping) else None
@@ -82,7 +81,6 @@ def parse_quote_market_rules(payload: object, symbol: str) -> QuoteMarketRules:
         raise RuntimeError("quote_market_symbol_missing")
     if str(raw.get("symbol") or "").strip().upper() != wanted:
         raise RuntimeError("quote_market_symbol_mismatch")
-
     quantity_step = _power10_precision(raw.get("stepSize"))
     price_tick = _power10_precision(raw.get("tickSize"))
     min_notional = _decimal(raw.get("minNotional"))
@@ -152,4 +150,13 @@ def run_quote_order_preflight(*, env: Mapping[str, str], client: GetClient, inte
         raise RuntimeError("active_spot_required")
 
     normalized = QuoteOrderIntent(symbol, side, quantity, price)
-    return QuoteOrderPreflight(True, "quote_and_spot_preflight_validated_no_submission", False, normalized, rules, notional, cap, spot)
+    return QuoteOrderPreflight(
+        allowed=True,
+        reason="quote_and_spot_preflight_validated_no_submission",
+        live_ready=False,
+        intent=normalized,
+        rules=rules,
+        notional_quote=notional,
+        quote_cap=cap,
+        spot=spot,
+    )
