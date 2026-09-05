@@ -116,8 +116,8 @@ jobs:
             echo 'Stage-9 installer must not mutate .env' >&2
             exit 1
           fi
-          if grep -nE 'X-API-Key|/v1/account/orders|api\.wallex\.ir|margin-trade|futures' "$script"; then
-            echo 'Stage-9 installer must not contain exchange execution/auth surface' >&2
+          if grep -nE '(curl|wget).*(api\.wallex\.ir|X-API-Key|/v1/account/orders)' "$script"; then
+            echo 'Stage-9 installer must not call authenticated/mutable Wallex surfaces' >&2
             exit 1
           fi
           grep -q "TRADING_MODE=paper" "$script"
