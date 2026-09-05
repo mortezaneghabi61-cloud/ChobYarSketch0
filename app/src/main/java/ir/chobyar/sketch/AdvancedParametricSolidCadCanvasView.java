@@ -529,7 +529,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
                     catch(NumberFormatException e){return "text Entity text text text text";}
                 }
                 if("LOFT3D".equalsIgnoreCase(a[0])){
-                    if(a.length!=3)return "LOFT3D — Two profile numbers are required; text: LOFT3D 1 2";
+                    if(a.length!=3)return "LOFT3D — Two profile numbers are required; Example: LOFT3D 1 2";
                     try{return createLoftByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
                     catch(NumberFormatException e){return "text Entity text text text text";}
                 }
