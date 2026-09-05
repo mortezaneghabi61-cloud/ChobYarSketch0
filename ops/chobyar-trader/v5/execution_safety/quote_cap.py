@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Mapping
 
-from live_safety import evaluate_live_safety
+from v5_safety_core import evaluate_v5_safety
 
 APPROVED_SYMBOL_QUOTES = {
     "BTCUSDT": "USDT",
@@ -39,18 +39,13 @@ def _deny(reason: str, symbol: str, quote_asset: str, cap: Decimal, notional: De
     return QuoteCapDecision(False, reason, symbol, quote_asset, cap, notional)
 
 
-def evaluate_quote_cap(
-    *,
-    env: Mapping[str, str],
-    symbol: str,
-    notional_quote: object,
-) -> QuoteCapDecision:
-    """Stage-7 quote-aware hard-cap authority; pure and dry-run only.
+def evaluate_quote_cap(*, env: Mapping[str, str], symbol: str, notional_quote: object) -> QuoteCapDecision:
+    """Quote-aware hard-cap authority; pure and dry-run only.
 
-    For BTCUSDT, the notional is USDT. LIVE_MAX_ORDER_TMN is deliberately not
-    used as execution authority here because TMN and USDT are different units.
+    For BTCUSDT, notional and the hard cap are expressed only in its quote asset,
+    USDT. Legacy currency-specific cap state is outside this authority.
     """
-    safety = evaluate_live_safety(env)
+    safety = evaluate_v5_safety(env)
     wanted = (symbol or "").strip().upper()
     quote_asset = APPROVED_SYMBOL_QUOTES.get(wanted, "")
     notional = _decimal(notional_quote) or Decimal("0")
@@ -77,11 +72,4 @@ def evaluate_quote_cap(
     if notional > cap:
         return _deny("above_quote_asset_cap", wanted, quote_asset, cap, notional)
 
-    return QuoteCapDecision(
-        True,
-        "stage7_quote_aware_cap_validated_no_submission",
-        wanted,
-        quote_asset,
-        cap,
-        notional,
-    )
+    return QuoteCapDecision(True, "stage7_quote_aware_cap_validated_no_submission", wanted, quote_asset, cap, notional)

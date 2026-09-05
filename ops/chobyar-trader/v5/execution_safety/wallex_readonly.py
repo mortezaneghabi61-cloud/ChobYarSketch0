@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from live_safety import evaluate_live_safety
+from v5_safety_core import evaluate_v5_safety
 
 WALLEX_BASE_URL = "https://api.wallex.ir"
 BALANCES_PATH = "/v1/account/balances"
@@ -26,28 +26,16 @@ def _finite(value: Any) -> float:
     return number
 
 
-def fetch_balances_readonly(
-    *,
-    env: Mapping[str, str],
-    api_key: str,
-    client: Any,
-) -> tuple[BalanceRow, ...]:
-    """Read Wallex balances only after the Stage-1 fail-closed policy passes.
-
-    This function has no order, withdrawal, leverage, margin or futures authority.
-    The API key is used only in the X-API-Key request header and is never returned.
-    """
-    decision = evaluate_live_safety(env)
+def fetch_balances_readonly(*, env: Mapping[str, str], api_key: str, client: Any) -> tuple[BalanceRow, ...]:
+    """GET-only Wallex balances behind the quote-neutral v5 safety gate."""
+    decision = evaluate_v5_safety(env)
     if not decision.allowed:
-        raise RuntimeError(f"stage1_blocked:{decision.reason}")
+        raise RuntimeError(f"v5_safety_blocked:{decision.reason}")
     key = api_key.strip()
     if not key:
         raise RuntimeError("wallex_api_key_missing")
 
-    response = client.get(
-        BALANCES_PATH,
-        headers={"X-API-Key": key, "Accept": "application/json"},
-    )
+    response = client.get(BALANCES_PATH, headers={"X-API-Key": key, "Accept": "application/json"})
     response.raise_for_status()
     data = response.json()
     if not isinstance(data, dict) or data.get("success") is not True:
