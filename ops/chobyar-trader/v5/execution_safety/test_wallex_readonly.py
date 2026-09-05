@@ -56,9 +56,9 @@ class WallexReadOnlyTests(unittest.TestCase):
         self.assertEqual(client.calls[0][2]["X-API-Key"], "secret-value")
         self.assertNotIn("secret-value", repr(rows))
 
-    def test_stage1_block_prevents_network_call(self):
+    def test_v5_safety_block_prevents_network_call(self):
         client = FakeClient(FakeResponse({"success": True, "result": {"balances": {}}}))
-        with self.assertRaisesRegex(RuntimeError, "stage1_blocked"):
+        with self.assertRaisesRegex(RuntimeError, "v5_safety_blocked"):
             fetch_balances_readonly(
                 env={**BASE, "LIVE_TRADING_ENABLED": "true"},
                 api_key="secret-value",
