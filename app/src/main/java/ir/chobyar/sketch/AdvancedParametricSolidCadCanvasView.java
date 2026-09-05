@@ -77,7 +77,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object profileEntity;
         final Object pathEntity;
         SweepFeature(int id,Object profile,Object path){super(id,"Sweep");profileEntity=profile;pathEntity=path;sourceEntities.add(profile);sourceEntities.add(path);}
-        @Override String detail(){return "Sweep • text + text"+(broken?" • ⚠":"");}
+        @Override String detail(){return "Sweep • Profile + Path"+(broken?" • ⚠":"");}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile p=o.profile(profileEntity);if(p==null)return null;
             List<Geometry3D.Vec3> path=o.path3D(pathEntity);if(path.size()<2)return null;
