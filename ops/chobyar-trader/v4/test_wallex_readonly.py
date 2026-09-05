@@ -5,6 +5,7 @@ import unittest
 from wallex_readonly import BALANCES_PATH, fetch_balances_readonly
 
 BASE = {
+    "TRADING_MODE": "paper",
     "LIVE_TRADING_ENABLED": "false",
     "LIVE_DRY_RUN": "true",
     "SPOT_ONLY": "true",
