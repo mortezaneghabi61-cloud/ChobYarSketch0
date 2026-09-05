@@ -109,7 +109,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
         autoStroke.clear();
         lastEnd = null;
         chainStart = null;
-        toast("Automatic Line/Arc text • text S Pen text; Wiggle text Line/Arc text change text");
+        toast("Automatic Line/Arc • Draw with S Pen; wiggle to switch Line/Arc");
     }
 
     private void stopAutomatic() {
@@ -243,7 +243,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             addEntity(e);
             return e;
         } catch (Exception ex) {
-            toast("Line created text");
+            toast("Line creation failed");
             return null;
         }
     }
@@ -308,7 +308,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             Method m = OcctShaprCadCanvasView.class.getDeclaredMethod(name);
             m.setAccessible(true);
             m.invoke(this);
-        } catch (Exception e) { toast("text Tools text is unavailable"); }
+        } catch (Exception e) { toast("Sketch tool is unavailable"); }
     }
 
     private String invokeParentString(String name) {
@@ -317,7 +317,7 @@ public class OcctShaprPenCadCanvasView extends OcctShaprCadCanvasView {
             m.setAccessible(true);
             Object r = m.invoke(this);
             return r == null ? "" : String.valueOf(r);
-        } catch (Exception e) { return "text Tools text is unavailable"; }
+        } catch (Exception e) { return "Sketch tool is unavailable"; }
     }
 
     private static Method findMethod(Class<?> c, String name, Class<?>... types) {
