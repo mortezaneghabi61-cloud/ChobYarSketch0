@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Protocol
 
-from live_safety import evaluate_live_safety
+from v5_safety_core import evaluate_v5_safety
 
 ACTIVE_MARKETS_PATH = "/hector/web/v1/markets"
 
@@ -65,11 +65,9 @@ def parse_spot_eligibility(payload: object, symbol: str) -> SpotEligibility:
 
 
 def fetch_spot_eligibility(*, env: Mapping[str, str], client: GetClient, symbol: str) -> SpotEligibility:
-    safety = evaluate_live_safety(env)
+    safety = evaluate_v5_safety(env)
     if not safety.allowed:
-        raise RuntimeError(f"stage1_blocked:{safety.reason}")
-    if (env.get("LIVE_TRADING_ENABLED") or "").strip().lower() != "false":
-        raise RuntimeError("live_execution_must_remain_disabled")
+        raise RuntimeError(f"v5_safety_blocked:{safety.reason}")
     if not safety.spot_only:
         raise RuntimeError("spot_only_required")
 
