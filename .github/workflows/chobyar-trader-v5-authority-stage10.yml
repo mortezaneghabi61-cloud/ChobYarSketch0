@@ -1,0 +1,81 @@
+name: ChobYar Trader v5 Authority Stage 10
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/**'
+      - 'ops/chobyar-trader/v5/execution_safety/**'
+      - 'ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh'
+      - '.github/workflows/chobyar-trader-v4.yml'
+      - '.github/workflows/chobyar-trader-v5-authority-stage10.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v5-authority:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      FROZEN_V4_TREE: b4b7cddde55cf683b42a31b24bd598ce2c78abb2
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Freeze legacy v4 tree
+        run: |
+          set -Eeuo pipefail
+          actual="$(git rev-parse HEAD:ops/chobyar-trader/v4)"
+          test "$actual" = "$FROZEN_V4_TREE"
+          grep -q 'frozen legacy reference' ops/chobyar-trader/v4/README.md
+          grep -q 'not.*execution-authority path' ops/chobyar-trader/v4/README.md
+      - name: Assert v5 runtime authority
+        run: |
+          set -Eeuo pipefail
+          script=ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+          test -f "$V5/trader.py"
+          test -f "$V5/trader_entry.py"
+          test -f "$V5/entry_gate_v55.py"
+          grep -q 'WorkingDirectory=/opt/chobyar-trader/app/v5/execution_safety' "$script"
+          grep -q 'ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/v5/execution_safety/trader_entry.py' "$script"
+          grep -q 'V4_DIRECT_EXECSTART=RETIRED' "$script"
+          if grep -qE 'ExecStart=.*/app/(trader\.py|v4/)' "$script"; then
+            echo 'Direct v4 runtime authority reintroduced' >&2
+            exit 1
+          fi
+      - name: Compile and deterministic v5 regressions
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile "$V5"/*.py
+          python3 "$V5/test_entry_gate_v55.py" -v
+          python3 "$V5/test_live_safety.py" -v
+          python3 "$V5/test_wallex_readonly.py" -v
+          python3 "$V5/test_order_dryrun.py" -v
+          python3 "$V5/test_market_metadata.py" -v
+          python3 "$V5/test_auth_preflight.py" -v
+          python3 "$V5/test_open_orders_readonly.py" -v
+          python3 "$V5/test_quote_cap.py" -v
+      - name: Preserve approved Paper risk locks
+        run: |
+          set -Eeuo pipefail
+          script=ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+          grep -q 'TRADING_MODE=paper' "$script"
+          grep -q 'LIVE_TRADING_ENABLED=false' "$script"
+          grep -q 'MAX_POSITION_PCT=0.25' "$script"
+          grep -q 'STOP_LOSS_PCT=0.015' "$script"
+          grep -q 'TAKE_PROFIT_PCT=0.03' "$script"
+          grep -q 'MAX_DAILY_LOSS_PCT=0.03' "$script"
+      - name: No live or mutable execution surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true' "$V5" --include='*.py'; then
+            echo 'Forbidden mutable/live execution surface detected' >&2
+            exit 1
+          fi
+          grep -Rqs 'WITHDRAWALS_ENABLED.*false' "$V5"/test_*.py
+          grep -Rqs 'LEVERAGE_ENABLED.*false' "$V5"/test_*.py
