@@ -165,14 +165,14 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     public String projectExactBodyEdges(){
         List<Long> handles=projectSourceHandles();
         if(handles.isEmpty())return hasSelectedSolidBody()
-                ?"Project 3D • Body selected Shape text OCCT text"
+                ?"Project 3D • Body selected • exact OCCT shape is unavailable"
                 :"Project 3D • Select a body first";
         List<double[]> batches=new ArrayList<>();
         for(long handle:handles){
             double[] d=exactProjectDescriptors(handle);
             if(d!=null&&d.length>=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)batches.add(d);
         }
-        if(batches.isEmpty())return "Project 3D • Edge text text Project was not found";
+        if(batches.isEmpty())return "Project 3D • No projectable edges were found";
         return projectDescriptorBatches(batches);
     }
 
@@ -196,7 +196,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     private String projectDescriptorBatches(List<double[]> batches){
         Geometry3D.Plane3D plane=activePlane();
-        if(plane==null)return "Project 3D • Sketch Plane text text";
+        if(plane==null)return "Project 3D • Sketch plane is unavailable";
         Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
         int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;
         boolean undoSaved=false;
@@ -244,9 +244,9 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     public String projectSelectedBodyReference(){
         if(!hasSelectedSolidBody())return "Project Reference • Select a body first";
         int bodyId=selectedExactBodyId();long handle=selectedExactNativeHandle();
-        if(bodyId<0||handle==0L)return "Project Reference • Shape text Body selected is not ready";
+        if(bodyId<0||handle==0L)return "Project Reference • Body selected • exact shape is not ready";
         double[] d=exactProjectDescriptors(handle);
-        if(d==null||d.length<NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)return "Project Reference • Edge text text Project was not found";
+        if(d==null||d.length<NativeBRepKernel.OCCT_EDGE_RECORD_SIZE)return "Project Reference • No projectable edges were found";
         return projectReferenceDescriptors(bodyId,d,activePlane(),true);
     }
 
@@ -255,7 +255,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     }
 
     private String projectReferenceDescriptors(int bodyId,double[] d,Geometry3D.Plane3D plane,boolean saveUndo){
-        if(bodyId<0||plane==null||d==null)return "Project Reference • text invalid";
+        if(bodyId<0||plane==null||d==null)return "Project Reference • Invalid input";
         Set<String> lineKeys=new HashSet<>(),circleKeys=new HashSet<>(),arcKeys=new HashSet<>();
         int lines=0,circles=0,arcs=0,unsupported=0,skipped=0;boolean undoSaved=false;
         final int n=NativeBRepKernel.OCCT_EDGE_RECORD_SIZE;
@@ -418,8 +418,8 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
                 PointF local=toLocal(plane,n.p);float d=screenDistance(raw,local);
                 if(d>POINT_HIT_PX*density())continue;
                 String label;int priority;
-                if(n.kind==OcctSnapTopology.HOLE_CENTER){label="Hole Center • Center text";priority=11;}
-                else if(n.kind==OcctSnapTopology.VERTEX){label="3D Vertex • text";priority=10;}
+                if(n.kind==OcctSnapTopology.HOLE_CENTER){label="Hole Center • Center";priority=11;}
+                else if(n.kind==OcctSnapTopology.VERTEX){label="3D Vertex";priority=10;}
                 else if(n.kind==OcctSnapTopology.EDGE_MIDPOINT){label="3D Edge Midpoint • Midpoint Edge";priority=9;}
                 else{label="Face Center • Center Face";priority=8;}
                 best=better(best,new ExternalCandidate(local,label,priority,d));
@@ -440,7 +440,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
                     PointF la=toLocal(plane,a),lb=toLocal(plane,b);
                     if(screenDistance(la,lb)<2f)continue;
                     PointF q=nearestOnSegment(raw,la,lb);float d=screenDistance(raw,q);
-                    if(d<=EDGE_HIT_PX*density())best=better(best,new ExternalCandidate(q,"Distant Edge • Edge text Plane",7,d));
+                    if(d<=EDGE_HIT_PX*density())best=better(best,new ExternalCandidate(q,"Distant Edge • Off-plane edge",7,d));
                 }
             }
         }
