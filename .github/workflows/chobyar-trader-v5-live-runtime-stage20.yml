@@ -1,0 +1,48 @@
+name: ChobYar Trader v5 Live Runtime Stage 20
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_runtime_stage20.py'
+      - '.github/workflows/chobyar-trader-v5-live-runtime-stage20.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage20-live-runtime-disarmed:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and test Stage 20
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_runtime_stage20.py
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_runtime_stage20.py -v
+
+      - name: Enforce disarmed non-mutating boundary
+        run: |
+          files='ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py ops/chobyar-trader/v5/execution_safety/test_live_runtime_stage20.py'
+          if grep -nEi '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(' $files; then
+            echo 'Forbidden mutable exchange surface detected in Stage-20' >&2
+            exit 1
+          fi
+          grep -q 'live_execution_armed' ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py
+          grep -q 'stage20_requires_execution_arm_false' ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py
+          grep -q 'order_submission_authority=False' ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py
+          grep -q 'execution_authority=False' ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py
+          grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' ops/chobyar-trader/v5/execution_safety/live_runtime_stage20.py
