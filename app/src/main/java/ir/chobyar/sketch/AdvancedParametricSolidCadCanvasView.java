@@ -512,7 +512,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     public String createSweepByEntityIndex(int profileNumber,int pathNumber){
         List<Object> all=entities();
         if(profileNumber<1||pathNumber<1||profileNumber>all.size()||pathNumber>all.size())
-            return "text Entity text text 1 until "+all.size()+" text";
+            return "SWEEP3D — Entity numbers are out of range; Available entities: "+all.size();
         if(profileNumber==pathNumber)return "text text text Sweep text text text";
         return createSweep(all.get(profileNumber-1),all.get(pathNumber-1));
     }
