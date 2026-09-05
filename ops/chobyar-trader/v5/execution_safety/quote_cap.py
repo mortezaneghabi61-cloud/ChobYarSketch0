@@ -4,14 +4,13 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Mapping
 
-from live_safety import evaluate_live_safety
+from v5_safety_core import evaluate_v5_safety
 
 APPROVED_SYMBOL_QUOTES = {
     "BTCUSDT": "USDT",
 }
 
-# Stage-7 remains dry-run only. This ceiling prevents an accidentally huge
-# per-quote cap from becoming authoritative before live execution exists.
+# Dry-run only ceiling. This is not a user-approved live trading amount.
 STAGE7_MAX_QUOTE_CAP = Decimal("100")
 
 
@@ -45,18 +44,18 @@ def evaluate_quote_cap(
     symbol: str,
     notional_quote: object,
 ) -> QuoteCapDecision:
-    """Stage-7 quote-aware hard-cap authority; pure and dry-run only.
+    """Quote-aware hard-cap authority; pure and dry-run only.
 
-    For BTCUSDT, the notional is USDT. LIVE_MAX_ORDER_TMN is deliberately not
-    used as execution authority here because TMN and USDT are different units.
+    BTCUSDT notional is USDT. Legacy LIVE_MAX_ORDER_TMN is intentionally absent
+    from this authority and is not required by the Stage-12 v5 safety core.
     """
-    safety = evaluate_live_safety(env)
+    safety = evaluate_v5_safety(env)
     wanted = (symbol or "").strip().upper()
     quote_asset = APPROVED_SYMBOL_QUOTES.get(wanted, "")
     notional = _decimal(notional_quote) or Decimal("0")
 
     if not safety.allowed:
-        return _deny(f"stage1_blocked:{safety.reason}", wanted, quote_asset, Decimal("0"), notional)
+        return _deny(f"v5_safety_blocked:{safety.reason}", wanted, quote_asset, Decimal("0"), notional)
     if not wanted or not quote_asset:
         return _deny("symbol_quote_not_approved", wanted, quote_asset, Decimal("0"), notional)
     if (env.get("SYMBOL") or "").strip().upper() != wanted:
@@ -71,7 +70,7 @@ def evaluate_quote_cap(
     if cap <= 0:
         return _deny(f"quote_cap_required:{cap_key}", wanted, quote_asset, cap, notional)
     if cap > STAGE7_MAX_QUOTE_CAP:
-        return _deny("quote_cap_exceeds_stage7_ceiling", wanted, quote_asset, cap, notional)
+        return _deny("quote_cap_exceeds_dry_run_ceiling", wanted, quote_asset, cap, notional)
     if notional <= 0:
         return _deny("notional_quote_must_be_positive", wanted, quote_asset, cap, notional)
     if notional > cap:
@@ -79,7 +78,7 @@ def evaluate_quote_cap(
 
     return QuoteCapDecision(
         True,
-        "stage7_quote_aware_cap_validated_no_submission",
+        "quote_aware_cap_validated_no_submission",
         wanted,
         quote_asset,
         cap,
