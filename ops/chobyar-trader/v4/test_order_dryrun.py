@@ -24,7 +24,7 @@ RULES = MarketRules(
     symbol="BTCUSDT",
     quantity_step=Decimal("0.000001"),
     price_tick=Decimal("1"),
-    min_notional_tmn=Decimal("1000"),
+    min_notional_tmn=Decimal("10"),
     max_notional_tmn=Decimal("1000000"),
 )
 
@@ -101,7 +101,7 @@ class OrderDryRunTests(unittest.TestCase):
             symbol="BTCUSDT",
             quantity_step=Decimal("0"),
             price_tick=Decimal("1"),
-            min_notional_tmn=Decimal("1000"),
+            min_notional_tmn=Decimal("10"),
             max_notional_tmn=Decimal("1000000"),
         )
         result = evaluate_order_dry_run(env=BASE, intent=intent(), rules=bad)
