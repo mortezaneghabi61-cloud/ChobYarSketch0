@@ -92,7 +92,7 @@ public class EasyMainActivity extends MainActivity {
 
             easyCad.dispatchWorkspaceState();
         } catch (Exception e) {
-            Toast.makeText(this, "text ChobYar 3D text text", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "ChobYar 3D workspace is unavailable", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -141,7 +141,7 @@ public class EasyMainActivity extends MainActivity {
         LinearLayout bar = horizontalCard();
         bar.setPadding(dp(3), dp(1), dp(3), dp(1));
 
-        bar.addView(topButton("⌂", "Projecttext", () -> showStatus("Project ChobYar 3D")));
+        bar.addView(topButton("⌂", "Project", () -> showStatus("Project ChobYar 3D")));
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
@@ -155,7 +155,7 @@ public class EasyMainActivity extends MainActivity {
         titleBox.addView(title);
 
         TextView mode = new TextView(this);
-        mode.setText("Modeltext text");
+        mode.setText("Modeling workspace");
         mode.setTextSize(7.5f);
         mode.setTextColor(Color.rgb(112, 121, 134));
         titleBox.addView(mode);
@@ -163,9 +163,9 @@ public class EasyMainActivity extends MainActivity {
         titleBox.setPadding(dp(3), 0, dp(3), 0);
         bar.addView(titleBox, new LinearLayout.LayoutParams(0, dp(38), 1f));
 
-        bar.addView(topButton("↶", "Undo", () -> { easyCad.undo(); showStatus("text text text"); }));
+        bar.addView(topButton("↶", "Undo", () -> { easyCad.undo(); showStatus("Undo complete"); }));
         bar.addView(topButton("⏱", "History", () -> easyCad.showHistoryManager()));
-        bar.addView(topButton("⋯", "text", this::showMoreMenu));
+        bar.addView(topButton("⋯", "More", this::showMoreMenu));
         return bar;
     }
 
@@ -210,12 +210,12 @@ public class EasyMainActivity extends MainActivity {
 
     private void showAddMenu() {
         String[] items = {
-                "⬆ Extrude / text text Sketch",
+                "⬆ Extrude / Selected Sketch",
                 "▣ Solid tools / Revolve • Sweep • Loft • Boolean",
                 "✥ Edit 3D / Face • Edge",
                 "⏱ History"
         };
-        new AlertDialog.Builder(this).setTitle("Add / Modeltext").setItems(items, (d,w) -> {
+        new AlertDialog.Builder(this).setTitle("Add / Model").setItems(items, (d,w) -> {
             if (w==0) showQuickExtrudeDialog();
             else if (w==1) easyCad.showSolidManager();
             else if (w==2) easyCad.showDirectManager();
@@ -249,7 +249,7 @@ public class EasyMainActivity extends MainActivity {
 
     private void showSelectionMore() {
         String[] items = {
-                easyCad.is3DOverview()?"✥ Edit 3D":"⬆ Extrude / text",
+                easyCad.is3DOverview()?"✥ Edit 3D":"⬆ Extrude / Sketch",
                 "⌁ Constraints / Constraints",
                 "⌫ Delete Selection",
                 "⏱ History"
@@ -277,10 +277,10 @@ public class EasyMainActivity extends MainActivity {
         LinearLayout bar = verticalCard();
         bar.setPadding(dp(1),dp(2),dp(1),dp(2));
         bar.addView(navButton("◈","View",this::showViewCubeMenu));
-        bar.addView(navButton("◇","Fit",() -> { easyCad.fitAll(); showStatus("Show text Model"); }));
+        bar.addView(navButton("◇","Fit",() -> { easyCad.fitAll(); showStatus("Fit Model"); }));
         snapButton = navButton("⌁","Snap",this::toggleSnap);
         bar.addView(snapButton);
-        bar.addView(navButton("mm","text",() -> Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show()));
+        bar.addView(navButton("mm","Units",() -> Toast.makeText(this,easyCad.dualUnitSummary(),Toast.LENGTH_LONG).show()));
         updateSnapButton();
         return bar;
     }
@@ -288,11 +288,11 @@ public class EasyMainActivity extends MainActivity {
     private void showViewCubeMenu() {
         if (easyCad == null) return;
         String[] items = {
-                "◇ text / Isometric",
+                "◇ Isometric",
                 "Z  Top / XY",
                 "Y  Front / XZ",
                 "X  Right / YZ",
-                easyCad.is3DOverview() ? "□ text text Sketch 2D" : "▣ text text 3D View",
+                easyCad.is3DOverview() ? "□ Return to Sketch 2D" : "▣ Switch to 3D View",
                 "⌗ Fit / Show All"
         };
         new AlertDialog.Builder(this).setTitle("View Cube / View").setItems(items, (d,w) -> {
@@ -301,7 +301,7 @@ public class EasyMainActivity extends MainActivity {
             else if (w==2) standardView("FRONT");
             else if (w==3) standardView("RIGHT");
             else if (w==4) showStatus(easyCad.toggle3DOverview());
-            else { easyCad.fitAll(); showStatus("text Model text Plane"); }
+            else { easyCad.fitAll(); showStatus("Model fitted to view"); }
         }).setNegativeButton("Close",null).show();
     }
 
@@ -342,19 +342,19 @@ public class EasyMainActivity extends MainActivity {
         input.setText("20mm");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
-                .setTitle("Extrude / text • cm / mm")
-                .setMessage("text text text text Selection text text Height text text text; text 20mm text 2cm. text text text Extrude text text text.")
+                .setTitle("Extrude / Height • cm / mm")
+                .setMessage("Enter the extrusion height for the selected sketch; for example 20mm or 2cm. Positive and negative values set the extrusion direction.")
                 .setView(input)
-                .setPositiveButton("Create text", (d,w) -> {
+                .setPositiveButton("Create", (d,w) -> {
                     try {
                         float mm = parseLengthMm(input.getText().toString());
-                        if (Math.abs(mm) < 0.0001f) { showStatus("Height text text text text"); return; }
+                        if (Math.abs(mm) < 0.0001f) { showStatus("Height must be non-zero"); return; }
                         String result = easyCad.extrudeSelectedBody(mm / 10f);
                         showStatus(result);
                         if (result != null && result.contains("created")) standardView("ISO");
                         easyCad.dispatchWorkspaceState();
                     } catch (Exception e) {
-                        showStatus("Dimension text was entered incorrectly");
+                        showStatus("Dimension was entered incorrectly");
                     }
                 })
                 .setNegativeButton("Cancel", null)
@@ -382,12 +382,12 @@ public class EasyMainActivity extends MainActivity {
 
     private void showUtilityMenu() {
         String[] items = {
-                "⌁ Toolstext text",
+                "⌁ Modeling Tools",
                 "↔ Measure / Measure",
-                "⌁ Constraints text Constraint",
+                "⌁ Constraints",
                 "✥ Edit 3D",
                 "⏱ History",
-                "⇩ text DXF"
+                "⇩ Export DXF"
         };
         new AlertDialog.Builder(this).setTitle("Tools").setItems(items, (d,w) -> {
             if (w==0) invokeMain("showToolsMenu",new Class<?>[0]);
@@ -401,13 +401,13 @@ public class EasyMainActivity extends MainActivity {
 
     private void showMoreMenu() {
         String[] items = {
-                "⇩ text DXF",
-                "cm/mm text Dimension",
+                "⇩ Export DXF",
+                "cm/mm Dimensions",
                 easyCad.isShowGrid()?"# Grid Off":"# Grid On",
                 easyCad.isShowAxes()?"XYZ Axes Hide":"XYZ Axes On",
                 easyCad.isShowGuides()?"┼ Guide Hide":"┼ Guide On",
                 "◇ Plane / Construction",
-                "⋯ text text"
+                "⋯ More Options"
         };
         new AlertDialog.Builder(this).setTitle("ChobYar 3D").setItems(items,(d,w)->{
             if(w==0) invokeMain("exportDxf",new Class<?>[0]);
