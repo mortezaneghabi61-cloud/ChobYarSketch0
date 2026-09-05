@@ -43,7 +43,7 @@ class LiveCapStage16Tests(unittest.TestCase):
 
     def test_trade_and_live_must_remain_off(self):
         self.assertFalse(evaluate_live_cap_stage16(self.good(trade_permission_enabled=True)).allowed)
-        self.assertFalse(evaluate_live_cap_stage16(self.good(live_trading_enabled=True)).allowed)
+        self.assertFalse(evaluate_live_cap_stage16(self.good(live_trading_enabled=bool(1))).allowed)
 
     def test_withdrawal_and_nonspot_authority_rejected(self):
         self.assertFalse(evaluate_live_cap_stage16(self.good(withdrawal_permission_enabled=True)).allowed)
