@@ -1,4 +1,4 @@
-name: ChobYar Trader v4 Paper Gate
+name: ChobYar Trader Legacy v4 Freeze Gate
 
 on:
   pull_request:
@@ -11,57 +11,49 @@ permissions:
   contents: read
 
 jobs:
-  paper-safety:
+  legacy-v4-freeze:
     runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      FROZEN_V4_TREE: b4b7cddde55cf683b42a31b24bd598ce2c78abb2
+      V5: ops/chobyar-trader/v5/execution_safety
     steps:
       - uses: actions/checkout@v4
-      - name: Compile and shell syntax
-        run: |
-          python3 -m py_compile ops/chobyar-trader/v4/*.py ops/chobyar-trader/v3/*.py
-          bash -n ops/chobyar-trader/install-v4-paper.sh
-          bash -n ops/chobyar-trader/upgrade-v42-global-sources.sh
-      - name: Deterministic and fail-closed tests
-        env:
-          PYTHONPATH: ops/chobyar-trader/v4
-        run: |
-          python3 ops/chobyar-trader/v4/test_v4.py -v
-          python3 ops/chobyar-trader/v4/test_global_sources.py -v
-      - name: Global-source resilience contract
-        run: |
-          grep -q '"okx"' ops/chobyar-trader/v4/global_sources.py
-          grep -q '"kucoin"' ops/chobyar-trader/v4/global_sources.py
-          grep -q '"coinbase"' ops/chobyar-trader/v4/global_sources.py
-          grep -q '"kraken"' ops/chobyar-trader/v4/global_sources.py
-          grep -q 'fetch_global_snapshot(trader.AUDIT)' ops/chobyar-trader/v4/trader_entry.py
-          grep -q 'GLOBAL_SOURCE_FALLBACKS=ACTIVE' ops/chobyar-trader/upgrade-v42-global-sources.sh
-      - name: Backtest sample and approved-risk ratchet
-        run: |
-          grep -q '^DEFAULT_LIMIT = 24 \* 90$' ops/chobyar-trader/v4/backtest.py
-          grep -q '^POSITION = 0.25$' ops/chobyar-trader/v4/backtest.py
-          grep -q '^STOP = 0.015$' ops/chobyar-trader/v4/backtest.py
-          grep -q '^TAKE = 0.03$' ops/chobyar-trader/v4/backtest.py
-          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/install-v4-paper.sh
-          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/install-v4-paper.sh
-          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
-          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/install-v4-paper.sh
-          grep -q "MAX_POSITION_PCT=0.25" ops/chobyar-trader/upgrade-v42-global-sources.sh
-          grep -q "STOP_LOSS_PCT=0.015" ops/chobyar-trader/upgrade-v42-global-sources.sh
-          grep -q "TAKE_PROFIT_PCT=0.03" ops/chobyar-trader/upgrade-v42-global-sources.sh
-          grep -q "MAX_DAILY_LOSS_PCT=0.03" ops/chobyar-trader/upgrade-v42-global-sources.sh
-          grep -q 'chobyar-backtest.timer' ops/chobyar-trader/install-v4-paper.sh
-          grep -q 'BACKTEST_TIMER=ACTIVE' ops/chobyar-trader/install-v4-paper.sh
-      - name: No live execution surface
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: v4 is frozen legacy only
         run: |
           set -Eeuo pipefail
-          # Scan executable mutation primitives rather than policy words such as
-          # leverage_disabled, so fail-closed safety code is not a false positive.
-          if grep -RniE --include='*.py' --exclude-dir='__pycache__' \
-            '(requests\.(post|put|patch|delete)\(|httpx\.(post|put|patch|delete)\(|\.(post|put|patch|delete)\(|submit_order\(|create_order\(|place_order\(|cancel_order\(|withdraw\(|margin_order\(|futures_order\(|martingale)' \
-            ops/chobyar-trader/v4; then
-            echo 'Forbidden live execution surface detected' >&2
+          test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = "$FROZEN_V4_TREE"
+          grep -q 'frozen legacy reference' ops/chobyar-trader/v4/README.md
+          grep -q 'not.*execution-authority path' ops/chobyar-trader/v4/README.md
+      - name: Authoritative v5 paper runtime compiles
+        run: |
+          python3 -m py_compile "$V5"/*.py
+          bash -n ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+      - name: Authoritative v5 deterministic safety tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 "$V5/test_entry_gate_v55.py" -v
+          python3 "$V5/test_live_safety.py" -v
+          python3 "$V5/test_wallex_readonly.py" -v
+          python3 "$V5/test_order_dryrun.py" -v
+          python3 "$V5/test_market_metadata.py" -v
+          python3 "$V5/test_auth_preflight.py" -v
+          python3 "$V5/test_open_orders_readonly.py" -v
+          python3 "$V5/test_quote_cap.py" -v
+      - name: v5 runtime authority and fail-closed contract
+        run: |
+          set -Eeuo pipefail
+          script=ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+          grep -q 'WorkingDirectory=/opt/chobyar-trader/app/v5/execution_safety' "$script"
+          grep -q 'ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/v5/execution_safety/trader_entry.py' "$script"
+          grep -q 'TRADING_MODE=paper' "$script"
+          grep -q 'LIVE_TRADING_ENABLED=false' "$script"
+          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true' "$V5" --include='*.py'; then
+            echo 'Forbidden mutable or live execution surface detected in authoritative v5 runtime' >&2
             exit 1
           fi
-          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/install-v4-paper.sh
-          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/install-v4-paper.sh
-          grep -q 'TRADING_MODE=paper' ops/chobyar-trader/upgrade-v42-global-sources.sh
-          grep -q 'LIVE_TRADING_ENABLED=false' ops/chobyar-trader/upgrade-v42-global-sources.sh
