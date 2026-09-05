@@ -77,7 +77,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object profileEntity;
         final Object pathEntity;
         SweepFeature(int id,Object profile,Object path){super(id,"Sweep");profileEntity=profile;pathEntity=path;sourceEntities.add(profile);sourceEntities.add(path);}
-        @Override String detail(){return "Sweep • text + text"+(broken?" • ⚠":"");}
+        @Override String detail(){return "Sweep • Profile + Path"+(broken?" • ⚠":"");}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile p=o.profile(profileEntity);if(p==null)return null;
             List<Geometry3D.Vec3> path=o.path3D(pathEntity);if(path.size()<2)return null;
@@ -568,7 +568,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private void startLoft(){
         List<Object> profiles=new ArrayList<>();for(Object e:selection())if(isClosedProfile(e))profiles.add(e);
         if(profiles.size()!=2){toast("text Loft text text text text text Selection text; text text Roy text Plane/Face text text");return;}
-        toast(createLoft(profiles.get(0),profiles.get(1)));
+        toast(createLoft(profiles.get(0),profiles.get(1));
     }
 
     public String createLoft(Object first,Object second){
