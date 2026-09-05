@@ -526,7 +526,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
                 if("SWEEP3D".equalsIgnoreCase(a[0])){
                     if(a.length!=3)return "SWEEP3D — profile number and path required; Example: SWEEP3D 1 2";
                     try{return createSweepByEntityIndex(Integer.parseInt(a[1]),Integer.parseInt(a[2]));}
-                    catch(NumberFormatException e){return "text Entity text text text text";}
+                    catch(NumberFormatException e){return "SWEEP3D — Entity numbers must be integers; Example: SWEEP3D 1 2";}
                 }
                 if("LOFT3D".equalsIgnoreCase(a[0])){
                     if(a.length!=3)return "LOFT3D — Two profile numbers are required; Example: LOFT3D 1 2";
