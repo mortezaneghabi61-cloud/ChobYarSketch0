@@ -568,7 +568,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private void startLoft(){
         List<Object> profiles=new ArrayList<>();for(Object e:selection())if(isClosedProfile(e))profiles.add(e);
         if(profiles.size()!=2){toast("text Loft text text text text text Selection text; text text Roy text Plane/Face text text");return;}
-        toast(createLoft(profiles.get(0),profiles.get(1));
+        toast(createLoft(profiles.get(0),profiles.get(1)));
     }
 
     public String createLoft(Object first,Object second){
