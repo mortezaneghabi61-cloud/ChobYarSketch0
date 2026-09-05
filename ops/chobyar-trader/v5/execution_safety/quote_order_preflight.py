@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Mapping, Protocol
 
-from live_safety import evaluate_live_safety
 from quote_cap import APPROVED_SYMBOL_QUOTES, QuoteCapDecision, evaluate_quote_cap
 from spot_eligibility import SpotEligibility, fetch_spot_eligibility
+from v5_safety_core import evaluate_v5_safety
 
 MARKETS_PATH = "/v1/markets"
 
@@ -87,7 +87,6 @@ def parse_quote_market_rules(payload: object, symbol: str) -> QuoteMarketRules:
     price_tick = _power10_precision(raw.get("tickSize"))
     min_notional = _decimal(raw.get("minNotional"))
     max_notional = _decimal(raw.get("maxNotional")) if raw.get("maxNotional") is not None else None
-
     if quantity_step is None or quantity_step <= 0:
         raise RuntimeError("quote_market_invalid_step")
     if price_tick is None or price_tick <= 0:
@@ -96,17 +95,13 @@ def parse_quote_market_rules(payload: object, symbol: str) -> QuoteMarketRules:
         raise RuntimeError("quote_market_invalid_min_notional")
     if max_notional is not None and (max_notional <= 0 or max_notional < min_notional):
         raise RuntimeError("quote_market_invalid_max_notional")
-
     return QuoteMarketRules(wanted, quote_asset, quantity_step, price_tick, min_notional, max_notional)
 
 
 def fetch_quote_market_rules(*, env: Mapping[str, str], client: GetClient, symbol: str) -> QuoteMarketRules:
-    safety = evaluate_live_safety(env)
+    safety = evaluate_v5_safety(env)
     if not safety.allowed:
-        raise RuntimeError(f"stage1_blocked:{safety.reason}")
-    if (env.get("LIVE_TRADING_ENABLED") or "").strip().lower() != "false":
-        raise RuntimeError("live_execution_must_remain_disabled")
-
+        raise RuntimeError(f"v5_safety_blocked:{safety.reason}")
     response = client.get(MARKETS_PATH)
     if getattr(response, "status_code", None) != 200:
         raise RuntimeError("quote_market_metadata_http_failed")
@@ -117,20 +112,11 @@ def fetch_quote_market_rules(*, env: Mapping[str, str], client: GetClient, symbo
     return parse_quote_market_rules(payload, symbol)
 
 
-def run_quote_order_preflight(
-    *,
-    env: Mapping[str, str],
-    client: GetClient,
-    intent: QuoteOrderIntent,
-) -> QuoteOrderPreflight:
-    """Stage-11 GET-only + local validation. Never grants order execution authority."""
-    safety = evaluate_live_safety(env)
+def run_quote_order_preflight(*, env: Mapping[str, str], client: GetClient, intent: QuoteOrderIntent) -> QuoteOrderPreflight:
+    """GET-only + local validation. Never grants order execution authority."""
+    safety = evaluate_v5_safety(env)
     if not safety.allowed:
-        raise RuntimeError(f"stage1_blocked:{safety.reason}")
-    if (env.get("LIVE_TRADING_ENABLED") or "").strip().lower() != "false":
-        raise RuntimeError("live_execution_must_remain_disabled")
-    if (env.get("LIVE_DRY_RUN") or "").strip().lower() != "true":
-        raise RuntimeError("dry_run_required")
+        raise RuntimeError(f"v5_safety_blocked:{safety.reason}")
 
     symbol = (intent.symbol or "").strip().upper()
     side = (intent.side or "").strip().upper()
@@ -166,13 +152,4 @@ def run_quote_order_preflight(
         raise RuntimeError("active_spot_required")
 
     normalized = QuoteOrderIntent(symbol, side, quantity, price)
-    return QuoteOrderPreflight(
-        allowed=True,
-        reason="stage11_quote_and_spot_preflight_validated_no_submission",
-        live_ready=False,
-        intent=normalized,
-        rules=rules,
-        notional_quote=notional,
-        quote_cap=cap,
-        spot=spot,
-    )
+    return QuoteOrderPreflight(True, "quote_and_spot_preflight_validated_no_submission", False, normalized, rules, notional, cap, spot)
