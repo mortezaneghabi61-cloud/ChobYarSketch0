@@ -1,0 +1,53 @@
+name: ChobYar Trader v5 Execution Safety Regression
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/**'
+      - '.github/workflows/chobyar-trader-v5-execution-safety-stage8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v5-execution-safety-regression:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Frozen v4 reference remains unchanged
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = "b4b7cddde55cf683b42a31b24bd598ce2c78abb2"
+      - name: Compile authoritative v5 execution safety
+        run: python3 -m py_compile "$V5"/*.py
+      - name: Deterministic v5 safety regressions
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 "$V5/test_live_safety.py" -v
+          python3 "$V5/test_wallex_readonly.py" -v
+          python3 "$V5/test_order_dryrun.py" -v
+          python3 "$V5/test_market_metadata.py" -v
+          python3 "$V5/test_auth_preflight.py" -v
+          python3 "$V5/test_open_orders_readonly.py" -v
+          python3 "$V5/test_quote_cap.py" -v
+          python3 "$V5/test_entry_gate_v55.py" -v
+          python3 "$V5/test_quote_order_preflight.py" -v
+          test ! -f "$V5/test_authenticated_quote_preflight.py" || python3 "$V5/test_authenticated_quote_preflight.py" -v
+      - name: Fail-closed exchange surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true' "$V5" --include='*.py'; then
+            echo 'Forbidden mutable or live execution surface detected in v5 execution safety' >&2
+            exit 1
+          fi
+      - name: v5 authority marker
+        run: |
+          grep -q 'authoritative v5 execution-safety surface' "$V5/README.md"
+          grep -q 'does not grant live-order authority' "$V5/README.md"
