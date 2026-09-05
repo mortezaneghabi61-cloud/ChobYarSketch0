@@ -52,8 +52,13 @@ jobs:
           grep -q 'BACKTEST_TIMER=ACTIVE' ops/chobyar-trader/install-v4-paper.sh
       - name: No live execution surface
         run: |
-          if grep -RniE '(/order|submit_order|create_order|place_order|leverage|martingale)' ops/chobyar-trader/v4; then
-            echo 'Forbidden live-order or leverage surface detected' >&2
+          set -Eeuo pipefail
+          # Scan executable mutation primitives rather than policy words such as
+          # leverage_disabled, so fail-closed safety code is not a false positive.
+          if grep -RniE --include='*.py' --exclude-dir='__pycache__' \
+            '(requests\.(post|put|patch|delete)\(|httpx\.(post|put|patch|delete)\(|\.(post|put|patch|delete)\(|submit_order\(|create_order\(|place_order\(|cancel_order\(|withdraw\(|margin_order\(|futures_order\(|martingale)' \
+            ops/chobyar-trader/v4; then
+            echo 'Forbidden live execution surface detected' >&2
             exit 1
           fi
           grep -q 'TRADING_MODE=paper' ops/chobyar-trader/install-v4-paper.sh
