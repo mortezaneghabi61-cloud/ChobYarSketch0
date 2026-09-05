@@ -1,0 +1,36 @@
+name: ChobYar Trader Live Safety Stage 1
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/live_safety.py'
+      - 'ops/chobyar-trader/v4/test_live_safety.py'
+      - '.github/workflows/chobyar-trader-live-safety-stage1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/test_live_safety.py
+      - name: Stage-1 safety tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_live_safety.py
+      - name: No execution, withdrawal, or leverage surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE '(requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete)|\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw|margin_order|futures_order)' \
+            ops/chobyar-trader/v4/live_safety.py; then
+            echo 'Forbidden mutable exchange surface detected in stage-1 safety module' >&2
+            exit 1
+          fi
+          grep -q 'stage1_requires_live_trading_disabled' ops/chobyar-trader/v4/live_safety.py
+          grep -q 'withdrawals_must_be_disabled' ops/chobyar-trader/v4/live_safety.py
+          grep -q 'leverage_must_be_disabled' ops/chobyar-trader/v4/live_safety.py
+          grep -q 'spot_only_required' ops/chobyar-trader/v4/live_safety.py
