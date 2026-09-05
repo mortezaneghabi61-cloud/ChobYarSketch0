@@ -89,7 +89,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
         final Object first;
         final Object second;
         LoftFeature(int id,Object a,Object b){super(id,"Loft");first=a;second=b;sourceEntities.add(a);sourceEntities.add(b);}
-        @Override String detail(){return "Loft • text text"+(broken?" • ⚠":"");}
+        @Override String detail(){return "Loft • Two Profiles"+(broken?" • ⚠":"");}
         @Override SolidCSG build(AdvancedParametricSolidCadCanvasView o){
             Profile a=o.profile(first),b=o.profile(second);if(a==null||b==null)return null;
             return SolidCSG.loft(a.points,a.plane,b.points,b.plane,64);
