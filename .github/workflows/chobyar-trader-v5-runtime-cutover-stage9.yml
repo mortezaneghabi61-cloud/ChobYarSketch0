@@ -1,0 +1,128 @@
+name: ChobYar Trader v5 Runtime Cutover Stage 9
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/common.py'
+      - 'ops/chobyar-trader/v5/execution_safety/trader.py'
+      - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
+      - 'ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh'
+      - '.github/workflows/chobyar-trader-v5-runtime-cutover-stage9.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v5-runtime-cutover-contract:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Core paper parity
+        run: |
+          set -Eeuo pipefail
+          runtime=ops/chobyar-trader/v5/execution_safety
+          cmp ops/chobyar-trader/v4/common.py "$runtime/common.py"
+          cmp ops/chobyar-trader/v4/trader.py "$runtime/trader.py"
+          cmp ops/chobyar-trader/v4/global_sources.py "$runtime/global_sources.py"
+
+      - name: Compile v5 self-contained paper runtime
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/common.py \
+            ops/chobyar-trader/v5/execution_safety/trader.py \
+            ops/chobyar-trader/v5/execution_safety/global_sources.py \
+            ops/chobyar-trader/v5/execution_safety/trader_entry.py \
+            ops/chobyar-trader/v5/execution_safety/entry_gate_v55.py \
+            ops/chobyar-trader/v5/execution_safety/live_safety.py \
+            ops/chobyar-trader/v5/execution_safety/wallex_readonly.py \
+            ops/chobyar-trader/v5/execution_safety/market_metadata.py \
+            ops/chobyar-trader/v5/execution_safety/auth_preflight.py \
+            ops/chobyar-trader/v5/execution_safety/open_orders_readonly.py \
+            ops/chobyar-trader/v5/execution_safety/order_dryrun.py \
+            ops/chobyar-trader/v5/execution_safety/quote_cap.py
+          bash -n ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+
+      - name: Deterministic v5 safety regressions
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 ops/chobyar-trader/v5/execution_safety/test_entry_gate_v55.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_safety.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_wallex_readonly.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_order_dryrun.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_market_metadata.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_auth_preflight.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_open_orders_readonly.py -v
+          python3 ops/chobyar-trader/v5/execution_safety/test_quote_cap.py -v
+          python3 ops/chobyar-trader/v4/test_global_sources.py -v
+
+      - name: Self-contained v5 module resolution
+        env:
+          TRADING_MODE: paper
+          LIVE_TRADING_ENABLED: 'false'
+          MAX_POSITION_PCT: '0.25'
+          STOP_LOSS_PCT: '0.015'
+          TAKE_PROFIT_PCT: '0.03'
+          MAX_DAILY_LOSS_PCT: '0.03'
+          CHOBYAR_APP_DIR: /tmp/chobyar-stage9-probe
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 - <<'PY'
+          import importlib
+          import sys
+          import types
+          from pathlib import Path
+
+          class DummyClient:
+              def __init__(self, *args, **kwargs):
+                  pass
+
+          httpx = types.ModuleType('httpx')
+          httpx.Client = DummyClient
+          sys.modules['httpx'] = httpx
+          root = Path('ops/chobyar-trader/v5/execution_safety').resolve()
+          entry = importlib.import_module('trader_entry')
+          for name in ('trader', 'global_sources', 'entry_gate_v55'):
+              module = importlib.import_module(name)
+              assert Path(module.__file__).resolve().parent == root, (name, module.__file__, root)
+          assert Path(entry.__file__).resolve().parent == root
+          print('V5_SELF_CONTAINED_IMPORT=PASS')
+          PY
+
+      - name: Fail-closed runtime and installer contract
+        run: |
+          set -Eeuo pipefail
+          runtime=ops/chobyar-trader/v5/execution_safety
+          script=ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
+          if grep -RniE 'X-API-Key|/v1/account/orders|\.post\(|\.put\(|\.patch\(|\.delete\(|margin-trade|futures' \
+            "$runtime/trader.py" "$runtime/trader_entry.py" "$runtime/entry_gate_v55.py" "$runtime/global_sources.py"; then
+            echo 'Forbidden mutable/authenticated exchange surface in v5 paper runtime core' >&2
+            exit 1
+          fi
+          if grep -Rni 'LIVE_TRADING_ENABLED=true' "$runtime" --include='*.py'; then
+            echo 'Live-enable marker detected in v5 runtime' >&2
+            exit 1
+          fi
+          if grep -nE '(sed -i|>>|tee ).*ENV_FILE' "$script"; then
+            echo 'Stage-9 installer must not mutate .env' >&2
+            exit 1
+          fi
+          if grep -nE 'X-API-Key|/v1/account/orders|api\.wallex\.ir|margin-trade|futures' "$script"; then
+            echo 'Stage-9 installer must not contain exchange execution/auth surface' >&2
+            exit 1
+          fi
+          grep -q "TRADING_MODE=paper" "$script"
+          grep -q "LIVE_TRADING_ENABLED=false" "$script"
+          grep -q 'WorkingDirectory=/opt/chobyar-trader/app/v5/execution_safety' "$script"
+          grep -q 'ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/v5/execution_safety/trader_entry.py' "$script"
+          grep -q 'V4_DIRECT_EXECSTART=RETIRED' "$script"
+          grep -q 'PAPER_ENGINE_BEHAVIOR=UNCHANGED' "$script"
