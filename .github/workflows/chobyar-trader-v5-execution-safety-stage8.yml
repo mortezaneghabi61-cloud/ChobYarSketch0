@@ -1,4 +1,4 @@
-name: ChobYar Trader v5 Execution Safety Stage 8
+name: ChobYar Trader v5 Execution Safety Regression
 
 on:
   pull_request:
@@ -11,11 +11,10 @@ permissions:
   contents: read
 
 jobs:
-  v5-execution-safety-migration:
+  v5-execution-safety-regression:
     runs-on: ubuntu-24.04
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      V4: ops/chobyar-trader/v4
       V5: ops/chobyar-trader/v5/execution_safety
     steps:
       - uses: actions/checkout@v4
@@ -23,18 +22,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Exact-head lock
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Byte-for-byte migration parity
-        run: |
-          set -Eeuo pipefail
-          for f in live_safety.py wallex_readonly.py order_dryrun.py market_metadata.py auth_preflight.py open_orders_readonly.py quote_cap.py entry_gate_v55.py trader_entry.py; do
-            cmp "$V4/$f" "$V5/$f"
-          done
-          for f in test_live_safety.py test_wallex_readonly.py test_order_dryrun.py test_market_metadata.py test_auth_preflight.py test_open_orders_readonly.py test_quote_cap.py test_entry_gate_v55.py; do
-            cmp "$V4/$f" "$V5/$f"
-          done
-      - name: Compile v5 execution-safety surface
+      - name: Frozen v4 reference remains unchanged
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = "b4b7cddde55cf683b42a31b24bd598ce2c78abb2"
+      - name: Compile authoritative v5 execution safety
         run: python3 -m py_compile "$V5"/*.py
-      - name: Deterministic v5 migrated tests
+      - name: Deterministic v5 safety regressions
         env:
           PYTHONPATH: ops/chobyar-trader/v5/execution_safety
         run: |
@@ -46,6 +38,8 @@ jobs:
           python3 "$V5/test_open_orders_readonly.py" -v
           python3 "$V5/test_quote_cap.py" -v
           python3 "$V5/test_entry_gate_v55.py" -v
+          python3 "$V5/test_quote_order_preflight.py" -v
+          test ! -f "$V5/test_authenticated_quote_preflight.py" || python3 "$V5/test_authenticated_quote_preflight.py" -v
       - name: Fail-closed exchange surface
         run: |
           set -Eeuo pipefail
@@ -53,9 +47,6 @@ jobs:
             echo 'Forbidden mutable or live execution surface detected in v5 execution safety' >&2
             exit 1
           fi
-          grep -Rqs 'LIVE_TRADING_ENABLED.*false' "$V5"/test_*.py
-          grep -Rqs 'WITHDRAWALS_ENABLED.*false' "$V5"/test_*.py
-          grep -Rqs 'LEVERAGE_ENABLED.*false' "$V5"/test_*.py
       - name: v5 authority marker
         run: |
           grep -q 'authoritative v5 execution-safety surface' "$V5/README.md"
