@@ -42,8 +42,8 @@ def _deny(reason: str, symbol: str, quote_asset: str, cap: Decimal, notional: De
 def evaluate_quote_cap(*, env: Mapping[str, str], symbol: str, notional_quote: object) -> QuoteCapDecision:
     """Quote-aware hard-cap authority; pure and dry-run only.
 
-    For BTCUSDT, the notional is USDT. LIVE_MAX_ORDER_TMN is deliberately absent
-    from this authority and no longer required by the authoritative v5 path.
+    For BTCUSDT, notional and the hard cap are expressed only in its quote asset,
+    USDT. Legacy currency-specific cap state is outside this authority.
     """
     safety = evaluate_v5_safety(env)
     wanted = (symbol or "").strip().upper()
