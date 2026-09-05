@@ -1,0 +1,93 @@
+name: ChobYar Trader v5 Auth+Quote Stage 12
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/v5_safety_core.py'
+      - 'ops/chobyar-trader/v5/execution_safety/wallex_readonly.py'
+      - 'ops/chobyar-trader/v5/execution_safety/quote_cap.py'
+      - 'ops/chobyar-trader/v5/execution_safety/spot_eligibility.py'
+      - 'ops/chobyar-trader/v5/execution_safety/quote_order_preflight.py'
+      - 'ops/chobyar-trader/v5/execution_safety/authenticated_quote_preflight.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_authenticated_quote_preflight.py'
+      - '.github/workflows/chobyar-trader-v5-auth-quote-stage12.yml'
+      - '.github/workflows/chobyar-trader-v5-execution-safety-stage8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-quote-preflight:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Frozen v4 lock
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = 'b4b7cddde55cf683b42a31b24bd598ce2c78abb2'
+
+      - name: Compile Stage-12 authority
+        run: |
+          python3 -m py_compile \
+            "$V5/v5_safety_core.py" \
+            "$V5/wallex_readonly.py" \
+            "$V5/quote_cap.py" \
+            "$V5/spot_eligibility.py" \
+            "$V5/quote_order_preflight.py" \
+            "$V5/authenticated_quote_preflight.py" \
+            "$V5/test_authenticated_quote_preflight.py"
+
+      - name: Deterministic Stage-12 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 "$V5/test_authenticated_quote_preflight.py" -v
+          python3 "$V5/test_quote_order_preflight.py" -v
+          python3 "$V5/test_quote_cap.py" -v
+          python3 "$V5/test_wallex_readonly.py" -v
+
+      - name: BTCUSDT quote authority has no TMN dependency
+        run: |
+          set -Eeuo pipefail
+          files=(
+            "$V5/v5_safety_core.py"
+            "$V5/wallex_readonly.py"
+            "$V5/quote_cap.py"
+            "$V5/spot_eligibility.py"
+            "$V5/quote_order_preflight.py"
+            "$V5/authenticated_quote_preflight.py"
+          )
+          if grep -n 'LIVE_MAX_ORDER_TMN' "${files[@]}"; then
+            echo 'Legacy TMN cap leaked into authoritative Stage-12 BTCUSDT path' >&2
+            exit 1
+          fi
+          grep -q 'LIVE_MAX_ORDER_USDT' "$V5/test_authenticated_quote_preflight.py"
+          grep -q 'quote_asset' "$V5/quote_order_preflight.py"
+          grep -q 'live_ready=False' "$V5/authenticated_quote_preflight.py"
+
+      - name: GET-only and no-live contract
+        run: |
+          set -Eeuo pipefail
+          files=(
+            "$V5/v5_safety_core.py"
+            "$V5/wallex_readonly.py"
+            "$V5/quote_cap.py"
+            "$V5/spot_eligibility.py"
+            "$V5/quote_order_preflight.py"
+            "$V5/authenticated_quote_preflight.py"
+          )
+          if grep -nE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order' "${files[@]}"; then
+            echo 'Forbidden mutable exchange surface in Stage-12' >&2
+            exit 1
+          fi
+          grep -q 'LIVE_TRADING_ENABLED' "$V5/v5_safety_core.py"
+          grep -q 'WITHDRAWALS_ENABLED' "$V5/v5_safety_core.py"
+          grep -q 'LEVERAGE_ENABLED' "$V5/v5_safety_core.py"
