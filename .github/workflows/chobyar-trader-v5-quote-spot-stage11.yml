@@ -1,0 +1,67 @@
+name: ChobYar Trader v5 Quote+Spot Stage 11
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/spot_eligibility.py'
+      - 'ops/chobyar-trader/v5/execution_safety/quote_order_preflight.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_quote_order_preflight.py'
+      - '.github/workflows/chobyar-trader-v5-quote-spot-stage11.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quote-spot-preflight:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Compile Stage-11 modules
+        run: |
+          python3 -m py_compile \
+            "$V5/spot_eligibility.py" \
+            "$V5/quote_order_preflight.py" \
+            "$V5/test_quote_order_preflight.py"
+
+      - name: Deterministic quote and spot tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: python3 "$V5/test_quote_order_preflight.py" -v
+
+      - name: Quote-unit authority contract
+        run: |
+          set -Eeuo pipefail
+          grep -q 'quote_asset' "$V5/quote_order_preflight.py"
+          grep -q 'min_notional_quote' "$V5/quote_order_preflight.py"
+          grep -q 'limit_price_quote' "$V5/quote_order_preflight.py"
+          grep -q 'LIVE_MAX_ORDER_USDT' "$V5/test_quote_order_preflight.py"
+          if grep -nE '(min_notional_tmn|max_notional_tmn|limit_price_tmn|notional_tmn)' "$V5/quote_order_preflight.py"; then
+            echo 'Stage-11 authority must not use TMN labels for BTCUSDT quote semantics' >&2
+            exit 1
+          fi
+
+      - name: Active spot and GET-only contract
+        run: |
+          set -Eeuo pipefail
+          grep -q '/hector/web/v1/markets' "$V5/spot_eligibility.py"
+          grep -q 'is_spot' "$V5/spot_eligibility.py"
+          grep -q 'live_ready=False' "$V5/quote_order_preflight.py"
+          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true' \
+            "$V5/spot_eligibility.py" "$V5/quote_order_preflight.py"; then
+            echo 'Forbidden mutable/live exchange surface in Stage-11' >&2
+            exit 1
+          fi
+
+      - name: Frozen v4 remains untouched
+        run: |
+          test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = 'b4b7cddde55cf683b42a31b24bd598ce2c78abb2'
