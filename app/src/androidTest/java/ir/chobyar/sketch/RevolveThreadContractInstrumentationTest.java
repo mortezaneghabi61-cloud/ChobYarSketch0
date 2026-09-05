@@ -55,7 +55,7 @@ public final class RevolveThreadContractInstrumentationTest {
         Object feature=newRevolveFeature(3600f,25.2f);
         String detail=(String)method(feature,"detail").invoke(feature);
         assertTrue(detail.contains("H 25.2 mm"));
-        assertTrue(detail.contains("10 text"));
+        assertTrue(detail.contains("10 turns"));
         assertTrue(detail.contains("Pitch 2.52 mm"));
     }
 
