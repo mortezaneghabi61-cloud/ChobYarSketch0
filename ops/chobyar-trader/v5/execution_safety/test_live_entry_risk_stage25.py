@@ -54,7 +54,7 @@ class Stage25Tests(unittest.TestCase):
     def test_equity_sizing_allows_within_25pct_total_position(self):
         with tempfile.TemporaryDirectory() as td:
             state = Path(td) / "risk.json"
-            write_state(state, start="100")
+            write_state(state, start="90")
             # Equity = 90, position = 10, max position = 22.5, remaining = 12.5.
             out = evaluate_buy_risk(
                 env=GOOD_ENV,
@@ -102,7 +102,7 @@ class Stage25Tests(unittest.TestCase):
     def test_available_usdt_is_also_a_hard_budget(self):
         with tempfile.TemporaryDirectory() as td:
             state = Path(td) / "risk.json"
-            write_state(state, start="10")
+            write_state(state, start="1")
             c = FakeClient(usdt="1", btc="0", bid="10000")
             with self.assertRaisesRegex(Stage25Error, "buy_exceeds_equity_sized_budget"):
                 evaluate_buy_risk(env=GOOD_ENV, intended_notional=Decimal("1.01"), client=c, headers={}, state_path=state, now=NOW)
