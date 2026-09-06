@@ -3,9 +3,7 @@ from __future__ import annotations
 import os
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Mapping
-
-import httpx
+from typing import Any, Mapping
 
 APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 BALANCES_PATH = "/v1/account/balances"
@@ -83,9 +81,9 @@ def _api_key(env: Mapping[str, str]) -> str:
     raise RuntimeError("wallex_api_key_missing")
 
 
-def _require_success(response: httpx.Response, reason: str) -> object:
-    if response.status_code != 200:
-        raise RuntimeError(f"{reason}_http_{response.status_code}")
+def _require_success(response: Any, reason: str) -> object:
+    if getattr(response, "status_code", None) != 200:
+        raise RuntimeError(f"{reason}_http_{getattr(response, 'status_code', 'unknown')}")
     payload = response.json()
     if not isinstance(payload, dict) or payload.get("success") is not True:
         raise RuntimeError(f"{reason}_rejected")
@@ -102,14 +100,18 @@ def _open_order_count(payload: object) -> int:
     return len(orders)
 
 
-def run_live_observer_once(*, env: Mapping[str, str] | None = None, client: httpx.Client | None = None) -> dict[str, object]:
+def run_live_observer_once(*, env: Mapping[str, str] | None = None, client: Any | None = None) -> dict[str, object]:
     """GET-only live account observation. Never submits, cancels, or modifies orders."""
     effective = dict(env) if env is not None else _merged_env()
     validate_live_observer_env(effective)
     key = _api_key(effective)
     headers = {"X-API-Key": key, "Accept": "application/json", "User-Agent": "ChobYar-Trader/5-live-observer"}
     owns_client = client is None
-    http = client or httpx.Client(base_url="https://api.wallex.ir", timeout=12.0, headers=headers)
+    if client is None:
+        import httpx
+        http = httpx.Client(base_url="https://api.wallex.ir", timeout=12.0, headers=headers)
+    else:
+        http = client
     try:
         balances = _require_success(http.get(BALANCES_PATH, headers=headers), "balances")
         open_orders = _require_success(
@@ -117,8 +119,8 @@ def run_live_observer_once(*, env: Mapping[str, str] | None = None, client: http
             "open_orders",
         )
         markets_response = http.get(MARKETS_PATH, headers={"Accept": "application/json", "User-Agent": headers["User-Agent"]})
-        if markets_response.status_code != 200:
-            raise RuntimeError(f"markets_http_{markets_response.status_code}")
+        if getattr(markets_response, "status_code", None) != 200:
+            raise RuntimeError(f"markets_http_{getattr(markets_response, 'status_code', 'unknown')}")
         markets_payload = markets_response.json()
         if not isinstance(markets_payload, dict):
             raise RuntimeError("markets_schema_invalid")
