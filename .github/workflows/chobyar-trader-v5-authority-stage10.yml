@@ -60,6 +60,8 @@ jobs:
           python3 "$V5/test_auth_preflight.py" -v
           python3 "$V5/test_open_orders_readonly.py" -v
           python3 "$V5/test_quote_cap.py" -v
+          test ! -f "$V5/test_live_executor_stage22.py" || python3 "$V5/test_live_executor_stage22.py" -v
+          test ! -f "$V5/test_live_position_guardian_stage23.py" || python3 "$V5/test_live_position_guardian_stage23.py" -v
       - name: Preserve approved Paper risk locks
         run: |
           set -Eeuo pipefail
@@ -70,15 +72,17 @@ jobs:
           grep -q 'STOP_LOSS_PCT=0.015' "$script"
           grep -q 'TAKE_PROFIT_PCT=0.03' "$script"
           grep -q 'MAX_DAILY_LOSS_PCT=0.03' "$script"
-      - name: No mutable execution outside governed Stage 22
+      - name: No mutable execution outside governed Stage 22 and 23
         run: |
           set -Eeuo pipefail
           pattern='\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true'
           mapfile -d '' files < <(find "$V5" -maxdepth 1 -type f -name '*.py' \
             ! -name 'live_executor_stage22.py' \
-            ! -name 'test_live_executor_stage22.py' -print0)
+            ! -name 'test_live_executor_stage22.py' \
+            ! -name 'live_position_guardian_stage23.py' \
+            ! -name 'test_live_position_guardian_stage23.py' -print0)
           if ((${#files[@]})) && grep -niE "$pattern" "${files[@]}"; then
-            echo 'Forbidden mutable/live execution surface detected outside governed Stage-22 executor' >&2
+            echo 'Forbidden mutable/live execution surface detected outside governed Stage-22/23 surfaces' >&2
             exit 1
           fi
           if [[ -f "$V5/live_executor_stage22.py" ]]; then
@@ -86,6 +90,15 @@ jobs:
             test "$(grep -Ec 'client\.post\(ORDER_PATH' "$V5/live_executor_stage22.py")" = 1
             ! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|/margin|/otc|futures' "$V5/live_executor_stage22.py"
             grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$V5/live_executor_stage22.py"
+          fi
+          if [[ -f "$V5/live_position_guardian_stage23.py" ]]; then
+            test -f .github/workflows/chobyar-trader-v5-spot-risk-guardian-stage23.yml
+            test "$(grep -Ec 'client\.post\(ORDER_PATH' "$V5/live_position_guardian_stage23.py")" = 1
+            ! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|/margin|/otc|futures' "$V5/live_position_guardian_stage23.py"
+            grep -q '"side": "SELL"' "$V5/live_position_guardian_stage23.py"
+            ! grep -q '"side": "BUY"' "$V5/live_position_guardian_stage23.py"
+            grep -q 'entry_exceeded_approved_10_usdt_cap' "$V5/live_position_guardian_stage23.py"
+            grep -q 'btc_balance_exceeds_entry_quantity' "$V5/live_position_guardian_stage23.py"
           fi
           grep -Rqs 'WITHDRAWALS_ENABLED.*false' "$V5"/test_*.py
           grep -Rqs 'LEVERAGE_ENABLED.*false' "$V5"/test_*.py
