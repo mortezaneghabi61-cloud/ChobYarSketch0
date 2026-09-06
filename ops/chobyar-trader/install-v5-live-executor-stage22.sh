@@ -51,8 +51,8 @@ post_count="$(grep -Ec 'client\.post\(ORDER_PATH' "$SRC_REL" || true)"
 
 # Reject actual mutable/non-spot execution surfaces only. Do not reject the explicit
 # *_ENABLED=false safety gates themselves (for example FUTURES_ENABLED=false).
-! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|["'"']/(margin|otc|futures)(/|["'"'])|margin_order|otc_order|futures_order' "$SRC_REL" >/dev/null \
-  || fail "forbidden mutable/non-spot surface detected"
+forbidden_re="\\.delete\\(|\\.put\\(|\\.patch\\(|withdraw\\(|[\"']/(margin|otc|futures)(/|[\"'])|margin_order|otc_order|futures_order"
+! grep -nEi "$forbidden_re" "$SRC_REL" >/dev/null || fail "forbidden mutable/non-spot surface detected"
 
 grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$SRC_REL" || fail "hard 10 USDT cap missing"
 grep -q 'WITHDRAWALS_ENABLED' "$SRC_REL" || fail "withdrawal-off gate missing"
