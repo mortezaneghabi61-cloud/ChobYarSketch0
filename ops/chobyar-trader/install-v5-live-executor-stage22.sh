@@ -48,10 +48,18 @@ PYTHONPATH="ops/chobyar-trader/v5/execution_safety" "$PY" "$TEST_REL" -q
 # Stage-22 must have exactly one exchange mutation surface: POST /v1/account/orders.
 post_count="$(grep -Ec 'client\.post\(ORDER_PATH' "$SRC_REL" || true)"
 [[ "$post_count" == "1" ]] || fail "expected exactly one order POST surface"
-! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|/margin|/otc|futures' "$SRC_REL" >/dev/null || fail "forbidden mutable/non-spot surface detected"
+
+# Reject actual mutable/non-spot execution surfaces only. Do not reject the explicit
+# *_ENABLED=false safety gates themselves (for example FUTURES_ENABLED=false).
+forbidden_re="\\.delete\\(|\\.put\\(|\\.patch\\(|withdraw\\(|[\"']/(margin|otc|futures)(/|[\"'])|margin_order|otc_order|futures_order"
+! grep -nEi "$forbidden_re" "$SRC_REL" >/dev/null || fail "forbidden mutable/non-spot surface detected"
+
 grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$SRC_REL" || fail "hard 10 USDT cap missing"
 grep -q 'WITHDRAWALS_ENABLED' "$SRC_REL" || fail "withdrawal-off gate missing"
 grep -q 'LEVERAGE_ENABLED' "$SRC_REL" || fail "leverage-off gate missing"
+grep -q 'MARGIN_ENABLED' "$SRC_REL" || fail "margin-off gate missing"
+grep -q 'FUTURES_ENABLED' "$SRC_REL" || fail "futures-off gate missing"
+grep -q 'OTC_ENABLED' "$SRC_REL" || fail "otc-off gate missing"
 
 install -d -m 0755 "$DST_DIR"
 install -m 0644 "$SRC_REL" "$DST"
