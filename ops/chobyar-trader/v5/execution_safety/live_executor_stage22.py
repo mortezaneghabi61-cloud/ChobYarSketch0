@@ -183,10 +183,29 @@ def validate_intent(intent: LiveOrderIntent, rules: MarketRules) -> Decimal:
     return notional
 
 
+def _safe_error_summary(response: Any) -> str:
+    """Return bounded, whitelisted exchange validation detail without headers or secrets."""
+    try:
+        payload = response.json()
+    except Exception:
+        return "no_json_error_detail"
+    if not isinstance(payload, Mapping):
+        return "non_mapping_error_detail"
+    parts: list[str] = []
+    for key in ("message", "error", "code", "errors"):
+        if key not in payload:
+            continue
+        text = str(payload.get(key)).replace("\n", " ").replace("\r", " ").strip()
+        if text:
+            parts.append(f"{key}={text[:240]}")
+    return ";".join(parts)[:500] if parts else "no_whitelisted_error_detail"
+
+
 def _json_ok(response: Any, expected_statuses: set[int], reason: str) -> Mapping[str, Any]:
     status = getattr(response, "status_code", None)
     if status not in expected_statuses:
-        raise Stage22Error(f"{reason}_http_{status}")
+        detail = _safe_error_summary(response)
+        raise Stage22Error(f"{reason}_http_{status}:{detail}")
     try:
         payload = response.json()
     except Exception as exc:
@@ -220,7 +239,6 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
     if orders:
         raise Stage22Error("existing_open_order_blocks_submission")
 
-    # Idempotency fence: refuse to POST if this client_id already exists.
     prior = client.get(f"{ORDER_PATH}/{intent.client_id}", headers=headers)
     if getattr(prior, "status_code", None) == 200:
         raise Stage22Error("client_id_already_exists")
@@ -281,8 +299,11 @@ def main(argv: list[str] | None = None) -> int:
 
     env = merged_env()
     intent = LiveOrderIntent(args.side, quantity, price, args.client_id)
-    with httpx.Client(base_url=BASE_URL, timeout=12.0) as client:
-        result = submit_one_live_limit_order(env=env, intent=intent, client=client)
+    try:
+        with httpx.Client(base_url=BASE_URL, timeout=12.0) as client:
+            result = submit_one_live_limit_order(env=env, intent=intent, client=client)
+    except Stage22Error as exc:
+        raise SystemExit(f"FAIL-CLOSED: {exc}") from None
 
     print("STAGE22_LIVE_ORDER=SUBMITTED")
     print(f"SYMBOL={result['symbol']}")
