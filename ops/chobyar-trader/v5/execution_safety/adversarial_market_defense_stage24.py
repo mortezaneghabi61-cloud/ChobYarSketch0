@@ -7,32 +7,25 @@ from dataclasses import dataclass
 from statistics import median
 from typing import Iterable, Sequence
 
-# Stage-24 is deliberately observation/gating only. It has no exchange mutation surface.
-# External text is treated as untrusted data, never as instructions.
-
 MIN_PRICE_QUORUM = 3
-MAX_GLOBAL_DISPERSION = 0.0075      # 0.75%
-MAX_LOCAL_GLOBAL_DIVERGENCE = 0.0125 # 1.25%
-MAX_SPREAD = 0.0075                 # 0.75%
-MAX_SINGLE_STEP_MOVE = 0.0200       # 2.00%
+MAX_GLOBAL_DISPERSION = 0.0075
+MAX_LOCAL_GLOBAL_DIVERGENCE = 0.0125
+MAX_SPREAD = 0.0075
+MAX_SINGLE_STEP_MOVE = 0.0200
 MAX_CANCEL_RATIO = 0.90
 MAX_DEPTH_FLIP_RATIO = 0.80
 MIN_TRADE_TO_QUOTE_RATIO = 0.02
 
-INJECTION_PATTERNS = tuple(
-    re.compile(p, re.IGNORECASE)
-    for p in (
-        r"\bignore\s+(all\s+)?(previous|prior|system|developer)\b",
-        r"\b(disregard|override|bypass)\s+(the\s+)?(previous|prior|system|developer|safety)\b",
-        r"\b(system|developer)\s+prompt\b",
-        r"\breveal\s+(your\s+)?(instructions|prompt|secrets?|api\s*key)\b",
-        r"\bcall\s+(the\s+)?(tool|plugin|function)\b",
-        r"\bexecute\s+(this|the)\s+(command|instruction)\b",
-        r"\byou\s+are\s+now\b",
-        r"\bdo\s+not\s+follow\s+(your|the)\s+(rules|instructions)\b",
-    )
-)
-
+INJECTION_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in (
+    r"\bignore\s+(all\s+)?(previous|prior|system|developer)\b",
+    r"\b(disregard|override|bypass)\s+(the\s+)?(previous|prior|system|developer|safety)\b",
+    r"\b(system|developer)\s+prompt\b",
+    r"\breveal\s+(your\s+)?(instructions|prompt|secrets?|api\s*key)\b",
+    r"\bcall\s+(the\s+)?(tool|plugin|function)\b",
+    r"\bexecute\s+(this|the)\s+(command|instruction)\b",
+    r"\byou\s+are\s+now\b",
+    r"\bdo\s+not\s+follow\s+(your|the)\s+(rules|instructions)\b",
+))
 BIDI_CONTROL_CATEGORIES = {"Cf"}
 
 
@@ -44,11 +37,17 @@ class ExternalContent:
 
 
 @dataclass(frozen=True)
+class PriceObservation:
+    source_id: str
+    price: float
+
+
+@dataclass(frozen=True)
 class MarketEvidence:
     local_bid: float
     local_ask: float
     local_last: float
-    global_prices: Sequence[float]
+    global_prices: Sequence[PriceObservation]
     previous_local_last: float | None = None
     cancel_ratio: float | None = None
     depth_flip_ratio: float | None = None
@@ -76,10 +75,7 @@ def _ratio_distance(a: float, b: float) -> float:
 
 
 def _contains_unicode_controls(text: str) -> bool:
-    for ch in text:
-        if unicodedata.category(ch) in BIDI_CONTROL_CATEGORIES:
-            return True
-    return False
+    return any(unicodedata.category(ch) in BIDI_CONTROL_CATEGORIES for ch in text)
 
 
 def external_content_flags(items: Iterable[ExternalContent]) -> tuple[set[str], int]:
@@ -99,18 +95,41 @@ def external_content_flags(items: Iterable[ExternalContent]) -> tuple[set[str], 
     return flags, len(trusted_sources)
 
 
+def _unique_prices(observations: Sequence[PriceObservation]) -> tuple[list[float], set[str], set[str]]:
+    by_source: dict[str, float] = {}
+    flags: set[str] = set()
+    duplicates: set[str] = set()
+    for obs in observations:
+        if not isinstance(obs, PriceObservation):
+            flags.add("source_identity_missing")
+            continue
+        source = (obs.source_id or "").strip().lower()
+        if not source:
+            flags.add("source_identity_missing")
+            continue
+        if not _finite_positive(obs.price):
+            flags.add("invalid_global_price")
+            continue
+        if source in by_source:
+            duplicates.add(source)
+            flags.add("duplicate_price_source")
+            continue
+        by_source[source] = float(obs.price)
+    return list(by_source.values()), flags, duplicates
+
+
 def market_flags(e: MarketEvidence) -> tuple[set[str], int]:
     flags: set[str] = set()
     if not all(_finite_positive(x) for x in (e.local_bid, e.local_ask, e.local_last)):
         return {"invalid_local_market_data"}, 0
     if e.local_ask < e.local_bid:
         flags.add("crossed_local_market")
-
     spread = (e.local_ask - e.local_bid) / ((e.local_ask + e.local_bid) / 2.0)
     if spread > MAX_SPREAD:
         flags.add("abnormal_spread")
 
-    prices = [float(x) for x in e.global_prices if _finite_positive(x)]
+    prices, source_flags, _ = _unique_prices(e.global_prices)
+    flags |= source_flags
     quorum = len(prices)
     if quorum < MIN_PRICE_QUORUM:
         flags.add("global_price_quorum_insufficient")
@@ -127,8 +146,6 @@ def market_flags(e: MarketEvidence) -> tuple[set[str], int]:
             flags.add("invalid_previous_market_data")
         elif _ratio_distance(e.local_last, e.previous_local_last) > MAX_SINGLE_STEP_MOVE:
             flags.add("single_step_price_shock")
-
-    # These metrics require order-book history. We never infer spoofing from one snapshot.
     if e.cancel_ratio is not None:
         if not 0 <= e.cancel_ratio <= 1:
             flags.add("invalid_cancel_ratio")
@@ -144,43 +161,24 @@ def market_flags(e: MarketEvidence) -> tuple[set[str], int]:
             flags.add("invalid_trade_to_quote_ratio")
         elif e.trade_to_quote_ratio <= MIN_TRADE_TO_QUOTE_RATIO:
             flags.add("quote_activity_without_matching_trades")
-
     return flags, quorum
 
 
-def evaluate_adversarial_defense(
-    *,
-    market: MarketEvidence,
-    external_content: Sequence[ExternalContent] = (),
-) -> DefenseDecision:
+def evaluate_adversarial_defense(*, market: MarketEvidence, external_content: Sequence[ExternalContent] = ()) -> DefenseDecision:
     text_flags, trusted_text_sources = external_content_flags(external_content)
     mkt_flags, price_quorum = market_flags(market)
     flags = set(text_flags) | set(mkt_flags)
-
-    # Prompt/tool injection is an immediate block: untrusted content can inform analysis,
-    # but it can never alter policy, call tools, or create trading authority.
     hard_block = {
-        "prompt_injection_like_content",
-        "hidden_unicode_control",
-        "invalid_local_market_data",
-        "crossed_local_market",
-        "global_price_quorum_insufficient",
-        "global_price_dispersion_high",
-        "local_global_divergence",
-        "abnormal_spread",
-        "single_step_price_shock",
-        "extreme_order_cancellation",
-        "rapid_depth_flip",
-        "quote_activity_without_matching_trades",
-        "invalid_cancel_ratio",
-        "invalid_depth_flip_ratio",
-        "invalid_trade_to_quote_ratio",
-        "invalid_previous_market_data",
+        "prompt_injection_like_content", "hidden_unicode_control", "invalid_local_market_data",
+        "crossed_local_market", "source_identity_missing", "duplicate_price_source", "invalid_global_price",
+        "global_price_quorum_insufficient", "global_price_dispersion_high", "local_global_divergence",
+        "abnormal_spread", "single_step_price_shock", "extreme_order_cancellation", "rapid_depth_flip",
+        "quote_activity_without_matching_trades", "invalid_cancel_ratio", "invalid_depth_flip_ratio",
+        "invalid_trade_to_quote_ratio", "invalid_previous_market_data",
     }
-
     weighted = 0.0
     for flag in flags:
-        if flag in {"prompt_injection_like_content", "hidden_unicode_control"}:
+        if flag in {"prompt_injection_like_content", "hidden_unicode_control", "source_identity_missing", "duplicate_price_source"}:
             weighted += 1.0
         elif flag in {"local_global_divergence", "single_step_price_shock", "global_price_dispersion_high"}:
             weighted += 0.8
@@ -189,23 +187,7 @@ def evaluate_adversarial_defense(
         else:
             weighted += 0.5
     risk_score = min(1.0, weighted)
-
     blockers = sorted(flags & hard_block)
     if blockers:
-        return DefenseDecision(
-            allowed=False,
-            reason=blockers[0],
-            risk_score=risk_score,
-            flags=tuple(sorted(flags)),
-            trusted_text_sources=trusted_text_sources,
-            price_quorum=price_quorum,
-        )
-
-    return DefenseDecision(
-        allowed=True,
-        reason="adversarial_checks_clear",
-        risk_score=risk_score,
-        flags=tuple(sorted(flags)),
-        trusted_text_sources=trusted_text_sources,
-        price_quorum=price_quorum,
-    )
+        return DefenseDecision(False, blockers[0], risk_score, tuple(sorted(flags)), trusted_text_sources, price_quorum)
+    return DefenseDecision(True, "adversarial_checks_clear", risk_score, tuple(sorted(flags)), trusted_text_sources, price_quorum)
