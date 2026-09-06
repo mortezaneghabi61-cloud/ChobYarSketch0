@@ -91,12 +91,17 @@ jobs:
           set -euo pipefail
           e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
           grep -q 'enforce_live_buy_veto()' "$e"
-          grep -q 'enforce_buy_risk' "$e"
+          grep -q 'risk_snapshot = enforce_buy_risk(' "$e"
           test "$(grep -Ec 'client\.post\(ORDER_PATH' "$e")" = 1
           python3 - <<'PY'
           from pathlib import Path
           text = Path('ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py').read_text()
-          assert text.index('enforce_live_buy_veto()') < text.index('enforce_buy_risk') < text.index('client.post(ORDER_PATH')
+          start = text.index('def submit_one_live_limit_order')
+          body = text[start:]
+          veto = body.index('defense_snapshot = enforce_live_buy_veto()')
+          risk = body.index('risk_snapshot = enforce_buy_risk(')
+          post = body.index('client.post(ORDER_PATH')
+          assert veto < risk < post
           PY
 
       - name: Prove installer preserves production paper and safety gates
