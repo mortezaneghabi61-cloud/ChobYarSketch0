@@ -8,6 +8,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
 
+from live_entry_risk_stage25 import Stage25Error, enforce_buy_risk
+
 APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 BASE_URL = "https://api.wallex.ir"
 ORDER_PATH = "/v1/account/orders"
@@ -227,6 +229,13 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
     rules = parse_market_rules(rules_payload)
     notional = validate_intent(intent, rules)
 
+    risk_snapshot = None
+    if intent.side.strip().upper() == "BUY":
+        try:
+            risk_snapshot = enforce_buy_risk(env=env, intended_notional=notional, client=client, headers=headers)
+        except Stage25Error as exc:
+            raise Stage22Error(f"stage25_{exc}") from exc
+
     open_payload = _json_ok(
         client.get(OPEN_ORDERS_PATH, params={"symbol": APPROVED_SYMBOL}, headers=headers),
         {200},
@@ -267,7 +276,7 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
     server_id = str(order.get("clientOrderId") or "").strip()
     if not server_id:
         raise Stage22Error("submitted_client_order_id_missing")
-    return {
+    result_out: dict[str, object] = {
         "submitted": True,
         "symbol": APPROVED_SYMBOL,
         "side": body["side"],
@@ -277,6 +286,14 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
         "withdrawals_enabled": False,
         "leverage_enabled": False,
     }
+    if risk_snapshot is not None:
+        result_out.update({
+            "book_equity_usdt": str(risk_snapshot.equity_usdt),
+            "position_usdt": str(risk_snapshot.position_usdt),
+            "daily_drawdown_pct": str(risk_snapshot.daily_drawdown_pct),
+            "max_new_buy_usdt": str(risk_snapshot.max_new_buy_usdt),
+        })
+    return result_out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -310,6 +327,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"SIDE={result['side']}")
     print(f"NOTIONAL_USDT={result['notional_usdt']}")
     print(f"CLIENT_ORDER_ID={result['client_order_id']}")
+    if result["side"] == "BUY":
+        print(f"BOOK_EQUITY_USDT={result['book_equity_usdt']}")
+        print(f"POSITION_USDT={result['position_usdt']}")
+        print(f"DAILY_DRAWDOWN_PCT={result['daily_drawdown_pct']}")
+        print(f"MAX_NEW_BUY_USDT={result['max_new_buy_usdt']}")
     print("HARD_CAP_USDT=10")
     print("WITHDRAWALS=DISABLED")
     print("LEVERAGE=DISABLED")
