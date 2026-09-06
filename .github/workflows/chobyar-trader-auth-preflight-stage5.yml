@@ -1,0 +1,39 @@
+name: ChobYar Trader Auth Preflight Stage 5
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/auth_preflight.py'
+      - 'ops/chobyar-trader/v4/test_auth_preflight.py'
+      - '.github/workflows/chobyar-trader-auth-preflight-stage5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-preflight-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/wallex_readonly.py ops/chobyar-trader/v4/order_dryrun.py ops/chobyar-trader/v4/market_metadata.py ops/chobyar-trader/v4/auth_preflight.py ops/chobyar-trader/v4/test_auth_preflight.py
+      - name: Deterministic authenticated preflight tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_auth_preflight.py
+      - name: Read-only exchange surface
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/auth_preflight.py
+          if grep -nE '(\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
+            echo 'Forbidden mutable exchange surface detected in stage-5 module' >&2
+            exit 1
+          fi
+          grep -q 'live_ready=False' "$target"
+          grep -q 'fetch_balances_readonly' "$target"
+          grep -q 'fetch_market_metadata' "$target"
+          if grep -nE '(account/orders|openOrders|withdrawals|margin|futures)' "$target"; then
+            echo 'Unapproved authenticated trading surface detected in stage-5 module' >&2
+            exit 1
+          fi

@@ -1,0 +1,66 @@
+name: ChobYar Trader v5 Permission Readiness Stage 13
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/permission_readiness.py'
+      - 'ops/chobyar-trader/v5/execution_safety/stage13_readiness.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_stage13_readiness.py'
+      - '.github/workflows/chobyar-trader-v5-permission-readiness-stage13.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  permission-readiness:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Frozen v4 lock
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = 'b4b7cddde55cf683b42a31b24bd598ce2c78abb2'
+
+      - name: Compile Stage-13 readiness modules
+        run: |
+          python3 -m py_compile \
+            "$V5/permission_readiness.py" \
+            "$V5/stage13_readiness.py" \
+            "$V5/test_stage13_readiness.py"
+
+      - name: Deterministic Stage-13 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: python3 "$V5/test_stage13_readiness.py" -v
+
+      - name: Least-privilege contract
+        run: |
+          set -Eeuo pipefail
+          grep -q 'api_trade_permission_must_remain_disabled_stage13' "$V5/permission_readiness.py"
+          grep -q 'api_withdrawal_permission_must_remain_disabled' "$V5/permission_readiness.py"
+          grep -q 'api_ip_allowlist_must_match_single_expected_server' "$V5/permission_readiness.py"
+          grep -q 'live_ready=False' "$V5/stage13_readiness.py"
+
+      - name: No exchange mutation authority
+        run: |
+          set -Eeuo pipefail
+          files=(
+            "$V5/permission_readiness.py"
+            "$V5/stage13_readiness.py"
+            "$V5/authenticated_quote_preflight.py"
+          )
+          if grep -nE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order' "${files[@]}"; then
+            echo 'Forbidden mutable exchange surface in Stage-13 readiness path' >&2
+            exit 1
+          fi
+          grep -q 'LIVE_TRADING_ENABLED.*false' "$V5/test_stage13_readiness.py"
+          grep -q 'WITHDRAWALS_ENABLED.*false' "$V5/test_stage13_readiness.py"
+          grep -q 'LEVERAGE_ENABLED.*false' "$V5/test_stage13_readiness.py"

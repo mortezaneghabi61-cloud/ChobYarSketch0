@@ -1,0 +1,35 @@
+name: ChobYar Trader Open Orders Stage 6
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/open_orders_readonly.py'
+      - 'ops/chobyar-trader/v4/test_open_orders_readonly.py'
+      - '.github/workflows/chobyar-trader-open-orders-stage6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  open-orders-readonly-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/open_orders_readonly.py ops/chobyar-trader/v4/test_open_orders_readonly.py
+      - name: Deterministic Stage-6 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_open_orders_readonly.py
+      - name: GET-only authenticated surface
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/open_orders_readonly.py
+          if grep -nE '(\.post\(|\.put\(|\.patch\(|\.delete\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
+            echo 'Forbidden exchange mutation surface detected in Stage-6 open-orders reader' >&2
+            exit 1
+          fi
+          grep -q 'OPEN_ORDERS_PATH = "/v1/account/openOrders"' "$target"
+          grep -q 'client.get(' "$target"
+          grep -q '"X-API-Key": key' "$target"

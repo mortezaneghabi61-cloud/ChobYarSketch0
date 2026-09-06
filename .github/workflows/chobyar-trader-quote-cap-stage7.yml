@@ -1,0 +1,35 @@
+name: ChobYar Trader Quote Cap Stage 7
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v4/quote_cap.py'
+      - 'ops/chobyar-trader/v4/test_quote_cap.py'
+      - '.github/workflows/chobyar-trader-quote-cap-stage7.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quote-aware-cap-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python3 -m py_compile ops/chobyar-trader/v4/live_safety.py ops/chobyar-trader/v4/quote_cap.py ops/chobyar-trader/v4/test_quote_cap.py
+      - name: Deterministic Stage-7 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v4
+        run: python3 -m unittest -v ops/chobyar-trader/v4/test_quote_cap.py
+      - name: Pure dry-run quote-cap surface only
+        run: |
+          set -Eeuo pipefail
+          target=ops/chobyar-trader/v4/quote_cap.py
+          if grep -nE '(httpx|requests|\.post\(|\.put\(|\.patch\(|\.delete\(|X-API-Key|x-api-key|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order)' "$target"; then
+            echo 'Forbidden network, mutable, or authenticated exchange surface detected in Stage-7 module' >&2
+            exit 1
+          fi
+          grep -q 'LIVE_MAX_ORDER_USDT' ops/chobyar-trader/v4/test_quote_cap.py
+          grep -q 'LIVE_MAX_ORDER_TMN is deliberately not' "$target"
+          grep -q 'stage7_quote_aware_cap_validated_no_submission' "$target"

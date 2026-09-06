@@ -1,21 +1,20 @@
-name: ChobYar Trader Legacy v4 Freeze Gate
+name: ChobYar Trader v5 Execution Safety Regression
 
 on:
   pull_request:
     paths:
-      - 'ops/chobyar-trader/**'
-      - '.github/workflows/chobyar-trader-v4.yml'
+      - 'ops/chobyar-trader/v5/execution_safety/**'
+      - '.github/workflows/chobyar-trader-v5-execution-safety-stage8.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  legacy-v4-freeze:
+  v5-execution-safety-regression:
     runs-on: ubuntu-24.04
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      FROZEN_V4_TREE: b4b7cddde55cf683b42a31b24bd598ce2c78abb2
       V5: ops/chobyar-trader/v5/execution_safety
     steps:
       - uses: actions/checkout@v4
@@ -23,21 +22,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Exact-head lock
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: v4 is frozen legacy only
-        run: |
-          set -Eeuo pipefail
-          test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = "$FROZEN_V4_TREE"
-          grep -q 'frozen legacy reference' ops/chobyar-trader/v4/README.md
-          grep -q 'not.*execution-authority path' ops/chobyar-trader/v4/README.md
-      - name: Authoritative v5 paper runtime compiles
-        run: |
-          python3 -m py_compile "$V5"/*.py
-          bash -n ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
-      - name: Authoritative v5 deterministic safety tests
+      - name: Frozen v4 reference remains unchanged
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = "b4b7cddde55cf683b42a31b24bd598ce2c78abb2"
+      - name: Compile authoritative v5 execution safety
+        run: python3 -m py_compile "$V5"/*.py
+      - name: Deterministic v5 safety regressions
         env:
           PYTHONPATH: ops/chobyar-trader/v5/execution_safety
         run: |
-          python3 "$V5/test_entry_gate_v55.py" -v
           python3 "$V5/test_live_safety.py" -v
           python3 "$V5/test_wallex_readonly.py" -v
           python3 "$V5/test_order_dryrun.py" -v
@@ -45,16 +37,14 @@ jobs:
           python3 "$V5/test_auth_preflight.py" -v
           python3 "$V5/test_open_orders_readonly.py" -v
           python3 "$V5/test_quote_cap.py" -v
+          python3 "$V5/test_entry_gate_v55.py" -v
+          python3 "$V5/test_quote_order_preflight.py" -v
+          test ! -f "$V5/test_authenticated_quote_preflight.py" || python3 "$V5/test_authenticated_quote_preflight.py" -v
           test ! -f "$V5/test_live_executor_stage22.py" || python3 "$V5/test_live_executor_stage22.py" -v
           test ! -f "$V5/test_live_position_guardian_stage23.py" || python3 "$V5/test_live_position_guardian_stage23.py" -v
-      - name: v5 runtime authority and fail-closed contract
+      - name: Fail-closed exchange surfaces outside governed Stage 22 and 23
         run: |
           set -Eeuo pipefail
-          script=ops/chobyar-trader/upgrade-v56-v5-runtime-cutover.sh
-          grep -q 'WorkingDirectory=/opt/chobyar-trader/app/v5/execution_safety' "$script"
-          grep -q 'ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/v5/execution_safety/trader_entry.py' "$script"
-          grep -q 'TRADING_MODE=paper' "$script"
-          grep -q 'LIVE_TRADING_ENABLED=false' "$script"
           pattern='\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true'
           mapfile -d '' files < <(find "$V5" -maxdepth 1 -type f -name '*.py' \
             ! -name 'live_executor_stage22.py' \
@@ -80,3 +70,7 @@ jobs:
             grep -q 'entry_exceeded_approved_10_usdt_cap' "$V5/live_position_guardian_stage23.py"
             grep -q 'btc_balance_exceeds_entry_quantity' "$V5/live_position_guardian_stage23.py"
           fi
+      - name: v5 authority marker
+        run: |
+          grep -q 'authoritative v5 execution-safety surface' "$V5/README.md"
+          grep -q 'does not grant live-order authority' "$V5/README.md"

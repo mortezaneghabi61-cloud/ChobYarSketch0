@@ -1,0 +1,55 @@
+name: ChobYar Trader v5 Final Readiness Stage 14
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/final_readiness.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_final_readiness.py'
+      - '.github/workflows/chobyar-trader-v5-final-readiness-stage14.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-readiness:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      V5: ops/chobyar-trader/v5/execution_safety
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Frozen v4 remains untouched
+        run: test "$(git rev-parse HEAD:ops/chobyar-trader/v4)" = 'b4b7cddde55cf683b42a31b24bd598ce2c78abb2'
+
+      - name: Compile Stage-14 final readiness
+        run: python3 -m py_compile "$V5/final_readiness.py" "$V5/test_final_readiness.py"
+
+      - name: Deterministic final readiness tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: python3 "$V5/test_final_readiness.py" -v
+
+      - name: No execution authority contract
+        run: |
+          set -Eeuo pipefail
+          grep -q 'live_ready is always False' "$V5/final_readiness.py"
+          grep -q 'trade_enabled=False' "$V5/test_final_readiness.py"
+          grep -q 'withdrawal_enabled=False' "$V5/test_final_readiness.py"
+          grep -q 'LIVE_TRADING_ENABLED.*false' "$V5/test_final_readiness.py"
+          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order' \
+            "$V5/final_readiness.py" "$V5/test_final_readiness.py"; then
+            echo 'Forbidden mutable exchange surface in Stage-14' >&2
+            exit 1
+          fi
+
+      - name: Manual-decision boundary is explicit
+        run: |
+          grep -q 'ready_for_manual_live_decision' "$V5/final_readiness.py"
+          grep -q 'no_execution_authority' "$V5/final_readiness.py"
