@@ -7,21 +7,21 @@ from decimal import Decimal, ROUND_DOWN
 from typing import Any, Mapping
 
 from live_executor_stage22 import (
+    ACTIVE_MARKETS_PATH,
     APPROVED_MAX_ORDER_USDT,
     APPROVED_SYMBOL,
-    LiveOrderIntent,
+    ORDER_PATH,
     Stage22Error,
     _dec,
     _json_ok,
     api_key,
+    ensure_active_spot,
     merged_env,
     parse_market_rules,
-    submit_one_live_limit_order,
     validate_live_env,
 )
 
 BASE_URL = "https://api.wallex.ir"
-ORDER_PATH = "/v1/account/orders"
 OPEN_ORDERS_PATH = "/v1/account/openOrders"
 BALANCES_PATH = "/v1/account/balances"
 MARKETS_PATH = "/v1/markets"
@@ -38,6 +38,8 @@ class Stage23Error(RuntimeError):
 class GuardDecision:
     state: str
     entry_price: Decimal
+    entry_quantity: Decimal
+    entry_notional: Decimal
     last_price: Decimal
     bid_price: Decimal
     stop_price: Decimal
@@ -59,13 +61,17 @@ def _positive_decimal(value: object, reason: str) -> Decimal:
     return out
 
 
-def read_guard_decision(*, env: Mapping[str, str], entry_client_id: str, client: Any) -> GuardDecision:
+def _headers(env: Mapping[str, str]) -> dict[str, str]:
     try:
         validate_live_env(env)
         key = api_key(env)
     except Stage22Error as exc:
         raise Stage23Error(str(exc)) from exc
-    headers = {"X-API-Key": key, "Accept": "application/json", "Content-Type": "application/json"}
+    return {"X-API-Key": key, "Accept": "application/json", "Content-Type": "application/json"}
+
+
+def read_guard_decision(*, env: Mapping[str, str], entry_client_id: str, client: Any) -> GuardDecision:
+    headers = _headers(env)
 
     entry_payload = _json_ok(client.get(f"{ORDER_PATH}/{entry_client_id}", headers=headers), {200}, "entry_order")
     entry = _map_result(entry_payload, "entry_order")
@@ -76,22 +82,20 @@ def read_guard_decision(*, env: Mapping[str, str], entry_client_id: str, client:
     if str(entry.get("status") or "").upper() != "FILLED":
         raise Stage23Error("entry_must_be_filled")
     entry_price = _positive_decimal(entry.get("executedPrice"), "entry_executed_price_invalid")
+    entry_quantity = _positive_decimal(entry.get("executedQty"), "entry_executed_quantity_invalid")
+    entry_notional = _positive_decimal(entry.get("executedSum"), "entry_executed_sum_invalid")
+    if entry_notional > APPROVED_MAX_ORDER_USDT:
+        raise Stage23Error("entry_exceeded_approved_10_usdt_cap")
+
+    stop_price = entry_price * (Decimal("1") - STOP_LOSS_PCT)
+    take_price = entry_price * (Decimal("1") + TAKE_PROFIT_PCT)
 
     open_payload = _json_ok(client.get(OPEN_ORDERS_PATH, params={"symbol": APPROVED_SYMBOL}, headers=headers), {200}, "open_orders")
-    open_result = _map_result(open_payload, "open_orders")
-    orders = open_result.get("orders")
+    orders = _map_result(open_payload, "open_orders").get("orders")
     if not isinstance(orders, list):
         raise Stage23Error("open_orders_schema_invalid")
     if orders:
-        return GuardDecision(
-            state="EXIT_PENDING",
-            entry_price=entry_price,
-            last_price=Decimal("0"),
-            bid_price=Decimal("0"),
-            stop_price=entry_price * (Decimal("1") - STOP_LOSS_PCT),
-            take_price=entry_price * (Decimal("1") + TAKE_PROFIT_PCT),
-            available_btc=Decimal("0"),
-        )
+        return GuardDecision("EXIT_PENDING", entry_price, entry_quantity, entry_notional, Decimal("0"), Decimal("0"), stop_price, take_price, Decimal("0"))
 
     balance_payload = _json_ok(client.get(BALANCES_PATH, headers=headers), {200}, "balances")
     balances = _map_result(balance_payload, "balances").get("balances")
@@ -106,16 +110,10 @@ def read_guard_decision(*, env: Mapping[str, str], entry_client_id: str, client:
         raise Stage23Error("btc_balance_invalid")
     if locked_btc != 0:
         raise Stage23Error("btc_locked_without_open_order")
+    if available_btc > entry_quantity:
+        raise Stage23Error("btc_balance_exceeds_entry_quantity")
     if available_btc == 0:
-        return GuardDecision(
-            state="FLAT",
-            entry_price=entry_price,
-            last_price=Decimal("0"),
-            bid_price=Decimal("0"),
-            stop_price=entry_price * (Decimal("1") - STOP_LOSS_PCT),
-            take_price=entry_price * (Decimal("1") + TAKE_PROFIT_PCT),
-            available_btc=available_btc,
-        )
+        return GuardDecision("FLAT", entry_price, entry_quantity, entry_notional, Decimal("0"), Decimal("0"), stop_price, take_price, available_btc)
 
     market_payload = _json_ok(client.get(MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "markets")
     symbols = _map_result(market_payload, "markets").get("symbols")
@@ -128,44 +126,81 @@ def read_guard_decision(*, env: Mapping[str, str], entry_client_id: str, client:
     last_price = _positive_decimal(stats.get("lastPrice"), "last_price_invalid")
     bid_price = _positive_decimal(stats.get("bidPrice"), "bid_price_invalid")
 
-    stop_price = entry_price * (Decimal("1") - STOP_LOSS_PCT)
-    take_price = entry_price * (Decimal("1") + TAKE_PROFIT_PCT)
     state = "HOLD"
     if last_price <= stop_price:
         state = "STOP_TRIGGER"
     elif last_price >= take_price:
         state = "TAKE_TRIGGER"
-    return GuardDecision(state, entry_price, last_price, bid_price, stop_price, take_price, available_btc)
+    return GuardDecision(state, entry_price, entry_quantity, entry_notional, last_price, bid_price, stop_price, take_price, available_btc)
+
+
+def submit_position_bound_close(*, env: Mapping[str, str], decision: GuardDecision, client: Any) -> dict[str, object]:
+    if decision.state not in {"STOP_TRIGGER", "TAKE_TRIGGER"}:
+        raise Stage23Error("close_without_trigger_blocked")
+    if decision.entry_notional > APPROVED_MAX_ORDER_USDT:
+        raise Stage23Error("entry_cap_proof_failed")
+    if decision.available_btc <= 0 or decision.available_btc > decision.entry_quantity:
+        raise Stage23Error("close_quantity_not_position_bound")
+
+    headers = _headers(env)
+    active_payload = _json_ok(client.get(ACTIVE_MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "active_markets")
+    ensure_active_spot(active_payload)
+    rules_payload = _json_ok(client.get(MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "market_rules")
+    rules = parse_market_rules(rules_payload)
+
+    quantity = decision.available_btc.quantize(rules.quantity_step, rounding=ROUND_DOWN)
+    price = (decision.bid_price * (Decimal("1") - EXIT_CROSS_PCT)).quantize(rules.price_tick, rounding=ROUND_DOWN)
+    if quantity <= 0 or price <= 0:
+        raise Stage23Error("exit_order_invalid")
+    if quantity > decision.entry_quantity:
+        raise Stage23Error("exit_quantity_exceeds_entry")
+    notional = quantity * price
+    if notional < rules.min_notional:
+        raise Stage23Error("exit_below_min_notional")
+
+    open_payload = _json_ok(client.get(OPEN_ORDERS_PATH, params={"symbol": APPROVED_SYMBOL}, headers=headers), {200}, "open_orders_recheck")
+    orders = _map_result(open_payload, "open_orders_recheck").get("orders")
+    if not isinstance(orders, list):
+        raise Stage23Error("open_orders_recheck_schema_invalid")
+    if orders:
+        raise Stage23Error("race_open_order_blocks_close")
+
+    state_slug = decision.state.lower().replace("_", "-")
+    client_id = f"chobyar-stage23-{state_slug}-{int(time.time())}"
+    prior = client.get(f"{ORDER_PATH}/{client_id}", headers=headers)
+    if getattr(prior, "status_code", None) == 200:
+        raise Stage23Error("close_client_id_already_exists")
+    if getattr(prior, "status_code", None) != 404:
+        raise Stage23Error("close_client_id_precheck_ambiguous")
+
+    body = {
+        "symbol": APPROVED_SYMBOL,
+        "type": "LIMIT",
+        "side": "SELL",
+        "price": format(price, "f"),
+        "quantity": format(quantity, "f"),
+        "client_id": client_id,
+    }
+    payload = _json_ok(client.post(ORDER_PATH, json=body, headers=headers), {201}, "close_submit")
+    order = _map_result(payload, "close_submit")
+    if str(order.get("symbol") or "").upper() != APPROVED_SYMBOL:
+        raise Stage23Error("close_symbol_mismatch")
+    if str(order.get("side") or "").upper() != "SELL":
+        raise Stage23Error("close_side_mismatch")
+    if str(order.get("type") or "").upper() != "LIMIT":
+        raise Stage23Error("close_type_mismatch")
+    server_id = str(order.get("clientOrderId") or "").strip()
+    if not server_id:
+        raise Stage23Error("close_client_order_id_missing")
+    return {"submitted": True, "side": "SELL", "notional_usdt": str(notional), "client_order_id": server_id}
 
 
 def guard_once(*, env: Mapping[str, str], entry_client_id: str, client: Any) -> dict[str, object]:
     decision = read_guard_decision(env=env, entry_client_id=entry_client_id, client=client)
     if decision.state not in {"STOP_TRIGGER", "TAKE_TRIGGER"}:
         return {"submitted": False, "state": decision.state, "decision": decision}
-
-    market_payload = _json_ok(client.get(MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "market_rules")
-    rules = parse_market_rules(market_payload)
-    quantity = decision.available_btc.quantize(rules.quantity_step, rounding=ROUND_DOWN)
-    price = (decision.bid_price * (Decimal("1") - EXIT_CROSS_PCT)).quantize(rules.price_tick, rounding=ROUND_DOWN)
-    if quantity <= 0 or price <= 0:
-        raise Stage23Error("exit_order_invalid")
-    notional = quantity * price
-    if notional > APPROVED_MAX_ORDER_USDT:
-        raise Stage23Error("exit_hard_cap_exceeded")
-    if notional < rules.min_notional:
-        raise Stage23Error("exit_below_min_notional")
-
-    state_slug = decision.state.lower().replace("_", "-")
-    client_id = f"chobyar-stage23-{state_slug}-{int(time.time())}"
-    try:
-        result = submit_one_live_limit_order(
-            env=env,
-            intent=LiveOrderIntent("SELL", quantity, price, client_id),
-            client=client,
-        )
-    except Stage22Error as exc:
-        raise Stage23Error(str(exc)) from exc
-    return {"submitted": True, "state": decision.state, "decision": decision, "order": result}
+    order = submit_position_bound_close(env=env, decision=decision, client=client)
+    return {"submitted": True, "state": decision.state, "decision": decision, "order": order}
 
 
 def main() -> int:
@@ -177,7 +212,8 @@ def main() -> int:
     args = parser.parse_args()
     entry_id = args.entry_client_id.strip()
     if not entry_id:
-        raise Stage23Error("entry_client_id_required")
+        print("FAIL-CLOSED: entry_client_id_required")
+        return 2
 
     env = merged_env()
     try:
@@ -187,6 +223,7 @@ def main() -> int:
         assert isinstance(d, GuardDecision)
         print(f"STAGE23_STATE={result['state']}")
         print(f"ENTRY_PRICE={d.entry_price}")
+        print(f"ENTRY_NOTIONAL_USDT={d.entry_notional}")
         print(f"LAST_PRICE={d.last_price}")
         print(f"STOP_PRICE={d.stop_price}")
         print(f"TAKE_PRICE={d.take_price}")
