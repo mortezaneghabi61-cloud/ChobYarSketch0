@@ -1,0 +1,48 @@
+name: ChobYar Trader v5 Adversarial Defense Stage 24
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/adversarial_market_defense_stage24.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_adversarial_market_defense_stage24.py'
+      - 'ops/chobyar-trader/v5/execution_safety/STAGE24_ADVERSARIAL_DEFENSE.md'
+      - '.github/workflows/chobyar-trader-v5-adversarial-defense-stage24.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage24-adversarial-defense:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and test Stage 24
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/adversarial_market_defense_stage24.py \
+            ops/chobyar-trader/v5/execution_safety/test_adversarial_market_defense_stage24.py
+          python3 ops/chobyar-trader/v5/execution_safety/test_adversarial_market_defense_stage24.py -q
+
+      - name: Prove Stage 24 has no execution authority
+        run: |
+          set -euo pipefail
+          src='ops/chobyar-trader/v5/execution_safety/adversarial_market_defense_stage24.py'
+          ! grep -nE '\.(post|delete|put|patch)\(' "$src"
+          ! grep -nEi 'X-API-Key|WALLEX_API_KEY|withdraw|margin_order|futures_order|otc_order' "$src"
+          grep -q 'MIN_PRICE_QUORUM = 3' "$src"
+          grep -q 'prompt_injection_like_content' "$src"
+          grep -q 'global_price_quorum_insufficient' "$src"
+          grep -q 'single_step_price_shock' "$src"
+          grep -q 'extreme_order_cancellation' "$src"
