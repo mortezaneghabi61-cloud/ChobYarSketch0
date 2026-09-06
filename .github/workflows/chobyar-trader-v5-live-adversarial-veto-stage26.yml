@@ -1,0 +1,121 @@
+name: ChobYar Trader v5 Live Adversarial Veto Stage 26
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/adversarial_market_defense_stage24.py'
+      - 'ops/chobyar-trader/v5/execution_safety/live_adversarial_veto_stage26.py'
+      - 'ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_adversarial_market_defense_stage24.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_adversarial_veto_stage26.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py'
+      - 'ops/chobyar-trader/install-v5-live-adversarial-veto-stage26.sh'
+      - 'ops/chobyar-trader/v5/execution_safety/STAGE26_LIVE_ADVERSARIAL_VETO.md'
+      - '.github/workflows/chobyar-trader-v5-live-adversarial-veto-stage26.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage26-live-adversarial-veto:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and deterministic tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          set -euo pipefail
+          d='ops/chobyar-trader/v5/execution_safety'
+          python3 -m py_compile \
+            "$d/adversarial_market_defense_stage24.py" \
+            "$d/live_adversarial_veto_stage26.py" \
+            "$d/live_entry_risk_stage25.py" \
+            "$d/live_executor_stage22.py" \
+            "$d/test_adversarial_market_defense_stage24.py" \
+            "$d/test_live_adversarial_veto_stage26.py" \
+            "$d/test_live_entry_risk_stage25.py" \
+            "$d/test_live_executor_stage22.py"
+          python3 "$d/test_adversarial_market_defense_stage24.py" -q
+          python3 "$d/test_live_adversarial_veto_stage26.py" -q
+          python3 "$d/test_live_entry_risk_stage25.py" -q
+          python3 "$d/test_live_executor_stage22.py" -q
+          bash -n ops/chobyar-trader/install-v5-live-adversarial-veto-stage26.sh
+
+      - name: Prove unique-source quorum cannot be padded
+        run: |
+          set -euo pipefail
+          d='ops/chobyar-trader/v5/execution_safety'
+          grep -q 'class PriceObservation' "$d/adversarial_market_defense_stage24.py"
+          grep -q 'duplicate_price_source' "$d/adversarial_market_defense_stage24.py"
+          grep -q 'source_identity_missing' "$d/adversarial_market_defense_stage24.py"
+          grep -q 'MIN_UNIQUE_SOURCES = 3' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'APPROVED_SOURCE_IDS' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'stage26_quorum_source_mismatch' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'stage26_unapproved_source' "$d/live_adversarial_veto_stage26.py"
+
+      - name: Prove history warmup and stale data fail closed
+        run: |
+          set -euo pipefail
+          d='ops/chobyar-trader/v5/execution_safety'
+          grep -q 'MIN_HISTORY_SAMPLES = 3' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'MAX_HISTORY_GAP_SECONDS = 45' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'MAX_SNAPSHOT_AGE_SECONDS = 60' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'history_warmup' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'stage26_snapshot_stale' "$d/live_adversarial_veto_stage26.py"
+          grep -q 'history_invalid' "$d/live_adversarial_veto_stage26.py"
+
+      - name: Prove Stage24 and Stage26 cannot mutate exchange
+        run: |
+          set -euo pipefail
+          d='ops/chobyar-trader/v5/execution_safety'
+          ! grep -nE '\.(post|delete|put|patch)\(' \
+            "$d/adversarial_market_defense_stage24.py" \
+            "$d/live_adversarial_veto_stage26.py"
+          ! grep -nEi '/withdraw|/margin|/otc|futures' \
+            "$d/adversarial_market_defense_stage24.py" \
+            "$d/live_adversarial_veto_stage26.py"
+
+      - name: Prove BUY path is veto then risk then single mutation surface
+        run: |
+          set -euo pipefail
+          e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+          grep -q 'enforce_live_buy_veto()' "$e"
+          grep -q 'risk_snapshot = enforce_buy_risk(' "$e"
+          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$e")" = 1
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py').read_text()
+          start = text.index('def submit_one_live_limit_order')
+          body = text[start:]
+          veto = body.index('defense_snapshot = enforce_live_buy_veto()')
+          risk = body.index('risk_snapshot = enforce_buy_risk(')
+          post = body.index('client.post(ORDER_PATH')
+          assert veto < risk < post
+          PY
+
+      - name: Prove installer preserves production paper and safety gates
+        run: |
+          set -euo pipefail
+          i='ops/chobyar-trader/install-v5-live-adversarial-veto-stage26.sh'
+          grep -q "TRADING_MODE=paper" "$i"
+          grep -q "LIVE_TRADING_ENABLED=false" "$i"
+          grep -q "WITHDRAWALS_ENABLED=false" "$i"
+          grep -q "LEVERAGE_ENABLED=false" "$i"
+          grep -q "MARGIN_ENABLED=false" "$i"
+          grep -q "FUTURES_ENABLED=false" "$i"
+          grep -q "OTC_ENABLED=false" "$i"
+          grep -q 'OnUnitActiveSec=20s' "$i"
+          grep -q 'INITIAL_POLICY=FAIL_CLOSED_UNTIL_HISTORY_WARM' "$i"
+          ! grep -Eq 'systemctl (restart|start|enable).*chobyar-trader\.service' "$i"
+          ! grep -Eq 'sed .*\.env|tee .*\.env|cat > .*\.env|echo .*>> .*\.env' "$i"

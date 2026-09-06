@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
 
+from live_adversarial_veto_stage26 import Stage26Error, enforce_live_buy_veto
 from live_entry_risk_stage25 import Stage25Error, enforce_buy_risk
 
 APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
@@ -223,16 +224,34 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
     key = api_key(env)
     headers = {"X-API-Key": key, "Accept": "application/json", "Content-Type": "application/json"}
 
-    active_payload = _json_ok(client.get(ACTIVE_MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "active_markets")
+    active_payload = _json_ok(
+        client.get(ACTIVE_MARKETS_PATH, headers={"Accept": "application/json"}),
+        {200},
+        "active_markets",
+    )
     ensure_active_spot(active_payload)
-    rules_payload = _json_ok(client.get(MARKETS_PATH, headers={"Accept": "application/json"}), {200}, "market_rules")
+    rules_payload = _json_ok(
+        client.get(MARKETS_PATH, headers={"Accept": "application/json"}),
+        {200},
+        "market_rules",
+    )
     rules = parse_market_rules(rules_payload)
     notional = validate_intent(intent, rules)
 
     risk_snapshot = None
+    defense_snapshot = None
     if intent.side.strip().upper() == "BUY":
         try:
-            risk_snapshot = enforce_buy_risk(env=env, intended_notional=notional, client=client, headers=headers)
+            defense_snapshot = enforce_live_buy_veto()
+        except Stage26Error as exc:
+            raise Stage22Error(f"stage26_{exc}") from exc
+        try:
+            risk_snapshot = enforce_buy_risk(
+                env=env,
+                intended_notional=notional,
+                client=client,
+                headers=headers,
+            )
         except Stage25Error as exc:
             raise Stage22Error(f"stage25_{exc}") from exc
 
@@ -276,6 +295,7 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
     server_id = str(order.get("clientOrderId") or "").strip()
     if not server_id:
         raise Stage22Error("submitted_client_order_id_missing")
+
     result_out: dict[str, object] = {
         "submitted": True,
         "symbol": APPROVED_SYMBOL,
@@ -286,12 +306,14 @@ def submit_one_live_limit_order(*, env: Mapping[str, str], intent: LiveOrderInte
         "withdrawals_enabled": False,
         "leverage_enabled": False,
     }
-    if risk_snapshot is not None:
+    if risk_snapshot is not None and defense_snapshot is not None:
         result_out.update({
             "book_equity_usdt": str(risk_snapshot.equity_usdt),
             "position_usdt": str(risk_snapshot.position_usdt),
             "daily_drawdown_pct": str(risk_snapshot.daily_drawdown_pct),
             "max_new_buy_usdt": str(risk_snapshot.max_new_buy_usdt),
+            "stage26_price_quorum": int(defense_snapshot["price_quorum"]),
+            "stage26_sources": ",".join(defense_snapshot["source_ids"]),
         })
     return result_out
 
@@ -328,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"NOTIONAL_USDT={result['notional_usdt']}")
     print(f"CLIENT_ORDER_ID={result['client_order_id']}")
     if result["side"] == "BUY":
+        print(f"STAGE26_PRICE_QUORUM={result['stage26_price_quorum']}")
+        print(f"STAGE26_SOURCES={result['stage26_sources']}")
         print(f"BOOK_EQUITY_USDT={result['book_equity_usdt']}")
         print(f"POSITION_USDT={result['position_usdt']}")
         print(f"DAILY_DRAWDOWN_PCT={result['daily_drawdown_pct']}")
