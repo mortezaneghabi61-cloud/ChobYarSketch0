@@ -235,7 +235,7 @@ def _atomic_json(path: Path, payload: object) -> None:
     fd, tmp = tempfile.mkstemp(prefix=".stage26-", dir=str(path.parent), text=True)
     try:
         with os.fdopen(fd, "w") as handle:
-            json.dump(payload, handle, sort_keys=True, separators=(",", ","))
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(tmp, 0o600)
