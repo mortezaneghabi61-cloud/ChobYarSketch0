@@ -155,7 +155,8 @@ def guard_once(*, env: Mapping[str, str], entry_client_id: str, client: Any) -> 
     if notional < rules.min_notional:
         raise Stage23Error("exit_below_min_notional")
 
-    client_id = f"chobyar-stage23-{decision.state.lower()}-{int(time.time())}"
+    state_slug = decision.state.lower().replace("_", "-")
+    client_id = f"chobyar-stage23-{state_slug}-{int(time.time())}"
     try:
         result = submit_one_live_limit_order(
             env=env,
