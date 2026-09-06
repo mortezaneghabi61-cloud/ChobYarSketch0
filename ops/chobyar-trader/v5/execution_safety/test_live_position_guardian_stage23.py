@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 from decimal import Decimal
 
-from live_executor_stage22 import Stage22Error
 from live_position_guardian_stage23 import Stage23Error, guard_once, read_guard_decision
 
 GOOD_ENV = {
@@ -24,6 +23,7 @@ GOOD_ENV = {
     "MAX_DAILY_LOSS_PCT": "0.03",
     "WALLEX_API_KEY": "secret-test-key",
 }
+ENTRY_ID = "chobyar-entry-0001"
 
 
 class Resp:
@@ -46,11 +46,13 @@ class FakeClient:
     def get(self, path, **kwargs):
         if path == "/hector/web/v1/markets":
             return Resp(200, {"success": True, "result": {"markets": [{"symbol": "BTCUSDT", "quote_asset": "USDT", "is_spot": True}]}})
-        if path.startswith("/v1/account/orders/"):
+        if path == f"/v1/account/orders/{ENTRY_ID}":
             return Resp(200, {"success": True, "result": {
                 "symbol": "BTCUSDT", "side": "BUY", "status": self.entry_status,
                 "executedPrice": "100.00", "executedQty": "0.10000000",
             }})
+        if path.startswith("/v1/account/orders/"):
+            return Resp(404, {"success": False})
         if path == "/v1/account/openOrders":
             return Resp(200, {"success": True, "result": {"orders": self.open_orders}})
         if path == "/v1/account/balances":
@@ -78,14 +80,14 @@ class FakeClient:
 class Stage23Tests(unittest.TestCase):
     def test_hold_does_not_submit(self):
         c = FakeClient(last="100.00", bid="99.90")
-        out = guard_once(env=GOOD_ENV, entry_client_id="chobyar-entry-0001", client=c)
+        out = guard_once(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
         self.assertEqual(out["state"], "HOLD")
         self.assertFalse(out["submitted"])
         self.assertEqual(c.posts, [])
 
     def test_stop_trigger_submits_one_sell(self):
         c = FakeClient(last="98.40", bid="98.35")
-        out = guard_once(env=GOOD_ENV, entry_client_id="chobyar-entry-0001", client=c)
+        out = guard_once(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
         self.assertEqual(out["state"], "STOP_TRIGGER")
         self.assertTrue(out["submitted"])
         self.assertEqual(len(c.posts), 1)
@@ -95,14 +97,14 @@ class Stage23Tests(unittest.TestCase):
 
     def test_take_trigger_submits_one_sell(self):
         c = FakeClient(last="103.10", bid="103.00")
-        out = guard_once(env=GOOD_ENV, entry_client_id="chobyar-entry-0001", client=c)
+        out = guard_once(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
         self.assertEqual(out["state"], "TAKE_TRIGGER")
         self.assertTrue(out["submitted"])
         self.assertEqual(len(c.posts), 1)
 
     def test_open_order_blocks_new_exit(self):
         c = FakeClient(open_orders=[{"clientOrderId": "existing"}])
-        out = guard_once(env=GOOD_ENV, entry_client_id="chobyar-entry-0001", client=c)
+        out = guard_once(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
         self.assertEqual(out["state"], "EXIT_PENDING")
         self.assertFalse(out["submitted"])
         self.assertEqual(c.posts, [])
@@ -110,14 +112,14 @@ class Stage23Tests(unittest.TestCase):
     def test_unfilled_entry_fails_closed(self):
         c = FakeClient(entry_status="NEW")
         with self.assertRaisesRegex(Stage23Error, "entry_must_be_filled"):
-            read_guard_decision(env=GOOD_ENV, entry_client_id="chobyar-entry-0001", client=c)
+            read_guard_decision(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
 
     def test_nonspot_or_withdrawal_authority_rejected(self):
         for key in ("WITHDRAWALS_ENABLED", "MARGIN_ENABLED", "FUTURES_ENABLED", "OTC_ENABLED"):
             c = FakeClient()
             env = dict(GOOD_ENV, **{key: "true"})
             with self.assertRaises(Stage23Error):
-                read_guard_decision(env=env, entry_client_id="chobyar-entry-0001", client=c)
+                read_guard_decision(env=env, entry_client_id=ENTRY_ID, client=c)
 
 
 if __name__ == "__main__":
