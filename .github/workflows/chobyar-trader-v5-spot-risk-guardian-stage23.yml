@@ -1,0 +1,67 @@
+name: ChobYar Trader v5 Spot Risk Guardian Stage 23
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+      - 'ops/chobyar-trader/v5/execution_safety/live_position_guardian_stage23.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_position_guardian_stage23.py'
+      - 'ops/chobyar-trader/install-v5-spot-risk-guardian-stage23.sh'
+      - '.github/workflows/chobyar-trader-v5-spot-risk-guardian-stage23.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage23-spot-risk-guardian:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and test Stage 22 and Stage 23
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py \
+            ops/chobyar-trader/v5/execution_safety/live_position_guardian_stage23.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_position_guardian_stage23.py
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py -q
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_position_guardian_stage23.py -q
+          bash -n ops/chobyar-trader/install-v5-spot-risk-guardian-stage23.sh
+
+      - name: Enforce position-bound spot-only close surface
+        run: |
+          set -euo pipefail
+          g='ops/chobyar-trader/v5/execution_safety/live_position_guardian_stage23.py'
+          e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$g")" = 1
+          ! grep -nE '\.(delete|put|patch)\(' "$g"
+          grep -q '"side": "SELL"' "$g"
+          ! grep -q '"side": "BUY"' "$g"
+          grep -q 'entry_exceeded_approved_10_usdt_cap' "$g"
+          grep -q 'btc_balance_exceeds_entry_quantity' "$g"
+          grep -q 'STOP_LOSS_PCT = Decimal("0.015")' "$g"
+          grep -q 'TAKE_PROFIT_PCT = Decimal("0.03")' "$g"
+          grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$e"
+          grep -q 'WITHDRAWALS_ENABLED' "$e"
+          grep -q 'LEVERAGE_ENABLED' "$e"
+
+      - name: Prove production paper service remains untouched
+        run: |
+          set -euo pipefail
+          inst='ops/chobyar-trader/install-v5-spot-risk-guardian-stage23.sh'
+          ! grep -Eq 'systemctl (restart|start|enable).*chobyar-trader\.service' "$inst"
+          ! grep -Eq 'sed .*\.env|tee .*\.env|cat > .*\.env|echo .*>> .*\.env' "$inst"
+          grep -q 'PRODUCTION_TRADER=PAPER_UNCHANGED' "$inst"
