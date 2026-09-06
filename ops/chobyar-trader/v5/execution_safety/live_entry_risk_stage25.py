@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import tempfile
@@ -13,6 +14,7 @@ APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 DEFAULT_STATE_PATH = APP_DIR / "state" / "live_risk_stage25.json"
 BALANCES_PATH = "/v1/account/balances"
 MARKETS_PATH = "/v1/markets"
+BASE_URL = "https://api.wallex.ir"
 APPROVED_SYMBOL = "BTCUSDT"
 APPROVED_MAX_ORDER_USDT = Decimal("10")
 MAX_POSITION_PCT = Decimal("0.25")
@@ -212,3 +214,57 @@ def evaluate_buy_risk(*, env: Mapping[str, str], intended_notional: Decimal, cli
 
 def enforce_buy_risk(*, env: Mapping[str, str], intended_notional: Decimal, client: Any, headers: Mapping[str, str], state_path: Path | None = None, now: datetime | None = None) -> RiskSnapshot:
     return evaluate_buy_risk(env=env, intended_notional=intended_notional, client=client, headers=headers, state_path=state_path, now=now)
+
+
+def _read_app_env() -> dict[str, str]:
+    values: dict[str, str] = {}
+    path = APP_DIR / ".env"
+    if path.exists():
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    values.update({k: v for k, v in os.environ.items() if isinstance(v, str)})
+    return values
+
+
+def _api_key(env: Mapping[str, str]) -> str:
+    for name in ("WALLEX_API_KEY", "API_KEY", "WALLEX_KEY"):
+        value = (env.get(name) or "").strip()
+        if value:
+            return value
+    raise Stage25Error("wallex_api_key_missing")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="ChobYar Stage-25 read-only equity risk gate")
+    parser.add_argument("--init-baseline", action="store_true")
+    args = parser.parse_args(argv)
+    if not args.init_baseline:
+        raise SystemExit("FAIL-CLOSED: --init-baseline required")
+    try:
+        import httpx
+    except ImportError as exc:
+        raise SystemExit("FAIL-CLOSED: httpx unavailable in venv") from exc
+    env = _read_app_env()
+    try:
+        key = _api_key(env)
+        headers = {"X-API-Key": key, "Accept": "application/json"}
+        with httpx.Client(base_url=BASE_URL, timeout=12.0) as client:
+            out = initialize_daily_baseline(client=client, headers=headers)
+    except Stage25Error as exc:
+        raise SystemExit(f"FAIL-CLOSED: {exc}") from None
+    print("STAGE25_BASELINE=PASS")
+    print(f"UTC_DAY={out['utc_day']}")
+    print(f"START_EQUITY_USDT={out['start_equity_usdt']}")
+    print(f"POSITION_USDT={out['position_usdt']}")
+    print(f"AVAILABLE_USDT={out['available_usdt']}")
+    print(f"BID_PRICE={out['bid_price']}")
+    print("EXCHANGE_MUTATION=NONE")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
