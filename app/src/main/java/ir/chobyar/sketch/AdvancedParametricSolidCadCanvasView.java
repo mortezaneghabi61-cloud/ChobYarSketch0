@@ -184,20 +184,31 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     // Adaptive Solid menu
     // ------------------------------------------------------------------
 
+    String[] solidFormMenuItems(boolean overview3D){
+        return new String[]{
+                "⬆ Extrude / Boolean / Bodies / Face",
+                "⟳ Revolve / Thread",
+                "➜ Sweep / Profile along Path",
+                "≋ Loft / Between Profiles",
+                "⏱ Form History",
+                "↻ Rebuild All Features",
+                overview3D?"□ Return to Sketch 2D":"◇ Show 3D"
+        };
+    }
+
+    String solidFormMenuMessage(){
+        return "Form tools create parametric 3D bodies:\n"
+                +"Revolve: profile + axis (selected line or sketch X/Y axis)\n"
+                +"Sweep: closed profile + line/polyline path\n"
+                +"Loft: two closed profiles on different sketches/planes";
+    }
+
     @Override
     public void showSolidManager(){
-        String[] items={
-                "⬆ Extrude / Boolean / Bodies / Face",
-                "⟳ Revolve / text text",
-                "➜ Sweep / text text Roy text",
-                "≋ Loft / text text text",
-                "⏱ History text",
-                "↻ Rebuild All Featuretext",
-                is3DOverview()?"□ text text Sketch 2D":"◇ Show 3D"
-        };
+        String[] items=solidFormMenuItems(is3DOverview());
         new AlertDialog.Builder(getContext())
                 .setTitle("Solid 3D • Form")
-                .setMessage("Tools text, text text: \n Revolve: text text + text text text text Line Axis \n Sweep: text text + Line/Polyline text \n Loft: text text text Roy Sketch/Planetext text")
+                .setMessage(solidFormMenuMessage())
                 .setItems(items,(d,w)->{
                     if(w==0)super.showSolidManager();
                     else if(w==1)startRevolve();
