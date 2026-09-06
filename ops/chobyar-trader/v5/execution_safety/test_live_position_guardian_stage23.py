@@ -35,12 +35,13 @@ class Resp:
 
 
 class FakeClient:
-    def __init__(self, *, last="100.00", bid="99.90", btc="0.099", open_orders=None, entry_status="FILLED"):
+    def __init__(self, *, last="100.00", bid="99.90", btc="0.099", open_orders=None, entry_status="FILLED", entry_sum="9.90"):
         self.last = last
         self.bid = bid
         self.btc = btc
         self.open_orders = [] if open_orders is None else open_orders
         self.entry_status = entry_status
+        self.entry_sum = entry_sum
         self.posts = []
 
     def get(self, path, **kwargs):
@@ -49,7 +50,7 @@ class FakeClient:
         if path == f"/v1/account/orders/{ENTRY_ID}":
             return Resp(200, {"success": True, "result": {
                 "symbol": "BTCUSDT", "side": "BUY", "status": self.entry_status,
-                "executedPrice": "100.00", "executedQty": "0.10000000",
+                "executedPrice": "100.00", "executedQty": "0.10000000", "executedSum": self.entry_sum,
             }})
         if path.startswith("/v1/account/orders/"):
             return Resp(404, {"success": False})
@@ -91,16 +92,18 @@ class Stage23Tests(unittest.TestCase):
         self.assertEqual(out["state"], "STOP_TRIGGER")
         self.assertTrue(out["submitted"])
         self.assertEqual(len(c.posts), 1)
-        body = c.posts[0][1]["json"]
-        self.assertEqual(body["side"], "SELL")
-        self.assertLessEqual(Decimal(body["price"]) * Decimal(body["quantity"]), Decimal("10"))
+        self.assertEqual(c.posts[0][1]["json"]["side"], "SELL")
 
-    def test_take_trigger_submits_one_sell(self):
-        c = FakeClient(last="103.10", bid="103.00")
+    def test_take_trigger_closes_full_position_even_if_exit_value_exceeds_10(self):
+        c = FakeClient(last="103.10", bid="103.00", btc="0.099")
         out = guard_once(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
         self.assertEqual(out["state"], "TAKE_TRIGGER")
         self.assertTrue(out["submitted"])
         self.assertEqual(len(c.posts), 1)
+        body = c.posts[0][1]["json"]
+        self.assertEqual(body["side"], "SELL")
+        self.assertEqual(Decimal(body["quantity"]), Decimal("0.09900000"))
+        self.assertGreater(Decimal(body["price"]) * Decimal(body["quantity"]), Decimal("10"))
 
     def test_open_order_blocks_new_exit(self):
         c = FakeClient(open_orders=[{"clientOrderId": "existing"}])
@@ -112,6 +115,16 @@ class Stage23Tests(unittest.TestCase):
     def test_unfilled_entry_fails_closed(self):
         c = FakeClient(entry_status="NEW")
         with self.assertRaisesRegex(Stage23Error, "entry_must_be_filled"):
+            read_guard_decision(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
+
+    def test_entry_above_10_usdt_is_not_eligible(self):
+        c = FakeClient(entry_sum="10.01")
+        with self.assertRaisesRegex(Stage23Error, "entry_exceeded_approved_10_usdt_cap"):
+            read_guard_decision(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
+
+    def test_unrelated_btc_cannot_be_sold(self):
+        c = FakeClient(btc="0.10000001")
+        with self.assertRaisesRegex(Stage23Error, "btc_balance_exceeds_entry_quantity"):
             read_guard_decision(env=GOOD_ENV, entry_client_id=ENTRY_ID, client=c)
 
     def test_nonspot_or_withdrawal_authority_rejected(self):
