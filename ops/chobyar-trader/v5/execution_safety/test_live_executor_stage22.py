@@ -36,9 +36,10 @@ class Resp:
 
 
 class FakeClient:
-    def __init__(self, existing=False, post_status=201):
+    def __init__(self, existing=False, post_status=201, post_payload=None):
         self.existing = existing
         self.post_status = post_status
+        self.post_payload = post_payload
         self.posts = []
 
     def get(self, path, **kwargs):
@@ -55,6 +56,8 @@ class FakeClient:
     def post(self, path, **kwargs):
         self.posts.append((path, kwargs))
         body = kwargs["json"]
+        if self.post_payload is not None:
+            return Resp(self.post_status, self.post_payload)
         return Resp(self.post_status, {
             "success": self.post_status == 201,
             "result": {
@@ -108,6 +111,22 @@ class Stage22Tests(unittest.TestCase):
         c = FakeClient(post_status=200)
         with self.assertRaisesRegex(Stage22Error, "order_submit_http_200"):
             submit_one_live_limit_order(env=GOOD_ENV, intent=self.intent(), client=c)
+
+    def test_422_exposes_only_whitelisted_validation_detail(self):
+        c = FakeClient(post_status=422, post_payload={
+            "success": False,
+            "message": "validation failed",
+            "errors": {"quantity": ["invalid precision"]},
+            "secret": "must-not-appear",
+        })
+        with self.assertRaises(Stage22Error) as ctx:
+            submit_one_live_limit_order(env=GOOD_ENV, intent=self.intent(), client=c)
+        text = str(ctx.exception)
+        self.assertIn("order_submit_http_422", text)
+        self.assertIn("message=validation failed", text)
+        self.assertIn("quantity", text)
+        self.assertNotIn("must-not-appear", text)
+        self.assertNotIn("secret-test-key", text)
 
 
 if __name__ == "__main__":
