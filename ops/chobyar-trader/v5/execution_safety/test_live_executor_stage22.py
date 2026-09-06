@@ -93,7 +93,7 @@ class Stage22Tests(unittest.TestCase):
         state.write_text(json.dumps({
             "version": 1,
             "utc_day": datetime.now(timezone.utc).date().isoformat(),
-            "start_equity_usdt": "100",
+            "start_equity_usdt": "90",
         }))
         live_entry_risk_stage25.DEFAULT_STATE_PATH = state
 
@@ -128,7 +128,7 @@ class Stage22Tests(unittest.TestCase):
         self.assertEqual(c.posts[0][1]["json"]["type"], "LIMIT")
 
     def test_stage25_blocks_buy_when_existing_position_is_over_25pct(self):
-        c = FakeClient(usdt="1", btc="0.00012422")
+        c = FakeClient(usdt="60", btc="0.00030000")
         with self.assertRaisesRegex(Stage22Error, "stage25_buy_exceeds_equity_sized_budget"):
             submit_one_live_limit_order(env=GOOD_ENV, intent=self.intent(), client=c)
         self.assertEqual(c.posts, [])
