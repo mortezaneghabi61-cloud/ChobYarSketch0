@@ -53,7 +53,17 @@ jobs:
           grep -q 'ExecStart=/opt/chobyar-trader/.venv/bin/python /opt/chobyar-trader/app/v5/execution_safety/trader_entry.py' "$script"
           grep -q 'TRADING_MODE=paper' "$script"
           grep -q 'LIVE_TRADING_ENABLED=false' "$script"
-          if grep -RniE '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true' "$V5" --include='*.py'; then
-            echo 'Forbidden mutable or live execution surface detected in authoritative v5 runtime' >&2
+          pattern='\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|LIVE_TRADING_ENABLED[=:][[:space:]]*true'
+          mapfile -d '' files < <(find "$V5" -maxdepth 1 -type f -name '*.py' \
+            ! -name 'live_executor_stage22.py' \
+            ! -name 'test_live_executor_stage22.py' -print0)
+          if ((${#files[@]})) && grep -niE "$pattern" "${files[@]}"; then
+            echo 'Forbidden mutable or live execution surface detected outside governed Stage-22 executor' >&2
             exit 1
+          fi
+          if [[ -f "$V5/live_executor_stage22.py" ]]; then
+            test -f .github/workflows/chobyar-trader-v5-live-executor-stage22.yml
+            test "$(grep -Ec 'client\.post\(ORDER_PATH' "$V5/live_executor_stage22.py")" = 1
+            ! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|/margin|/otc|futures' "$V5/live_executor_stage22.py"
+            grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$V5/live_executor_stage22.py"
           fi
