@@ -1,0 +1,58 @@
+name: ChobYar Trader v5 Live Executor Stage 22
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py'
+      - 'ops/chobyar-trader/install-v5-live-executor-stage22.sh'
+      - '.github/workflows/chobyar-trader-v5-live-executor-stage22.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage22-live-executor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and test Stage 22
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py -q
+          bash -n ops/chobyar-trader/install-v5-live-executor-stage22.sh
+
+      - name: Enforce bounded spot-only live executor
+        run: |
+          set -euo pipefail
+          src='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$src")" = 1
+          ! grep -nEi '\.delete\(|\.put\(|\.patch\(|withdraw\(|/margin|/otc|futures' "$src"
+          grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$src"
+          grep -q 'LIVE_EXECUTION_ARMED' "$src"
+          grep -q 'WITHDRAWALS_ENABLED' "$src"
+          grep -q 'LEVERAGE_ENABLED' "$src"
+          grep -q 'existing_open_order_blocks_submission' "$src"
+          grep -q 'client_id_already_exists' "$src"
+
+      - name: Prove production paper service is not mutated
+        run: |
+          set -euo pipefail
+          inst='ops/chobyar-trader/install-v5-live-executor-stage22.sh'
+          ! grep -Eq 'systemctl (restart|start|enable).*chobyar-trader\.service' "$inst"
+          ! grep -Eq 'sed .*\.env|tee .*\.env|cat > .*\.env|echo .*>> .*\.env' "$inst"
+          grep -q 'PRODUCTION_TRADER=PAPER_UNCHANGED' "$inst"
