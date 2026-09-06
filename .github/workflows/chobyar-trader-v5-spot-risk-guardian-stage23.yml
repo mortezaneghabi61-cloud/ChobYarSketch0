@@ -41,14 +41,17 @@ jobs:
           python3 ops/chobyar-trader/v5/execution_safety/test_live_position_guardian_stage23.py -q
           bash -n ops/chobyar-trader/install-v5-spot-risk-guardian-stage23.sh
 
-      - name: Enforce delegated spot-only exit surface
+      - name: Enforce position-bound spot-only close surface
         run: |
           set -euo pipefail
           g='ops/chobyar-trader/v5/execution_safety/live_position_guardian_stage23.py'
           e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
-          ! grep -nE '\.(post|delete|put|patch)\(' "$g"
-          grep -q 'submit_one_live_limit_order' "$g"
-          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$e")" = 1
+          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$g")" = 1
+          ! grep -nE '\.(delete|put|patch)\(' "$g"
+          grep -q '"side": "SELL"' "$g"
+          ! grep -q '"side": "BUY"' "$g"
+          grep -q 'entry_exceeded_approved_10_usdt_cap' "$g"
+          grep -q 'btc_balance_exceeds_entry_quantity' "$g"
           grep -q 'STOP_LOSS_PCT = Decimal("0.015")' "$g"
           grep -q 'TAKE_PROFIT_PCT = Decimal("0.03")' "$g"
           grep -q 'APPROVED_MAX_ORDER_USDT = Decimal("10")' "$e"
