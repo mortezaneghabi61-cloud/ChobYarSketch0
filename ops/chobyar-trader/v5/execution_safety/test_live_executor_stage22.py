@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
+import live_entry_risk_stage25
 from live_executor_stage22 import LiveOrderIntent, Stage22Error, submit_one_live_limit_order, validate_live_env
 
 
@@ -36,17 +41,28 @@ class Resp:
 
 
 class FakeClient:
-    def __init__(self, existing=False, post_status=201, post_payload=None):
+    def __init__(self, existing=False, post_status=201, post_payload=None, *, usdt="90", btc="0"):
         self.existing = existing
         self.post_status = post_status
         self.post_payload = post_payload
+        self.usdt = usdt
+        self.btc = btc
         self.posts = []
 
     def get(self, path, **kwargs):
         if path == "/hector/web/v1/markets":
             return Resp(200, {"success": True, "result": {"markets": [{"symbol": "BTCUSDT", "quote_asset": "USDT", "is_spot": True}]}})
         if path == "/v1/markets":
-            return Resp(200, {"success": True, "result": {"symbols": {"BTCUSDT": {"symbol": "BTCUSDT", "stepSize": 6, "tickSize": 2, "minNotional": "5", "maxNotional": "100000"}}}})
+            return Resp(200, {"success": True, "result": {"symbols": {"BTCUSDT": {
+                "symbol": "BTCUSDT", "stepSize": 6, "tickSize": 2,
+                "minNotional": "5", "maxNotional": "100000",
+                "stats": {"bidPrice": "100000.00", "lastPrice": "100000.00"},
+            }}}})
+        if path == "/v1/account/balances":
+            return Resp(200, {"success": True, "result": {"balances": {
+                "USDT": {"value": self.usdt, "locked": "0"},
+                "BTC": {"value": self.btc, "locked": "0"},
+            }}})
         if path == "/v1/account/openOrders":
             return Resp(200, {"success": True, "result": {"orders": ([{"x": 1}] if self.existing else [])}})
         if path.startswith("/v1/account/orders/"):
@@ -70,6 +86,21 @@ class FakeClient:
 
 
 class Stage22Tests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_state = live_entry_risk_stage25.DEFAULT_STATE_PATH
+        state = Path(self.tmp.name) / "risk.json"
+        state.write_text(json.dumps({
+            "version": 1,
+            "utc_day": datetime.now(timezone.utc).date().isoformat(),
+            "start_equity_usdt": "90",
+        }))
+        live_entry_risk_stage25.DEFAULT_STATE_PATH = state
+
+    def tearDown(self):
+        live_entry_risk_stage25.DEFAULT_STATE_PATH = self.old_state
+        self.tmp.cleanup()
+
     def intent(self, notional10=True):
         return LiveOrderIntent("BUY", Decimal("0.000100"), Decimal("100000.00" if notional10 else "100001.00"), "chobyar-live-test-0001")
 
@@ -87,13 +118,20 @@ class Stage22Tests(unittest.TestCase):
             with self.assertRaises(Stage22Error):
                 validate_live_env(env)
 
-    def test_happy_path_posts_once(self):
+    def test_happy_path_posts_once_after_stage25(self):
         c = FakeClient()
         result = submit_one_live_limit_order(env=GOOD_ENV, intent=self.intent(), client=c)
         self.assertTrue(result["submitted"])
+        self.assertEqual(result["max_new_buy_usdt"], "10")
         self.assertEqual(len(c.posts), 1)
         self.assertEqual(c.posts[0][0], "/v1/account/orders")
         self.assertEqual(c.posts[0][1]["json"]["type"], "LIMIT")
+
+    def test_stage25_blocks_buy_when_existing_position_is_over_25pct(self):
+        c = FakeClient(usdt="60", btc="0.00030000")
+        with self.assertRaisesRegex(Stage22Error, "stage25_buy_exceeds_equity_sized_budget"):
+            submit_one_live_limit_order(env=GOOD_ENV, intent=self.intent(), client=c)
+        self.assertEqual(c.posts, [])
 
     def test_hard_cap_blocks(self):
         c = FakeClient()

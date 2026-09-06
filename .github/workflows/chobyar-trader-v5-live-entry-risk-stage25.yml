@@ -1,0 +1,75 @@
+name: ChobYar Trader v5 Live Entry Risk Stage 25
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_entry_risk_stage25.py'
+      - 'ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_entry_risk_stage25.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_executor_stage22.py'
+      - 'ops/chobyar-trader/install-v5-live-entry-risk-stage25.sh'
+      - '.github/workflows/chobyar-trader-v5-live-entry-risk-stage25.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage25-live-entry-risk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and deterministic tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          set -euo pipefail
+          d='ops/chobyar-trader/v5/execution_safety'
+          python3 -m py_compile "$d/live_entry_risk_stage25.py" "$d/live_executor_stage22.py" "$d/test_live_entry_risk_stage25.py" "$d/test_live_executor_stage22.py"
+          python3 "$d/test_live_entry_risk_stage25.py" -q
+          python3 "$d/test_live_executor_stage22.py" -q
+          bash -n ops/chobyar-trader/install-v5-live-entry-risk-stage25.sh
+
+      - name: Prove actual equity sizing and daily loss breaker
+        run: |
+          set -euo pipefail
+          r='ops/chobyar-trader/v5/execution_safety/live_entry_risk_stage25.py'
+          e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+          grep -q 'MAX_POSITION_PCT = Decimal("0.25")' "$r"
+          grep -q 'MAX_DAILY_LOSS_PCT = Decimal("0.03")' "$r"
+          grep -q 'max_position = equity \* MAX_POSITION_PCT' "$r"
+          grep -q 'daily_loss_limit_reached' "$r"
+          grep -q 'daily_baseline_required' "$r"
+          grep -q 'daily_baseline_stale' "$r"
+          grep -q 'buy_exceeds_equity_sized_budget' "$r"
+          grep -q 'enforce_buy_risk' "$e"
+
+      - name: Stage25 has no exchange mutation authority
+        run: |
+          set -euo pipefail
+          r='ops/chobyar-trader/v5/execution_safety/live_entry_risk_stage25.py'
+          ! grep -nE '\.(post|delete|put|patch)\(' "$r"
+          ! grep -nEi 'withdraw|/margin|/otc|futures' "$r"
+          e='ops/chobyar-trader/v5/execution_safety/live_executor_stage22.py'
+          test "$(grep -Ec 'client\.post\(ORDER_PATH' "$e")" = 1
+
+      - name: Installer preserves paper production and fail-closed rollover
+        run: |
+          set -euo pipefail
+          i='ops/chobyar-trader/install-v5-live-entry-risk-stage25.sh'
+          grep -q 'TRADING_MODE=paper' "$i"
+          grep -q 'LIVE_TRADING_ENABLED=false' "$i"
+          grep -q 'Persistent=false' "$i"
+          grep -q 'OnCalendar=\*-\*-\* 00:00:05 UTC' "$i"
+          ! grep -Eq 'systemctl (restart|start|enable).*chobyar-trader\.service' "$i"
+          ! grep -Eq 'sed .*\.env|tee .*\.env|cat > .*\.env|echo .*>> .*\.env' "$i"
+          grep -q 'EXCHANGE_MUTATION=NONE_DURING_INSTALL' "$i"
