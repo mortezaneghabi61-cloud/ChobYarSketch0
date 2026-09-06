@@ -1,0 +1,62 @@
+name: ChobYar Trader v5 Live Observer Stage 21
+
+on:
+  pull_request:
+    branches:
+      - automation/chobyar-trader-v55-paper-entry-gate
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/live_observer_stage21.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_live_observer_stage21.py'
+      - 'ops/chobyar-trader/install-v5-live-observer-stage21.sh'
+      - '.github/workflows/chobyar-trader-v5-live-observer-stage21.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage21-live-observer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exact-head lock
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Compile and run Stage 21 tests
+        env:
+          PYTHONPATH: ops/chobyar-trader/v5/execution_safety
+        run: |
+          python3 -m py_compile \
+            ops/chobyar-trader/v5/execution_safety/live_observer_stage21.py \
+            ops/chobyar-trader/v5/execution_safety/test_live_observer_stage21.py
+          python3 ops/chobyar-trader/v5/execution_safety/test_live_observer_stage21.py -q
+          bash -n ops/chobyar-trader/install-v5-live-observer-stage21.sh
+
+      - name: Enforce GET-only disarmed observer
+        run: |
+          set -euo pipefail
+          observer='ops/chobyar-trader/v5/execution_safety/live_observer_stage21.py'
+          if grep -nEi '\.post\(|\.put\(|\.patch\(|\.delete\(|/v1/account/orders|submit_order|create_order|place_order|cancel_order|withdraw\(' "$observer"; then
+            echo 'Forbidden mutable exchange surface detected in Stage-21 observer' >&2
+            exit 1
+          fi
+          installer='ops/chobyar-trader/install-v5-live-observer-stage21.sh'
+          grep -q 'LIVE_EXECUTION_ARMED=false' "$installer"
+          grep -q 'LIVE_MAX_ORDER_USDT=10' "$installer"
+          grep -q 'WITHDRAWALS_ENABLED=false' "$installer"
+          grep -q 'LEVERAGE_ENABLED=false' "$installer"
+          grep -q 'LIVE_OBSERVER_TIMER=DISABLED' "$installer"
+          grep -q 'ORDER_SUBMISSION=NOT_USED' "$installer"
+          ! grep -Eq 'curl .*api\.wallex|wget .*api\.wallex' "$installer"
+
+      - name: Prove production Paper env is not modified
+        run: |
+          set -euo pipefail
+          installer='ops/chobyar-trader/install-v5-live-observer-stage21.sh'
+          ! grep -Eq 'sed .*\.env|tee .*\.env|cat > .*\.env|echo .*>> .*\.env' "$installer"
+          grep -q 'production TRADING_MODE must remain paper' "$installer"
+          grep -q 'production LIVE_TRADING_ENABLED must remain false' "$installer"
