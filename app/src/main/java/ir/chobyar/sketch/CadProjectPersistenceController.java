@@ -12,9 +12,9 @@ final class CadProjectPersistenceController {
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         if((appearance==null)!=(section==null))throw new IllegalArgumentException("Visual workspace controllers are incomplete");
         String sketch=cad.exportSketchProjectState();
-        boolean hasBodies=cad.bodyCount()>0,hasReference=cad.hasReferenceImage();
+        boolean hasBodies=cad.bodyCount()>0,hasReference=cad.hasReferenceImage(),hasPlanes=cad.hasProjectConstructionPlanes();
         String model=null;
-        if(hasBodies||hasReference){
+        if(hasBodies||hasReference||hasPlanes){
             model=ExactModelProjectAdapter.exportModel(cad);
             ExactModelProjectAdapter.validateAgainstSketch(model,sketch);
         }
@@ -29,7 +29,7 @@ final class CadProjectPersistenceController {
             WorkspaceVisualProjectAdapter.validate(visual);
         }
         if(hasReference||visual!=null)return CadProjectDocument.encodeWorkspace(sketch,model,reference,visual);
-        if(hasBodies)return CadProjectDocument.encodeModel(sketch,model);
+        if(hasBodies||hasPlanes)return CadProjectDocument.encodeModel(sketch,model);
         return CadProjectDocument.encodeSketch(sketch);
     }
 

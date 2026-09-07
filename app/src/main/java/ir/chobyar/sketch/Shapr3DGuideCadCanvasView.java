@@ -37,7 +37,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
     private boolean snap3DGuidepoints=true;
     private boolean snapDistantEdges=true;
 
-    private Field viewScaleField,offsetXField,offsetYField,activePlaneField;
+    private Field viewScaleField,offsetXField,offsetYField;
     private Field baseGridField,baseGuidelinesField,baseGuidepointsField,baseShowPointsField,baseHintsField;
     private Method baseSaveSettingsMethod,baseSketchGestureMethod,baseFindBestSnapMethod;
 
@@ -70,7 +70,6 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
             viewScaleField=field(CadCanvasView.class,"viewScale");
             offsetXField=field(CadCanvasView.class,"offsetX");
             offsetYField=field(CadCanvasView.class,"offsetY");
-            activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
 
             baseGridField=field(ShaprSnappingCadCanvasView.class,"snapGrid");
             baseGuidelinesField=field(ShaprSnappingCadCanvasView.class,"snapSketchGuidelines");
@@ -483,7 +482,7 @@ public class Shapr3DGuideCadCanvasView extends ShaprSnappingCadCanvasView {
 
     private List<Long> nativeHandles(){return exactNativeHandlesSnapshot();}
 
-    private Geometry3D.Plane3D activePlane(){try{Object p=activePlaneField==null?null:activePlaneField.get(this);return p instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)p:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}}
+    private Geometry3D.Plane3D activePlane(){return activeSpatialPlane();}
     private static PointF toLocal(Geometry3D.Plane3D p,Geometry3D.Vec3 world){Geometry3D.Vec3 d=world.sub(p.origin);return new PointF(d.dot(p.u),d.dot(p.v));}
     private static float offPlane(Geometry3D.Plane3D p,Geometry3D.Vec3 world){return Math.abs(world.sub(p.origin).dot(p.normal));}
 

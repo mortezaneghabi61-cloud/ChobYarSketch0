@@ -98,8 +98,6 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     private Field selectedField;
     private Field selectedObjectsField;
     private Field entitiesField;
-    private Field planeByLayerField;
-    private Field activePlaneField;
     private Field bodiesField;
     private Field selectedBodyField;
     private Field selectedFaceField;
@@ -116,8 +114,6 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
             selectedField=field(CadCanvasView.class,"selected");
             selectedObjectsField=field(SmartCadCanvasView.class,"selectedObjects");
             entitiesField=field(CadCanvasView.class,"entities");
-            planeByLayerField=field(SpatialCadCanvasView.class,"planeByLayer");
-            activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
             bodiesField=field(SolidCadCanvasView.class,"bodies");
             selectedBodyField=field(SolidCadCanvasView.class,"selectedBody");
             selectedFaceField=field(SolidCadCanvasView.class,"selectedFace");
@@ -594,11 +590,8 @@ public class ParametricHistorySolidCadCanvasView extends DualUnitSolidCadCanvasV
     private void setBodyCsg(Object body,SolidCSG csg){try{Field f=findField(body.getClass(),"csg");if(f!=null)f.set(body,csg);}catch(Exception ignored){}}
     private String bodyName(Object body){try{if(body==null)return"";Field f=findField(body.getClass(),"name");Object v=f==null?null:f.get(body);return v==null?"Body":String.valueOf(v);}catch(Exception e){return"Body";}}
 
-    @SuppressWarnings("unchecked")
-    private Geometry3D.Plane3D planeForLayer(String layer){
-        try{Map<String,Geometry3D.Plane3D> m=(Map<String,Geometry3D.Plane3D>)planeByLayerField.get(this);Geometry3D.Plane3D p=m.get(layer);return p==null?activePlane():p;}catch(Exception e){return activePlane();}
-    }
-    private Geometry3D.Plane3D activePlane(){try{Object v=activePlaneField.get(this);return v instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)v:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}}
+    private Geometry3D.Plane3D planeForLayer(String layer){return spatialPlaneForLayer(layer);}
+    private Geometry3D.Plane3D activePlane(){return activeSpatialPlane();}
 
     private static String entityLayer(Object e){Object v=call(e,"getLayer");return v==null?"":String.valueOf(v);}
     private static Object call(Object target,String name){if(target==null)return null;Class<?> c=target.getClass();while(c!=null){try{Method m=c.getDeclaredMethod(name);m.setAccessible(true);return m.invoke(target);}catch(NoSuchMethodException e){c=c.getSuperclass();}catch(Exception e){return null;}}return null;}

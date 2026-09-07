@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import ir.chobyar.sketch.core.ConstructionPlane;
+import ir.chobyar.sketch.core.ConstructionPlaneDocument;
+
 /**
  * Parametric sketch layer for ChobYar.
  *
@@ -58,6 +61,7 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     private Field parentCoincidenceField;
 
     private final List<SketchSpace> sketchSpaces = new ArrayList<>();
+    private final ConstructionPlaneDocument constructionPlaneDocument = new ConstructionPlaneDocument();
     private int activeSketchIndex = 0;
     private int sketchSerial = 1;
 
@@ -83,8 +87,10 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         super(context);
         initReflection();
         initPaints();
-        SketchSpace first = new SketchSpace("Sketch 1", "SKETCH_1");
+        SketchSpace first = new SketchSpace("sketch:1", "Sketch 1", "SKETCH_1");
         sketchSpaces.add(first);
+        constructionPlaneDocument.createSketchOnPlane(first.stableId, ConstructionPlane.XY_ID);
+        constructionPlaneDocument.clearHistory();
         sketchSerial = 2;
         super.setLayer(first.layerName);
         super.setLayerVisible(first.layerName, true);
@@ -137,12 +143,14 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     // ---------------------------------------------------------------------
 
     private static class SketchSpace {
+        final String stableId;
         String name;
         final String layerName;
         boolean locked;
         boolean visible = true;
 
-        SketchSpace(String name, String layerName) {
+        SketchSpace(String stableId, String name, String layerName) {
+            this.stableId = stableId;
             this.name = name;
             this.layerName = layerName;
         }
@@ -155,10 +163,18 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     }
 
     public String createSketchSpace(String requestedName) {
+        return createSketchSpaceWithAssignedPlane(requestedName,constructionPlaneDocument.activePlaneId(),false);
+    }
+
+    protected final String createSketchSpaceWithAssignedPlane(String requestedName,String planeId,boolean relationshipCommitted) {
         String clean = requestedName == null ? "" : requestedName.trim();
         if (clean.isEmpty()) clean = "Sketch " + sketchSerial;
+        String stableId=nextSketchStableId();
         String layer = "SKETCH_" + sketchSerial++;
-        SketchSpace s = new SketchSpace(clean, layer);
+        SketchSpace s = new SketchSpace(stableId,clean, layer);
+        if(relationshipCommitted){
+            if(!planeId.equals(constructionPlaneDocument.planeIdForSketch(stableId)))throw new IllegalStateException("Sketch plane transaction is missing");
+        }else constructionPlaneDocument.createSketchOnPlane(stableId,planeId);
         sketchSpaces.add(s);
         activeSketchIndex = sketchSpaces.size() - 1;
         super.setLayer(s.layerName);
@@ -168,12 +184,31 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
         return "Sketch text: " + s.name;
     }
 
+    protected final String nextSketchStableId(){return "sketch:"+sketchSerial;}
+    public final String activeSketchStableId(){SketchSpace s=activeSketch();return s==null?"":s.stableId;}
+    protected final String sketchStableIdForLayer(String layer){for(SketchSpace s:sketchSpaces)if(s.layerName.equals(layer))return s.stableId;return null;}
+    protected final ConstructionPlaneDocument constructionPlaneDocument(){return constructionPlaneDocument;}
+
+    protected final void restoreSketchSpacesFromPlaneModel(){
+        Map<String,String> assignments=constructionPlaneDocument.sketchPlaneAssignments();
+        ArrayList<SketchSpace> restored=new ArrayList<>();int max=0;
+        for(String stableId:assignments.keySet())if(stableId.startsWith("sketch:")){
+            try{int number=Integer.parseInt(stableId.substring(7));if(number<1)throw new NumberFormatException();max=Math.max(max,number);restored.add(new SketchSpace(stableId,"Sketch "+number,"SKETCH_"+number));}
+            catch(NumberFormatException e){throw new IllegalArgumentException("Persisted Sketch id is malformed",e);}
+        }
+        if(restored.isEmpty())return;
+        restored.sort((a,b)->a.stableId.compareTo(b.stableId));sketchSpaces.clear();sketchSpaces.addAll(restored);sketchSerial=max+1;
+        String active=constructionPlaneDocument.activeSketchId();activeSketchIndex=0;for(int i=0;i<sketchSpaces.size();i++)if(sketchSpaces.get(i).stableId.equals(active)){activeSketchIndex=i;break;}
+        SketchSpace current=activeSketch();if(current!=null)super.setLayer(current.layerName);
+    }
+
     public String switchSketchSpace(int index) {
         if (index < 0 || index >= sketchSpaces.size()) return "Sketch was not found";
         activeSketchIndex = index;
         SketchSpace s = activeSketch();
         if (s == null) return "Sketch was not found";
         super.setLayer(s.layerName);
+        if(!constructionPlaneDocument.activateSketch(s.stableId))throw new IllegalStateException("Sketch construction plane is missing");
         if (!s.visible) {
             s.visible = true;
             super.setLayerVisible(s.layerName, true);
@@ -1094,6 +1129,8 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     @Override
     public void clearAll() {
         super.clearAll();
+        sketchSpaces.clear();SketchSpace first=new SketchSpace("sketch:1","Sketch 1","SKETCH_1");sketchSpaces.add(first);activeSketchIndex=0;sketchSerial=2;
+        constructionPlaneDocument.reset(first.stableId);constructionPlaneDocument.clearHistory();super.setLayer(first.layerName);super.setLayerVisible(first.layerName,true);
         elementLocks.clear();
         pointOnLineLinks.clear();
         invalidate();

@@ -137,8 +137,6 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private Field selectedField;
     private Field selectedObjectsField;
     private Field entitiesField;
-    private Field planeByLayerField;
-    private Field activePlaneField;
     private Field bodiesField;
     private Field selectedBodyField;
     private Field selectedFaceField;
@@ -163,8 +161,6 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             selectedField=field(CadCanvasView.class,"selected");
             selectedObjectsField=field(SmartCadCanvasView.class,"selectedObjects");
             entitiesField=field(CadCanvasView.class,"entities");
-            planeByLayerField=field(SpatialCadCanvasView.class,"planeByLayer");
-            activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
             bodiesField=field(SolidCadCanvasView.class,"bodies");
             selectedBodyField=field(SolidCadCanvasView.class,"selectedBody");
             selectedFaceField=field(SolidCadCanvasView.class,"selectedFace");
@@ -859,9 +855,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     private void setBodyCsg(Object body,SolidCSG csg){try{Field f=findField(body.getClass(),"csg");if(f!=null)f.set(body,csg);}catch(Exception ignored){}}
     private void setOverview3D(){try{Field f=field(SpatialCadCanvasView.class,"overview3D");f.setBoolean(this,true);}catch(Exception ignored){}}
 
-    @SuppressWarnings("unchecked") private Geometry3D.Plane3D planeForLayer(String layer){
-        try{Map<String,Geometry3D.Plane3D>m=(Map<String,Geometry3D.Plane3D>)planeByLayerField.get(this);Geometry3D.Plane3D p=m.get(layer);if(p!=null)return p;Object a=activePlaneField.get(this);return a instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)a:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}
-    }
+    private Geometry3D.Plane3D planeForLayer(String layer){return spatialPlaneForLayer(layer);}
     private static String entityLayer(Object e){Object v=call(e,"getLayer");return v==null?"":String.valueOf(v);}
     private static Object call(Object target,String name){if(target==null)return null;Class<?>c=target.getClass();while(c!=null){try{Method m=c.getDeclaredMethod(name);m.setAccessible(true);return m.invoke(target);}catch(NoSuchMethodException e){c=c.getSuperclass();}catch(Exception e){return null;}}return null;}
     private static Field findField(Class<?>c,String name){Class<?>x=c;while(x!=null){try{Field f=x.getDeclaredField(name);f.setAccessible(true);return f;}catch(Exception e){x=x.getSuperclass();}}return null;}

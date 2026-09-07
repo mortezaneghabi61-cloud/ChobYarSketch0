@@ -12,7 +12,11 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+
+import ir.chobyar.sketch.core.ConstructionPlane;
+import ir.chobyar.sketch.core.ConstructionPlaneDocument;
 
 /**
  * Boundary between the live CAD object graph and the versioned project DTO.
@@ -38,7 +42,9 @@ final class ExactModelProjectAdapter {
             JSONArray features=exportFeatures(cad,entityIndex);
             JSONArray direct=exportDirectEdits(cad);
             JSONObject camera=exportCamera(cad);
-            return ExactModelProjectState.encode(planes,features,direct,camera);
+            JSONObject assignments=new JSONObject();for(Map.Entry<String,String> e:cad.sketchPlaneAssignmentSnapshot().entrySet())assignments.put(e.getKey(),e.getValue());
+            ConstructionPlaneDocument planeModel=cad.constructionPlaneModel();
+            return ExactModelProjectState.encode(planes,features,direct,camera,assignments,planeModel.activeSketchId(),planeModel.activePlaneId(),planeModel.nextOffsetSerial());
         }catch(IllegalArgumentException|IllegalStateException e){throw e;}
         catch(Exception e){throw new IllegalStateException("Exact model snapshot could not be exported",e);}
     }
@@ -60,7 +66,7 @@ final class ExactModelProjectAdapter {
 
             ExactModelProjectState.Decoded model=ExactModelProjectState.decode(modelState);
             List<Object> entities=list(field(CadCanvasView.class,"entities").get(cad));
-            restorePlanes(cad,model.planes);
+            restorePlanes(cad,model);
 
             Map<String,Object> bodiesByKey=new HashMap<>();
             int restored=0;
@@ -145,10 +151,7 @@ final class ExactModelProjectAdapter {
     private static void entityIndex(JSONObject p,String key,int count)throws Exception{int i=p.getInt(key);if(i<0||i>=count)throw new IllegalArgumentException("Feature entity index is invalid");}
 
     private static JSONArray exportPlanes(Shapr3DGuideCadCanvasView cad)throws Exception{
-        @SuppressWarnings("unchecked") Map<String,Geometry3D.Plane3D> map=(Map<String,Geometry3D.Plane3D>)field(SpatialCadCanvasView.class,"planeByLayer").get(cad);
-        List<String> names=new ArrayList<>(map.keySet());Collections.sort(names);
-        JSONArray out=new JSONArray();
-        for(String name:names){Geometry3D.Plane3D plane=map.get(name);if(plane!=null)out.put(ExactModelProjectState.plane(name,plane));}
+        JSONArray out=new JSONArray();for(ConstructionPlane plane:cad.constructionPlaneSnapshot())out.put(ExactModelProjectState.constructionPlane(plane));
         return out;
     }
 
@@ -228,12 +231,24 @@ final class ExactModelProjectAdapter {
         return ExactModelProjectState.camera(visible,yaw,pitch,scale,targetX,targetY,targetZ,panX,panY);
     }
 
-    @SuppressWarnings("unchecked") private static void restorePlanes(Shapr3DGuideCadCanvasView cad,JSONArray rows)throws Exception{
-        Map<String,Geometry3D.Plane3D> map=(Map<String,Geometry3D.Plane3D>)field(SpatialCadCanvasView.class,"planeByLayer").get(cad);map.clear();
-        for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);map.put(row.getString("layer"),ExactModelProjectState.planeFromJson(row));}
-        String layer=String.valueOf(field(CadCanvasView.class,"currentLayer").get(cad));Geometry3D.Plane3D active=map.get(layer);if(active==null)active=Geometry3D.xy();
-        field(SpatialCadCanvasView.class,"activePlane").set(cad,active);
+    private static void restorePlanes(Shapr3DGuideCadCanvasView cad,ExactModelProjectState.Decoded model)throws Exception{
+        ConstructionPlaneDocument restored;
+        boolean typed=model.planes.length()>0&&model.planes.getJSONObject(0).has("id");
+        if(typed){
+            List<ConstructionPlane> planes=new ArrayList<>();for(int i=0;i<model.planes.length();i++)planes.add(ExactModelProjectState.constructionPlaneFromJson(model.planes.getJSONObject(i)));
+            Map<String,String> assignments=new LinkedHashMap<>();java.util.Iterator<String> keys=model.planeAssignments.keys();while(keys.hasNext()){String key=keys.next();assignments.put(key,model.planeAssignments.getString(key));}
+            restored=new ConstructionPlaneDocument();restored.restoreExternal(planes,assignments,model.activeSketchId,model.activePlaneId,model.nextPlaneSerial);
+        }else{
+            List<ConstructionPlane.Legacy> legacy=new ArrayList<>();for(int i=0;i<model.planes.length();i++){JSONObject row=model.planes.getJSONObject(i);Geometry3D.Plane3D p=ExactModelProjectState.planeFromJson(row);legacy.add(new ConstructionPlane.Legacy(legacySketchId(row.getString("layer")),p.label,
+                    new ConstructionPlane.Vector(p.origin.x,p.origin.y,p.origin.z),new ConstructionPlane.Vector(p.u.x,p.u.y,p.u.z),new ConstructionPlane.Vector(p.v.x,p.v.y,p.v.z)));}
+            restored=ConstructionPlaneDocument.migrateLegacy(legacy);
+            if(legacy.isEmpty())restored.createSketchOnPlane(cad.activeSketchStableId(),ConstructionPlane.XY_ID);
+        }
+        ConstructionPlaneDocument target=cad.constructionPlaneModel();target.restoreExternal(restored.planes(),restored.sketchPlaneAssignments(),restored.activeSketchId(),restored.activePlaneId(),restored.nextOffsetSerial());
+        cad.restoreSketchSpacesFromPlaneModel();
     }
+
+    private static String legacySketchId(String layer){String clean=layer==null?"":layer.trim();if("0".equals(clean))return "sketch:1";if(clean.matches("SKETCH_[1-9][0-9]*"))return "sketch:"+clean.substring(7);return "legacy-sketch:"+clean;}
 
     private static void restoreCamera(Shapr3DGuideCadCanvasView cad,JSONObject camera)throws Exception{
         if(camera==null||camera.length()==0)return;JSONArray target=camera.optJSONArray("target"),pan=camera.optJSONArray("pan");
