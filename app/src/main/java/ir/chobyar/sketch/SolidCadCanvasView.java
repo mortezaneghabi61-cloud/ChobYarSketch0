@@ -438,6 +438,26 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         invalidate();return b.name+(b.visible?" Show text text":" Hide text");
     }
 
+    /** Selected-body visibility uses the same project-owned state as Items. */
+    public String selectedBodyVisibilityActionLabel(){
+        return selectedBody==null?"":selectedBody.visible?"Hide":"Show";
+    }
+
+    public String toggleSelectedBodyVisibility(){
+        if(selectedBody==null)return "Select a body first";
+        saveSolidUndo();
+        SolidBody body=selectedBody;
+        body.visible=!body.visible;
+        String result=body.name+(body.visible?" shown":" hidden");
+        if(!body.visible){selectedBody=null;selectedFace=null;clearSubSelection();}
+        invalidate();dispatchWorkspaceState();
+        return result;
+    }
+
+    public boolean isSelectedBodyVisible(){return selectedBody!=null&&selectedBody.visible;}
+
+    public boolean isItemVisible(int index){return index>=0&&index<bodies.size()&&bodies.get(index).visible;}
+
     public String renameItem(int index,String newName){
         if(index<0||index>=bodies.size())return "Body was not found";
         String clean=newName==null?"":newName.trim();

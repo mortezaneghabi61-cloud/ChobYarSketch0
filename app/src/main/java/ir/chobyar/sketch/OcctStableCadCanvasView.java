@@ -247,6 +247,24 @@ public class OcctStableCadCanvasView extends OcctDirectCadCanvasView {
     public void showSelectedPushPull(){showFaceFeaturePreview(Kind.PUSH_PULL);}
     public void showSelectedShell(){showFaceFeaturePreview(Kind.SHELL);}
 
+    /** Topology-aware measurement; never delegates a 3D selection to Sketch measurement. */
+    public void showSelectedTopologyMeasure(){
+        Object body=selectedBody();
+        OcctTopologyRef.Ref ref=null;
+        if("EDGE".equals(selectionKind())&&selectedEdgeBody==body)ref=selectedEdgeRef;
+        else if("FACE".equals(selectionKind())&&body!=null&&selectedFace()!=null){
+            Object record=ensureNativeRecord(body);
+            if(record!=null)ref=OcctTopologyRef.captureFace(recordHandle(record),selectedFace().centroid(),
+                    nextTopologyId(body,OcctTopologyRef.FACE));
+        }
+        if(ref==null){toast("Exact topology measurement is unavailable");return;}
+        String unit=ref.kind==OcctTopologyRef.FACE?" mm²":" mm";
+        String label=ref.kind==OcctTopologyRef.FACE?"Face area":"Edge length";
+        new AlertDialog.Builder(getContext()).setTitle("Measure • "+ref.shortLabel())
+                .setMessage(label+": "+num(ref.measure)+unit)
+                .setPositiveButton("Close",null).show();
+    }
+
     private void showEdgeFeaturePreview(Kind kind){
         Object body=selectedBody();
         if(body==null||selectedEdgeRef==null||selectedEdgeBody!=body){toast("Select an edge first");return;}

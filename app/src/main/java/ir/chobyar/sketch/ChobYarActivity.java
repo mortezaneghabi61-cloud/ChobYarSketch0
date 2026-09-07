@@ -30,6 +30,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /** Single production workspace. No activity swapping and no reflection wiring. */
 public final class ChobYarActivity extends Activity {
@@ -315,36 +318,69 @@ public final class ChobYarActivity extends Activity {
 
     private void syncGpuCamera(){if(gpuSurface!=null&&cad!=null)gpuSurface.setCameraState(cad.gpuCameraState());}
 
+    private enum ContextualAction {
+        DESELECT("Deselect All"), FILLET("Fillet"), CHAMFER("Chamfer"), MEASURE("Measure"),
+        SKETCH("Sketch"), MOVE_ROTATE("Move/Rotate"), PUSH_PULL("Push/Pull"),
+        EXACT_DIMENSIONS("Exact Dimensions"), MATERIAL("Material"), SECTION("Section"),
+        BOOLEAN("Boolean"), VISIBILITY(""), OFFSET("Offset"), TRIM("Trim"), EXTEND("Extend"),
+        DIMENSION("Dimension"), EXTRUDE("Extrude"), DELETE("Delete");
+        final String label;
+        ContextualAction(String label){this.label=label;}
+    }
+
+    private List<ContextualAction> contextualCapabilities(String kind){
+        String k=kind==null?"NONE":kind;
+        List<ContextualAction> out=new ArrayList<>();
+        if("NONE".equals(k)||"UNKNOWN".equals(k))return out;
+        out.add(ContextualAction.DESELECT);
+        if("EDGE".equals(k)){Collections.addAll(out,ContextualAction.FILLET,ContextualAction.CHAMFER,ContextualAction.MEASURE);}
+        else if("FACE".equals(k)){Collections.addAll(out,ContextualAction.SKETCH,ContextualAction.MOVE_ROTATE,ContextualAction.PUSH_PULL,ContextualAction.MEASURE);}
+        else if("BODY".equals(k)){Collections.addAll(out,ContextualAction.MOVE_ROTATE,ContextualAction.EXACT_DIMENSIONS,
+                ContextualAction.MATERIAL,ContextualAction.SECTION,ContextualAction.BOOLEAN,ContextualAction.VISIBILITY);}
+        else if("VERTEX".equals(k)){}
+        else if("SKETCH".equals(k)){Collections.addAll(out,ContextualAction.MOVE_ROTATE,ContextualAction.OFFSET,
+                ContextualAction.TRIM,ContextualAction.EXTEND,ContextualAction.DIMENSION,ContextualAction.EXTRUDE,ContextualAction.DELETE);}
+        else out.clear();
+        return out;
+    }
+
+    final List<String> contextualCapabilityLabelsForSelection(String kind){
+        List<String> labels=new ArrayList<>();
+        for(ContextualAction action:contextualCapabilities(kind)){
+            String label=action==ContextualAction.VISIBILITY?cad.selectedBodyVisibilityActionLabel():action.label;
+            if(!label.isEmpty())labels.add(label);
+        }
+        return Collections.unmodifiableList(labels);
+    }
+
     private void renderAdaptive(String kind){
         setAdaptivePlacement(false);
-        adaptive.removeAllViews();String k=kind==null?"SKETCH":kind;
-        adaptive.addView(tool("×","Deselect All",cad::clearWorkspaceSelection));
-        if("EDGE".equals(k)){
-            adaptive.addView(tool("⌒","Fillet",cad::showSelectedFillet));adaptive.addView(tool("／","Chamfer",cad::showSelectedChamfer));
-            adaptive.addView(tool("⌨","Measure",this::editDimension));
-        }else if("FACE".equals(k)){
-            adaptive.addView(tool("✎","Sketch",this::sketchOnSelectedFace));
-            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
-            adaptive.addView(tool("⇧","Extrude",cad::showSelectedPushPull));
-        }else if("BODY".equals(k)){
-            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
-            adaptive.addView(tool("⌨","Exact Dimensions",cad::showSelectedAnalyticEditor));
-            adaptive.addView(tool("◉","Material",this::showMaterialPalette));
-            adaptive.addView(tool("◫","Section",this::showSectionViewPanel));
-            adaptive.addView(tool("∪","Boolean",cad::showSolidManager));
-            adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
-        }else if("VERTEX".equals(k)){
-            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));adaptive.addView(tool("⌨","Measure",cad::showSketchMeasureInspector));
-        }else{
-            adaptive.addView(tool("↗","Move/Rotate",beginMoveRotateRunnable()));
-            adaptive.addView(tool("⧉","Offset",cad::showOffsetEdgeTool));
-            adaptive.addView(tool("✂","Trim",()->status(cad.trimSelectedLines())));
-            adaptive.addView(tool("╱","Extend",()->status(cad.extendSelectedLines())));
-            adaptive.addView(tool("⌨","Dimension",this::editDimension));
-            adaptive.addView(tool("⬆","Extrude",this::beginExtrude));
+        adaptive.removeAllViews();
+        for(ContextualAction action:contextualCapabilities(kind)){
+            switch(action){
+                case DESELECT: adaptive.addView(tool("×",action.label,cad::clearWorkspaceSelection));break;
+                case FILLET: adaptive.addView(tool("⌒",action.label,cad::showSelectedFillet));break;
+                case CHAMFER: adaptive.addView(tool("／",action.label,cad::showSelectedChamfer));break;
+                case MEASURE: adaptive.addView(tool("⌨",action.label,cad::showSelectedTopologyMeasure));break;
+                case SKETCH: adaptive.addView(tool("✎",action.label,this::sketchOnSelectedFace));break;
+                case MOVE_ROTATE: adaptive.addView(tool("↗",action.label,beginMoveRotateRunnable()));break;
+                case PUSH_PULL: adaptive.addView(tool("⇧",action.label,cad::showSelectedPushPull));break;
+                case EXACT_DIMENSIONS: adaptive.addView(tool("⌨",action.label,cad::showSelectedAnalyticEditor));break;
+                case MATERIAL: adaptive.addView(tool("◉",action.label,this::showMaterialPalette));break;
+                case SECTION: adaptive.addView(tool("◫",action.label,this::showSectionViewPanel));break;
+                case BOOLEAN: adaptive.addView(tool("∪",action.label,cad::showSolidManager));break;
+                case VISIBILITY:
+                    String label=cad.selectedBodyVisibilityActionLabel();
+                    if(!label.isEmpty())adaptive.addView(tool("Hide".equals(label)?"○":"◉",label,()->status(cad.toggleSelectedBodyVisibility())));
+                    break;
+                case OFFSET: adaptive.addView(tool("⧉",action.label,cad::showOffsetEdgeTool));break;
+                case TRIM: adaptive.addView(tool("✂",action.label,()->status(cad.trimSelectedLines())));break;
+                case EXTEND: adaptive.addView(tool("╱",action.label,()->status(cad.extendSelectedLines())));break;
+                case DIMENSION: adaptive.addView(tool("⌨",action.label,this::editDimension));break;
+                case EXTRUDE: adaptive.addView(tool("⬆",action.label,this::beginExtrude));break;
+                case DELETE: adaptive.addView(tool("⌫",action.label,()->{cad.deleteSelected();cad.dispatchWorkspaceState();}));break;
+            }
         }
-        adaptive.addView(tool("⌁","More",this::tools));
-        adaptive.addView(tool("⌫","Delete",()->{cad.deleteSelected();cad.dispatchWorkspaceState();}));
     }
 
     private Runnable beginMoveRotateRunnable(){return this::beginMoveRotate;}
