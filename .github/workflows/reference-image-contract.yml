@@ -42,7 +42,7 @@ jobs:
           grep -Fq 'cad.showReferenceImageSettings()' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
           grep -Fq '▧ Reference Image' app/src/main/java/ir/chobyar/sketch/ChobYarActivity.java
           grep -Fq 'float widthMm=100f,centerU,centerV,rotationDeg,opacity=.55f;boolean visible=true;' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
-          grep -Fq 'activePlane==null?Geometry3D.xy():activePlane' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
+          grep -Fq 'referenceImage=new ReferenceImage(bitmap,name==null?"Reference Image":name,activeSpatialPlane())' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           grep -Fq 'PointF q=project(image.plane.point(u,v))' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           grep -Fq 'image.widthMm=Math.max(1f,parseLocal(width))' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
           grep -Fq 'image.centerU=parseLocal(x)' app/src/main/java/ir/chobyar/sketch/SpatialCadCanvasView.java
