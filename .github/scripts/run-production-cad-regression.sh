@@ -101,6 +101,7 @@ run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
 run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5 tests)'
 run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
+run_contract ShaprConstructMenuInstrumentationTest shapr-construct-menu 'OK (1 test)'
 
 # GPU renderer lifecycle
 run_contract FilamentLifecycleInstrumentationTest filament-lifecycle 'OK (3 tests)'
