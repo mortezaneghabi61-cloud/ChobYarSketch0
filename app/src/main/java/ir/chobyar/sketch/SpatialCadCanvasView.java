@@ -131,7 +131,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     public String activePlaneLabel() {
-        return constructionPlaneDocument().activePlane().displayName;
+        return planePresentationLabel(constructionPlaneDocument().activePlane());
     }
 
     /** Non-modal plane assignment used when seeding editable bundled projects. */
@@ -200,7 +200,8 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     private static boolean aligned(ConstructionPlane.Vector a,ConstructionPlane.Vector b){double al=a.length(),bl=b.length();return al>1.0e-9&&Math.abs(a.dot(b)/(al*bl)-1.0)<1.0e-6;}
     private static ConstructionPlane.Vector vector(Geometry3D.Vec3 v){return new ConstructionPlane.Vector(v.x,v.y,v.z);}
     private static Geometry3D.Vec3 vector(ConstructionPlane.Vector v){return new Geometry3D.Vec3((float)v.x,(float)v.y,(float)v.z);}
-    private static Geometry3D.Plane3D geometry(ConstructionPlane p){if(p==null)throw new IllegalStateException("Construction plane is missing");return new Geometry3D.Plane3D(vector(p.origin),vector(p.uAxis),vector(p.vAxis),p.displayName);}
+    private static Geometry3D.Plane3D geometry(ConstructionPlane p){if(p==null)throw new IllegalStateException("Construction plane is missing");return new Geometry3D.Plane3D(vector(p.origin),vector(p.uAxis),vector(p.vAxis),planePresentationLabel(p));}
+    private static String planePresentationLabel(ConstructionPlane p){return p.provenance==ConstructionPlane.Provenance.OFFSET?p.displayName+" • "+fmt((float)p.offsetDistanceMm)+" mm":p.displayName;}
     private static String legacySketchIdForLayer(String layer){String clean=layer==null?"":layer.trim();if("0".equals(clean))return "sketch:1";if(clean.matches("SKETCH_[1-9][0-9]*"))return "sketch:"+clean.substring(7);return "legacy-sketch:"+clean;}
 
     public boolean is3DOverview() { return overview3D; }
