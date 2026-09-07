@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 public final class CadCommandPlanner {
     private static final Pattern NUMBER = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final Pattern CLAUSE_SPLIT = Pattern.compile(
-            "(?i)\\s+(?:then|and|و|بعد|سپس)\\s+|[;،]+");
+            "(?i)\\s+(?:then|and|\u0648|\u0628\u0639\u062F|\u0633\u067E\u0633)\\s+|[;\u060C]+");
 
     private CadCommandPlanner() {}
 
@@ -36,18 +36,18 @@ public final class CadCommandPlanner {
     }
 
     private enum Op {
-        RECT(new String[]{"rectangle", "rect", "مستطیل"}),
-        LINE(new String[]{"line", "خط"}),
-        CIRCLE(new String[]{"circle", "دایره"}),
-        ARC(new String[]{"arc", "کمان"}),
-        EXTRUDE(new String[]{"extrude", "اکسترود"}),
-        MOVE(new String[]{"move", "جابجا", "جابهجا", "جابه‌جا", "حرکت"}),
-        COPY(new String[]{"copy", "کپی"}),
-        OFFSET(new String[]{"offset", "افست"}),
-        ROTATE(new String[]{"rotate", "چرخش", "بچرخان"}),
-        SCALE(new String[]{"scale", "مقیاس"}),
-        MIRROR(new String[]{"mirror", "آینه", "قرینه"}),
-        ARRAY(new String[]{"array", "آرایه", "تکثیر"});
+        RECT(new String[]{"rectangle", "rect", "\u0645\u0633\u062A\u0637\u06CC\u0644"}),
+        LINE(new String[]{"line", "\u062E\u0637"}),
+        CIRCLE(new String[]{"circle", "\u062F\u0627\u06CC\u0631\u0647"}),
+        ARC(new String[]{"arc", "\u06A9\u0645\u0627\u0646"}),
+        EXTRUDE(new String[]{"extrude", "\u0627\u06A9\u0633\u062A\u0631\u0648\u062F"}),
+        MOVE(new String[]{"move", "\u062C\u0627\u0628\u062C\u0627", "\u062C\u0627\u0628\u0647\u062C\u0627", "\u062C\u0627\u0628\u0647\u200C\u062C\u0627", "\u062D\u0631\u06A9\u062A"}),
+        COPY(new String[]{"copy", "\u06A9\u067E\u06CC"}),
+        OFFSET(new String[]{"offset", "\u0627\u0641\u0633\u062A"}),
+        ROTATE(new String[]{"rotate", "\u0686\u0631\u062E\u0634", "\u0628\u0686\u0631\u062E\u0627\u0646"}),
+        SCALE(new String[]{"scale", "\u0645\u0642\u06CC\u0627\u0633"}),
+        MIRROR(new String[]{"mirror", "\u0622\u06CC\u0646\u0647", "\u0642\u0631\u06CC\u0646\u0647"}),
+        ARRAY(new String[]{"array", "\u0622\u0631\u0627\u06CC\u0647", "\u062A\u06A9\u062B\u06CC\u0631"});
 
         final String[] words;
         Op(String[] words) { this.words = words; }
@@ -108,8 +108,11 @@ public final class CadCommandPlanner {
     }
 
     private static List<Double> numbers(String clause, Op op) {
-        boolean cm = containsAny(clause, new String[]{"cm", "سانت", "سانتی"});
-        boolean mm = containsAny(clause, new String[]{"mm", "میلی"});
+        String lower = clause.toLowerCase(Locale.US);
+        boolean cm = Pattern.compile("(?i)(?:\\d|\\.)cm(?:\\b|$)").matcher(lower).find()
+                || containsAny(clause, new String[]{"cm", "\u0633\u0627\u0646\u062A", "\u0633\u0627\u0646\u062A\u06CC"});
+        boolean mm = Pattern.compile("(?i)(?:\\d|\\.)mm(?:\\b|$)").matcher(lower).find()
+                || containsAny(clause, new String[]{"mm", "\u0645\u06CC\u0644\u06CC"});
         if (cm && mm) throw new IllegalArgumentException("Mixed units in one instruction are not supported yet");
         if (cm && (op == Op.ROTATE || op == Op.SCALE || op == Op.ARRAY)) {
             throw new IllegalArgumentException("Centimeter units are not valid for this operation");
@@ -180,9 +183,9 @@ public final class CadCommandPlanner {
     private static String mirrorAxis(String clause) {
         String s = clause.toLowerCase(Locale.US);
         if (Pattern.compile("(?:^|[^a-z0-9])x(?:$|[^a-z0-9])", Pattern.CASE_INSENSITIVE).matcher(s).find()
-                || s.contains("محور x")) return "X";
+                || s.contains("\u0645\u062D\u0648\u0631 x")) return "X";
         if (Pattern.compile("(?:^|[^a-z0-9])y(?:$|[^a-z0-9])", Pattern.CASE_INSENSITIVE).matcher(s).find()
-                || s.contains("محور y")) return "Y";
+                || s.contains("\u0645\u062D\u0648\u0631 y")) return "Y";
         return null;
     }
 
@@ -211,10 +214,10 @@ public final class CadCommandPlanner {
         StringBuilder b = new StringBuilder(raw.length());
         for (int i = 0; i < raw.length(); i++) {
             char c = raw.charAt(i);
-            if (c >= '۰' && c <= '۹') c = (char) ('0' + (c - '۰'));
-            else if (c >= '٠' && c <= '٩') c = (char) ('0' + (c - '٠'));
-            else if (c == '٫') c = '.';
-            else if (c == '٬') continue;
+            if (c >= '\u06F0' && c <= '\u06F9') c = (char) ('0' + (c - '\u06F0'));
+            else if (c >= '\u0660' && c <= '\u0669') c = (char) ('0' + (c - '\u0660'));
+            else if (c == '\u066B') c = '.';
+            else if (c == '\u066C') continue;
             b.append(c);
         }
         return b.toString().trim().replaceAll("\\s+", " ");
