@@ -25,9 +25,9 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         K33MirroredCadCanvasView source=canvas();
         source.createSketchSpaceOnConstructionPlane("Front sketch","plane:xz");
         String id=source.activeConstructionPlaneId();
-        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        String project=CadProjectPersistenceController.encode(source);
         K33MirroredCadCanvasView restored=canvas();
-        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        CadProjectPersistenceController.restore(restored,project);
         assertEquals(id,restored.activeConstructionPlaneId());
     }
 
@@ -35,9 +35,9 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         K33MirroredCadCanvasView source=canvas();
         source.createOffsetSketchSpace(18.25f,"Shelf datum");
         String id=source.activeConstructionPlaneId();
-        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        String project=CadProjectPersistenceController.encode(source);
         K33MirroredCadCanvasView restored=canvas();
-        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        CadProjectPersistenceController.restore(restored,project);
         assertEquals(id,restored.activeConstructionPlaneId());
         assertEquals(18.25,restored.constructionPlaneOffsetMm(id),0.0);
     }
@@ -55,9 +55,11 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
     @Test public void sketchPlaneRelationshipSurvivesActivityRecovery(){
         K33MirroredCadCanvasView cad=canvas();
         cad.createOffsetSketchSpace(-3f,"Recovery datum");
-        String project=CadProjectPersistenceController.snapshot(cad,null,null);
+        String project=CadProjectPersistenceController.encode(cad);
+        WorkspaceRecoveryStore store=new WorkspaceRecoveryStore(ApplicationProvider.getApplicationContext());store.clear();store.save(project,"Recovery project");
+        WorkspaceRecoveryStore.Snapshot snapshot=store.load();assertNotNull(snapshot);
         K33MirroredCadCanvasView restored=canvas();
-        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        CadProjectPersistenceController.restore(restored,snapshot.payload);store.clear();
         assertEquals(cad.activeSketchStableId(),restored.activeSketchStableId());
         assertEquals(cad.activeConstructionPlaneId(),restored.activeConstructionPlaneId());
     }
@@ -81,17 +83,18 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         source.createOffsetSketchSpace(6f,"Hidden datum");
         String id=source.activeConstructionPlaneId();
         source.setConstructionPlaneVisibility(id,false);
-        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        String project=CadProjectPersistenceController.encode(source);
         K33MirroredCadCanvasView restored=canvas();
-        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        CadProjectPersistenceController.restore(restored,project);
         assertFalse(restored.isConstructionPlaneVisible(id));
     }
 
     @Test public void malformedPlaneDataFailsClosed(){
         K33MirroredCadCanvasView cad=canvas();
-        String project=CadProjectPersistenceController.snapshot(cad,null,null)
-                .replace("\"origin\":[0,0,0]","\"origin\":[\"NaN\",0,0]");
-        try { CadProjectPersistenceController.restore(canvas(),null,null,null,project); fail("malformed plane must fail"); }
+        cad.createOffsetSketchSpace(2f,"Bad input target");String model=cad.exportConstructionPlaneModel();
+        try { org.json.JSONObject root=new org.json.JSONObject(model);root.getJSONArray("planes").getJSONObject(0).put("origin",new org.json.JSONArray().put("NaN").put(0).put(0));model=root.toString(); }
+        catch(org.json.JSONException e){throw new AssertionError(e);}
+        try { canvas().importConstructionPlaneModel(model); fail("malformed plane must fail"); }
         catch (IllegalArgumentException expected) { assertNotNull(expected.getMessage()); }
     }
 

@@ -66,6 +66,20 @@ public final class ConstructionPlaneDocumentTest {
         assertEquals(id,doc.plane(id).id);
     }
 
+    @Test public void sketchAssignmentUndoRedoKeepsRelationship() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        doc.createSketchOnPlane("sketch:2",ConstructionPlane.XZ_ID);
+        assertTrue(doc.undo());assertEquals(null,doc.planeIdForSketch("sketch:2"));
+        assertTrue(doc.redo());assertEquals(ConstructionPlane.XZ_ID,doc.planeIdForSketch("sketch:2"));
+    }
+
+    @Test public void renameAndVisibilityAreUndoableWithoutChangingIdentity() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();String id=doc.createOffsetPlane(ConstructionPlane.XY_ID,3,"Datum").id;
+        doc.renamePlane(id,"Renamed");doc.setPlaneVisibility(id,false);assertFalse(doc.plane(id).visible);
+        assertTrue(doc.undo());assertTrue(doc.plane(id).visible);assertEquals("Renamed",doc.plane(id).displayName);
+        assertTrue(doc.undo());assertEquals("Datum",doc.plane(id).displayName);assertEquals(id,doc.plane(id).id);
+    }
+
     @Test public void legacyPlaneSchemaMigratesDeterministically() {
         ConstructionPlane.Legacy first=new ConstructionPlane.Legacy("SKETCH_4","XY + 8 mm",
                 new ConstructionPlane.Vector(0,0,8),new ConstructionPlane.Vector(1,0,0),new ConstructionPlane.Vector(0,1,0));
