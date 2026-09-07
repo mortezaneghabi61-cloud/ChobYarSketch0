@@ -123,6 +123,7 @@ public final class ChobYarActivity extends Activity {
         b.addView(tool("⌕","Search",this::search));
         b.addView(tool("✎","Sketch",this::showSketchPalette));
         b.addView(tool("＋","Add",this::showAddPalette));
+        b.addView(tool("◇","Construct",this::showConstructPalette));
         b.addView(tool("↗","Transform",this::showTransformPalette));
         b.addView(tool("⌁","Tools",this::showToolsPalette));return b;
     }
@@ -375,8 +376,14 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("≋","Loft",()->runAndClose(cad::showLoftTool)));
         adaptive.addView(tool("▧","Image",this::importReferenceImage));
         adaptive.addView(tool("∪","Boolean",()->runAndClose(cad::showSolidManager)));
-        adaptive.addView(tool("◇","Plane",cad::showPlaneManager));
         adaptive.addView(tool("●",s(R.string.solid_tools),cad::showSolidManager));finishManualPaletteLayout();
+    }
+
+    private void showConstructPalette(){
+        sketchPalette=false;openManualPalette();
+        adaptive.addView(tool("×","Close",this::closeManualPalette));
+        adaptive.addView(tool("◇","Plane",()->runAndClose(cad::showPlaneManager)));
+        finishManualPaletteLayout();
     }
 
     private void showTransformPalette(){
