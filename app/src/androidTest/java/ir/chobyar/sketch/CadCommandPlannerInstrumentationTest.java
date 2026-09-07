@@ -13,7 +13,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.lang.reflect.Field;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -29,7 +28,7 @@ public final class CadCommandPlannerInstrumentationTest {
     }
 
     @Test public void persianPlanCreatesRealProductionBody(){
-        runPlan("مستطیل ۱۲۰ در ۸۰ بساز و ۲۰ میلی متر اکسترود کن",20f);
+        runPlan("\u0645\u0633\u062A\u0637\u06CC\u0644 \u06F1\u06F2\u06F0 \u062F\u0631 \u06F8\u06F0 \u0628\u0633\u0627\u0632 \u0648 \u06F2\u06F0 \u0645\u06CC\u0644\u06CC \u0645\u062A\u0631 \u0627\u06A9\u0633\u062A\u0631\u0648\u062F \u06A9\u0646",20f);
     }
 
     private static void runPlan(String instruction,float expectedHeight){
