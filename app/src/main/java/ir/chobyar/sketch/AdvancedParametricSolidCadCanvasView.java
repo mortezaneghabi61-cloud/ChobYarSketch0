@@ -256,7 +256,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
             AutoProfile auto=autoProfile(selected,true);
             if(auto!=null){profile=auto.profile;axis=auto.axis;}
         }
-        if(profile==null)return "Package profile was not found; Select inside the section or a line from its environment";
+        if(profile==null)return "Revolve — Select a closed profile or boundary edge; optionally select a line as the axis";
         interactiveRevolveProfile=profile;interactiveRevolveAxis=axis;interactiveRevolveXAxis=false;
         interactiveRevolveAngle=360f;interactiveRevolveHeightMm=0f;interactiveRevolveActive=true;showModelOverview();
         if(!refreshInteractiveRevolve(true)){clearInteractiveRevolve();return "Revolve text Preview text; Axis text text text text text";}
