@@ -558,7 +558,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
 
     public String createSweep(Object profileEntity,Object pathEntity){
         Profile p=profile(profileEntity);List<Geometry3D.Vec3> path=path3D(pathEntity);
-        if(p==null)return"text Sweep text text";
+        if(p==null)return"Sweep — Closed profile is invalid or unavailable";
         if(path.size()<2)return"text Sweep text text";
         SweepFeature f=new SweepFeature(formSerial++,profileEntity,pathEntity);
         SolidCSG csg=f.build(this);if(csg==null||csg.isEmpty())return"Sweep text Body text";
