@@ -47,7 +47,7 @@ public final class ConstructionPlaneDocument {
         String id;do{id="plane:offset:"+(nextOffsetSerial++);}while(planes.containsKey(id));
         String name=displayName==null||displayName.trim().isEmpty()?"Offset Plane "+(nextOffsetSerial-1):displayName.trim();
         ConstructionPlane.Vector origin=source.origin.plus(source.normal.times(distanceMm));
-        ConstructionPlane plane=ConstructionPlane.offset(id,name,source.id,distanceMm,origin,source.uAxis,source.vAxis,source.normal,true,source.creationOrder+nextOffsetSerial+2);
+        ConstructionPlane plane=ConstructionPlane.offset(id,name,source.id,distanceMm,origin,source.uAxis,source.vAxis,source.normal,true,nextOffsetSerial+2);
         planes.put(id,plane);activePlaneId=id;commit(before);return plane;
     }
 

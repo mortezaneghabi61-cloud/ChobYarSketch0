@@ -3,6 +3,7 @@ package ir.chobyar.sketch;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
+import androidx.test.annotation.UiThreadTest;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Test;
@@ -21,7 +22,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         return new K33MirroredCadCanvasView(context);
     }
 
-    @Test public void createSketchOnBasePlanePersistsAcrossSaveOpen(){
+    @UiThreadTest @Test public void createSketchOnBasePlanePersistsAcrossSaveOpen(){
         K33MirroredCadCanvasView source=canvas();
         source.createSketchSpaceOnConstructionPlane("Front sketch","plane:xz");
         String id=source.activeConstructionPlaneId();
@@ -31,7 +32,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         assertEquals(id,restored.activeConstructionPlaneId());
     }
 
-    @Test public void createOffsetPlanePersistsAcrossSaveOpen(){
+    @UiThreadTest @Test public void createOffsetPlanePersistsAcrossSaveOpen(){
         K33MirroredCadCanvasView source=canvas();
         source.createOffsetSketchSpace(18.25f,"Shelf datum");
         String id=source.activeConstructionPlaneId();
@@ -42,7 +43,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         assertEquals(18.25,restored.constructionPlaneOffsetMm(id),0.0);
     }
 
-    @Test public void offsetPlaneUndoRedoKeepsStableIdentity(){
+    @UiThreadTest @Test public void offsetPlaneUndoRedoKeepsStableIdentity(){
         K33MirroredCadCanvasView cad=canvas();
         cad.createOffsetSketchSpace(9f,"Datum");
         String id=cad.activeConstructionPlaneId();
@@ -52,7 +53,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         assertTrue(cad.hasConstructionPlane(id));
     }
 
-    @Test public void sketchPlaneRelationshipSurvivesActivityRecovery(){
+    @UiThreadTest @Test public void sketchPlaneRelationshipSurvivesActivityRecovery(){
         K33MirroredCadCanvasView cad=canvas();
         cad.createOffsetSketchSpace(-3f,"Recovery datum");
         String project=CadProjectPersistenceController.encode(cad);
@@ -64,21 +65,21 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         assertEquals(cad.activeConstructionPlaneId(),restored.activeConstructionPlaneId());
     }
 
-    @Test public void constructUiUsesModelOwnedPlanes(){
+    @UiThreadTest @Test public void constructUiUsesModelOwnedPlanes(){
         K33MirroredCadCanvasView cad=canvas();
         cad.createSketchSpaceOnConstructionPlane("Side sketch","plane:yz");
         assertEquals("plane:yz",cad.activeConstructionPlaneId());
         assertTrue(cad.activePlaneLabel().contains("YZ"));
     }
 
-    @Test public void drawDoesNotRepairOrMutatePlaneRelationships(){
+    @UiThreadTest @Test public void drawDoesNotRepairOrMutatePlaneRelationships(){
         K33MirroredCadCanvasView cad=canvas();
         long before=cad.constructionPlaneModelRevision();
         cad.drawForPlaneAuthorityTest();
         assertEquals(before,cad.constructionPlaneModelRevision());
     }
 
-    @Test public void planeVisibilityPersists(){
+    @UiThreadTest @Test public void planeVisibilityPersists(){
         K33MirroredCadCanvasView source=canvas();
         source.createOffsetSketchSpace(6f,"Hidden datum");
         String id=source.activeConstructionPlaneId();
@@ -89,7 +90,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         assertFalse(restored.isConstructionPlaneVisible(id));
     }
 
-    @Test public void malformedPlaneDataFailsClosed(){
+    @UiThreadTest @Test public void malformedPlaneDataFailsClosed(){
         K33MirroredCadCanvasView cad=canvas();
         cad.createOffsetSketchSpace(2f,"Bad input target");String model=cad.exportConstructionPlaneModel();
         try { org.json.JSONObject root=new org.json.JSONObject(model);root.getJSONArray("planes").getJSONObject(0).put("origin",new org.json.JSONArray().put("NaN").put(0).put(0));model=root.toString(); }
@@ -98,7 +99,7 @@ public final class ModelOwnedConstructionPlaneInstrumentationTest {
         catch (IllegalArgumentException expected) { assertNotNull(expected.getMessage()); }
     }
 
-    @Test public void modelSurvivesViewRecreationWithoutViewLocalAuthority(){
+    @UiThreadTest @Test public void modelSurvivesViewRecreationWithoutViewLocalAuthority(){
         K33MirroredCadCanvasView source=canvas();
         source.createOffsetSketchSpace(11f,"Model datum");
         String model=source.exportConstructionPlaneModel();
