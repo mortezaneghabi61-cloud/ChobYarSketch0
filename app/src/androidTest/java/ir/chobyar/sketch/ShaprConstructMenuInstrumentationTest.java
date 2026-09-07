@@ -41,6 +41,18 @@ public final class ShaprConstructMenuInstrumentationTest {
                 assertTrue("Construct click rejected", construct.performClick());
                 assertNotNull("Construct palette must expose Plane", findVisible(root, "Plane"));
 
+                K33MirroredCadCanvasView canvas = findCanvas(root);
+                assertNotNull("Production CAD canvas not found", canvas);
+                assertEquals("Construct Plane menu must contain only real plane workflows", 4,
+                        canvas.constructionPlaneMenuItems().length);
+                assertEquals("＋ Offset Sketch Plane", canvas.constructionPlaneMenuItems()[3]);
+                for (String item : canvas.constructionPlaneMenuItems()) {
+                    assertFalse("Camera actions belong to the View Cube/right controls: " + item,
+                            item.contains("View") || item.contains("3D"));
+                    assertFalse("Construction Axis must not be exposed without a real backend: " + item,
+                            item.contains("Axis"));
+                }
+
                 View close = findVisible(root, "Close");
                 assertNotNull("Construct palette Close not found", close);
                 assertTrue(close.performClick());
@@ -67,6 +79,18 @@ public final class ShaprConstructMenuInstrumentationTest {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
                 View found = findVisible(group.getChildAt(i), description);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static K33MirroredCadCanvasView findCanvas(View view) {
+        if (view instanceof K33MirroredCadCanvasView) return (K33MirroredCadCanvasView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                K33MirroredCadCanvasView found = findCanvas(group.getChildAt(i));
                 if (found != null) return found;
             }
         }

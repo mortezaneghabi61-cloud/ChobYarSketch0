@@ -220,32 +220,29 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
 
     public void showPlaneManager() {
-        String[] items = {
-                "＋ Sketch on XY / Top",
-                "＋ Sketch on XZ / Front",
-                "＋ Sketch on YZ / Right",
-                "＋ Offset Plane",
-                overview3D ? "□ Return to Sketch" : "◇ Show 3D",
-                "◎ Isometric View",
-                "⌂ Front View",
-                "⌃ Top View"
-        };
+        String[] items = constructionPlaneMenuItems();
         new AlertDialog.Builder(getContext())
-                .setTitle("Construct • Plane")
+                .setTitle("Construct • Sketch Plane")
                 .setMessage("Active plane: " + activePlaneLabel()
-                        + "\nChoose a standard sketch plane, create a parallel offset plane, or switch the model view.")
+                        + "\nStart a sketch on a standard plane or on a parallel offset from the active plane.")
                 .setItems(items, (d, which) -> {
                     if (which == 0) createSketchOnPlane(Geometry3D.xy(), "Sketch XY");
                     else if (which == 1) createSketchOnPlane(Geometry3D.xz(), "Sketch XZ");
                     else if (which == 2) createSketchOnPlane(Geometry3D.yz(), "Sketch YZ");
                     else if (which == 3) showOffsetPlaneDialog();
-                    else if (which == 4) toast(toggle3DOverview());
-                    else if (which == 5) { setStandardView("ISO"); }
-                    else if (which == 6) { overview3D=true; cameraYaw=0f; cameraPitch=0f; invalidate(); }
-                    else { overview3D=true; cameraYaw=0f; cameraPitch=90f; invalidate(); }
                 })
                 .setNegativeButton("Close", null)
                 .show();
+    }
+
+    /** Truthful Construct capabilities: each action creates a real Sketch plane. */
+    final String[] constructionPlaneMenuItems() {
+        return new String[] {
+                "＋ Sketch on XY / Top",
+                "＋ Sketch on XZ / Front",
+                "＋ Sketch on YZ / Right",
+                "＋ Offset Sketch Plane"
+        };
     }
 
     private void createSketchOnPlane(Geometry3D.Plane3D plane, String baseName) {
@@ -286,9 +283,8 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
                 .setPositiveButton("Create", (d,w) -> {
                     try {
                         float mm = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
-                        Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
-                        Geometry3D.Plane3D p = base.offset(mm, base.label + " + " + fmt(mm) + " mm");
-                        createSketchOnPlane(p, "Offset Plane");
+                        if (!Float.isFinite(mm)) throw new IllegalArgumentException("Distance must be finite");
+                        toast(createOffsetSketchSpace(mm, null));
                     } catch (Exception e) { toast("Distance was entered incorrectly"); }
                 })
                 .setNegativeButton("Cancel", null)
