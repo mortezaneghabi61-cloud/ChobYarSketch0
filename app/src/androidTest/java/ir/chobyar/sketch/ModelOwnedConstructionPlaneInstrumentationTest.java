@@ -1,0 +1,107 @@
+package ir.chobyar.sketch;
+
+import android.content.Context;
+
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+@RunWith(AndroidJUnit4.class)
+public final class ModelOwnedConstructionPlaneInstrumentationTest {
+    private static K33MirroredCadCanvasView canvas(){
+        Context context=ApplicationProvider.getApplicationContext();
+        return new K33MirroredCadCanvasView(context);
+    }
+
+    @Test public void createSketchOnBasePlanePersistsAcrossSaveOpen(){
+        K33MirroredCadCanvasView source=canvas();
+        source.createSketchSpaceOnConstructionPlane("Front sketch","plane:xz");
+        String id=source.activeConstructionPlaneId();
+        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        K33MirroredCadCanvasView restored=canvas();
+        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        assertEquals(id,restored.activeConstructionPlaneId());
+    }
+
+    @Test public void createOffsetPlanePersistsAcrossSaveOpen(){
+        K33MirroredCadCanvasView source=canvas();
+        source.createOffsetSketchSpace(18.25f,"Shelf datum");
+        String id=source.activeConstructionPlaneId();
+        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        K33MirroredCadCanvasView restored=canvas();
+        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        assertEquals(id,restored.activeConstructionPlaneId());
+        assertEquals(18.25,restored.constructionPlaneOffsetMm(id),0.0);
+    }
+
+    @Test public void offsetPlaneUndoRedoKeepsStableIdentity(){
+        K33MirroredCadCanvasView cad=canvas();
+        cad.createOffsetSketchSpace(9f,"Datum");
+        String id=cad.activeConstructionPlaneId();
+        assertTrue(cad.undoConstructionPlaneTransaction());
+        assertFalse(cad.hasConstructionPlane(id));
+        assertTrue(cad.redoConstructionPlaneTransaction());
+        assertTrue(cad.hasConstructionPlane(id));
+    }
+
+    @Test public void sketchPlaneRelationshipSurvivesActivityRecovery(){
+        K33MirroredCadCanvasView cad=canvas();
+        cad.createOffsetSketchSpace(-3f,"Recovery datum");
+        String project=CadProjectPersistenceController.snapshot(cad,null,null);
+        K33MirroredCadCanvasView restored=canvas();
+        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        assertEquals(cad.activeSketchStableId(),restored.activeSketchStableId());
+        assertEquals(cad.activeConstructionPlaneId(),restored.activeConstructionPlaneId());
+    }
+
+    @Test public void constructUiUsesModelOwnedPlanes(){
+        K33MirroredCadCanvasView cad=canvas();
+        cad.createSketchSpaceOnConstructionPlane("Side sketch","plane:yz");
+        assertEquals("plane:yz",cad.activeConstructionPlaneId());
+        assertTrue(cad.activePlaneLabel().contains("YZ"));
+    }
+
+    @Test public void drawDoesNotRepairOrMutatePlaneRelationships(){
+        K33MirroredCadCanvasView cad=canvas();
+        long before=cad.constructionPlaneModelRevision();
+        cad.drawForPlaneAuthorityTest();
+        assertEquals(before,cad.constructionPlaneModelRevision());
+    }
+
+    @Test public void planeVisibilityPersists(){
+        K33MirroredCadCanvasView source=canvas();
+        source.createOffsetSketchSpace(6f,"Hidden datum");
+        String id=source.activeConstructionPlaneId();
+        source.setConstructionPlaneVisibility(id,false);
+        String project=CadProjectPersistenceController.snapshot(source,null,null);
+        K33MirroredCadCanvasView restored=canvas();
+        CadProjectPersistenceController.restore(restored,null,null,null,project);
+        assertFalse(restored.isConstructionPlaneVisible(id));
+    }
+
+    @Test public void malformedPlaneDataFailsClosed(){
+        K33MirroredCadCanvasView cad=canvas();
+        String project=CadProjectPersistenceController.snapshot(cad,null,null)
+                .replace("\"origin\":[0,0,0]","\"origin\":[\"NaN\",0,0]");
+        try { CadProjectPersistenceController.restore(canvas(),null,null,null,project); fail("malformed plane must fail"); }
+        catch (IllegalArgumentException expected) { assertNotNull(expected.getMessage()); }
+    }
+
+    @Test public void modelSurvivesViewRecreationWithoutViewLocalAuthority(){
+        K33MirroredCadCanvasView source=canvas();
+        source.createOffsetSketchSpace(11f,"Model datum");
+        String model=source.exportConstructionPlaneModel();
+        K33MirroredCadCanvasView recreated=canvas();
+        recreated.importConstructionPlaneModel(model);
+        assertEquals(source.activeConstructionPlaneId(),recreated.activeConstructionPlaneId());
+        assertFalse(recreated.hasViewLocalPlaneAuthority());
+    }
+}
