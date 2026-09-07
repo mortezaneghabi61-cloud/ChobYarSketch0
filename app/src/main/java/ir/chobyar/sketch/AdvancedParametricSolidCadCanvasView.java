@@ -353,7 +353,7 @@ public class AdvancedParametricSolidCadCanvasView extends ParametricHistorySolid
     }
 
     public String createRevolve(Object profileEntity,Object axisEntity,boolean xAxis,float angleDeg,float heightMm){
-        try{validateRevolve(angleDeg,heightMm);}catch(Exception e){return"Angle Revolve text 0.01 until 36000 degrees text Height text text";}
+        try{validateRevolve(angleDeg,heightMm);}catch(Exception e){return"Revolve — Angle and height must be finite; |angle| 0.01°–36000°, height ±100000 mm";}
         Profile p=profile(profileEntity);if(p==null)return"Revolve — Closed profile is invalid or unavailable";
         Axis3D axis=axisFor(axisEntity,p.plane,xAxis);if(axis==null)return"Axis Revolve text text";
         RevolveFeature f=new RevolveFeature(formSerial++,profileEntity,p.plane,axisEntity,xAxis,angleDeg,heightMm);
