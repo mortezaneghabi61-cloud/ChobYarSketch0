@@ -101,6 +101,7 @@ run_contract SketchUndoRedoInstrumentationTest sketch-undo-redo 'OK (1 test)'
 run_contract SketchPrimitivesSnapInstrumentationTest sketch-primitives 'OK (5 tests)'
 run_contract SketchConstraintSolverInstrumentationTest sketch-constraints 'OK (5 tests)'
 run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 test)'
+run_contract CadCommandPlannerInstrumentationTest natural-command-planner 'OK (2 tests)'
 
 # GPU renderer lifecycle
 run_contract FilamentLifecycleInstrumentationTest filament-lifecycle 'OK (3 tests)'
