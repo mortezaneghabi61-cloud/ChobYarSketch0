@@ -216,25 +216,24 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         overview3D = !overview3D;
         orbiting = false;
         invalidate();
-        return overview3D
-                ? "Viewtext text 3D On text — text text text text"
-                : "Back text Sketch text";
+        return overview3D ? "3D View" : "Sketch View";
     }
 
     public void showPlaneManager() {
         String[] items = {
-                "＋ Sketch text Roy XY / Top",
-                "＋ Sketch text Roy XZ / Front",
-                "＋ Sketch text Roy YZ / text",
-                "＋ Plane Parallel text Distance text",
-                overview3D ? "□ Close Viewtext text 3D" : "◇ Show text 3D",
+                "＋ Sketch on XY / Top",
+                "＋ Sketch on XZ / Front",
+                "＋ Sketch on YZ / Right",
+                "＋ Offset Plane",
+                overview3D ? "□ Return to Sketch" : "◇ Show 3D",
                 "◎ Isometric View",
                 "⌂ Front View",
                 "⌃ Top View"
         };
         new AlertDialog.Builder(getContext())
-                .setTitle("Plane Sketch / Plane")
-                .setMessage("Plane text: " + activePlaneLabel() + " \n text Sketch text text text text Roy text Plane text XYZ text text.")
+                .setTitle("Construct • Plane")
+                .setMessage("Active plane: " + activePlaneLabel()
+                        + "\nChoose a standard sketch plane, create a parallel offset plane, or switch the model view.")
                 .setItems(items, (d, which) -> {
                     if (which == 0) createSketchOnPlane(Geometry3D.xy(), "Sketch XY");
                     else if (which == 1) createSketchOnPlane(Geometry3D.xz(), "Sketch XZ");
@@ -258,7 +257,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
     public String createOffsetSketchSpace(float offsetMm, String requestedName) {
-        if (!Float.isFinite(offsetMm)) return "Distance Plane text text";
+        if (!Float.isFinite(offsetMm)) return "Offset Plane • Distance must be a finite value";
         Geometry3D.Plane3D base = activePlane == null ? Geometry3D.xy() : activePlane;
         String label = base.label + " + " + fmt(offsetMm) + " mm";
         pendingPlane = base.offset(offsetMm, label);
@@ -281,8 +280,8 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         input.setText("10");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(getContext())
-                .setTitle("Plane Parallel — Distance mm")
-                .setMessage("Plane text Parallel Plane text created text. text text text text Normal text.")
+                .setTitle("Offset Plane • Distance")
+                .setMessage("Create a plane parallel to the active plane. Positive and negative distances follow the plane normal.")
                 .setView(input)
                 .setPositiveButton("Create", (d,w) -> {
                     try {
