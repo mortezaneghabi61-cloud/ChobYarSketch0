@@ -6,8 +6,9 @@ remain correct after every commit, cancel and history rebuild.
 
 ## Selection and navigation
 
-- The idle rail contains only Sketch, Add, Transform and Tools. Search, units,
-  construction and snapping are not permanent full-height rails.
+- The idle rail is ordered Search, Sketch, Add, Construct, Transform and Tools.
+  Units and snapping are not permanent full-height rails, and Construct exposes
+  only construction capabilities backed by real document behavior.
 - Project/import/export actions remain small in the top-left; undo/history and
   Items/snapping/settings remain small in the bottom corners; the view cube is
   the only persistent control in the top-right.
