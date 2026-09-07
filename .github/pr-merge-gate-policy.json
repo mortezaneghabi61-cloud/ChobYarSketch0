@@ -80,6 +80,18 @@
         "docs/CAD_KERNEL_REWRITE_V2.md"
       ]
     },
+    "OCCT 8 arm64 exact B-Rep compile": {
+      "paths": [
+        ".github/pr-merge-gate-policy.json",
+        ".github/workflows/occt-native-pr-compile.yml",
+        ".github/scripts/build_occt_android.sh",
+        "app/build.gradle*",
+        "app/src/main/cpp/**",
+        "app/src/main/java/ir/chobyar/sketch/NativeBRepKernel.java",
+        "app/src/main/java/ir/chobyar/sketch/NativeIndexedDirectKernel.java",
+        "app/src/main/java/ir/chobyar/sketch/Occt*.java"
+      ]
+    },
     "regression": {
       "paths": [
         ".github/workflows/manual26100-consolidated-regression.yml",
