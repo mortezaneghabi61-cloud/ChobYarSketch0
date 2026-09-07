@@ -348,6 +348,7 @@ public final class ChobYarActivity extends Activity {
         List<String> labels=new ArrayList<>();
         for(ContextualAction action:contextualCapabilities(kind)){
             String label=action==ContextualAction.VISIBILITY?cad.selectedBodyVisibilityActionLabel():action.label;
+            if(action==ContextualAction.VISIBILITY&&label.isEmpty())label="Hide";
             if(!label.isEmpty())labels.add(label);
         }
         return Collections.unmodifiableList(labels);

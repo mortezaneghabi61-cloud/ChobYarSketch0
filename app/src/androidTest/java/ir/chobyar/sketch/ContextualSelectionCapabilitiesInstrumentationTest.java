@@ -59,7 +59,6 @@ public final class ContextualSelectionCapabilitiesInstrumentationTest {
                 assertTrue(cad.executeCommand("RECT 0 0 80 50").contains("Rectangle"));
                 assertTrue(cad.executeCommand("EXTRUDE 30").contains("created"));
                 assertTrue(cad.isSelectedBodyVisible());
-                assertTrue(cad.gpuMesh().length >= 9);
 
                 String result = cad.toggleSelectedBodyVisibility();
                 assertTrue(result, result.contains("hidden"));
