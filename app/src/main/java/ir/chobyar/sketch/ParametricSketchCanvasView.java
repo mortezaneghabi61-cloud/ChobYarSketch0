@@ -191,16 +191,29 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
 
     protected final void restoreSketchSpacesFromPlaneModel(){
         Map<String,String> assignments=constructionPlaneDocument.sketchPlaneAssignments();
+        java.util.HashMap<String,SketchSpace> existing=new java.util.HashMap<>();for(SketchSpace space:sketchSpaces)existing.put(space.stableId,space);
         ArrayList<SketchSpace> restored=new ArrayList<>();int max=0;
-        for(String stableId:assignments.keySet())if(stableId.startsWith("sketch:")){
-            try{int number=Integer.parseInt(stableId.substring(7));if(number<1)throw new NumberFormatException();max=Math.max(max,number);restored.add(new SketchSpace(stableId,"Sketch "+number,"SKETCH_"+number));}
-            catch(NumberFormatException e){throw new IllegalArgumentException("Persisted Sketch id is malformed",e);}
+        for(String stableId:assignments.keySet()){
+            String layer,name;int number=Integer.MAX_VALUE;
+            if(stableId.startsWith("sketch:")){try{number=Integer.parseInt(stableId.substring(7));if(number<1)throw new NumberFormatException();max=Math.max(max,number);layer="SKETCH_"+number;name="Sketch "+number;}
+                catch(NumberFormatException e){throw new IllegalArgumentException("Persisted Sketch id is malformed",e);}}
+            else if(stableId.startsWith("legacy-sketch:")&&!stableId.substring(14).trim().isEmpty()){layer=stableId.substring(14);name="Sketch • "+layer;}
+            else throw new IllegalArgumentException("Persisted Sketch id is malformed");
+            SketchSpace prior=existing.get(stableId);restored.add(prior!=null&&prior.layerName.equals(layer)?prior:new SketchSpace(stableId,name,layer));
         }
-        if(restored.isEmpty())return;
-        restored.sort((a,b)->a.stableId.compareTo(b.stableId));sketchSpaces.clear();sketchSpaces.addAll(restored);sketchSerial=max+1;
+        if(restored.isEmpty())throw new IllegalArgumentException("Project has no Sketch-to-plane relationship");
+        restored.sort((a,b)->{int order=Integer.compare(sketchNumber(a.stableId),sketchNumber(b.stableId));return order!=0?order:a.stableId.compareTo(b.stableId);});
+        sketchSpaces.clear();sketchSpaces.addAll(restored);sketchSerial=Math.max(2,max+1);
         String active=constructionPlaneDocument.activeSketchId();activeSketchIndex=0;for(int i=0;i<sketchSpaces.size();i++)if(sketchSpaces.get(i).stableId.equals(active)){activeSketchIndex=i;break;}
         SketchSpace current=activeSketch();if(current!=null)super.setLayer(current.layerName);
     }
+
+    protected final boolean canAdoptSketchPlaneAssignments(Map<String,String> assignments){
+        if(assignments==null)return false;for(SketchSpace space:sketchSpaces)if(!assignments.containsKey(space.stableId))
+            for(Object entity:entities())if(space.layerName.equals(entityLayer(entity)))return false;return true;
+    }
+
+    private static int sketchNumber(String stableId){if(stableId!=null&&stableId.startsWith("sketch:"))try{return Integer.parseInt(stableId.substring(7));}catch(NumberFormatException ignored){}return Integer.MAX_VALUE;}
 
     public String switchSketchSpace(int index) {
         if (index < 0 || index >= sketchSpaces.size()) return "Sketch was not found";

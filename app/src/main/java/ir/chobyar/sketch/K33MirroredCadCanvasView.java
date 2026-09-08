@@ -1216,6 +1216,9 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
         syncMirror("clear");
     }
 
+    @Override public boolean canUndoSketch(){return super.canUndoSketch()||canUndoConstructionPlaneTransaction();}
+    @Override public boolean canRedoSketch(){return super.canRedoSketch()||canRedoConstructionPlaneTransaction();}
+
     @Override public void undo() {
         if (authorityHistoryValid && sketchDocument.canUndo()) {
             boolean changed = sketchDocument.undo();
@@ -1227,6 +1230,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
                 return;
             }
         }
+        if(!super.canUndoSketch()&&undoConstructionPlaneTransaction()){syncMirror("construction-plane-undo");return;}
         super.undo();
         syncMirror("undo-fallback");
     }
@@ -1245,6 +1249,7 @@ public class K33MirroredCadCanvasView extends Shapr3DGuideCadCanvasView {
             return legacyChanged;
         }
         boolean out = super.redoSketch();
+        if(!out&&redoConstructionPlaneTransaction()){syncMirror("construction-plane-redo");return true;}
         if (out) syncMirror("redo-fallback");
         return out;
     }

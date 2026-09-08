@@ -21,7 +21,6 @@ import android.widget.Toast;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -163,11 +162,13 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     public final double constructionPlaneOffsetMm(String id){ConstructionPlane p=constructionPlaneDocument().plane(id);if(p==null)throw new IllegalArgumentException("Plane is missing");return p.offsetDistanceMm;}
     public final boolean setConstructionPlaneVisibility(String id,boolean visible){boolean changed=constructionPlaneDocument().setPlaneVisibility(id,visible);if(changed)invalidate();return changed;}
     public final boolean isConstructionPlaneVisible(String id){ConstructionPlane p=constructionPlaneDocument().plane(id);return p!=null&&p.visible;}
-    public final boolean undoConstructionPlaneTransaction(){boolean changed=constructionPlaneDocument().undo();if(changed)invalidate();return changed;}
-    public final boolean redoConstructionPlaneTransaction(){boolean changed=constructionPlaneDocument().redo();if(changed)invalidate();return changed;}
-    public final boolean hasViewLocalPlaneAuthority(){return false;}
-    public final boolean hasProjectConstructionPlanes(){return constructionPlaneDocument().planes().size()>3||constructionPlaneDocument().sketchPlaneAssignments().size()>1||!ConstructionPlane.XY_ID.equals(activeConstructionPlaneId());}
-    public final void drawForPlaneAuthorityTest(){for(ConstructionPlane ignored:constructionPlaneDocument().planes()){} }
+    public final boolean canUndoConstructionPlaneTransaction(){return constructionPlaneDocument().canUndo();}
+    public final boolean canRedoConstructionPlaneTransaction(){return constructionPlaneDocument().canRedo();}
+    public final boolean undoConstructionPlaneTransaction(){Map<String,String> target=constructionPlaneDocument().undoSketchPlaneAssignments();if(!canAdoptSketchPlaneAssignments(target))return false;
+        boolean changed=constructionPlaneDocument().undo();if(changed){restoreSketchSpacesFromPlaneModel();invalidate();dispatchWorkspaceState();}return changed;}
+    public final boolean redoConstructionPlaneTransaction(){Map<String,String> target=constructionPlaneDocument().redoSketchPlaneAssignments();if(!canAdoptSketchPlaneAssignments(target))return false;
+        boolean changed=constructionPlaneDocument().redo();if(changed){restoreSketchSpacesFromPlaneModel();invalidate();dispatchWorkspaceState();}return changed;}
+    public final boolean hasProjectConstructionPlanes(){return !constructionPlaneDocument().isDefaultProjectState("sketch:1");}
     public final String exportConstructionPlaneModel(){return ExactModelProjectAdapter.exportModel((Shapr3DGuideCadCanvasView)this);}
     public final void importConstructionPlaneModel(String raw){ExactModelProjectAdapter.restoreModel((Shapr3DGuideCadCanvasView)this,raw,exportSketchProjectState());}
 

@@ -34,6 +34,8 @@ public final class ConstructionPlaneDocument {
     public synchronized ConstructionPlane plane(String id){return planes.get(clean(id));}
     public synchronized List<ConstructionPlane> planes(){return Collections.unmodifiableList(new ArrayList<>(planes.values()));}
     public synchronized Map<String,String> sketchPlaneAssignments(){return Collections.unmodifiableMap(new LinkedHashMap<>(sketchPlaneIds));}
+    public synchronized Map<String,String> undoSketchPlaneAssignments(){return undo.isEmpty()?null:Collections.unmodifiableMap(new LinkedHashMap<>(undo.peekLast().assignments));}
+    public synchronized Map<String,String> redoSketchPlaneAssignments(){return redo.isEmpty()?null:Collections.unmodifiableMap(new LinkedHashMap<>(redo.peekLast().assignments));}
     public synchronized String activePlaneId(){return activePlaneId;}
     public synchronized String activeSketchId(){return activeSketchId;}
     public synchronized long nextOffsetSerial(){return nextOffsetSerial;}
@@ -44,16 +46,16 @@ public final class ConstructionPlaneDocument {
         ConstructionPlane source=requirePlane(sourceId);
         if(!Double.isFinite(distanceMm)||Math.abs(distanceMm)>1.0e12)throw new IllegalArgumentException("Offset distance must be finite");
         Snapshot before=snapshot();
-        String id;do{id="plane:offset:"+(nextOffsetSerial++);}while(planes.containsKey(id));
-        String name=displayName==null||displayName.trim().isEmpty()?"Offset Plane "+(nextOffsetSerial-1):displayName.trim();
+        long serial=nextAvailableOffsetSerial();String id="plane:offset:"+serial;
+        String name=displayName==null||displayName.trim().isEmpty()?"Offset Plane "+serial:displayName.trim();
         ConstructionPlane.Vector origin=source.origin.plus(source.normal.times(distanceMm));
-        ConstructionPlane plane=ConstructionPlane.offset(id,name,source.id,distanceMm,origin,source.uAxis,source.vAxis,source.normal,true,nextOffsetSerial+2);
-        planes.put(id,plane);activePlaneId=id;commit(before);return plane;
+        ConstructionPlane plane=ConstructionPlane.offset(id,name,source.id,distanceMm,origin,source.uAxis,source.vAxis,source.normal,true,nextCreationOrder());
+        nextOffsetSerial=serial+1;planes.put(id,plane);activePlaneId=id;commit(before);return plane;
     }
 
     /** One transaction for the interaction intent: create an offset and a Sketch bound to it. */
     public synchronized ConstructionPlane createOffsetPlaneWithSketch(String sourceId,double distanceMm,String displayName,String sketchId){
-        Snapshot before=snapshot();
+        if(clean(sketchId).isEmpty())throw new IllegalArgumentException("Sketch id is empty");Snapshot before=snapshot();
         ConstructionPlane plane=createOffsetPlaneWithoutHistory(sourceId,distanceMm,displayName);
         assignSketchWithoutHistory(sketchId,plane.id);commit(before);return plane;
     }
@@ -64,7 +66,8 @@ public final class ConstructionPlaneDocument {
     public synchronized ConstructionPlane createReferencePlaneWithSketch(String id,String name,ConstructionPlane.Vector origin,
                                                                           ConstructionPlane.Vector u,ConstructionPlane.Vector v,String sketchId){
         String key=clean(id);if(key.isEmpty()||planes.containsKey(key))throw new IllegalArgumentException("Duplicate or empty construction plane id");
-        Snapshot before=snapshot();ConstructionPlane p=ConstructionPlane.reference(key,name,origin,u,v,u.cross(v).normalized(),true,planes.size());
+        if(clean(sketchId).isEmpty())throw new IllegalArgumentException("Sketch id is empty");
+        Snapshot before=snapshot();ConstructionPlane p=ConstructionPlane.reference(key,name,origin,u,v,u.cross(v).normalized(),true,nextCreationOrder());
         planes.put(key,p);assignSketchWithoutHistory(sketchId,key);commit(before);return p;
     }
 
@@ -82,6 +85,14 @@ public final class ConstructionPlaneDocument {
         ConstructionPlane old=requirePlane(id);if(old.visible==visible)return false;Snapshot before=snapshot();planes.put(old.id,old.withVisibility(visible));commit(before);return true;
     }
 
+    public synchronized boolean isDefaultProjectState(String initialSketchId){
+        String sketch=clean(initialSketchId);if(sketch.isEmpty()||planes.size()!=3||sketchPlaneIds.size()!=1)return false;
+        if(!ConstructionPlane.XY_ID.equals(sketchPlaneIds.get(sketch))||!sketch.equals(activeSketchId)
+                ||!ConstructionPlane.XY_ID.equals(activePlaneId)||nextOffsetSerial!=1)return false;
+        return canonicalBuiltIn(ConstructionPlane.baseXY())&&canonicalBuiltIn(ConstructionPlane.baseXZ())
+                &&canonicalBuiltIn(ConstructionPlane.baseYZ());
+    }
+
     public synchronized DeleteResult deletePlane(String id){
         String key=clean(id);ConstructionPlane target=planes.get(key);if(target==null)return DeleteResult.NOT_FOUND;
         if(target.builtIn())return DeleteResult.BUILT_IN;
@@ -96,13 +107,15 @@ public final class ConstructionPlaneDocument {
     /** Restore is prevalidated and does not create a user history step. */
     public synchronized void restoreExternal(Collection<ConstructionPlane> values,Map<String,String> assignments,
                                              String restoredActiveSketchId,String restoredActivePlaneId,long restoredNextSerial){
-        LinkedHashMap<String,ConstructionPlane> incoming=new LinkedHashMap<>();
-        if(values!=null)for(ConstructionPlane plane:values){if(plane==null||incoming.put(plane.id,plane)!=null)throw new IllegalArgumentException("Duplicate construction plane id");}
+        LinkedHashMap<String,ConstructionPlane> incoming=new LinkedHashMap<>();java.util.HashSet<Long> orders=new java.util.HashSet<>();
+        List<ConstructionPlane> ordered=new ArrayList<>();if(values!=null)ordered.addAll(values);
+        ordered.sort((a,b)->{if(a==null||b==null)throw new IllegalArgumentException("Construction plane is missing");return Long.compare(a.creationOrder,b.creationOrder);});
+        for(ConstructionPlane plane:ordered){if(plane==null||incoming.put(plane.id,plane)!=null)throw new IllegalArgumentException("Duplicate construction plane id");if(!orders.add(plane.creationOrder))throw new IllegalArgumentException("Duplicate construction plane creation order");}
         requireBuiltIn(incoming,ConstructionPlane.baseXY());requireBuiltIn(incoming,ConstructionPlane.baseXZ());requireBuiltIn(incoming,ConstructionPlane.baseYZ());
         for(ConstructionPlane plane:incoming.values())if(plane.provenance==ConstructionPlane.Provenance.OFFSET){
             ConstructionPlane source=incoming.get(plane.sourcePlaneId);if(source==null)throw new IllegalArgumentException("Offset source plane is missing");
             if(source.id.equals(plane.id))throw new IllegalArgumentException("Offset plane is self-referential");
-            assertNoCycle(plane,incoming);
+            requireOffsetGeometry(plane,source);assertNoCycle(plane,incoming);
         }
         LinkedHashMap<String,String> incomingAssignments=new LinkedHashMap<>();
         if(assignments!=null)for(Map.Entry<String,String> e:assignments.entrySet()){
@@ -138,14 +151,19 @@ public final class ConstructionPlaneDocument {
 
     private ConstructionPlane createOffsetPlaneWithoutHistory(String sourceId,double distanceMm,String displayName){
         ConstructionPlane source=requirePlane(sourceId);if(!Double.isFinite(distanceMm)||Math.abs(distanceMm)>1.0e12)throw new IllegalArgumentException("Offset distance must be finite");
-        String id;do{id="plane:offset:"+(nextOffsetSerial++);}while(planes.containsKey(id));
-        String name=displayName==null||displayName.trim().isEmpty()?"Offset Plane "+(nextOffsetSerial-1):displayName.trim();
-        ConstructionPlane p=ConstructionPlane.offset(id,name,source.id,distanceMm,source.origin.plus(source.normal.times(distanceMm)),source.uAxis,source.vAxis,source.normal,true,planes.size());
-        planes.put(id,p);activePlaneId=id;return p;
+        long serial=nextAvailableOffsetSerial();String id="plane:offset:"+serial;
+        String name=displayName==null||displayName.trim().isEmpty()?"Offset Plane "+serial:displayName.trim();
+        ConstructionPlane p=ConstructionPlane.offset(id,name,source.id,distanceMm,source.origin.plus(source.normal.times(distanceMm)),source.uAxis,source.vAxis,source.normal,true,nextCreationOrder());
+        nextOffsetSerial=serial+1;planes.put(id,p);activePlaneId=id;return p;
     }
     private void assignSketchWithoutHistory(String sketchId,String planeId){String sketch=clean(sketchId);if(sketch.isEmpty())throw new IllegalArgumentException("Sketch id is empty");ConstructionPlane p=requirePlane(planeId);sketchPlaneIds.put(sketch,p.id);activeSketchId=sketch;activePlaneId=p.id;}
     private ConstructionPlane requirePlane(String id){ConstructionPlane p=planes.get(clean(id));if(p==null)throw new IllegalArgumentException("Construction plane is missing");return p;}
     private void installBuiltIns(){planes.put(ConstructionPlane.XY_ID,ConstructionPlane.baseXY());planes.put(ConstructionPlane.XZ_ID,ConstructionPlane.baseXZ());planes.put(ConstructionPlane.YZ_ID,ConstructionPlane.baseYZ());}
+    private long nextAvailableOffsetSerial(){long serial=nextOffsetSerial;while(serial<Long.MAX_VALUE&&planes.containsKey("plane:offset:"+serial))serial++;if(serial==Long.MAX_VALUE)throw new IllegalStateException("Plane identity serial is exhausted");return serial;}
+    private long nextCreationOrder(){long max=-1;for(ConstructionPlane plane:planes.values())max=Math.max(max,plane.creationOrder);if(max==Long.MAX_VALUE)throw new IllegalStateException("Plane creation order is exhausted");return max+1;}
+    private boolean canonicalBuiltIn(ConstructionPlane expected){ConstructionPlane actual=planes.get(expected.id);return actual!=null&&actual.provenance==expected.provenance&&actual.visible==expected.visible
+            &&actual.displayName.equals(expected.displayName)&&same(actual.origin,expected.origin)&&same(actual.uAxis,expected.uAxis)
+            &&same(actual.vAxis,expected.vAxis)&&same(actual.normal,expected.normal)&&actual.creationOrder==expected.creationOrder;}
     private void commit(Snapshot before){undo.addLast(before);while(undo.size()>MAX_HISTORY)undo.removeFirst();redo.clear();revision++;}
     private Snapshot snapshot(){return new Snapshot(planes,sketchPlaneIds,activeSketchId,activePlaneId,nextOffsetSerial);}
     private void restore(Snapshot s){planes.clear();planes.putAll(s.planes);sketchPlaneIds.clear();sketchPlaneIds.putAll(s.assignments);activeSketchId=s.activeSketchId;activePlaneId=s.activePlaneId;nextOffsetSerial=s.nextOffsetSerial;}
@@ -158,6 +176,11 @@ public final class ConstructionPlaneDocument {
     }
 
     private static void requireBuiltIn(Map<String,ConstructionPlane> map,ConstructionPlane expected){ConstructionPlane actual=map.get(expected.id);if(actual==null||actual.provenance!=expected.provenance)throw new IllegalArgumentException("Required built-in plane is missing");}
+    private static void requireOffsetGeometry(ConstructionPlane plane,ConstructionPlane source){ConstructionPlane.Vector expected=source.origin.plus(source.normal.times(plane.offsetDistanceMm));
+        if(!same(plane.origin,expected)||!same(plane.uAxis,source.uAxis)||!same(plane.vAxis,source.vAxis)||!same(plane.normal,source.normal))
+            throw new IllegalArgumentException("Offset plane geometry does not match its source and distance");}
+    private static boolean same(ConstructionPlane.Vector a,ConstructionPlane.Vector b){return close(a.x,b.x)&&close(a.y,b.y)&&close(a.z,b.z);}
+    private static boolean close(double a,double b){double scale=Math.max(1.0,Math.max(Math.abs(a),Math.abs(b)));return Math.abs(a-b)<=1.0e-9*scale;}
     private static void assertNoCycle(ConstructionPlane start,Map<String,ConstructionPlane> all){java.util.HashSet<String> seen=new java.util.HashSet<>();ConstructionPlane p=start;while(p!=null&&p.sourcePlaneId!=null){if(!seen.add(p.id))throw new IllegalArgumentException("Cyclic plane provenance");p=all.get(p.sourcePlaneId);}}
     private static ConstructionPlane matchingBase(ConstructionPlane.Legacy row){
         ConstructionPlane.Vector normal=row.u.cross(row.v).normalized();ConstructionPlane[] bases={ConstructionPlane.baseXY(),ConstructionPlane.baseXZ(),ConstructionPlane.baseYZ()};ConstructionPlane match=null;

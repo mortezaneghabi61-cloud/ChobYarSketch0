@@ -189,7 +189,7 @@ final class ExactModelProjectState {
                                                             ConstructionPlane.Vector u,ConstructionPlane.Vector v,ConstructionPlane.Vector normal,
                                                             boolean visible,long order,double offset,JSONObject row){
         if(!expected.id.equals(id)||!same(origin,expected.origin)||!same(u,expected.uAxis)||!same(v,expected.vAxis)||!same(normal,expected.normal)
-                ||offset!=0||row.has("sourcePlaneId"))throw new IllegalArgumentException("Built-in plane payload was altered");
+                ||order!=expected.creationOrder||offset!=0||row.has("sourcePlaneId"))throw new IllegalArgumentException("Built-in plane payload was altered");
         return expected.withVisibility(visible).renamed(name);
     }
 
