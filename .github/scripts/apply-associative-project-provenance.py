@@ -37,14 +37,13 @@ cad=once(cad,cad_anchor,cad_block,'Sketch provenance helpers')
 CAD.write_text(cad,encoding='utf-8')
 
 # ---------------------------------------------------------------------
-# Stable plane lookup by the entity's own Sketch layer.  Refresh must not
-# accidentally use whichever plane happens to be active later.
+# Stable plane lookup is model-owned. Never restore the retired View map.
 # ---------------------------------------------------------------------
 sp=SPATIAL.read_text(encoding='utf-8')
-plane_anchor='''    public String activePlaneLabel() {\n        return activePlane == null ? "XY" : activePlane.label;\n    }\n'''
-plane_block=plane_anchor+'''\n    /** Stable subclass-facing plane lookup for associative Sketch references. */\n    protected final Geometry3D.Plane3D spatialPlaneForLayer(String layer){\n        Geometry3D.Plane3D p=planeByLayer.get(layer);\n        return p==null?(activePlane==null?Geometry3D.xy():activePlane):p;\n    }\n'''
-sp=once(sp,plane_anchor,plane_block,'Spatial plane contract')
-SPATIAL.write_text(sp,encoding='utf-8')
+if 'protected final Geometry3D.Plane3D spatialPlaneForLayer(String layer)' not in sp:
+    raise SystemExit('Spatial model-owned plane contract not found')
+if 'planeByLayer' in sp or 'pendingPlane' in sp:
+    raise SystemExit('View-owned plane authority must not be restored')
 
 # ---------------------------------------------------------------------
 # Stable Body.id -> exact OCCT handle bridge.  No Object identity is stored

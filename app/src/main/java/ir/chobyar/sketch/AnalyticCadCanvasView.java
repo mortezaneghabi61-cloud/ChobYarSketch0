@@ -37,8 +37,6 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
     private Field selectedFaceField;
     private Field bodiesField;
     private Field bodySerialField;
-    private Field activePlaneField;
-    private Field planeByLayerField;
     private Field selectedField;
     private Field selectedObjectsField;
     private Constructor<?> bodyConstructor;
@@ -54,8 +52,6 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
             selectedFaceField=field(SolidCadCanvasView.class,"selectedFace");
             bodiesField=field(SolidCadCanvasView.class,"bodies");
             bodySerialField=field(SolidCadCanvasView.class,"bodySerial");
-            activePlaneField=field(SpatialCadCanvasView.class,"activePlane");
-            planeByLayerField=field(SpatialCadCanvasView.class,"planeByLayer");
             selectedField=field(CadCanvasView.class,"selected");
             selectedObjectsField=field(SmartCadCanvasView.class,"selectedObjects");
             Class<?> bodyClass=Class.forName("ir.chobyar.sketch.SolidCadCanvasView$SolidBody");
@@ -358,16 +354,11 @@ public class AnalyticCadCanvasView extends BRepDirectCadCanvasView {
         return out;
     }
 
-    @SuppressWarnings("unchecked")
     private Geometry3D.Plane3D planeForLayer(String layer){
-        try{
-            Object m=planeByLayerField==null?null:planeByLayerField.get(this);
-            if(m instanceof Map){Object p=((Map<String,Geometry3D.Plane3D>)m).get(layer);if(p instanceof Geometry3D.Plane3D)return(Geometry3D.Plane3D)p;}
-        }catch(Exception ignored){}
-        return activePlane();
+        return spatialPlaneForLayer(layer);
     }
 
-    private Geometry3D.Plane3D activePlane(){try{Object p=activePlaneField==null?null:activePlaneField.get(this);return p instanceof Geometry3D.Plane3D?(Geometry3D.Plane3D)p:Geometry3D.xy();}catch(Exception e){return Geometry3D.xy();}}
+    private Geometry3D.Plane3D activePlane(){return activeSpatialPlane();}
 
     // ------------------------------------------------------------------
     // UI + reflection helpers

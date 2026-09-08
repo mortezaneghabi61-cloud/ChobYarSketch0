@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+import ir.chobyar.sketch.core.ConstructionPlane;
+
 /**
  * Logical exact-model payload stored inside a schema-v2 .chobyar document.
  *
@@ -29,14 +31,24 @@ final class ExactModelProjectState {
         final JSONArray features;
         final JSONArray directEdits;
         final JSONObject camera;
-        Decoded(int modelVersion,JSONArray planes,JSONArray features,JSONArray directEdits,JSONObject camera){
+        final JSONObject planeAssignments;
+        final String activeSketchId,activePlaneId;
+        final long nextPlaneSerial;
+        Decoded(int modelVersion,JSONArray planes,JSONArray features,JSONArray directEdits,JSONObject camera,
+                JSONObject planeAssignments,String activeSketchId,String activePlaneId,long nextPlaneSerial){
             this.modelVersion=modelVersion;this.planes=planes;this.features=features;this.directEdits=directEdits;this.camera=camera;
+            this.planeAssignments=planeAssignments;this.activeSketchId=activeSketchId;this.activePlaneId=activePlaneId;this.nextPlaneSerial=nextPlaneSerial;
         }
     }
 
     private ExactModelProjectState(){}
 
     static String encode(JSONArray planes,JSONArray features,JSONArray directEdits,JSONObject camera){
+        return encode(planes,features,directEdits,camera,new JSONObject(),"","",1);
+    }
+
+    static String encode(JSONArray planes,JSONArray features,JSONArray directEdits,JSONObject camera,JSONObject assignments,
+                         String activeSketchId,String activePlaneId,long nextPlaneSerial){
         try{
             JSONObject root=new JSONObject();
             root.put("modelVersion",MODEL_VERSION);
@@ -44,6 +56,10 @@ final class ExactModelProjectState {
             root.put("features",features==null?new JSONArray():features);
             root.put("directEdits",directEdits==null?new JSONArray():directEdits);
             root.put("camera",camera==null?new JSONObject():camera);
+            root.put("planeAssignments",assignments==null?new JSONObject():assignments);
+            root.put("activeSketchId",activeSketchId==null?"":activeSketchId);
+            root.put("activePlaneId",activePlaneId==null?"":activePlaneId);
+            root.put("nextPlaneSerial",nextPlaneSerial);
             String encoded=root.toString();
             decode(encoded); // one validation path for writers and readers
             return encoded;
@@ -60,8 +76,10 @@ final class ExactModelProjectState {
             if(version!=MODEL_VERSION)throw new IllegalArgumentException("Unsupported model state version");
             JSONArray planes=requireArray(root,"planes"),features=requireArray(root,"features"),direct=requireArray(root,"directEdits");
             JSONObject camera=root.optJSONObject("camera");if(camera==null)throw new IllegalArgumentException("Model camera is missing");
-            validatePlanes(planes);validateFeatures(features);validateDirectEdits(direct);validateCamera(camera);
-            return new Decoded(version,planes,features,direct,camera);
+            JSONObject assignments=root.optJSONObject("planeAssignments");if(assignments==null)throw new IllegalArgumentException("Plane assignments are malformed");
+            String activeSketch=root.optString("activeSketchId",""),activePlane=root.optString("activePlaneId","");long serial=root.optLong("nextPlaneSerial",1);
+            validatePlanes(planes,assignments,activeSketch,activePlane,serial);validateFeatures(features);validateDirectEdits(direct);validateCamera(camera);
+            return new Decoded(version,planes,features,direct,camera,assignments,activeSketch,activePlane,serial);
         }catch(IllegalArgumentException e){throw e;}
         catch(Exception e){throw new IllegalArgumentException("Malformed exact model project state",e);}
     }
@@ -79,6 +97,30 @@ final class ExactModelProjectState {
         if(u.length()<.999f||v.length()<.999f||Math.abs(u.normalized().dot(v.normalized()))>.0015f)
             throw new IllegalArgumentException("Plane basis is invalid");
         return new Geometry3D.Plane3D(origin,u,v,row.optString("label","Plane"));
+    }
+
+    static JSONObject constructionPlane(ConstructionPlane plane){
+        if(plane==null)throw new IllegalArgumentException("Construction plane is missing");
+        try{JSONObject row=new JSONObject().put("id",plane.id).put("name",plane.displayName).put("type",plane.provenance.name())
+                .put("origin",vec(plane.origin)).put("u",vec(plane.uAxis)).put("v",vec(plane.vAxis)).put("normal",vec(plane.normal))
+                .put("visible",plane.visible).put("offsetDistanceMm",plane.offsetDistanceMm).put("creationOrder",plane.creationOrder);
+            if(plane.sourcePlaneId!=null)row.put("sourcePlaneId",plane.sourcePlaneId);return row;
+        }catch(Exception e){throw new IllegalArgumentException("Invalid construction plane",e);}
+    }
+
+    static ConstructionPlane constructionPlaneFromJson(JSONObject row){
+        if(row==null)throw new IllegalArgumentException("Construction plane is missing");
+        try{
+            String id=row.getString("id"),name=row.getString("name");ConstructionPlane.Provenance type=ConstructionPlane.Provenance.valueOf(row.getString("type"));
+            ConstructionPlane.Vector origin=planeVec(row.getJSONArray("origin")),u=planeVec(row.getJSONArray("u")),v=planeVec(row.getJSONArray("v")),normal=planeVec(row.getJSONArray("normal"));
+            boolean visible=row.getBoolean("visible");long order=row.getLong("creationOrder");double offset=finite(row.getDouble("offsetDistanceMm"));
+            if(type==ConstructionPlane.Provenance.BASE_XY)return requireBuiltInPayload(ConstructionPlane.baseXY(),id,name,origin,u,v,normal,visible,order,offset,row);
+            if(type==ConstructionPlane.Provenance.BASE_XZ)return requireBuiltInPayload(ConstructionPlane.baseXZ(),id,name,origin,u,v,normal,visible,order,offset,row);
+            if(type==ConstructionPlane.Provenance.BASE_YZ)return requireBuiltInPayload(ConstructionPlane.baseYZ(),id,name,origin,u,v,normal,visible,order,offset,row);
+            if(type==ConstructionPlane.Provenance.OFFSET)return ConstructionPlane.offset(id,name,row.getString("sourcePlaneId"),offset,origin,u,v,normal,visible,order);
+            if(type==ConstructionPlane.Provenance.REFERENCE)return ConstructionPlane.reference(id,name,origin,u,v,normal,visible,order);
+            throw new IllegalArgumentException("Unsupported construction plane type");
+        }catch(IllegalArgumentException e){throw e;}catch(Exception e){throw new IllegalArgumentException("Malformed construction plane",e);}
     }
 
     static JSONObject feature(int id,String kind,String outputKey,JSONArray sourceEntityIndexes,JSONObject params){
@@ -128,7 +170,13 @@ final class ExactModelProjectState {
         catch(Exception e){throw new IllegalArgumentException("Invalid camera",e);}
     }
 
-    private static void validatePlanes(JSONArray rows)throws Exception{
+    private static void validatePlanes(JSONArray rows,JSONObject assignments,String activeSketch,String activePlane,long serial)throws Exception{
+        boolean typed=rows.length()>0&&rows.optJSONObject(0)!=null&&rows.optJSONObject(0).has("id");
+        if(typed){Set<String> ids=new HashSet<>();for(int i=0;i<rows.length();i++){ConstructionPlane p=constructionPlaneFromJson(rows.getJSONObject(i));if(!ids.add(p.id))throw new IllegalArgumentException("Duplicate construction plane id");}
+            java.util.Iterator<String> keys=assignments.keys();while(keys.hasNext()){String sketch=keys.next();String plane=assignments.getString(sketch);if(sketch.trim().isEmpty()||!ids.contains(plane))throw new IllegalArgumentException("Sketch plane assignment is invalid");}
+            if(!activePlane.isEmpty()&&!ids.contains(activePlane))throw new IllegalArgumentException("Active construction plane is missing");
+            if(!activeSketch.isEmpty()&&!activePlane.equals(assignments.optString(activeSketch,"")))throw new IllegalArgumentException("Active Sketch plane assignment is invalid");
+            if(serial<1)throw new IllegalArgumentException("Plane serial is invalid");return;}
         Set<String> layers=new HashSet<>();
         for(int i=0;i<rows.length();i++){
             JSONObject row=rows.getJSONObject(i);String layer=row.optString("layer","").trim();
@@ -136,6 +184,16 @@ final class ExactModelProjectState {
             planeFromJson(row);
         }
     }
+
+    private static ConstructionPlane requireBuiltInPayload(ConstructionPlane expected,String id,String name,ConstructionPlane.Vector origin,
+                                                            ConstructionPlane.Vector u,ConstructionPlane.Vector v,ConstructionPlane.Vector normal,
+                                                            boolean visible,long order,double offset,JSONObject row){
+        if(!expected.id.equals(id)||!same(origin,expected.origin)||!same(u,expected.uAxis)||!same(v,expected.vAxis)||!same(normal,expected.normal)
+                ||order!=expected.creationOrder||offset!=0||row.has("sourcePlaneId"))throw new IllegalArgumentException("Built-in plane payload was altered");
+        return expected.withVisibility(visible).renamed(name);
+    }
+
+    private static boolean same(ConstructionPlane.Vector a,ConstructionPlane.Vector b){return Math.abs(a.x-b.x)<1e-9&&Math.abs(a.y-b.y)<1e-9&&Math.abs(a.z-b.z)<1e-9;}
 
     private static void validateFeatures(JSONArray rows)throws Exception{
         Set<Integer> ids=new HashSet<>();Set<String> outputs=new HashSet<>();
@@ -179,6 +237,8 @@ final class ExactModelProjectState {
         try{return new JSONArray().put(v.x).put(v.y).put(v.z);}
         catch(Exception e){throw new IllegalArgumentException("Vector is invalid",e);}
     }
+    private static JSONArray vec(ConstructionPlane.Vector v){if(v==null)throw new IllegalArgumentException("Vector is missing");try{return new JSONArray().put(v.x).put(v.y).put(v.z);}catch(Exception e){throw new IllegalArgumentException("Vector is invalid",e);}}
+    private static ConstructionPlane.Vector planeVec(JSONArray a){if(a==null||a.length()!=3)throw new IllegalArgumentException("Vector is invalid");return new ConstructionPlane.Vector(finite(a.optDouble(0,Double.NaN)),finite(a.optDouble(1,Double.NaN)),finite(a.optDouble(2,Double.NaN)));}
     private static Geometry3D.Vec3 vec(JSONArray a){if(a==null||a.length()!=3)throw new IllegalArgumentException("Vector is invalid");return new Geometry3D.Vec3((float)finite(a.optDouble(0,Double.NaN)),(float)finite(a.optDouble(1,Double.NaN)),(float)finite(a.optDouble(2,Double.NaN)));}
     private static double finite(double v){if(!Double.isFinite(v)||Math.abs(v)>1.0e12)throw new IllegalArgumentException("Non-finite model value");return v;}
     private static String upper(String v){return v==null?"":v.trim().toUpperCase(java.util.Locale.US);}

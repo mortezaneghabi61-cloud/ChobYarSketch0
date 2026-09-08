@@ -82,9 +82,6 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
 
     private Field selectedField;
     private Field selectedObjectsField;
-    private Field planeByLayerField;
-    private Field activePlaneField;
-    private Field pendingPlaneField;
     private Field overview3DField;
     private Field overviewCardField;
     private Field cameraYawField;
@@ -136,9 +133,6 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         try {
             selectedField = field(CadCanvasView.class,"selected");
             selectedObjectsField = field(SmartCadCanvasView.class,"selectedObjects");
-            planeByLayerField = field(SpatialCadCanvasView.class,"planeByLayer");
-            activePlaneField = field(SpatialCadCanvasView.class,"activePlane");
-            pendingPlaneField = field(SpatialCadCanvasView.class,"pendingPlane");
             overview3DField = field(SpatialCadCanvasView.class,"overview3D");
             overviewCardField = field(SpatialCadCanvasView.class,"overviewCard");
             cameraYawField = field(SpatialCadCanvasView.class,"cameraYaw");
@@ -387,8 +381,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         Geometry3D.Vec3 v=n.cross(u).normalized();
         Geometry3D.Plane3D facePlane=new Geometry3D.Plane3D(origin,u,v,"Face • "+selectedBody.name);
         try {
-            if(pendingPlaneField!=null)pendingPlaneField.set(this,facePlane);
-            String result=createSketchSpace("Sketch on "+selectedBody.name);
+            String result=createSketchOnGeometryPlane("Sketch on "+selectedBody.name,facePlane);
             setOverview(false);
             selectedFace=null;
             invalidate();
@@ -966,14 +959,8 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         }catch(Exception e){return new ArrayList<>();}
     }
 
-    @SuppressWarnings("unchecked")
     private Geometry3D.Plane3D planeForLayer(String layer) {
-        try{
-            Map<String,Geometry3D.Plane3D> map=(Map<String,Geometry3D.Plane3D>)planeByLayerField.get(this);
-            Geometry3D.Plane3D p=map.get(layer);if(p!=null)return p;
-            Object a=activePlaneField.get(this);if(a instanceof Geometry3D.Plane3D)return(Geometry3D.Plane3D)a;
-        }catch(Exception ignored){}
-        return Geometry3D.xy();
+        return spatialPlaneForLayer(layer);
     }
 
     private void setOverview(boolean value) {try{if(overview3DField!=null)overview3DField.setBoolean(this,value);}catch(Exception ignored){}invalidate();}
