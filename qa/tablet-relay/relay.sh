@@ -21,16 +21,19 @@ fetch_command(){
 }
 
 upload_file(){
-  local repo_path="$1" local_file="$2" message="$3" sha content
-  content="$(base64 -w 0 "$local_file")" || return 1
+  local repo_path="$1" local_file="$2" message="$3" sha content_file payload
   sha="$(gh api "repos/$REPO/contents/$repo_path?ref=$BRANCH" --jq .sha 2>/dev/null || true)"
+  content_file="$ROOT/upload-content.b64"
+  payload="$ROOT/upload-payload.json"
+  base64 -w 0 "$local_file" > "$content_file" || return 1
   if [ -n "$sha" ]; then
-    gh api --method PUT "repos/$REPO/contents/$repo_path" \
-      -f message="$message" -f branch="$BRANCH" -f sha="$sha" -f content="$content" >/dev/null
+    jq -n --arg message "$message" --arg branch "$BRANCH" --arg sha "$sha" --rawfile content "$content_file" \
+      '{message:$message,branch:$branch,sha:$sha,content:$content}' > "$payload" || return 1
   else
-    gh api --method PUT "repos/$REPO/contents/$repo_path" \
-      -f message="$message" -f branch="$BRANCH" -f content="$content" >/dev/null
+    jq -n --arg message "$message" --arg branch "$BRANCH" --rawfile content "$content_file" \
+      '{message:$message,branch:$branch,content:$content}' > "$payload" || return 1
   fi
+  gh api --method PUT "repos/$REPO/contents/$repo_path" --input "$payload" >/dev/null
 }
 
 report(){
