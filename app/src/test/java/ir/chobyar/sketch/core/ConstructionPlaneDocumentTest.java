@@ -113,12 +113,12 @@ public final class ConstructionPlaneDocumentTest {
         assertNotEquals(first.creationOrder,second.creationOrder);
     }
 
-    @Test public void rejectedOffsetDoesNotConsumeIdentityOrCreateHistory() {
+    @Test public void rejectedCompositeTransactionDoesNotConsumeIdentityOrCreateHistory() {
         ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
-        ConstructionPlane edge=doc.createOffsetPlane(ConstructionPlane.XY_ID,1.0e12,"Limit");doc.clearHistory();
+        doc.clearHistory();
         long serial=doc.nextOffsetSerial(),count=doc.planes().size();
-        try { doc.createOffsetPlaneWithSketch(edge.id,1,"Overflow","sketch:2"); }
+        try { doc.createOffsetPlaneWithSketch(ConstructionPlane.XY_ID,1,"Rejected",""); }
         catch(IllegalArgumentException expected) { assertEquals(serial,doc.nextOffsetSerial());assertEquals(count,doc.planes().size());assertFalse(doc.canUndo());return; }
-        throw new AssertionError("Invalid derived offset must fail closed");
+        throw new AssertionError("Invalid composite transaction must fail closed");
     }
 }
