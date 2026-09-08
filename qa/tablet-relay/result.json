@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 8,
-  "action": "capture",
+  "seq": 9,
+  "action": "launch",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T15:49:52Z",
-  "message": "gh: Invalid request.\n\n\"sha\" wasn't supplied. (HTTP 422)\nEVIDENCE_DIR=/data/data/com.termux/files/home/.chobyar-qa-bridge/evidence/20260908-191901"
+  "at": "2026-09-08T15:50:42Z",
+  "message": "args: [-p, ir.chobyar.sketch, -c, android.intent.category.LAUNCHER, 1]\n arg: \"-p\"\n arg: \"ir.chobyar.sketch\"\n arg: \"-c\"\n arg: \"android.intent.category.LAUNCHER\"\n arg: \"1\"\ndata=\"ir.chobyar.sketch\"\ndata=\"android.intent.category.LAUNCHER\"\nLAUNCH_OK pid=30617"
 }
