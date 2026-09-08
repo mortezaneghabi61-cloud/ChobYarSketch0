@@ -54,13 +54,25 @@ require_serial(){
 }
 
 capture_latest(){
-  local out dir
+  local out dir stamp screen_path
   out="$($HOME/.chobyar-qa-bridge/bin/chobyar-capture 2>&1)" || { printf '%s\n' "$out"; return 5; }
   dir="$(printf '%s\n' "$out" | sed -n 's/^EVIDENCE_DIR=//p' | tail -1)"
   [ -d "$dir" ] || { printf 'EVIDENCE_DIR_MISSING\n'; return 6; }
-  upload_file 'qa/tablet-relay/evidence/latest-screen.png' "$dir/screen.png" 'qa(tablet): latest screen' || return 7
-  [ -f "$dir/ui.xml" ] && upload_file 'qa/tablet-relay/evidence/latest-ui.xml' "$dir/ui.xml" 'qa(tablet): latest ui' || true
-  [ -f "$dir/logcat.txt" ] && upload_file 'qa/tablet-relay/evidence/latest-logcat.txt' "$dir/logcat.txt" 'qa(tablet): latest logcat' || true
+  if [ -f "$dir/ui.xml" ]; then
+    upload_file 'qa/tablet-relay/evidence/latest-ui.xml' "$dir/ui.xml" 'qa(tablet): latest ui' || return 7
+  fi
+  if [ -f "$dir/logcat.txt" ]; then
+    upload_file 'qa/tablet-relay/evidence/latest-logcat.txt' "$dir/logcat.txt" 'qa(tablet): latest logcat' || true
+  fi
+  if [ -f "$dir/screen.png" ]; then
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    screen_path="qa/tablet-relay/evidence/screen-$stamp.png"
+    if upload_file "$screen_path" "$dir/screen.png" "qa(tablet): screen $stamp"; then
+      printf 'SCREEN_REPO_PATH=%s\n' "$screen_path"
+    else
+      log "screenshot upload failed path=$screen_path"
+    fi
+  fi
   printf '%s\n' "$out"
 }
 
