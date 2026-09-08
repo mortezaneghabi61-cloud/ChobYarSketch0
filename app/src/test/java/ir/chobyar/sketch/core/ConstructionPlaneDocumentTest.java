@@ -140,4 +140,24 @@ public final class ConstructionPlaneDocumentTest {
         assertEquals(planeId,restored.activePlaneId());
         assertEquals(6.5,restored.plane(planeId).offsetDistanceMm,0.0);
     }
+
+    @Test public void activatingPlaneDoesNotSwitchSketchOrCreateHistory() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        doc.createSketchOnPlane("sketch:1",ConstructionPlane.XY_ID);
+        doc.clearHistory();
+        long before=doc.revision();
+
+        assertTrue(doc.activatePlane(ConstructionPlane.XZ_ID));
+        assertEquals("sketch:1",doc.activeSketchId());
+        assertEquals(ConstructionPlane.XY_ID,doc.planeIdForSketch("sketch:1"));
+        assertEquals(ConstructionPlane.XZ_ID,doc.activePlaneId());
+        assertTrue(doc.revision()>before);
+        assertFalse(doc.canUndo());
+
+        long revision=doc.revision();
+        assertFalse(doc.activatePlane(ConstructionPlane.XZ_ID));
+        assertEquals(revision,doc.revision());
+        assertFalse(doc.activatePlane("plane:missing"));
+        assertEquals(revision,doc.revision());
+    }
 }
