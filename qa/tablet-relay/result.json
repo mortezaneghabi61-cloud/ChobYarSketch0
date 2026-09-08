@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 7,
-  "action": "tap",
+  "seq": 8,
+  "action": "capture",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T15:48:06Z",
-  "message": "OK"
+  "at": "2026-09-08T15:49:52Z",
+  "message": "gh: Invalid request.\n\n\"sha\" wasn't supplied. (HTTP 422)\nEVIDENCE_DIR=/data/data/com.termux/files/home/.chobyar-qa-bridge/evidence/20260908-191901"
 }
