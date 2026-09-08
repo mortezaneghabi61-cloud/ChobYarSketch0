@@ -187,6 +187,16 @@ public class ParametricSketchCanvasView extends ChobYarShaprCanvasView {
     protected final String nextSketchStableId(){return "sketch:"+sketchSerial;}
     public final String activeSketchStableId(){SketchSpace s=activeSketch();return s==null?"":s.stableId;}
     protected final String sketchStableIdForLayer(String layer){for(SketchSpace s:sketchSpaces)if(s.layerName.equals(layer))return s.stableId;return null;}
+    protected final void appendSketchItemRefs(List<CadItemRef> out){
+        for(SketchSpace s:sketchSpaces)out.add(new CadItemRef(CadItemRef.Kind.SKETCH,s.stableId,s.name,s.visible));
+    }
+    protected final boolean hasSketchSpace(String stableId){
+        String id=stableId==null?"":stableId.trim();for(SketchSpace s:sketchSpaces)if(s.stableId.equals(id))return true;return false;
+    }
+    protected final String switchSketchSpaceByStableId(String stableId){
+        String id=stableId==null?"":stableId.trim();for(int i=0;i<sketchSpaces.size();i++)if(sketchSpaces.get(i).stableId.equals(id))return switchSketchSpace(i);
+        return "Sketch was not found";
+    }
     protected final ConstructionPlaneDocument constructionPlaneDocument(){return constructionPlaneDocument;}
 
     protected final void restoreSketchSpacesFromPlaneModel(){

@@ -34,6 +34,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import ir.chobyar.sketch.core.ConstructionPlaneDocument;
+
 /** Single production workspace. No activity swapping and no reflection wiring. */
 public final class ChobYarActivity extends Activity {
     private static final int REQUEST_EXPORT_CAD=1701;
@@ -387,12 +389,13 @@ public final class ChobYarActivity extends Activity {
     private Runnable beginMoveRotateRunnable(){return this::beginMoveRotate;}
 
     private void sketchOnSelectedFace(){
-        String result=cad.sketchOnSelectedFace();status(result);
+        String result=cad.isSketchPlacementAwaitingTarget()
+                ?cad.startSketchPlacementOnSelectedFace():cad.sketchOnSelectedFace();status(result);
         if(!cad.is3DOverview())showSketchPalette();
     }
 
     private void showSketchPalette(){
-        if(cad.is3DOverview())status(cad.enterActiveSketchView());
+        if(cad.is3DOverview()){showSketchPlacementPalette();return;}
         updateWorkspaceChrome();syncGpuCamera();sketchPalette=true;openManualPalette();
         adaptive.addView(tool("×","Close",this::closeManualPalette));
         adaptive.addView(tool("╱","Line",()->activateSketchTool(CadCanvasView.TOOL_LINE,"Line")));
@@ -402,6 +405,30 @@ public final class ChobYarActivity extends Activity {
         adaptive.addView(tool("⬡","Polygon",()->activateSketchTool(CadCanvasView.TOOL_POLYGON,"Polygon")));
         adaptive.addView(tool("⌁","Constraints",cad::showSmartConstraintMenu));
         adaptive.addView(tool("…","More",cad::showShaprSketchMenu));finishManualPaletteLayout();
+    }
+
+    private void showSketchPlacementPalette(){
+        String result=cad.beginSketchPlacement();
+        if(!cad.isSketchPlacementAwaitingTarget()){status(result);return;}
+        sketchPalette=false;openManualPalette();
+        adaptive.addView(tool("×","Cancel",this::cancelSketchPlacementPalette));
+        adaptive.addView(tool("▱","Selected Face",this::sketchOnSelectedFace));
+        for(CadItemRef item:cad.projectItemRefs())if(item.kind==CadItemRef.Kind.PLANE){
+            final String planeId=item.stableId;
+            adaptive.addView(tool("◇",item.label,()->startSketchOnPlane(planeId)));
+        }
+        finishManualPaletteLayout();updateWorkspaceChrome();syncGpuCamera();status(result);
+    }
+
+    private void startSketchOnPlane(String planeId){
+        try{
+            String result=cad.startSketchOnConstructionPlane(planeId);
+            closeManualPalette();showSketchPalette();status(result);scheduleRecoverySnapshot();
+        }catch(RuntimeException failure){status(failure.getMessage());}
+    }
+
+    private void cancelSketchPlacementPalette(){
+        cad.cancelSketchPlacement();closeManualPalette();updateWorkspaceChrome();status("Sketch placement cancelled");
     }
 
     private void showAddPalette(){
@@ -473,14 +500,14 @@ public final class ChobYarActivity extends Activity {
     }
 
     private void activateSketchTool(int tool,String name){
-        if(cad.is3DOverview())cad.enterActiveSketchView();
+        if(cad.is3DOverview()){showSketchPlacementPalette();return;}
         cad.setTool(tool);status(name+" activated");updateWorkspaceChrome();updateConstraintRail(tool,false);
     }
 
     private void finishSketchView(){
         if(cad==null||cad.is3DOverview())return;
         closeManualPalette();cad.setTool(CadCanvasView.TOOL_SELECT);
-        cad.setStandardView("ISO");cad.post(cad::fitAll);syncGpuCamera();updateWorkspaceChrome();status("3D View");scheduleRecoverySnapshot();
+        status(cad.finishSketchSessionToModel());syncGpuCamera();updateWorkspaceChrome();scheduleRecoverySnapshot();
     }
 
     private void updateConstraintRail(int activeTool,boolean sessionActive){
@@ -710,24 +737,71 @@ public final class ChobYarActivity extends Activity {
     private void setView(String view){if(manualPalette)closeManualPalette();cad.setStandardView(view);cad.post(cad::fitAll);syncGpuCamera();updateWorkspaceChrome();}
 
     private void showItems(){
-        String[] bodies=cad.itemRows();boolean image=cad.hasReferenceImage();
-        if(bodies.length==0&&!image){toast(s(R.string.no_items));return;}
-        String[] rows=new String[bodies.length+(image?1:0)];System.arraycopy(bodies,0,rows,0,bodies.length);if(image)rows[rows.length-1]="▧ Reference Image";
+        CadItemRef[] items=cad.projectItemRefs();
+        if(items.length==0){toast(s(R.string.no_items));return;}
+        String[] rows=new String[items.length];for(int i=0;i<items.length;i++)rows[i]=itemRow(items[i]);
         new AlertDialog.Builder(this).setTitle("Items").setMessage(s(R.string.items_message))
-                .setItems(rows,(d,w)->{if(image&&w==rows.length-1)cad.showReferenceImageSettings();else{status(cad.selectItem(w));showItemActions(w);}}).setNegativeButton("Close",null).show();
+                .setItems(rows,(d,w)->showItemActions(items[w])).setNegativeButton("Close",null).show();
     }
 
-    private void showItemActions(int index){
-        String[] actions={"Show / Hide",s(R.string.rename),"Fit All"};
-        new AlertDialog.Builder(this).setTitle("Body").setItems(actions,(d,w)->{
-            if(w==0){status(cad.toggleItemVisibility(index));showItems();}else if(w==1)renameItem(index);else{cad.fitAll();status("Fit");}
-        }).setNegativeButton("Close",null).show();
+    private String itemRow(CadItemRef item){
+        String kind=item.kind==CadItemRef.Kind.REFERENCE_IMAGE?"Reference Image":item.kind.name().substring(0,1)+item.kind.name().substring(1).toLowerCase(java.util.Locale.US);
+        return (item.visible?"◉ ":"○ ")+kind+" • "+item.label;
     }
 
-    private void renameItem(int index){
-        EditText e=new EditText(this);e.setSingleLine();
-        new AlertDialog.Builder(this).setTitle(s(R.string.rename_body)).setView(e)
-                .setPositiveButton("Save",(d,w)->{status(cad.renameItem(index,e.getText().toString()));scheduleRecoverySnapshot();}).setNegativeButton("Cancel",null).show();
+    private void showItemActions(CadItemRef item){
+        if(item.kind==CadItemRef.Kind.BODY){
+            status(cad.selectBodyItem(item.stableId));String[] actions={item.visible?"Hide":"Show",s(R.string.rename),"Fit All"};
+            new AlertDialog.Builder(this).setTitle("Body • "+item.label).setItems(actions,(d,w)->{
+                if(w==0){status(cad.toggleBodyItemVisibility(item.stableId));scheduleRecoverySnapshot();showItems();}
+                else if(w==1)renameItem(item);else{cad.selectBodyItem(item.stableId);cad.fitAll();status("Fit");}
+            }).setNegativeButton("Close",null).show();return;
+        }
+        if(item.kind==CadItemRef.Kind.SKETCH){
+            new AlertDialog.Builder(this).setTitle("Sketch • "+item.label).setItems(new String[]{"Edit Sketch"},(d,w)->editSketchItem(item.stableId))
+                    .setNegativeButton("Close",null).show();return;
+        }
+        if(item.kind==CadItemRef.Kind.PLANE){
+            String[] actions={item.visible?"Hide":"Show",s(R.string.rename),"Start Sketch","Delete"};
+            new AlertDialog.Builder(this).setTitle("Plane • "+item.label).setItems(actions,(d,w)->{
+                if(w==0){boolean changed=cad.setConstructionPlaneItemVisibility(item.stableId,!item.visible);status(changed?(item.visible?"Plane hidden":"Plane shown"):"Plane visibility unchanged");scheduleRecoverySnapshot();showItems();}
+                else if(w==1)renameItem(item);else if(w==2)startSketchFromPlaneItem(item.stableId);else deletePlaneItem(item.stableId);
+            }).setNegativeButton("Close",null).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("Reference Image • "+item.label)
+                .setItems(new String[]{"Edit Reference Image","Remove"},(d,w)->{if(w==0)cad.showReferenceImageSettings();else{status(cad.removeReferenceImage());scheduleRecoverySnapshot();showItems();}})
+                .setNegativeButton("Close",null).show();
+    }
+
+    private void editSketchItem(String stableId){
+        String result=cad.editExistingSketch(stableId);if(!cad.is3DOverview()){showSketchPalette();syncGpuCamera();updateWorkspaceChrome();}status(result);
+    }
+
+    private void startSketchFromPlaneItem(String planeId){
+        if(!cad.is3DOverview()){status("Finish the current Sketch before creating another");return;}
+        status(cad.beginSketchPlacement());startSketchOnPlane(planeId);
+    }
+
+    private void deletePlaneItem(String planeId){
+        ConstructionPlaneDocument.DeleteResult result=cad.deleteConstructionPlaneItem(planeId);String message;
+        if(result==ConstructionPlaneDocument.DeleteResult.DELETED)message="Construction Plane deleted";
+        else if(result==ConstructionPlaneDocument.DeleteResult.BUILT_IN)message="Built-in planes cannot be deleted";
+        else if(result==ConstructionPlaneDocument.DeleteResult.IN_USE)message="Plane is referenced by a Sketch";
+        else if(result==ConstructionPlaneDocument.DeleteResult.HAS_DERIVED_PLANES)message="Plane has derived construction planes";
+        else message="Construction Plane was not found";
+        status(message);if(result==ConstructionPlaneDocument.DeleteResult.DELETED)scheduleRecoverySnapshot();showItems();
+    }
+
+    private void renameItem(CadItemRef item){
+        EditText e=new EditText(this);e.setSingleLine();e.setText(item.label);e.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this).setTitle("Rename "+item.kind.name().substring(0,1)+item.kind.name().substring(1).toLowerCase(java.util.Locale.US)).setView(e)
+                .setPositiveButton("Save",(d,w)->{
+                    try{
+                        if(item.kind==CadItemRef.Kind.BODY)status(cad.renameBodyItem(item.stableId,e.getText().toString()));
+                        else status(cad.renameConstructionPlaneItem(item.stableId,e.getText().toString())?"Plane renamed":"Plane name unchanged");
+                        scheduleRecoverySnapshot();
+                    }catch(RuntimeException failure){status(failure.getMessage());}
+                }).setNegativeButton("Cancel",null).show();
     }
 
     private void editDimension(){

@@ -380,6 +380,7 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         Geometry3D.Vec3 n=selectedFace.plane.normal.normalized();
         Geometry3D.Vec3 v=n.cross(u).normalized();
         Geometry3D.Plane3D facePlane=new Geometry3D.Plane3D(origin,u,v,"Face • "+selectedBody.name);
+        prepareModelCameraForSketchSession();
         try {
             String result=createSketchOnGeometryPlane("Sketch on "+selectedBody.name,facePlane);
             setOverview(false);
@@ -387,6 +388,14 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
             invalidate();
             return result;
         } catch(Exception e){return "Create Sketch Roy Face Done text";}
+    }
+
+    /** Explicit Sketch placement reuses the proven face-to-Sketch authority. */
+    public String startSketchPlacementOnSelectedFace(){
+        if(!isSketchPlacementAwaitingTarget())return "Sketch placement target was not requested";
+        String result=sketchOnSelectedFace();
+        if(!is3DOverview())completeExternalSketchPlacementTarget();
+        return result;
     }
 
     public String deleteSelectedBody() {
@@ -417,6 +426,19 @@ public class SolidCadCanvasView extends SpatialCadCanvasView {
         }
         return rows;
     }
+
+    @Override protected void appendBodyItemRefs(List<CadItemRef> out){
+        for(SolidBody body:bodies)out.add(new CadItemRef(CadItemRef.Kind.BODY,bodyItemId(body),body.name,body.visible));
+    }
+
+    public String selectBodyItem(String stableId){int index=bodyItemIndex(stableId);return selectItem(index);}
+    public String toggleBodyItemVisibility(String stableId){int index=bodyItemIndex(stableId);return toggleItemVisibility(index);}
+    public String renameBodyItem(String stableId,String name){int index=bodyItemIndex(stableId);return renameItem(index,name);}
+
+    private int bodyItemIndex(String stableId){
+        String id=stableId==null?"":stableId.trim();for(int i=0;i<bodies.size();i++)if(bodyItemId(bodies.get(i)).equals(id))return i;return -1;
+    }
+    private static String bodyItemId(SolidBody body){return "body:"+body.id;}
 
     public String selectItem(int index){
         if(index<0||index>=bodies.size())return "Body was not found";
