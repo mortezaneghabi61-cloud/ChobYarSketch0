@@ -1,6 +1,8 @@
 {
   "version": 1,
-  "seq": 2,
-  "action": "status",
-  "args": {}
+  "seq": 3,
+  "action": "install_download",
+  "args": {
+    "file": "ChobYar3D-main-ac394a6.apk"
+  }
 }
