@@ -33,6 +33,7 @@ public final class ProfessionalSketchPlacementInstrumentationTest {
     @Test public void constructOffsetCreatesPlaneWithoutSketch() {
         onMain(() -> {
             K33MirroredCadCanvasView cad = canvas();
+            cad.setStandardView("ISO");
             String sketchBefore = cad.activeSketchStableId();
             String planeId = cad.createOffsetConstructionPlane(12.5f, "Shelf datum");
 

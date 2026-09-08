@@ -292,6 +292,13 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         invalidate();return result;
     }
 
+    /** Construct creates construction geometry only; Sketch creation is a separate user intent. */
+    public String createOffsetConstructionPlane(float offsetMm,String requestedName) {
+        if(!Float.isFinite(offsetMm))throw new IllegalArgumentException("Offset Plane distance must be finite");
+        ConstructionPlane plane=constructionPlaneDocument().createOffsetPlane(activeConstructionPlaneId(),offsetMm,requestedName);
+        invalidate();dispatchWorkspaceState();return plane.id;
+    }
+
     /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
     public String createOffsetSketchSpace(float offsetMm, String requestedName) {
         if (!Float.isFinite(offsetMm)) return "Offset Plane • Distance must be a finite value";
