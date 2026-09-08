@@ -54,18 +54,28 @@ require_serial(){
 }
 
 capture_latest(){
-  local out dir stamp screen_path
+  local out dir stamp screen_path ui_path log_path
   out="$($HOME/.chobyar-qa-bridge/bin/chobyar-capture 2>&1)" || { printf '%s\n' "$out"; return 5; }
   dir="$(printf '%s\n' "$out" | sed -n 's/^EVIDENCE_DIR=//p' | tail -1)"
   [ -d "$dir" ] || { printf 'EVIDENCE_DIR_MISSING\n'; return 6; }
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   if [ -f "$dir/ui.xml" ]; then
-    upload_file 'qa/tablet-relay/evidence/latest-ui.xml' "$dir/ui.xml" 'qa(tablet): latest ui' || return 7
+    ui_path="qa/tablet-relay/evidence/ui-$stamp.xml"
+    if upload_file "$ui_path" "$dir/ui.xml" "qa(tablet): ui $stamp"; then
+      printf 'UI_REPO_PATH=%s\n' "$ui_path"
+    else
+      log "ui upload failed path=$ui_path"
+    fi
   fi
   if [ -f "$dir/logcat.txt" ]; then
-    upload_file 'qa/tablet-relay/evidence/latest-logcat.txt' "$dir/logcat.txt" 'qa(tablet): latest logcat' || true
+    log_path="qa/tablet-relay/evidence/logcat-$stamp.txt"
+    if upload_file "$log_path" "$dir/logcat.txt" "qa(tablet): logcat $stamp"; then
+      printf 'LOGCAT_REPO_PATH=%s\n' "$log_path"
+    else
+      log "logcat upload failed path=$log_path"
+    fi
   fi
   if [ -f "$dir/screen.png" ]; then
-    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     screen_path="qa/tablet-relay/evidence/screen-$stamp.png"
     if upload_file "$screen_path" "$dir/screen.png" "qa(tablet): screen $stamp"; then
       printf 'SCREEN_REPO_PATH=%s\n' "$screen_path"
@@ -76,8 +86,38 @@ capture_latest(){
   printf '%s\n' "$out"
 }
 
+validate_tap(){
+  local x="$1" y="$2"
+  case "$x:$y" in
+    (*[!0-9:]*|:*) return 2 ;;
+    (*) return 0 ;;
+  esac
+}
+
+launch_taps_capture(){
+  local json="$1" launch_out s count i x y tap_out cap_out
+  launch_out="$($HOME/.chobyar-qa-bridge/bin/chobyar-launch 2>&1)" || { printf '%s\n' "$launch_out"; return 10; }
+  s="$(require_serial)" || return $?
+  count="$(jq -r '(.args.taps // []) | length' <<<"$json")"
+  case "$count" in (*[!0-9]*|'') printf 'INVALID_TAP_COUNT\n'; return 2;; esac
+  [ "$count" -ge 1 ] && [ "$count" -le 8 ] || { printf 'INVALID_TAP_COUNT=%s\n' "$count"; return 2; }
+  printf '%s\n' "$launch_out"
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    x="$(jq -r ".args.taps[$i].x // empty" <<<"$json")"
+    y="$(jq -r ".args.taps[$i].y // empty" <<<"$json")"
+    validate_tap "$x" "$y" || { printf 'INVALID_TAP_ARGS index=%s\n' "$i"; return 2; }
+    tap_out="$(adb -s "$s" shell input tap "$x" "$y" 2>&1)" || { printf '%s\n' "$tap_out"; return 11; }
+    printf 'TAP_OK index=%s x=%s y=%s\n' "$i" "$x" "$y"
+    sleep 1
+    i=$((i + 1))
+  done
+  cap_out="$(capture_latest 2>&1)" || { printf '%s\n' "$cap_out"; return 12; }
+  printf '%s\n' "$cap_out"
+}
+
 run_action(){
-  local json="$1" action seq s out rc
+  local json="$1" action seq s out rc x y more file
   seq="$(jq -r '.seq // -1' <<<"$json")"
   action="$(jq -r '.action // ""' <<<"$json")"
   case "$action" in
@@ -91,7 +131,11 @@ run_action(){
     smoke)
       out="$($HOME/.chobyar-qa-bridge/bin/chobyar-smoke 2>&1)"; rc=$?; if [ "$rc" -eq 0 ]; then more="$(capture_latest 2>&1)"; out="$out\n$more"; fi ;;
     tap)
-      s="$(require_serial)"; rc=$?; if [ "$rc" -eq 0 ]; then x="$(jq -r '.args.x' <<<"$json")"; y="$(jq -r '.args.y' <<<"$json")"; case "$x:$y" in (*[!0-9:]*|:*) out='INVALID_TAP_ARGS'; rc=2;; (*) out="$(adb -s "$s" shell input tap "$x" "$y" 2>&1)"; rc=$?;; esac; fi ;;
+      s="$(require_serial)"; rc=$?; if [ "$rc" -eq 0 ]; then x="$(jq -r '.args.x' <<<"$json")"; y="$(jq -r '.args.y' <<<"$json")"; if ! validate_tap "$x" "$y"; then out='INVALID_TAP_ARGS'; rc=2; else out="$(adb -s "$s" shell input tap "$x" "$y" 2>&1)"; rc=$?; fi; fi ;;
+    tap_capture)
+      s="$(require_serial)"; rc=$?; if [ "$rc" -eq 0 ]; then x="$(jq -r '.args.x' <<<"$json")"; y="$(jq -r '.args.y' <<<"$json")"; if ! validate_tap "$x" "$y"; then out='INVALID_TAP_ARGS'; rc=2; else out="$(adb -s "$s" shell input tap "$x" "$y" 2>&1)"; rc=$?; if [ "$rc" -eq 0 ]; then sleep 1; more="$(capture_latest 2>&1)"; rc=$?; out="TAP_OK x=$x y=$y\n$more"; fi; fi; fi ;;
+    launch_taps_capture)
+      out="$(launch_taps_capture "$json" 2>&1)"; rc=$? ;;
     swipe)
       s="$(require_serial)"; rc=$?; if [ "$rc" -eq 0 ]; then x1="$(jq -r '.args.x1' <<<"$json")"; y1="$(jq -r '.args.y1' <<<"$json")"; x2="$(jq -r '.args.x2' <<<"$json")"; y2="$(jq -r '.args.y2' <<<"$json")"; ms="$(jq -r '.args.ms // 400' <<<"$json")"; case "$x1:$y1:$x2:$y2:$ms" in (*[!0-9:]*|*::*|:*|*:) out='INVALID_SWIPE_ARGS'; rc=2;; (*) out="$(adb -s "$s" shell input swipe "$x1" "$y1" "$x2" "$y2" "$ms" 2>&1)"; rc=$?;; esac; fi ;;
     install_download)
