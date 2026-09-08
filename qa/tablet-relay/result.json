@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 4,
-  "action": "launch",
-  "status": "ok",
-  "exit_code": 0,
-  "at": "2026-09-08T15:40:50Z",
-  "message": "args: [-p, ir.chobyar.sketch, -c, android.intent.category.LAUNCHER, 1]\n arg: \"-p\"\n arg: \"ir.chobyar.sketch\"\n arg: \"-c\"\n arg: \"android.intent.category.LAUNCHER\"\n arg: \"1\"\ndata=\"ir.chobyar.sketch\"\ndata=\"android.intent.category.LAUNCHER\"\nLAUNCH_OK pid=25321"
+  "seq": 5,
+  "action": "capture",
+  "status": "error",
+  "exit_code": 7,
+  "at": "2026-09-08T15:41:46Z",
+  "message": "/data/data/com.termux/files/home/.chobyar-tablet-relay/relay.sh: line 28: /data/data/com.termux/files/usr/bin/gh: Argument list too long"
 }
