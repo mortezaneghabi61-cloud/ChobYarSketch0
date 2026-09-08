@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 3,
-  "action": "install_download",
-  "status": "error",
-  "exit_code": 2,
-  "at": "2026-09-08T15:34:09Z",
-  "message": "INVALID_APK_FILENAME"
+  "seq": 4,
+  "action": "launch",
+  "status": "ok",
+  "exit_code": 0,
+  "at": "2026-09-08T15:40:50Z",
+  "message": "args: [-p, ir.chobyar.sketch, -c, android.intent.category.LAUNCHER, 1]\n arg: \"-p\"\n arg: \"ir.chobyar.sketch\"\n arg: \"-c\"\n arg: \"android.intent.category.LAUNCHER\"\n arg: \"1\"\ndata=\"ir.chobyar.sketch\"\ndata=\"android.intent.category.LAUNCHER\"\nLAUNCH_OK pid=25321"
 }
