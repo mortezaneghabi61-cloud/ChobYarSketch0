@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 20,
+  "seq": 21,
   "action": "capture",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T16:59:27Z",
-  "message": "gh: Invalid request.\n\n\"sha\" wasn't supplied. (HTTP 422)\nSCREEN_REPO_PATH=qa/tablet-relay/evidence/screen-20260908T165923Z.png\nEVIDENCE_DIR=/data/data/com.termux/files/home/.chobyar-qa-bridge/evidence/20260908-202821"
+  "at": "2026-09-08T17:03:31Z",
+  "message": "SCREEN_REPO_PATH=qa/tablet-relay/evidence/screen-20260908T170324Z.png\nEVIDENCE_DIR=/data/data/com.termux/files/home/.chobyar-qa-bridge/evidence/20260908-203255"
 }
