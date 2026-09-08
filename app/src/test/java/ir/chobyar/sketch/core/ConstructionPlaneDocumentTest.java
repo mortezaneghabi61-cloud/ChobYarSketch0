@@ -95,4 +95,30 @@ public final class ConstructionPlaneDocumentTest {
                 new ConstructionPlane.Vector(0,0,0),new ConstructionPlane.Vector(1,0,0),
                 new ConstructionPlane.Vector(0,1,0),new ConstructionPlane.Vector(0,0,1),true,4);
     }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void restoredOffsetGeometryMustMatchSourceAndSignedDistance() {
+        ConstructionPlane inconsistent=ConstructionPlane.offset("plane:offset:1","Bad offset",ConstructionPlane.XY_ID,5,
+                new ConstructionPlane.Vector(0,0,7),new ConstructionPlane.Vector(1,0,0),
+                new ConstructionPlane.Vector(0,1,0),new ConstructionPlane.Vector(0,0,1),true,3);
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        doc.restoreExternal(Arrays.asList(ConstructionPlane.baseXY(),ConstructionPlane.baseXZ(),ConstructionPlane.baseYZ(),inconsistent),
+                Collections.singletonMap("sketch:1",inconsistent.id),"sketch:1",inconsistent.id,2);
+    }
+
+    @Test public void planeCreationOrderRemainsUniqueAcrossTransactionEntryPoints() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        ConstructionPlane first=doc.createOffsetPlane(ConstructionPlane.XY_ID,2,"First");
+        ConstructionPlane second=doc.createOffsetPlaneWithSketch(ConstructionPlane.XY_ID,4,"Second","sketch:2");
+        assertNotEquals(first.creationOrder,second.creationOrder);
+    }
+
+    @Test public void rejectedOffsetDoesNotConsumeIdentityOrCreateHistory() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        ConstructionPlane edge=doc.createOffsetPlane(ConstructionPlane.XY_ID,1.0e12,"Limit");doc.clearHistory();
+        long serial=doc.nextOffsetSerial(),count=doc.planes().size();
+        try { doc.createOffsetPlaneWithSketch(edge.id,1,"Overflow","sketch:2"); }
+        catch(IllegalArgumentException expected) { assertEquals(serial,doc.nextOffsetSerial());assertEquals(count,doc.planes().size());assertFalse(doc.canUndo());return; }
+        throw new AssertionError("Invalid derived offset must fail closed");
+    }
 }
