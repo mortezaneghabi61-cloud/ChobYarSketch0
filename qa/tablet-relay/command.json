@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seq": 4,
-  "action": "launch",
+  "seq": 5,
+  "action": "capture",
   "args": {}
 }
