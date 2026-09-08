@@ -14,7 +14,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/** Production workspace contract for the Shapr-style main/Construct menu split. */
+/** Production workspace contract for the main/Construct authority split. */
 @RunWith(AndroidJUnit4.class)
 public final class ShaprConstructMenuInstrumentationTest {
 
@@ -43,15 +43,28 @@ public final class ShaprConstructMenuInstrumentationTest {
 
                 K33MirroredCadCanvasView canvas = findCanvas(root);
                 assertNotNull("Production CAD canvas not found", canvas);
-                assertEquals("Construct Plane menu must contain only real plane workflows", 4,
+                assertEquals("Construct Plane menu must contain existing base planes plus Offset", 4,
                         canvas.constructionPlaneMenuItems().length);
-                assertEquals("＋ Offset Sketch Plane", canvas.constructionPlaneMenuItems()[3]);
+                assertEquals("XY / Top", canvas.constructionPlaneMenuItems()[0]);
+                assertEquals("XZ / Front", canvas.constructionPlaneMenuItems()[1]);
+                assertEquals("YZ / Side", canvas.constructionPlaneMenuItems()[2]);
+                assertEquals("＋ Offset Plane", canvas.constructionPlaneMenuItems()[3]);
                 for (String item : canvas.constructionPlaneMenuItems()) {
-                    assertFalse("Camera actions belong to the View Cube/right controls: " + item,
+                    assertFalse("Construct must not create Sketches: " + item, item.contains("Sketch"));
+                    assertFalse("Camera actions belong to View controls: " + item,
                             item.contains("View") || item.contains("3D"));
                     assertFalse("Construction Axis must not be exposed without a real backend: " + item,
                             item.contains("Axis"));
                 }
+
+                canvas.setStandardView("ISO");
+                String sketchBefore = canvas.activeSketchStableId();
+                int sketchItemsBefore = sketchCount(canvas.projectItemRefs());
+                assertTrue(canvas.activateConstructionPlane("plane:xz").contains("XZ"));
+                assertEquals("plane:xz", canvas.activeConstructionPlaneId());
+                assertEquals(sketchBefore, canvas.activeSketchStableId());
+                assertEquals(sketchItemsBefore, sketchCount(canvas.projectItemRefs()));
+                assertTrue(canvas.is3DOverview());
 
                 View close = findVisible(root, "Close");
                 assertNotNull("Construct palette Close not found", close);
@@ -64,6 +77,12 @@ public final class ShaprConstructMenuInstrumentationTest {
                         hasVisible(root, "Plane"));
             });
         }
+    }
+
+    private static int sketchCount(CadItemRef[] items) {
+        int n = 0;
+        for (CadItemRef item : items) if (item.kind == CadItemRef.Kind.SKETCH) n++;
+        return n;
     }
 
     private static boolean hasVisible(View root, String description) {
