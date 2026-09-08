@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 1,
+  "seq": 2,
   "action": "status",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T11:40:22Z",
-  "message": "TIME=2026-09-08T11:40:18Z\nAndroid Debug Bridge version 1.0.41\nList of devices attached\n\nSAVED_SERIAL="
+  "at": "2026-09-08T12:00:37Z",
+  "message": "TIME=2026-09-08T12:00:36Z\nAndroid Debug Bridge version 1.0.41\nList of devices attached\n127.0.0.1:38979        device product:gts10fewifixx model:SM_X520 device:gts10fewifi transport_id:1\n\nSAVED_SERIAL=127.0.0.1:38979\nMODEL=SM-X520\nANDROID=16\nSDK=36"
 }
