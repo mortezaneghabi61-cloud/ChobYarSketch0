@@ -76,6 +76,12 @@ public final class ConstructionPlaneDocument {
         activeSketchId=id;activePlaneId=planeId;revision++;return true;
     }
 
+    /** Activate construction context without changing the active Sketch or creating history. */
+    public synchronized boolean activatePlane(String planeId){
+        String id=clean(planeId);if(!planes.containsKey(id)||id.equals(activePlaneId))return false;
+        activePlaneId=id;revision++;return true;
+    }
+
     public synchronized boolean renamePlane(String id,String name){
         ConstructionPlane old=requirePlane(id);String cleanName=clean(name);if(cleanName.isEmpty())throw new IllegalArgumentException("Plane name is empty");
         if(old.displayName.equals(cleanName))return false;Snapshot before=snapshot();planes.put(old.id,old.renamed(cleanName));commit(before);return true;
