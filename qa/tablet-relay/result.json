@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 11,
-  "action": "launch",
-  "status": "error",
-  "exit_code": 1,
-  "at": "2026-09-08T16:44:12Z",
-  "message": "adb: device '127.0.0.1:38979' not found"
+  "seq": 12,
+  "action": "status",
+  "status": "ok",
+  "exit_code": 0,
+  "at": "2026-09-08T16:49:24Z",
+  "message": "TIME=2026-09-08T16:49:24Z\nAndroid Debug Bridge version 1.0.41\nList of devices attached\n127.0.0.1:45095        device product:gts10fewifixx model:SM_X520 device:gts10fewifi transport_id:2\n\nSAVED_SERIAL=127.0.0.1:45095\nMODEL=SM-X520\nANDROID=16\nSDK=36\npackage:/data/app/~~vZFZjiMZUa9y0X1XeETY2A==/ir.chobyar.sketch-HVzulU73DF5oyAE7F3bQhA==/base.apk"
 }
