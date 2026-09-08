@@ -104,7 +104,7 @@ run_contract SmartCommandSelectionInstrumentationTest command-selection 'OK (1 t
 run_contract ShaprConstructMenuInstrumentationTest shapr-construct-menu 'OK (1 test)'
 run_contract ContextualSelectionCapabilitiesInstrumentationTest contextual-selection 'OK (3 tests)'
 run_contract ModelOwnedConstructionPlaneInstrumentationTest model-owned-construction-plane 'OK (9 tests)'
-run_contract ProfessionalSketchPlacementInstrumentationTest professional-sketch-placement 'OK (1 test)'
+run_contract ProfessionalSketchPlacementInstrumentationTest professional-sketch-placement 'OK (6 tests)'
 
 # GPU renderer lifecycle
 run_contract FilamentLifecycleInstrumentationTest filament-lifecycle 'OK (3 tests)'
