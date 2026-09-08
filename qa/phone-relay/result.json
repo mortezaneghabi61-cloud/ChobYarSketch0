@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "seq": 1,
+  "action": "status",
+  "status": "ok",
+  "exit_code": 0,
+  "at": "2026-09-08T10:23:26Z",
+  "message": "TIME=2026-09-08T10:23:22Z\nAndroid Debug Bridge version 1.0.41\nList of devices attached\n\nSAVED_SERIAL="
+}
