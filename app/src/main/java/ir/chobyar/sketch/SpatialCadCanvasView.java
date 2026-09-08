@@ -41,6 +41,7 @@ import ir.chobyar.sketch.core.ConstructionPlaneDocument;
  * layer rather than faked here.
  */
 public class SpatialCadCanvasView extends EasyCadCanvasView {
+    private static final String REFERENCE_IMAGE_ITEM_ID = "reference-image:1";
 
     private Field entitiesField;
 
@@ -77,9 +78,12 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     }
     private ReferenceImage referenceImage;
     private final Paint referenceImagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+    private final ProfessionalSketchPlacementController sketchPlacementController;
+    private GpuCameraState modelCameraBeforeSketch;
 
     public SpatialCadCanvasView(Context context) {
         super(context);
+        sketchPlacementController = new ProfessionalSketchPlacementController(this);
         initSpatialReflection();
         initSpatialPaints();
     }
@@ -170,11 +174,98 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
         boolean changed=constructionPlaneDocument().redo();if(changed){restoreSketchSpacesFromPlaneModel();invalidate();dispatchWorkspaceState();}return changed;}
     public final boolean hasProjectConstructionPlanes(){return !constructionPlaneDocument().isDefaultProjectState("sketch:1");}
     public final String exportConstructionPlaneModel(){return ExactModelProjectAdapter.exportModel((Shapr3DGuideCadCanvasView)this);}
-    public final void importConstructionPlaneModel(String raw){ExactModelProjectAdapter.restoreModel((Shapr3DGuideCadCanvasView)this,raw,exportSketchProjectState());}
+    public final void importConstructionPlaneModel(String raw){resetTransientSketchPlacement();ExactModelProjectAdapter.restoreModel((Shapr3DGuideCadCanvasView)this,raw,exportSketchProjectState());}
 
     final List<ConstructionPlane> constructionPlaneSnapshot(){return constructionPlaneDocument().planes();}
     final Map<String,String> sketchPlaneAssignmentSnapshot(){return constructionPlaneDocument().sketchPlaneAssignments();}
     final ConstructionPlaneDocument constructionPlaneModel(){return constructionPlaneDocument();}
+
+    /** Subclasses append exact body identities without exposing kernel objects. */
+    protected void appendBodyItemRefs(List<CadItemRef> out) {}
+
+    /** Typed projection of model/document Items; labels never become identity. */
+    public final CadItemRef[] projectItemRefs(){
+        List<CadItemRef> out=new ArrayList<>();appendBodyItemRefs(out);appendSketchItemRefs(out);
+        for(ConstructionPlane plane:constructionPlaneDocument().planes())out.add(new CadItemRef(CadItemRef.Kind.PLANE,plane.id,plane.displayName,plane.visible));
+        if(referenceImage!=null)out.add(new CadItemRef(CadItemRef.Kind.REFERENCE_IMAGE,REFERENCE_IMAGE_ITEM_ID,referenceImage.name,referenceImage.visible));
+        return out.toArray(new CadItemRef[0]);
+    }
+
+    public final String activateConstructionPlane(String planeId){
+        ConstructionPlane plane=constructionPlaneDocument().plane(planeId);if(plane==null)return "Construction Plane was not found";
+        if(constructionPlaneDocument().activatePlane(plane.id)){invalidate();dispatchWorkspaceState();}
+        return "Construction Plane • "+plane.displayName;
+    }
+
+    public final boolean setConstructionPlaneItemVisibility(String planeId,boolean visible){
+        boolean changed=constructionPlaneDocument().setPlaneVisibility(planeId,visible);if(changed){invalidate();dispatchWorkspaceState();}return changed;
+    }
+
+    public final boolean renameConstructionPlaneItem(String planeId,String name){
+        boolean changed=constructionPlaneDocument().renamePlane(planeId,name);if(changed){invalidate();dispatchWorkspaceState();}return changed;
+    }
+
+    public final ConstructionPlaneDocument.DeleteResult deleteConstructionPlaneItem(String planeId){
+        ConstructionPlaneDocument.DeleteResult result=constructionPlaneDocument().deletePlane(planeId);
+        if(result==ConstructionPlaneDocument.DeleteResult.DELETED){invalidate();dispatchWorkspaceState();}
+        return result;
+    }
+
+    public final String sketchPlaneId(String sketchId){return constructionPlaneDocument().planeIdForSketch(sketchId);}
+
+    /** Enter the real transient AWAITING_TARGET state without allocating identity. */
+    public final String beginSketchPlacement(){
+        if(!overview3D)return "Finish the current Sketch before creating another";
+        captureModelCameraForSketchSession();
+        if(!sketchPlacementController.begin())return "Sketch placement is unavailable";
+        invalidate();return "Sketch • Select a construction plane or planar face";
+    }
+
+    public final boolean isSketchPlacementAwaitingTarget(){
+        return sketchPlacementController.state()==ProfessionalSketchPlacementController.State.AWAITING_TARGET;
+    }
+
+    public final void cancelSketchPlacement(){resetTransientSketchPlacement();invalidate();}
+
+    public final String startSketchOnConstructionPlane(String planeId){
+        return sketchPlacementController.startNewSketchOnPlane(planeId);
+    }
+
+    /** Existing Sketch Items enter the exact Sketch identity; they never clone it. */
+    public final String editExistingSketch(String sketchId){
+        if(!hasSketchSpace(sketchId))return "Sketch was not found";
+        captureModelCameraForSketchSession();overview3D=false;orbiting=false;navigating2D=false;
+        String result=switchSketchSpaceByStableId(sketchId);invalidate();post(this::fitAll);return result;
+    }
+
+    /** Face placement remains implemented by SolidCadCanvasView's proven path. */
+    protected final void prepareModelCameraForSketchSession(){captureModelCameraForSketchSession();}
+    protected final void completeExternalSketchPlacementTarget(){sketchPlacementController.completeExternalTarget();}
+
+    public final String finishSketchSessionToModel(){
+        setTool(TOOL_SELECT);sketchPlacementController.cancel();orbiting=false;navigating2D=false;
+        GpuCameraState saved=modelCameraBeforeSketch;modelCameraBeforeSketch=null;
+        if(validModelCamera(saved))restoreModelCamera(saved);else applyDeterministicModelCamera();
+        overview3D=true;invalidate();dispatchWorkspaceState();return "3D View";
+    }
+
+    private void captureModelCameraForSketchSession(){
+        if(overview3D&&modelCameraBeforeSketch==null){GpuCameraState candidate=gpuCameraState();if(validModelCamera(candidate))modelCameraBeforeSketch=candidate;}
+    }
+
+    private void resetTransientSketchPlacement(){sketchPlacementController.cancel();modelCameraBeforeSketch=null;}
+    private static boolean validModelCamera(GpuCameraState state){
+        return state!=null&&state.visible&&Float.isFinite(state.yaw)&&Float.isFinite(state.pitch)&&Float.isFinite(state.scale)&&state.scale>0f
+                &&Float.isFinite(state.targetX)&&Float.isFinite(state.targetY)&&Float.isFinite(state.targetZ)
+                &&Float.isFinite(state.panX)&&Float.isFinite(state.panY);
+    }
+    private void restoreModelCamera(GpuCameraState state){
+        cameraYaw=state.yaw;cameraPitch=state.pitch;spatialScale=state.scale;cameraTargetX=state.targetX;cameraTargetY=state.targetY;cameraTargetZ=state.targetZ;
+        cameraPanX=state.panX;cameraPanY=state.panY;
+    }
+    private void applyDeterministicModelCamera(){
+        cameraYaw=218f;cameraPitch=24f;spatialScale=1.25f;cameraTargetX=0f;cameraTargetY=0f;cameraTargetZ=0f;cameraPanX=0f;cameraPanY=0f;
+    }
 
     private void bindGeometryToSketch(String sketchId,Geometry3D.Plane3D plane){
         ConstructionPlane.Vector origin=vector(plane.origin),u=vector(plane.u),v=vector(plane.v);
@@ -216,6 +307,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
      * also gives the rest of the UI one reliable source of truth for 2D/3D mode.
      */
     public String enterActiveSketchView() {
+        captureModelCameraForSketchSession();
         overview3D = false;
         orbiting = false;
         navigating2D = false;
@@ -262,48 +354,54 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
     public void showPlaneManager() {
         String[] items = constructionPlaneMenuItems();
         new AlertDialog.Builder(getContext())
-                .setTitle("Construct • Sketch Plane")
+                .setTitle("Construct • Plane")
                 .setMessage("Active plane: " + activePlaneLabel()
-                        + "\nStart a sketch on a standard plane or on a parallel offset from the active plane.")
+                        + "\nActivate an existing base plane or create a parallel offset plane.")
                 .setItems(items, (d, which) -> {
-                    if (which == 0) createSketchSpaceOnConstructionPlane("Sketch XY",ConstructionPlane.XY_ID);
-                    else if (which == 1) createSketchSpaceOnConstructionPlane("Sketch XZ",ConstructionPlane.XZ_ID);
-                    else if (which == 2) createSketchSpaceOnConstructionPlane("Sketch YZ",ConstructionPlane.YZ_ID);
+                    if (which == 0) toast(activateConstructionPlane(ConstructionPlane.XY_ID));
+                    else if (which == 1) toast(activateConstructionPlane(ConstructionPlane.XZ_ID));
+                    else if (which == 2) toast(activateConstructionPlane(ConstructionPlane.YZ_ID));
                     else if (which == 3) showOffsetPlaneDialog();
                 })
                 .setNegativeButton("Close", null)
                 .show();
     }
 
-    /** Truthful Construct capabilities: each action creates a real Sketch plane. */
+    /** Truthful Construct capabilities: construction geometry, never Sketch creation. */
     final String[] constructionPlaneMenuItems() {
         return new String[] {
-                "＋ Sketch on XY / Top",
-                "＋ Sketch on XZ / Front",
-                "＋ Sketch on YZ / Right",
-                "＋ Offset Sketch Plane"
+                "XY / Top",
+                "XZ / Front",
+                "YZ / Side",
+                "＋ Offset Plane"
         };
     }
 
     public String createSketchSpaceOnConstructionPlane(String baseName,String planeId) {
         if(!constructionPlaneDocument().containsPlane(planeId))return "Construction Plane was not found";
+        captureModelCameraForSketchSession();overview3D=false;orbiting=false;navigating2D=false;
         String result = createSketchSpaceWithAssignedPlane(baseName + " " + (constructionPlaneDocument().planes().size()+1),planeId,false);
-        overview3D = false;
-        invalidate();return result;
+        invalidate();post(this::fitAll);return result;
+    }
+
+    /** Construct creates construction geometry only; Sketch creation is a separate user intent. */
+    public String createOffsetConstructionPlane(float offsetMm,String requestedName) {
+        if(!Float.isFinite(offsetMm))throw new IllegalArgumentException("Offset Plane distance must be finite");
+        ConstructionPlane plane=constructionPlaneDocument().createOffsetPlane(activeConstructionPlaneId(),offsetMm,requestedName);
+        invalidate();dispatchWorkspaceState();return plane.id;
     }
 
     /** Deterministic non-modal parallel Sketch plane entry for commands/tests. */
     public String createOffsetSketchSpace(float offsetMm, String requestedName) {
         if (!Float.isFinite(offsetMm)) return "Offset Plane • Distance must be a finite value";
+        captureModelCameraForSketchSession();
         String name = requestedName == null || requestedName.trim().isEmpty()
                 ? "Offset Plane " + (constructionPlaneDocument().planes().size() + 1)
                 : requestedName.trim();
         String sketchId=nextSketchStableId();
         ConstructionPlane plane=constructionPlaneDocument().createOffsetPlaneWithSketch(activeConstructionPlaneId(),offsetMm,name,sketchId);
+        overview3D = false;orbiting = false;navigating2D = false;
         String result = createSketchSpaceWithAssignedPlane(name,plane.id,true)+" | "+plane.displayName;
-        overview3D = false;
-        orbiting = false;
-        navigating2D = false;
         invalidate();
         return result;
     }
@@ -323,7 +421,8 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
                     try {
                         float mm = Float.parseFloat(normalizeDigits(input.getText().toString().trim()));
                         if (!Float.isFinite(mm)) throw new IllegalArgumentException("Distance must be finite");
-                        toast(createOffsetSketchSpace(mm, null));
+                        String planeId=createOffsetConstructionPlane(mm,null);
+                        toast(constructionPlaneDocument().plane(planeId).displayName+" created");
                     } catch (Exception e) { toast("Distance was entered incorrectly"); }
                 })
                 .setNegativeButton("Cancel", null)
@@ -364,6 +463,7 @@ public class SpatialCadCanvasView extends EasyCadCanvasView {
 
     /** Clear project-owned auxiliary image state together with Sketch/model state. */
     @Override public void clearAll(){
+        resetTransientSketchPlacement();
         referenceImage=null;
         super.clearAll();
     }

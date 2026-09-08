@@ -76,6 +76,12 @@ public final class ConstructionPlaneDocument {
         activeSketchId=id;activePlaneId=planeId;revision++;return true;
     }
 
+    /** Activate construction context without changing the active Sketch or creating history. */
+    public synchronized boolean activatePlane(String planeId){
+        String id=clean(planeId);if(!planes.containsKey(id)||id.equals(activePlaneId))return false;
+        activePlaneId=id;revision++;return true;
+    }
+
     public synchronized boolean renamePlane(String id,String name){
         ConstructionPlane old=requirePlane(id);String cleanName=clean(name);if(cleanName.isEmpty())throw new IllegalArgumentException("Plane name is empty");
         if(old.displayName.equals(cleanName))return false;Snapshot before=snapshot();planes.put(old.id,old.renamed(cleanName));commit(before);return true;
@@ -123,7 +129,7 @@ public final class ConstructionPlaneDocument {
             incomingAssignments.put(sketch,plane);
         }
         String activePlane=clean(restoredActivePlaneId);if(!incoming.containsKey(activePlane))throw new IllegalArgumentException("Active plane is missing");
-        String activeSketch=clean(restoredActiveSketchId);if(!activeSketch.isEmpty()&&!activePlane.equals(incomingAssignments.get(activeSketch)))throw new IllegalArgumentException("Active Sketch plane relationship is invalid");
+        String activeSketch=clean(restoredActiveSketchId);if(!activeSketch.isEmpty()&&!incomingAssignments.containsKey(activeSketch))throw new IllegalArgumentException("Active Sketch plane relationship is invalid");
         if(restoredNextSerial<1)throw new IllegalArgumentException("Plane serial is invalid");
         planes.clear();planes.putAll(incoming);sketchPlaneIds.clear();sketchPlaneIds.putAll(incomingAssignments);
         activeSketchId=activeSketch.isEmpty()?null:activeSketch;activePlaneId=activePlane;nextOffsetSerial=restoredNextSerial;

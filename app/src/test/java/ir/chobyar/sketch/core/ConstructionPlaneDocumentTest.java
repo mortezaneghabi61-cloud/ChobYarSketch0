@@ -121,4 +121,43 @@ public final class ConstructionPlaneDocumentTest {
         catch(IllegalArgumentException expected) { assertEquals(serial,doc.nextOffsetSerial());assertEquals(count,doc.planes().size());assertFalse(doc.canUndo());return; }
         throw new AssertionError("Invalid composite transaction must fail closed");
     }
+
+    @Test public void restoreAllowsActiveConstructionPlaneIndependentOfActiveSketch() {
+        ConstructionPlaneDocument source=new ConstructionPlaneDocument();
+        source.createSketchOnPlane("sketch:1",ConstructionPlane.XY_ID);
+        source.clearHistory();
+        String planeId=source.createOffsetPlane(ConstructionPlane.XY_ID,6.5,"Construction datum").id;
+        assertEquals("sketch:1",source.activeSketchId());
+        assertEquals(ConstructionPlane.XY_ID,source.planeIdForSketch("sketch:1"));
+        assertEquals(planeId,source.activePlaneId());
+
+        ConstructionPlaneDocument restored=new ConstructionPlaneDocument();
+        restored.restoreExternal(source.planes(),source.sketchPlaneAssignments(),
+                source.activeSketchId(),source.activePlaneId(),source.nextOffsetSerial());
+
+        assertEquals("sketch:1",restored.activeSketchId());
+        assertEquals(ConstructionPlane.XY_ID,restored.planeIdForSketch("sketch:1"));
+        assertEquals(planeId,restored.activePlaneId());
+        assertEquals(6.5,restored.plane(planeId).offsetDistanceMm,0.0);
+    }
+
+    @Test public void activatingPlaneDoesNotSwitchSketchOrCreateHistory() {
+        ConstructionPlaneDocument doc=new ConstructionPlaneDocument();
+        doc.createSketchOnPlane("sketch:1",ConstructionPlane.XY_ID);
+        doc.clearHistory();
+        long before=doc.revision();
+
+        assertTrue(doc.activatePlane(ConstructionPlane.XZ_ID));
+        assertEquals("sketch:1",doc.activeSketchId());
+        assertEquals(ConstructionPlane.XY_ID,doc.planeIdForSketch("sketch:1"));
+        assertEquals(ConstructionPlane.XZ_ID,doc.activePlaneId());
+        assertTrue(doc.revision()>before);
+        assertFalse(doc.canUndo());
+
+        long revision=doc.revision();
+        assertFalse(doc.activatePlane(ConstructionPlane.XZ_ID));
+        assertEquals(revision,doc.revision());
+        assertFalse(doc.activatePlane("plane:missing"));
+        assertEquals(revision,doc.revision());
+    }
 }

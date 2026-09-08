@@ -175,7 +175,7 @@ final class ExactModelProjectState {
         if(typed){Set<String> ids=new HashSet<>();for(int i=0;i<rows.length();i++){ConstructionPlane p=constructionPlaneFromJson(rows.getJSONObject(i));if(!ids.add(p.id))throw new IllegalArgumentException("Duplicate construction plane id");}
             java.util.Iterator<String> keys=assignments.keys();while(keys.hasNext()){String sketch=keys.next();String plane=assignments.getString(sketch);if(sketch.trim().isEmpty()||!ids.contains(plane))throw new IllegalArgumentException("Sketch plane assignment is invalid");}
             if(!activePlane.isEmpty()&&!ids.contains(activePlane))throw new IllegalArgumentException("Active construction plane is missing");
-            if(!activeSketch.isEmpty()&&!activePlane.equals(assignments.optString(activeSketch,"")))throw new IllegalArgumentException("Active Sketch plane assignment is invalid");
+            if(!activeSketch.isEmpty()&&!assignments.has(activeSketch))throw new IllegalArgumentException("Active Sketch plane assignment is invalid");
             if(serial<1)throw new IllegalArgumentException("Plane serial is invalid");return;}
         Set<String> layers=new HashSet<>();
         for(int i=0;i<rows.length();i++){
