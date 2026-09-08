@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seq": 0,
-  "action": "idle",
+  "seq": 1,
+  "action": "status",
   "args": {}
 }
