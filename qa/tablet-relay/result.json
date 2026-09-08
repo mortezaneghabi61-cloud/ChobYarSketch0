@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 6,
-  "action": "capture",
+  "seq": 7,
+  "action": "tap",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T15:45:38Z",
-  "message": "EVIDENCE_DIR=/data/data/com.termux/files/home/.chobyar-qa-bridge/evidence/20260908-191520"
+  "at": "2026-09-08T15:48:06Z",
+  "message": "OK"
 }
