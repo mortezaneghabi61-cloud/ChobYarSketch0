@@ -1,46 +1,26 @@
 package ir.chobyar.sketch;
 
 import android.content.Context;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import ir.chobyar.sketch.core.ConstructionPlane;
+import ir.chobyar.sketch.core.ConstructionPlaneDocument;
+import static org.junit.Assert.*;
 
 /** Production contracts for plane-aware Sketch placement and construction Items. */
 @RunWith(AndroidJUnit4.class)
 public final class ProfessionalSketchPlacementInstrumentationTest {
-    private static K33MirroredCadCanvasView canvas() {
-        Context context = ApplicationProvider.getApplicationContext();
-        return new K33MirroredCadCanvasView(context);
-    }
+    private static K33MirroredCadCanvasView canvas(){return new K33MirroredCadCanvasView(ApplicationProvider.getApplicationContext());}
+    private static void onMain(Runnable task){final Throwable[] failure={null};InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{try{task.run();}catch(Throwable t){failure[0]=t;}});if(failure[0] instanceof AssertionError)throw(AssertionError)failure[0];if(failure[0] instanceof RuntimeException)throw(RuntimeException)failure[0];if(failure[0]!=null)throw new RuntimeException(failure[0]);}
 
-    private static void onMain(Runnable task) {
-        final Throwable[] failure = {null};
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            try { task.run(); } catch (Throwable t) { failure[0] = t; }
-        });
-        if (failure[0] instanceof AssertionError) throw (AssertionError) failure[0];
-        if (failure[0] instanceof RuntimeException) throw (RuntimeException) failure[0];
-        if (failure[0] != null) throw new RuntimeException(failure[0]);
-    }
-
-    @Test public void constructOffsetCreatesPlaneWithoutSketch() {
-        onMain(() -> {
-            K33MirroredCadCanvasView cad = canvas();
-            cad.setStandardView("ISO");
-            String sketchBefore = cad.activeSketchStableId();
-            String planeId = cad.createOffsetConstructionPlane(12.5f, "Shelf datum");
-
-            assertTrue(cad.hasConstructionPlane(planeId));
-            assertEquals(sketchBefore, cad.activeSketchStableId());
-            assertEquals(12.5, cad.constructionPlaneOffsetMm(planeId), 0.0);
-            assertTrue(cad.is3DOverview());
-        });
-    }
+    @Test public void constructOffsetCreatesPlaneWithoutSketch(){onMain(()->{K33MirroredCadCanvasView cad=canvas();cad.setStandardView("ISO");String before=cad.activeSketchStableId();String plane=cad.createOffsetConstructionPlane(12.5f,"Shelf datum");assertTrue(cad.hasConstructionPlane(plane));assertEquals(before,cad.activeSketchStableId());assertEquals(12.5,cad.constructionPlaneOffsetMm(plane),0.0);assertTrue(cad.is3DOverview());});}
+    @Test public void constructBasePlaneDoesNotCreateSketch(){onMain(()->{K33MirroredCadCanvasView cad=canvas();String before=cad.activeSketchStableId();assertTrue(cad.activateConstructionPlane(ConstructionPlane.XZ_ID));assertEquals(before,cad.activeSketchStableId());assertTrue(cad.is3DOverview());});}
+    @Test public void sketchFromModelRequiresExplicitTargetAndCancelCreatesNothing(){onMain(()->{K33MirroredCadCanvasView cad=canvas();cad.setStandardView("ISO");String before=cad.activeSketchStableId();long revision=cad.constructionPlaneModelRevision();assertTrue(cad.beginSketchPlacement());assertTrue(cad.isSketchPlacementAwaitingTarget());assertEquals(before,cad.activeSketchStableId());assertEquals(revision,cad.constructionPlaneModelRevision());cad.cancelSketchPlacement();assertFalse(cad.isSketchPlacementAwaitingTarget());assertEquals(before,cad.activeSketchStableId());assertEquals(revision,cad.constructionPlaneModelRevision());});}
+    @Test public void sketchOnBuiltInAndOffsetPlaneReferenceExactStableIds(){onMain(()->{K33MirroredCadCanvasView cad=canvas();cad.setStandardView("ISO");cad.beginSketchPlacement();String first=cad.startNewSketchOnConstructionPlane(ConstructionPlane.XY_ID);assertEquals(ConstructionPlane.XY_ID,cad.constructionPlaneIdForSketch(first));cad.setStandardView("ISO");String offset=cad.createOffsetConstructionPlane(18f,"Door datum");cad.beginSketchPlacement();String second=cad.startNewSketchOnConstructionPlane(offset);assertEquals(offset,cad.constructionPlaneIdForSketch(second));assertNotEquals(first,second);});}
+    @Test public void planeItemsAreTypedAndModelOwned(){onMain(()->{K33MirroredCadCanvasView cad=canvas();String offset=cad.createOffsetConstructionPlane(7f,"Shelf datum");assertTrue(cad.professionalItemIds().contains("PLANE:"+ConstructionPlane.XY_ID));assertTrue(cad.professionalItemIds().contains("PLANE:"+offset));long revision=cad.constructionPlaneModelRevision();assertTrue(cad.setConstructionPlaneVisibility(offset,false));assertFalse(cad.isConstructionPlaneVisible(offset));assertTrue(cad.constructionPlaneModelRevision()>revision);assertTrue(cad.renameConstructionPlane(offset,"Shelf datum renamed"));assertEquals(offset,cad.constructionPlaneIdByDisplayName("Shelf datum renamed"));assertEquals(ConstructionPlaneDocument.DeleteResult.BUILT_IN,cad.deleteConstructionPlane(ConstructionPlane.XY_ID));});}
+    @Test public void referencedAndDerivedPlanesFailClosedOnDelete(){onMain(()->{K33MirroredCadCanvasView cad=canvas();String parent=cad.createOffsetConstructionPlane(10f,"Parent");String child=cad.createOffsetConstructionPlane(5f,"Child");assertEquals(ConstructionPlaneDocument.DeleteResult.HAS_DERIVED_PLANES,cad.deleteConstructionPlane(parent));cad.beginSketchPlacement();cad.startNewSketchOnConstructionPlane(child);assertEquals(ConstructionPlaneDocument.DeleteResult.IN_USE,cad.deleteConstructionPlane(child));});}
+    @Test public void existingSketchEditsSameIdentityAndNewSketchDoesNotReuseIt(){onMain(()->{K33MirroredCadCanvasView cad=canvas();cad.beginSketchPlacement();String first=cad.startNewSketchOnConstructionPlane(ConstructionPlane.XY_ID);cad.setStandardView("ISO");assertTrue(cad.editExistingSketch(first));assertEquals(first,cad.activeSketchStableId());cad.setStandardView("ISO");cad.beginSketchPlacement();String second=cad.startNewSketchOnConstructionPlane(ConstructionPlane.YZ_ID);assertNotEquals(first,second);assertEquals(ConstructionPlane.YZ_ID,cad.constructionPlaneIdForSketch(second));});}
 }
