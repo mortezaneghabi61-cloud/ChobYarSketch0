@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 9,
-  "action": "launch",
-  "status": "ok",
-  "exit_code": 0,
-  "at": "2026-09-08T15:50:42Z",
-  "message": "args: [-p, ir.chobyar.sketch, -c, android.intent.category.LAUNCHER, 1]\n arg: \"-p\"\n arg: \"ir.chobyar.sketch\"\n arg: \"-c\"\n arg: \"android.intent.category.LAUNCHER\"\n arg: \"1\"\ndata=\"ir.chobyar.sketch\"\ndata=\"android.intent.category.LAUNCHER\"\nLAUNCH_OK pid=30617"
+  "seq": 10,
+  "action": "capture",
+  "status": "error",
+  "exit_code": 7,
+  "at": "2026-09-08T15:52:17Z",
+  "message": "gh: Invalid request.\n\n\"sha\" wasn't supplied. (HTTP 422)"
 }
