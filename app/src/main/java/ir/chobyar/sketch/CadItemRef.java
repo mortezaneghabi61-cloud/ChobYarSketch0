@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Stable typed identity for one row in the project Items hierarchy.
  *
- * Presentation labels are intentionally not identity.  Callers must route
+ * Presentation labels are intentionally not identity. Callers must route
  * actions by {@link #kind} and {@link #stableId}; visibility is a projection of
  * the owning model state and must never become a second source of truth here.
  */
@@ -29,16 +29,16 @@ public final class CadItemRef {
         this.visible = visible;
     }
 
+    /** Equality follows stable project identity, not mutable presentation state. */
     @Override public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof CadItemRef)) return false;
         CadItemRef that = (CadItemRef) other;
-        return visible == that.visible && kind == that.kind
-                && stableId.equals(that.stableId) && label.equals(that.label);
+        return kind == that.kind && stableId.equals(that.stableId);
     }
 
     @Override public int hashCode() {
-        return Objects.hash(kind, stableId, label, visible);
+        return Objects.hash(kind, stableId);
     }
 
     @Override public String toString() {
