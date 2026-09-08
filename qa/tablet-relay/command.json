@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seq": 18,
-  "action": "capture",
-  "args": {}
+  "seq": 19,
+  "action": "tap",
+  "args": {"x": 1288, "y": 757}
 }
