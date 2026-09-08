@@ -745,7 +745,8 @@ public final class ChobYarActivity extends Activity {
     }
 
     private String itemRow(CadItemRef item){
-        String kind=item.kind==CadItemRef.Kind.REFERENCE_IMAGE?"Reference Image":item.kind.name().substring(0,1)+item.kind.name().substring(1).toLowerCase(java.util.Locale.US);
+        if(item.kind==CadItemRef.Kind.REFERENCE_IMAGE)return (item.visible?"":"○ ")+"▧ Reference Image"+("Reference Image".equals(item.label)?"":" • "+item.label);
+        String kind=item.kind.name().substring(0,1)+item.kind.name().substring(1).toLowerCase(java.util.Locale.US);
         return (item.visible?"◉ ":"○ ")+kind+" • "+item.label;
     }
 
