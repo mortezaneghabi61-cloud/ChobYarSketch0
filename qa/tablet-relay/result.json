@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "seq": 12,
-  "action": "status",
+  "seq": 13,
+  "action": "launch",
   "status": "ok",
   "exit_code": 0,
-  "at": "2026-09-08T16:49:24Z",
-  "message": "TIME=2026-09-08T16:49:24Z\nAndroid Debug Bridge version 1.0.41\nList of devices attached\n127.0.0.1:45095        device product:gts10fewifixx model:SM_X520 device:gts10fewifi transport_id:2\n\nSAVED_SERIAL=127.0.0.1:45095\nMODEL=SM-X520\nANDROID=16\nSDK=36\npackage:/data/app/~~vZFZjiMZUa9y0X1XeETY2A==/ir.chobyar.sketch-HVzulU73DF5oyAE7F3bQhA==/base.apk"
+  "at": "2026-09-08T16:50:06Z",
+  "message": "args: [-p, ir.chobyar.sketch, -c, android.intent.category.LAUNCHER, 1]\n arg: \"-p\"\n arg: \"ir.chobyar.sketch\"\n arg: \"-c\"\n arg: \"android.intent.category.LAUNCHER\"\n arg: \"1\"\ndata=\"ir.chobyar.sketch\"\ndata=\"android.intent.category.LAUNCHER\"\nLAUNCH_OK pid=1128"
 }
