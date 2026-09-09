@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seq": 24,
-  "action": "smoke",
+  "seq": 25,
+  "action": "status",
   "args": {}
 }
