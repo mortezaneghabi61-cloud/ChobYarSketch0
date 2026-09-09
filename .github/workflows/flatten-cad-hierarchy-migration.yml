@@ -81,7 +81,7 @@ jobs:
               count=1,
           )
 
-          # One method was duplicated by the damaged transport. Keep the first exact method body.
+          # One method was duplicated by damaged transport. Keep the first exact body.
           signature = 'private void addClassForNameStringEdits(UnitInfo u)'
           starts = [m.start() for m in re.finditer(re.escape(signature), code)]
           if len(starts) == 2:
@@ -107,6 +107,19 @@ jobs:
               code = code[:start] + code[end:]
           elif len(starts) != 1:
               raise SystemExit(f'unexpected addClassForNameStringEdits count={len(starts)}')
+
+          # Compiler diagnostics proved three TreePathScanner visitors lost their final null return.
+          # Insert only where the exact diagnosed lines are closing braces; otherwise fail closed.
+          lines = code.splitlines()
+          for line_no in (190, 185, 172):
+              idx = line_no - 1
+              if idx < 0 or idx >= len(lines) or lines[idx].strip() != '}':
+                  lo = max(0, idx - 3); hi = min(len(lines), idx + 4)
+                  raise SystemExit('unexpected return repair context at line %d: %r' %
+                                   (line_no, lines[lo:hi]))
+              indent = lines[idx][:-len(lines[idx].lstrip())]
+              lines.insert(idx, indent + 'return null;')
+          code = '\n'.join(lines) + '\n'
 
           if n1 != 1 or n2 != 1:
               raise SystemExit(f'expected exact transformer repairs n1={n1} n2={n2}')
