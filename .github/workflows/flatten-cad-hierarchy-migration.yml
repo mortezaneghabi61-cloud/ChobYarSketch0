@@ -43,7 +43,6 @@ jobs:
           raw = base64.b64decode(clean, validate=False)
           code = raw.decode('utf-8', errors='replace')
 
-          # Repair the few bytes damaged while the one-shot transformer was transported.
           code = code.replace('e=>ownerIndex(e)', 'e -> ownerIndex(e)')
           code = code.replace('if(e==null){return;}', 'if(e==null){return null;}')
           code = code.replace(
@@ -81,7 +80,6 @@ jobs:
               count=1,
           )
 
-          # One method was duplicated by damaged transport. Keep the first exact body.
           signature = 'private void addClassForNameStringEdits(UnitInfo u)'
           starts = [m.start() for m in re.finditer(re.escape(signature), code)]
           if len(starts) == 2:
@@ -108,8 +106,6 @@ jobs:
           elif len(starts) != 1:
               raise SystemExit(f'unexpected addClassForNameStringEdits count={len(starts)}')
 
-          # Compiler diagnostics proved three TreePathScanner visitors lost their final null return.
-          # Insert only where the exact diagnosed lines are closing braces; otherwise fail closed.
           lines = code.splitlines()
           for line_no in (190, 185, 172):
               idx = line_no - 1
@@ -119,6 +115,11 @@ jobs:
                                    (line_no, lines[lo:hi]))
               indent = lines[idx][:-len(lines[idx].lstrip())]
               lines.insert(idx, indent + 'return null;')
+
+          # Emit only the exact runtime-failure neighborhood so the next repair is evidence-based.
+          for line_no in range(194, 205):
+              print('TRANSFORMER[%d]=%s' % (line_no, lines[line_no - 1]))
+
           code = '\n'.join(lines) + '\n'
 
           if n1 != 1 or n2 != 1:
