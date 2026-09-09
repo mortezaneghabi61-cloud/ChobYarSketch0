@@ -117,8 +117,6 @@ jobs:
               lines.insert(idx, indent + 'return null;')
           code = '\n'.join(lines) + '\n'
 
-          # TreePathScanner cannot be rooted at an arbitrary subtree. Resolve the
-          # subtree against the parsed compilation units before scanning it.
           old_scan = '}.scan(l.tree,null);'
           if code.count(old_scan) != 1:
               raise SystemExit(f'unexpected layer subtree scan count={code.count(old_scan)}')
@@ -165,8 +163,9 @@ jobs:
 
       - name: Verify legacy production hierarchy is gone
         run: |
-          test -f app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
-          grep -Eq 'class[[:space:]]+K33MirroredCadCanvasView[[:space:]]+extends[[:space:]]+View' app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          TARGET=app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          test -f "$TARGET"
+          grep -Eq 'class[[:space:]]+K33MirroredCadCanvasView[[:space:]]+extends[[:space:]]+View' "$TARGET"
           for f in \
             CadCanvasView SmartCadCanvasView AdvancedCadCanvasView CentimeterCadCanvasView \
             ShaprStyleCadCanvasView ChobYarShaprCanvasView ParametricSketchCanvasView \
@@ -185,6 +184,9 @@ jobs:
                 exit 1
               }
           done
+          # Flattening preserves source bodies verbatim; normalize whitespace introduced
+          # at former class boundaries before enforcing the repository diff contract.
+          sed -i 's/[[:space:]]\+$//' "$TARGET"
           git diff --check
 
       - name: Commit generated canonical production surface
