@@ -115,12 +115,31 @@ jobs:
                                    (line_no, lines[lo:hi]))
               indent = lines[idx][:-len(lines[idx].lstrip())]
               lines.insert(idx, indent + 'return null;')
-
-          # Emit only the exact runtime-failure neighborhood so the next repair is evidence-based.
-          for line_no in range(194, 205):
-              print('TRANSFORMER[%d]=%s' % (line_no, lines[line_no - 1]))
-
           code = '\n'.join(lines) + '\n'
+
+          # TreePathScanner cannot be rooted at an arbitrary subtree. Resolve the
+          # subtree against the parsed compilation units before scanning it.
+          old_scan = '}.scan(l.tree,null);'
+          if code.count(old_scan) != 1:
+              raise SystemExit(f'unexpected layer subtree scan count={code.count(old_scan)}')
+          code = code.replace(old_scan, '}.scan(requireTreePath(l.tree),null);', 1)
+
+          helper = '''
+              private com.sun.source.util.TreePath requireTreePath(com.sun.source.tree.Tree tree) {
+                  for (UnitInfo u : unitByPath.values()) {
+                      com.sun.source.util.TreePath p = com.sun.source.util.TreePath.getPath(u.cu, tree);
+                      if (p != null) return p;
+                  }
+                  throw new IllegalStateException("No rooted TreePath for legacy layer subtree: " + tree.getKind());
+              }
+
+          '''
+          anchor = 'private void addClassForNameStringEdits(UnitInfo u)'
+          if code.count(anchor) != 1:
+              raise SystemExit(f'unexpected TreePath helper anchor count={code.count(anchor)}')
+          pos = code.index(anchor)
+          line_start = code.rfind('\n', 0, pos) + 1
+          code = code[:line_start] + helper + code[line_start:]
 
           if n1 != 1 or n2 != 1:
               raise SystemExit(f'expected exact transformer repairs n1={n1} n2={n2}')
