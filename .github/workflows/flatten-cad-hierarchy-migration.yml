@@ -43,16 +43,40 @@ jobs:
           raw = base64.b64decode(clean, validate=False)
           code = raw.decode('utf-8', errors='replace')
           code = code.replace('e=>ownerIndex(e)', 'e -> ownerIndex(e)')
-          code = re.sub(
-              r'(?m)^\s*private void replaceStringLiteral\(.*$',
-              r'''    private void replaceStringLiteral(UnitInfo u,LiteralTree lit,String value,int pri){long s=sp.getStartPosition(u.cu,lit),e=sp.getEndPosition(u.cu,lit);if(s>=0&&e>=s)u.edits.add(new Edit(s,e,"\\\""+value.replace("\\\\","\\\\\\\\").replace("\\\"","\\\\\\\"")+"\\\"",pri));}''',
+
+          literal_method = '''    private void replaceStringLiteral(UnitInfo u, LiteralTree lit, String value, int pri) {
+              long s = sp.getStartPosition(u.cu, lit), e = sp.getEndPosition(u.cu, lit);
+              if (s >= 0 && e >= s) {
+                  String q = Character.toString(34);
+                  String bs = Character.toString(92);
+                  String escaped = value.replace(bs, bs + bs).replace(q, bs + q);
+                  u.edits.add(new Edit(s, e, q + escaped + q, pri));
+              }
+          }'''
+          code, n1 = re.subn(
+              r'(?m)^\s*private void replaceStringLiteral\([^\n]*$',
+              lambda _m: literal_method,
               code,
+              count=1,
           )
-          code = re.sub(
-              r'(?m)^\s*private void deleteLegacyLayerFiles\(\) throws Exception \{.*$',
-              r'''    private void deleteLegacyLayerFiles() throws Exception {for(String n:CHAIN)if(!n.equals(TARGET))Files.deleteIfExists(repo.resolve("app/src/main/java/ir/chobyar/sketch/"+n+".java"));}''',
+
+          delete_method = '''    private void deleteLegacyLayerFiles() throws Exception {
+              for (String n : CHAIN) {
+                  if (!n.equals(TARGET)) {
+                      Files.deleteIfExists(repo.resolve("app/src/main/java/ir/chobyar/sketch/" + n + ".java"));
+                  }
+              }
+          }'''
+          code, n2 = re.subn(
+              r'(?m)^\s*private void deleteLegacyLayerFiles\(\) throws Exception \{[^\n]*$',
+              lambda _m: delete_method,
               code,
+              count=1,
           )
+
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f'expected exact transformer repairs n1={n1} n2={n2}')
+
           out = pathlib.Path('/tmp/FlattenCadHierarchy.java')
           out.write_text(code, encoding='utf-8')
           print(f'encoded_chars={len(text)} filtered_chars={len(clean)} decoded_bytes={len(raw)} repaired_chars={len(code)}')
