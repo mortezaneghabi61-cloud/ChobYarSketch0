@@ -1,0 +1,85 @@
+name: Flatten CAD Hierarchy Migration
+
+on:
+  push:
+    branches:
+      - p0-flatten-production-cad-surface-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  flatten:
+    if: ${{ !contains(github.event.head_commit.message, '[flatten-generated]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: p0-flatten-production-cad-surface-20260909
+
+      - name: Verify exact branch head
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git branch --show-current)" = "p0-flatten-production-cad-surface-20260909"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Decode flattening transformer
+        run: |
+          base64 -d .github/scripts/FlattenCadHierarchy.java.b64 > /tmp/FlattenCadHierarchy.java
+          test -s /tmp/FlattenCadHierarchy.java
+
+      - name: Compile transformer
+        run: |
+          rm -rf /tmp/flatten-classes
+          mkdir -p /tmp/flatten-classes
+          javac -d /tmp/flatten-classes /tmp/FlattenCadHierarchy.java
+
+      - name: Flatten production CAD hierarchy
+        run: |
+          java -cp /tmp/flatten-classes FlattenCadHierarchy "$GITHUB_WORKSPACE"
+
+      - name: Verify legacy production hierarchy is gone
+        run: |
+          test -f app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          grep -Eq 'class[[:space:]]+K33MirroredCadCanvasView[[:space:]]+extends[[:space:]]+View' app/src/main/java/ir/chobyar/sketch/K33MirroredCadCanvasView.java
+          for f in \
+            CadCanvasView SmartCadCanvasView AdvancedCadCanvasView CentimeterCadCanvasView \
+            ShaprStyleCadCanvasView ChobYarShaprCanvasView ParametricSketchCanvasView \
+            ShaprLabCanvasView EasyCadCanvasView SpatialCadCanvasView SolidCadCanvasView \
+            DualUnitSolidCadCanvasView ParametricHistorySolidCadCanvasView \
+            AdvancedParametricSolidCadCanvasView DirectModelCadCanvasView \
+            BRepDirectCadCanvasView AnalyticCadCanvasView AnalyticBooleanCadCanvasView \
+            ExactBooleanCadCanvasView NativeBRepCadCanvasView OcctModelCadCanvasView \
+            OcctDirectCadCanvasView OcctStableCadCanvasView OcctMeasureCadCanvasView \
+            OcctShaprCadCanvasView OcctShaprPenCadCanvasView ShaprSketchStateCadCanvasView \
+            ShaprConstraintSolverCadCanvasView ShaprParametricCurveCadCanvasView \
+            ShaprSplineEditingCadCanvasView ShaprArcCadCanvasView ShaprSnappingCadCanvasView \
+            Shapr3DGuideCadCanvasView; do
+              test ! -e "app/src/main/java/ir/chobyar/sketch/${f}.java" || {
+                echo "Legacy production file remains: ${f}.java" >&2
+                exit 1
+              }
+          done
+          git diff --check
+
+      - name: Commit generated canonical production surface
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No migration changes produced" >&2
+            exit 1
+          fi
+          git commit -m "P0: flatten legacy CAD production hierarchy [flatten-generated]"
+          git push origin HEAD:p0-flatten-production-cad-surface-20260909
