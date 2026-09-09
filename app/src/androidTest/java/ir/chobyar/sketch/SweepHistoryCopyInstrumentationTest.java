@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 public final class SweepHistoryCopyInstrumentationTest {
 
     @Test public void sweepDetailNamesProfileAndPath() throws Exception {
-        Class<?> type=Class.forName("ir.chobyar.sketch.AdvancedParametricSolidCadCanvasView$SweepFeature");
+        Class<?> type=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$SweepFeature");
         Constructor<?> ctor=type.getDeclaredConstructor(int.class,Object.class,Object.class);
         ctor.setAccessible(true);
         Object feature=ctor.newInstance(1,new Object(),new Object());

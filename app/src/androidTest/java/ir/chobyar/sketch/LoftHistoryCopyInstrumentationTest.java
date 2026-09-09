@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 public final class LoftHistoryCopyInstrumentationTest {
 
     @Test public void loftDetailNamesTwoProfiles() throws Exception {
-        Class<?> type=Class.forName("ir.chobyar.sketch.AdvancedParametricSolidCadCanvasView$LoftFeature");
+        Class<?> type=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$LoftFeature");
         Constructor<?> ctor=type.getDeclaredConstructor(int.class,Object.class,Object.class);
         ctor.setAccessible(true);
         Object feature=ctor.newInstance(1,new Object(),new Object());
