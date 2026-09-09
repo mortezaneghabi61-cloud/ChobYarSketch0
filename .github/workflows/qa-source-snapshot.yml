@@ -1,0 +1,49 @@
+name: QA Source Snapshot
+
+on:
+  push:
+    branches:
+      - qa/source-snapshot-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
+      - name: Pack CAD source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf chobyar-source-snapshot.tar.gz \
+            app/src/main/java \
+            app/src/test/java \
+            app/src/androidTest/java \
+            app/src/main/AndroidManifest.xml \
+            app/build.gradle \
+            .github/scripts
+          sha256sum chobyar-source-snapshot.tar.gz > chobyar-source-snapshot.sha256
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: chobyar-source-snapshot
+          path: |
+            chobyar-source-snapshot.tar.gz
+            chobyar-source-snapshot.sha256
+          retention-days: 1
+          if-no-files-found: error
