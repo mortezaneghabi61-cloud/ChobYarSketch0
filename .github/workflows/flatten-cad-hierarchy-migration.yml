@@ -42,7 +42,14 @@ jobs:
           clean += '=' * ((4 - (len(clean) % 4)) % 4)
           raw = base64.b64decode(clean, validate=False)
           code = raw.decode('utf-8', errors='replace')
+
+          # Repair the few bytes damaged while the one-shot transformer was transported.
           code = code.replace('e=>ownerIndex(e)', 'e -> ownerIndex(e)')
+          code = code.replace('if(e==null){return;}', 'if(e==null){return null;}')
+          code = code.replace(
+              'child.getEnclosingElement().getSuperclass()',
+              '((TypeElement) child.getEnclosingElement()).getSuperclass()',
+          )
 
           literal_method = '''    private void replaceStringLiteral(UnitInfo u, LiteralTree lit, String value, int pri) {
               long s = sp.getStartPosition(u.cu, lit), e = sp.getEndPosition(u.cu, lit);
@@ -73,6 +80,33 @@ jobs:
               code,
               count=1,
           )
+
+          # One method was duplicated by the damaged transport. Keep the first exact method body.
+          signature = 'private void addClassForNameStringEdits(UnitInfo u)'
+          starts = [m.start() for m in re.finditer(re.escape(signature), code)]
+          if len(starts) == 2:
+              start = code.rfind('\n', 0, starts[1]) + 1
+              brace = code.find('{', starts[1])
+              if brace < 0:
+                  raise SystemExit('duplicate method opening brace missing')
+              depth = 0
+              end = None
+              for i in range(brace, len(code)):
+                  ch = code[i]
+                  if ch == '{':
+                      depth += 1
+                  elif ch == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if end is None:
+                  raise SystemExit('duplicate method closing brace missing')
+              while end < len(code) and code[end] in ' \t\r\n':
+                  end += 1
+              code = code[:start] + code[end:]
+          elif len(starts) != 1:
+              raise SystemExit(f'unexpected addClassForNameStringEdits count={len(starts)}')
 
           if n1 != 1 or n2 != 1:
               raise SystemExit(f'expected exact transformer repairs n1={n1} n2={n2}')
