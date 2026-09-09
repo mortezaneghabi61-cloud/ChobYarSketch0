@@ -31,10 +31,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Decode flattening transformer
+      - name: Decode flattening transformer fail-closed
         run: |
-          base64 -d .github/scripts/FlattenCadHierarchy.java.b64 > /tmp/FlattenCadHierarchy.java
-          test -s /tmp/FlattenCadHierarchy.java
+          python - <<'PY'
+          import base64, pathlib, re
+          src = pathlib.Path('.github/scripts/FlattenCadHierarchy.java.b64')
+          text = src.read_text(encoding='utf-8')
+          clean = re.sub(r'[^A-Za-z0-9+/=]', '', text)
+          clean = clean.rstrip('=')
+          clean += '=' * ((4 - (len(clean) % 4)) % 4)
+          raw = base64.b64decode(clean, validate=False)
+          out = pathlib.Path('/tmp/FlattenCadHierarchy.java')
+          out.write_bytes(raw)
+          print(f'encoded_chars={len(text)} filtered_chars={len(clean)} decoded_bytes={len(raw)}')
+          if len(raw) < 10000:
+              raise SystemExit('flatten transformer unexpectedly short')
+          if b'public final class FlattenCadHierarchy' not in raw:
+              raise SystemExit('flatten transformer signature missing')
+          PY
 
       - name: Compile transformer
         run: |
