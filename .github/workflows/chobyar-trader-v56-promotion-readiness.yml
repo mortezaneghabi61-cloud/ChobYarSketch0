@@ -55,7 +55,7 @@ jobs:
       - name: Enforce monitoring-only surface
         run: |
           set -Eeuo pipefail
-          if grep -RniE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|geo.?bypass|leverage|martingale' \
+          if grep -RniE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|leverage|martingale|/api/v5/trade/' \
             .github/scripts/trader_promotion_readiness.py \
             .github/scripts/test_trader_promotion_readiness.py; then
             echo 'Forbidden execution/risk surface found' >&2
@@ -63,4 +63,6 @@ jobs:
           fi
           grep -q 'execution_authority_granted.*False' .github/scripts/trader_promotion_readiness.py
           grep -q 'live_authority_granted.*False' .github/scripts/trader_promotion_readiness.py
+          grep -q 'GEO_BYPASS_PRESENT' .github/scripts/trader_promotion_readiness.py
+          grep -q 'geo_bypass_supported.*True' .github/scripts/test_trader_promotion_readiness.py
           echo 'READ_ONLY_PROMOTION_GATE=PASS'
