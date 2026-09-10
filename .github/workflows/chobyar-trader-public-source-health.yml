@@ -1,0 +1,43 @@
+name: ChobYar Trader public source-health telemetry
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v3/public_source_health.py'
+      - 'ops/chobyar-trader/v3/status_server_v51.py'
+      - 'ops/chobyar-trader/v3/test_public_source_health.py'
+      - 'ops/chobyar-trader/upgrade-v57-public-source-health.sh'
+      - '.github/workflows/chobyar-trader-public-source-health.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-health-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact PR head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Run fail-closed source-health tests
+        run: |
+          set -Eeuo pipefail
+          cd ops/chobyar-trader/v3
+          python3 -m py_compile public_source_health.py status_server_v51.py test_public_source_health.py
+          PYTHONPATH=. python3 test_public_source_health.py -v
+      - name: Enforce monitoring-only change
+        run: |
+          set -Eeuo pipefail
+          files=(ops/chobyar-trader/v3/public_source_health.py ops/chobyar-trader/v3/status_server_v51.py)
+          if grep -RniE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|/api/v5/trade/|martingale|leverage|proxy|vpn' "${files[@]}"; then
+            echo 'Forbidden execution, risk, or bypass surface found' >&2
+            exit 1
+          fi
+          grep -q 'execution_authority.*False' ops/chobyar-trader/v3/status_server_v51.py
+          grep -q 'automatic_promotion_enabled.*False' ops/chobyar-trader/v3/status_server_v51.py
+          grep -q 'automatic_reweighting_enabled.*False' ops/chobyar-trader/v3/status_server_v51.py
+          grep -q 'geo_bypass_supported.*False' ops/chobyar-trader/v3/status_server_v51.py
+          bash -n ops/chobyar-trader/upgrade-v57-public-source-health.sh
