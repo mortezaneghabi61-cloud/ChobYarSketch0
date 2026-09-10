@@ -1,0 +1,68 @@
+name: ChobYar Trader v5.6 Promotion Readiness
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/trader_promotion_readiness.py'
+      - '.github/scripts/test_trader_promotion_readiness.py'
+      - '.github/workflows/chobyar-trader-v56-promotion-readiness.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  promotion-readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Compile and run fail-closed policy regressions
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile .github/scripts/trader_promotion_readiness.py .github/scripts/test_trader_promotion_readiness.py
+          python3 .github/scripts/test_trader_promotion_readiness.py -v
+
+      - name: Fetch sanitized Paper telemetry
+        if: github.event_name != 'pull_request'
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
+            'https://109.122.247.214/public-report' -o report.json
+
+      - name: Evaluate current V5 evidence without granting authority
+        if: github.event_name != 'pull_request'
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/trader_promotion_readiness.py report.json | tee readiness.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('readiness.json', encoding='utf-8'))
+          assert r['execution_authority_granted'] is False
+          assert r['live_authority_granted'] is False
+          assert r['automatic_promotion'] is False
+          print('PROMOTION_REVIEW_READY=' + str(r['ready_for_v5_paper_execution_review']).upper())
+          print('BLOCKER_COUNT=' + str(len(r['reasons'])))
+          for reason in r['reasons']:
+              print('BLOCKER=' + reason)
+          PY
+
+      - name: Enforce monitoring-only surface
+        run: |
+          set -Eeuo pipefail
+          if grep -RniE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|leverage|martingale|/api/v5/trade/' \
+            .github/scripts/trader_promotion_readiness.py \
+            .github/scripts/test_trader_promotion_readiness.py; then
+            echo 'Forbidden execution/risk surface found' >&2
+            exit 1
+          fi
+          grep -q 'execution_authority_granted.*False' .github/scripts/trader_promotion_readiness.py
+          grep -q 'live_authority_granted.*False' .github/scripts/trader_promotion_readiness.py
+          grep -q 'GEO_BYPASS_PRESENT' .github/scripts/trader_promotion_readiness.py
+          grep -q 'geo_bypass_supported.*True' .github/scripts/test_trader_promotion_readiness.py
+          echo 'READ_ONLY_PROMOTION_GATE=PASS'
