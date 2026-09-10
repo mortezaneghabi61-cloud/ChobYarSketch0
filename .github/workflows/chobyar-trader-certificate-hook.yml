@@ -1,0 +1,33 @@
+name: ChobYar Trader certificate deploy hook
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/certbot/**'
+      - 'ops/chobyar-trader/tests/test_certificate_hook.py'
+      - '.github/workflows/chobyar-trader-certificate-hook.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/chobyar-trader/certbot/**'
+      - 'ops/chobyar-trader/tests/test_certificate_hook.py'
+      - '.github/workflows/chobyar-trader-certificate-hook.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certificate-hook-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Test isolated hook contract without deployment
+        run: python3 -m unittest discover -s ops/chobyar-trader/tests -p test_certificate_hook.py -v
