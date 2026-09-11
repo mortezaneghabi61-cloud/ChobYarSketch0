@@ -1,0 +1,107 @@
+name: ChobYar Trader v5.9 Council Evidence Gate
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/council_evidence.py'
+      - 'ops/chobyar-trader/v5/shadow_runner.py'
+      - 'ops/chobyar-trader/v5/shadow_runner_v52.py'
+      - 'ops/chobyar-trader/v5/specialist_council.py'
+      - 'ops/chobyar-trader/v5/meta_intelligence.py'
+      - 'ops/chobyar-trader/v5/public_source_fallbacks.py'
+      - 'ops/chobyar-trader/v5/test_council_evidence.py'
+      - 'ops/chobyar-trader/v5/test_shadow_evidence_wiring.py'
+      - 'ops/chobyar-trader/v5/test_specialist_council.py'
+      - 'ops/chobyar-trader/v5/test_meta_intelligence.py'
+      - 'ops/chobyar-trader/v5/test_public_source_fallbacks.py'
+      - 'ops/chobyar-trader/v5/V59_COUNCIL_EVIDENCE.md'
+      - 'ops/chobyar-trader/upgrade-v59-council-evidence.sh'
+      - '.github/workflows/chobyar-trader-v59-council-evidence.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/chobyar-trader/v5/council_evidence.py'
+      - 'ops/chobyar-trader/v5/shadow_runner_v52.py'
+      - 'ops/chobyar-trader/upgrade-v59-council-evidence.sh'
+      - '.github/workflows/chobyar-trader-v59-council-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  council-evidence-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify exact deployed observation baseline
+        run: |
+          set -Eeuo pipefail
+          cd ops/chobyar-trader/v5
+          printf '%s  %s\n' \
+            afce972e853eacab8a03a913258cdd8d79757937ebfd4d880aca6000566a08a4 shadow_runner.py \
+            21dbea476e7239b89eb2920acfb257449fd9b11fa95289b3231ab39240d16e50 specialist_council.py \
+            f39eba16dc8b7e529773a58d4b913dd80fa88b8483764edf104ce2b57abdd44b meta_intelligence.py \
+            d560c01f4cc5c177903855e01490ac28dab714e718b051d4710cfd5b3c0a2c46 public_source_fallbacks.py \
+            | sha256sum -c -
+
+      - name: Compile and run deterministic regressions
+        run: |
+          set -Eeuo pipefail
+          v5=ops/chobyar-trader/v5
+          python3 -m py_compile "$v5"/*.py
+          PYTHONPATH="$v5" python3 -m unittest discover \
+            -s "$v5" -p 'test_*.py' -v
+          bash -n ops/chobyar-trader/upgrade-v59-council-evidence.sh
+
+      - name: Enforce evidence and authority invariants
+        run: |
+          set -Eeuo pipefail
+          evidence=ops/chobyar-trader/v5/council_evidence.py
+          wrapper=ops/chobyar-trader/v5/shadow_runner_v52.py
+          grep -q 'SCHEMA_VERSION = 1' "$evidence"
+          grep -q 'MAX_RECORD_BYTES = 512 \* 1024' "$evidence"
+          grep -q 'MAX_JOURNAL_BYTES = 2 \* 1024 \* 1024 \* 1024' "$evidence"
+          grep -q 'O_NOFOLLOW' "$evidence"
+          grep -q 'flock' "$evidence"
+          grep -q 'fsync' "$evidence"
+          grep -q '_validate_existing_tail' "$evidence"
+          grep -q 'allow_nan=False' "$evidence"
+          grep -q 'FULL_FIDELITY_BACKTEST_READY=NO' "$evidence"
+          grep -q 'EXECUTION_AUTHORITY=NONE' "$evidence"
+          grep -q 'record_evaluation' "$wrapper"
+          grep -q 'base.read_last_cycle = capture_cycle' "$wrapper"
+          grep -q 'base.read_last_cycle = original_read_last_cycle' "$wrapper"
+          grep -q 'execution_authority.*False' "$evidence"
+          grep -q 'automatic_promotion.*False' "$evidence"
+          grep -q 'automatic_reweighting.*False' "$evidence"
+          grep -q 'foreign_execution.*False' "$evidence"
+          grep -q 'geo_bypass.*False' "$evidence"
+
+      - name: Enforce monitoring-only change and unchanged council thresholds
+        run: |
+          set -Eeuo pipefail
+          files=(
+            ops/chobyar-trader/v5/council_evidence.py
+            ops/chobyar-trader/v5/shadow_runner_v52.py
+            ops/chobyar-trader/v5/test_council_evidence.py
+            ops/chobyar-trader/v5/test_shadow_evidence_wiring.py
+          )
+          if grep -RniE '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|withdraw|enable_live|LIVE_TRADING_ENABLED=true|/api/v5/trade/|martingale|leverage|proxy|vpn' "${files[@]}"; then
+            echo 'Forbidden execution, risk, or bypass surface found' >&2
+            exit 1
+          fi
+          grep -q 'len(available) < 3' ops/chobyar-trader/v5/specialist_council.py
+          grep -q 'score >= 1.25' ops/chobyar-trader/v5/specialist_council.py
+          grep -q 'score <= -1.25' ops/chobyar-trader/v5/specialist_council.py
+          installer=ops/chobyar-trader/upgrade-v59-council-evidence.sh
+          ! grep -Eq 'systemctl[[:space:]]+(restart|start|stop)[[:space:]]+(chobyar-trader|chobyar-status)' "$installer"
