@@ -1,0 +1,72 @@
+name: ChobYar Trader v5.8 global source diversity
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/V58_GLOBAL_SOURCE_DIVERSITY.md'
+      - 'ops/chobyar-trader/upgrade-v58-global-source-diversity.sh'
+      - '.github/workflows/chobyar-trader-v58-global-source-diversity.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/V58_GLOBAL_SOURCE_DIVERSITY.md'
+      - 'ops/chobyar-trader/upgrade-v58-global-source-diversity.sh'
+      - '.github/workflows/chobyar-trader-v58-global-source-diversity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  global-source-diversity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify checked-out revision
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Compile and run deterministic regressions
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v5/execution_safety'
+          python3 -m py_compile \
+            "$source_dir/global_sources.py" \
+            "$source_dir/test_global_sources.py"
+          PYTHONPATH="$source_dir" \
+            python3 "$source_dir/test_global_sources.py" -v
+          bash -n ops/chobyar-trader/upgrade-v58-global-source-diversity.sh
+
+      - name: Enforce read-only Paper scope
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v5/execution_safety'
+          files=(
+            "$source_dir/global_sources.py"
+            "$source_dir/test_global_sources.py"
+          )
+          if grep -niE \
+            '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|withdraw|proxy|vpn|LIVE_TRADING_ENABLED=true|leverage|martingale' \
+            "${files[@]}"; then
+            echo 'Mutable, bypass, live, or risk surface detected' >&2
+            exit 1
+          fi
+          grep -q 'TRADING_MODE=paper' \
+            ops/chobyar-trader/upgrade-v58-global-source-diversity.sh
+          grep -q 'LIVE_TRADING_ENABLED=false' \
+            ops/chobyar-trader/upgrade-v58-global-source-diversity.sh
+          grep -q 'EXPECTED_OLD_SHA256=' \
+            ops/chobyar-trader/upgrade-v58-global-source-diversity.sh
+          ! grep -Eq \
+            'systemctl restart.*(chobyar-status|nginx|chobyar-v5-shadow|chobyar-v5-scorecard)' \
+            ops/chobyar-trader/upgrade-v58-global-source-diversity.sh
