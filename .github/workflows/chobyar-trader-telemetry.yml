@@ -3,11 +3,15 @@ name: ChobYar Trader Telemetry Monitor
 on:
   pull_request:
     paths:
+      - '.github/scripts/trader_telemetry_contract.py'
+      - '.github/scripts/test_trader_telemetry_contract.py'
       - '.github/workflows/chobyar-trader-telemetry.yml'
   push:
     branches:
       - main
     paths:
+      - '.github/scripts/trader_telemetry_contract.py'
+      - '.github/scripts/test_trader_telemetry_contract.py'
       - '.github/workflows/chobyar-trader-telemetry.yml'
   schedule:
     - cron: '*/15 * * * *'
@@ -21,104 +25,51 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate sanitized telemetry contract
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact PR head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Test fail-closed telemetry heartbeat contract
         run: |
-          python3 - <<'PY'
-          report = {
-              'ok': True,
-              'public_report': True,
-              'report_version': 1,
-              'mode': 'paper',
-              'live_locked': True,
-              'decision': {'signal': 'WAIT', 'action': 'WAIT', 'executed': False},
-              'performance': {'equity': 10.0, 'closed_trades': 0},
-              'forward_test': {'current_equity': 10.0, 'closed_trades': 0},
-              'backtest': {'ok': True, 'closed_trades': 20},
-          }
-          forbidden_top = {'paper', 'market', 'risk', 'security'}
-          sensitive_markers = ('secret', 'token', 'password', 'passwd', 'api_key', 'apikey', 'authorization', 'cookie')
-          assert report['ok'] is True
-          assert report['public_report'] is True
-          assert report['mode'] == 'paper'
-          assert report['live_locked'] is True
-          assert not (forbidden_top & set(report))
-          def walk(obj):
-              if isinstance(obj, dict):
-                  for key, value in obj.items():
-                      lower = str(key).lower()
-                      assert not any(marker in lower for marker in sensitive_markers), key
-                      walk(value)
-              elif isinstance(obj, list):
-                  for value in obj:
-                      walk(value)
-          walk(report)
-          print('TELEMETRY_CONTRACT=PASS')
-          PY
-
-      - name: Probe deployed sanitized VPS report over HTTPS
+          set -Eeuo pipefail
+          python3 -m py_compile \
+            .github/scripts/trader_telemetry_contract.py \
+            .github/scripts/test_trader_telemetry_contract.py
+          PYTHONPATH=.github/scripts python3 -B \
+            .github/scripts/test_trader_telemetry_contract.py -v
+      - name: Enforce monitoring-only surface
+        run: |
+          set -Eeuo pipefail
+          files=(
+            .github/scripts/trader_telemetry_contract.py
+            .github/scripts/test_trader_telemetry_contract.py
+          )
+          if grep -RniE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|/api/v5/trade/|martingale|leverage|proxy|vpn' "${files[@]}"; then
+            echo 'Forbidden execution, risk, or bypass surface found' >&2
+            exit 1
+          fi
+      - name: Probe deployed sanitized VPS heartbeat
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
             'https://109.122.247.214/public-report' \
             -o report.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          report = json.loads(Path('report.json').read_text(encoding='utf-8'))
-          forbidden_top = {'paper', 'market', 'risk', 'security'}
-          sensitive_markers = ('secret', 'token', 'password', 'passwd', 'api_key', 'apikey', 'authorization', 'cookie')
-          assert report.get('ok') is True
-          assert report.get('public_report') is True
-          assert report.get('mode') == 'paper'
-          assert report.get('live_locked') is True
-          assert not (forbidden_top & set(report))
-          def walk(obj):
-              if isinstance(obj, dict):
-                  for key, value in obj.items():
-                      lower = str(key).lower()
-                      assert not any(marker in lower for marker in sensitive_markers), key
-                      walk(value)
-              elif isinstance(obj, list):
-                  for value in obj:
-                      walk(value)
-          walk(report)
-          print('TELEMETRY_PROBE=PASS')
-          print(json.dumps(report, ensure_ascii=False, sort_keys=True))
-          PY
+          python3 -B .github/scripts/trader_telemetry_contract.py report.json
 
   poll:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - name: Fetch and validate sanitized VPS report over HTTPS
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify exact monitored revision
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Fetch and validate sanitized VPS heartbeat
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 2 --connect-timeout 8 --max-time 20 \
             'https://109.122.247.214/public-report' \
             -o report.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path('report.json').read_text(encoding='utf-8'))
-          forbidden_top = {'paper', 'market', 'risk', 'security'}
-          sensitive_markers = ('secret', 'token', 'password', 'passwd', 'api_key', 'apikey', 'authorization', 'cookie')
-          assert report.get('ok') is True
-          assert report.get('public_report') is True
-          assert report.get('mode') == 'paper'
-          assert report.get('live_locked') is True
-          assert not (forbidden_top & set(report))
-
-          def walk(obj):
-              if isinstance(obj, dict):
-                  for key, value in obj.items():
-                      lower = str(key).lower()
-                      assert not any(marker in lower for marker in sensitive_markers), key
-                      walk(value)
-              elif isinstance(obj, list):
-                  for value in obj:
-                      walk(value)
-          walk(report)
-          print('TELEMETRY_STATUS=PASS')
-          print(json.dumps(report, ensure_ascii=False, sort_keys=True))
-          PY
+          python3 -B .github/scripts/trader_telemetry_contract.py report.json
