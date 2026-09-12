@@ -8,10 +8,11 @@ It never changes the V5.6 promotion gate or replaces `backtest_latest.json`.
 
 `evidence_replay_readiness.py JOURNAL [--require-ready]` reads the private V5.9
 JSONL and deterministically replays each record through `council_evidence`.
-All six engine files remain byte-identical to main `c6f7a52348b9803643eb168ff483b5e75fa04980`;
-the auditor is not added to the V5.9 engine digest set. Existing evidence remains
-replayable with its original engine. Different engine hashes fail replay: archive
-the original engine and review version migration separately; never rewrite hashes.
+The auditor is not part of the evidence engine digest set. Evidence must replay
+with its exact recorded engine epoch. V6.1 introduced a reviewed epoch boundary
+for the timestamp-precision defect: the V5.9 journal and all six original engine
+files are retained together, while the active journal starts from an empty new
+epoch. Different hashes still fail replay; old hashes or records are never rewritten.
 
 Exit 0 means the audit succeeded, not that evidence is sufficient. Exit 2 means
 invalid/unreadable/busy evidence, or insufficient evidence with `--require-ready`.
@@ -36,7 +37,9 @@ No CLI option lowers them. Smaller policies in tests are synthetic fixtures only
 
 The nominal record-count ratio is diagnostic only; it is not the coverage gate.
 Quality ratios are record-weighted, not estimates of independent market samples.
-The audit covers the entire captured prefix, not a selected winning interval.
+The audit covers the entire captured prefix of the active reviewed engine epoch,
+not a selected winning interval. Epoch rotation is permitted only for a reviewed
+engine change with the complete preceding journal and engine archived together.
 The window is historical: first/last evaluation times are reported, and freshness
 of current service output must be checked separately. No future performance claim
 or automatic promotion follows even if `ready_for_full_fidelity_backtest_review`

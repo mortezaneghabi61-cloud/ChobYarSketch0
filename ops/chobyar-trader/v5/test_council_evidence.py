@@ -119,6 +119,33 @@ class CouncilEvidenceTests(unittest.TestCase):
         self.assertNotIn("api_key", json.dumps(record).lower())
         self.assertEqual(set(record["engine_sha256"]), set(evidence.ENGINE_FILES))
 
+    def test_submicrosecond_evaluation_time_has_a_canonical_capture_timestamp(self) -> None:
+        ctx = context()
+        card = scorecard()
+        evaluated_at = float(ctx.candles[-1][0]) + 60.1234567
+        output = evaluation(ctx, card, evaluated_at)
+
+        record = evidence.build_record(
+            ctx=ctx,
+            source_cycle=source_cycle(ctx),
+            scorecard=card,
+            evaluated_at=evaluated_at,
+            enhanced_output=output,
+        )
+
+        expected = datetime.fromtimestamp(evaluated_at, tz=timezone.utc).isoformat()
+        self.assertEqual(record["captured_at_utc"], expected)
+        self.assertEqual(evidence.replay_record(record), output)
+
+        record["captured_at_utc"] = datetime.fromtimestamp(
+            evaluated_at + 0.000001, tz=timezone.utc
+        ).isoformat()
+        body = dict(record)
+        body.pop("record_sha256")
+        record["record_sha256"] = evidence.canonical_sha256(body)
+        with self.assertRaisesRegex(evidence.EvidenceError, "capture timestamp"):
+            evidence.validate_record(record)
+
     def test_replay_is_deterministic_and_preserves_observation_only_locks(self) -> None:
         record, expected = self.build()
         replayed = evidence.replay_record(record)
