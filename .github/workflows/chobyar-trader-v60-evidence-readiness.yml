@@ -1,0 +1,62 @@
+name: ChobYar Trader v6.0 Evidence Readiness
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/**'
+      - 'ops/chobyar-trader/verify-v60-evidence-readiness.sh'
+      - '.github/workflows/chobyar-trader-v60-evidence-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/chobyar-trader/v5/**'
+      - 'ops/chobyar-trader/verify-v60-evidence-readiness.sh'
+      - '.github/workflows/chobyar-trader-v60-evidence-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence-readiness-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact head and frozen V5.9 engine
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          cd ops/chobyar-trader/v5
+          sha256sum -c <<'EOF'
+          afce972e853eacab8a03a913258cdd8d79757937ebfd4d880aca6000566a08a4  shadow_runner.py
+          3cea7c210810399604500245724c55d2ea2d0718bbb8232b9fbe2a60e8c972df  shadow_runner_v52.py
+          21dbea476e7239b89eb2920acfb257449fd9b11fa95289b3231ab39240d16e50  specialist_council.py
+          f39eba16dc8b7e529773a58d4b913dd80fa88b8483764edf104ce2b57abdd44b  meta_intelligence.py
+          d560c01f4cc5c177903855e01490ac28dab714e718b051d4710cfd5b3c0a2c46  public_source_fallbacks.py
+          ff8fac2bd92f650f948e14d075d6d95b439d7cebf594de464224ec55451c1765  council_evidence.py
+          EOF
+      - name: Test real replay and fail-closed boundaries
+        run: |
+          set -Eeuo pipefail
+          v5=ops/chobyar-trader/v5
+          python3 -m py_compile "$v5"/*.py
+          PYTHONPATH="$v5" python3 -B -m unittest discover -s "$v5" -p 'test_*.py' -v
+          bash -n ops/chobyar-trader/verify-v60-evidence-readiness.sh
+      - name: Enforce no execution surface
+        run: |
+          set -Eeuo pipefail
+          auditor=ops/chobyar-trader/v5/evidence_replay_readiness.py
+          runner=ops/chobyar-trader/verify-v60-evidence-readiness.sh
+          if grep -nE 'submit_order|create_order|place_order|withdraw|LIVE_TRADING_ENABLED=true|/api/v5/trade/|martingale|leverage|proxy|vpn' "$auditor"; then
+            exit 1
+          fi
+          ! grep -nE 'systemctl (start|stop|restart|reload|enable|disable)' "$runner"
+          grep -q '"full_fidelity_multiagent": False' "$auditor"
+          grep -q '"execution_authority_granted": False' "$auditor"
+          grep -q '"live_authority_granted": False' "$auditor"
+          grep -q '"automatic_promotion": False' "$auditor"
