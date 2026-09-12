@@ -50,6 +50,8 @@ jobs:
           PYTHONPATH="$v5" python3 -B -m unittest discover -s "$v5" -p 'test_*.py' -v
           bash -n ops/chobyar-trader/verify-v60-evidence-readiness.sh
           bash -n ops/chobyar-trader/upgrade-v61-evidence-timestamp-epoch.sh
+          grep -Fq 'PYTHONPATH="$candidate" "$VENV_PYTHON" -B "$candidate/evidence_replay_readiness.py" "$JOURNAL"' \
+            ops/chobyar-trader/upgrade-v61-evidence-timestamp-epoch.sh
       - name: Enforce no execution surface
         run: |
           set -Eeuo pipefail

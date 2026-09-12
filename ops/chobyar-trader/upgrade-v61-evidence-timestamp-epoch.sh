@@ -200,7 +200,9 @@ systemctl start "$SHADOW_SERVICE"
 
 printf '\n=== VALIDATE_NEW_EPOCH ===\n'
 PYTHONPATH="$V5_DIR" "$VENV_PYTHON" -B "$EVIDENCE_TARGET" "$JOURNAL"
-PYTHONPATH="$V5_DIR" "$VENV_PYTHON" -B "$V5_DIR/evidence_replay_readiness.py" "$JOURNAL"
+# The readiness auditor is a reviewed deployment verifier, not a runtime file.
+# Run it from the exact candidate checkout with the exact candidate engine.
+PYTHONPATH="$candidate" "$VENV_PYTHON" -B "$candidate/evidence_replay_readiness.py" "$JOURNAL"
 
 check_locks
 [[ "$(identity "$TRADER_SERVICE")" == "$trader_before" ]] || fail "Trader process changed"
