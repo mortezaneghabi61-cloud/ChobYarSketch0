@@ -443,8 +443,8 @@ def validate_record(
         raise EvidenceError("record digest mismatch")
 
     evaluated_at = _number(record.get("evaluation_time_unix"), "evaluation_time_unix", positive=True)
-    captured = _parse_utc(record.get("captured_at_utc"), "captured_at_utc")
-    if captured.timestamp() != evaluated_at:
+    expected_capture = datetime.fromtimestamp(evaluated_at, tz=timezone.utc).isoformat()
+    if record.get("captured_at_utc") != expected_capture:
         raise EvidenceError("capture timestamp does not match evaluation time")
 
     context_payload = _normalise_context(record.get("context"))
