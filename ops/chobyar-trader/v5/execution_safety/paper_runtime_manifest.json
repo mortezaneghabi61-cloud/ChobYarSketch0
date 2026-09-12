@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "runtime": "chobyar-v5-paper",
+  "entrypoint": "/opt/chobyar-trader/app/v5/execution_safety/trader_entry.py",
+  "authority": {
+    "trading_mode": "paper",
+    "live_trading_enabled": false,
+    "live_execution_surface_included": false
+  },
+  "approved_risk": {
+    "max_position_pct": 0.25,
+    "stop_loss_pct": 0.015,
+    "take_profit_pct": 0.03,
+    "max_daily_loss_pct": 0.03
+  },
+  "provenance": {
+    "paper_runtime_source_commit": "e52b4d683d5f7215cb5284faa1915b5d530747ea",
+    "global_source_diversity_commit": "4d9ebe15342fa53730838cc16366b09fd99e2b16"
+  },
+  "files": {
+    "common.py": "cb4d107d75fbd0f039ca8d8712d6b7598cb6b3f253cf4fd98e8eb9e80ca25fae",
+    "trader.py": "52db97b98d2d063cc2425afd5bf813ea5a6384471a7092df50f42dc4ed0928cf",
+    "trader_entry.py": "6164a0393c4a22289320ef88c1a4ad3eb26d20a66e23cace33a131be2bb5795c",
+    "entry_gate_v55.py": "c514a966b2ca1553e8a2eb752b04569d5946324035484a40b73a677449d989ee",
+    "global_sources.py": "c610dcdd2bb38eff8842cc2b71b7f5510e88809b6708e964ae955827ec912ecf"
+  }
+}

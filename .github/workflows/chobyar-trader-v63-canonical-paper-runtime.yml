@@ -1,0 +1,109 @@
+name: ChobYar Trader V6.3 Canonical Paper Runtime
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/common.py'
+      - 'ops/chobyar-trader/v5/execution_safety/trader.py'
+      - 'ops/chobyar-trader/v5/execution_safety/trader_entry.py'
+      - 'ops/chobyar-trader/v5/execution_safety/entry_gate_v55.py'
+      - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_*.py'
+      - 'ops/chobyar-trader/v5/execution_safety/paper_runtime_manifest.json'
+      - 'ops/chobyar-trader/v5/execution_safety/CANONICAL_PAPER_RUNTIME.md'
+      - '.github/workflows/chobyar-trader-v63-canonical-paper-runtime.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/chobyar-trader/v5/execution_safety/common.py'
+      - 'ops/chobyar-trader/v5/execution_safety/trader.py'
+      - 'ops/chobyar-trader/v5/execution_safety/trader_entry.py'
+      - 'ops/chobyar-trader/v5/execution_safety/entry_gate_v55.py'
+      - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
+      - 'ops/chobyar-trader/v5/execution_safety/test_*.py'
+      - 'ops/chobyar-trader/v5/execution_safety/paper_runtime_manifest.json'
+      - 'ops/chobyar-trader/v5/execution_safety/CANONICAL_PAPER_RUNTIME.md'
+      - '.github/workflows/chobyar-trader-v63-canonical-paper-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-paper-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify checked-out revision
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Compile and run deterministic contracts
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v5/execution_safety'
+          python3 -m py_compile "$source_dir"/*.py
+          PYTHONPATH="$source_dir" python3 -m unittest -v \
+            "$source_dir/test_global_sources.py" \
+            "$source_dir/test_entry_gate_v55.py" \
+            "$source_dir/test_paper_runtime.py"
+
+      - name: Enforce Paper-only dependency closure
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v5/execution_safety'
+          files=(
+            "$source_dir/common.py"
+            "$source_dir/trader.py"
+            "$source_dir/trader_entry.py"
+            "$source_dir/entry_gate_v55.py"
+            "$source_dir/global_sources.py"
+          )
+          if grep -niE \
+            '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|cancel_order|withdraw\(|margin_order|futures_order|X-API-Key|x-api-key|proxy|vpn|martingale|LIVE_TRADING_ENABLED=true' \
+            "${files[@]}"; then
+            echo 'Mutable, authenticated, bypass, or live surface detected' >&2
+            exit 1
+          fi
+          grep -q 'MODE != "paper" or LIVE != "false"' "$source_dir/trader.py"
+          grep -q 'EXPECTED_RISK = (0.25, 0.015, 0.03, 0.03)' "$source_dir/trader.py"
+          grep -q 'if action != "BUY"' "$source_dir/trader_entry.py"
+          grep -q 'execution_authority") is not False' "$source_dir/entry_gate_v55.py"
+
+      - name: Verify canonical source manifest
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v5/execution_safety'
+          python3 - "$source_dir" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          manifest = json.loads(
+              (root / "paper_runtime_manifest.json").read_text(encoding="utf-8")
+          )
+          assert manifest["authority"] == {
+              "trading_mode": "paper",
+              "live_trading_enabled": False,
+              "live_execution_surface_included": False,
+          }
+          assert manifest["approved_risk"] == {
+              "max_position_pct": 0.25,
+              "stop_loss_pct": 0.015,
+              "take_profit_pct": 0.03,
+              "max_daily_loss_pct": 0.03,
+          }
+          for name, expected in manifest["files"].items():
+              actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
+              assert actual == expected, (name, expected, actual)
+          print("CANONICAL_PAPER_RUNTIME=PASS")
+          print("EXECUTION_AUTHORITY=NONE")
+          PY
