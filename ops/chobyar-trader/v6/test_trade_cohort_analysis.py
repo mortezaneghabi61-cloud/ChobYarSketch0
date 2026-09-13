@@ -42,6 +42,24 @@ class TradeCohortAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "monotonic"):
             extract_trades([{"ts": "2026-09-03T00:00:02Z"}, {"ts": "2026-09-03T00:00:01Z"}])
 
+    def test_stale_cycle_is_not_attached_to_buy(self):
+        rows = [
+            {"ts": "2026-09-03T00:00:00Z", "event": "paper_buy", "price": 100},
+            cycle("2026-09-03T00:02:01Z", "BUY", 1),
+        ]
+        trades, stats = extract_trades(rows)
+        self.assertEqual(trades, [])
+        self.assertEqual(stats["cycle_misses"], 1)
+
+    def test_open_position_is_reported_not_invented_as_closed(self):
+        rows = [
+            {"ts": "2026-09-03T00:00:00Z", "event": "paper_buy", "price": 100},
+            cycle("2026-09-03T00:00:01Z", "BUY", 1),
+        ]
+        trades, stats = extract_trades(rows)
+        self.assertEqual(trades, [])
+        self.assertEqual(stats["unmatched_buys"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
