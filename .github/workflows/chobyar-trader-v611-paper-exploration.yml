@@ -5,6 +5,7 @@ on:
     paths:
       - 'ops/chobyar-trader/v6/paper_exploration.py'
       - 'ops/chobyar-trader/v6/test_paper_exploration.py'
+      - 'ops/chobyar-trader/v6/install-paper-exploration.sh'
       - '.github/workflows/chobyar-trader-v611-paper-exploration.yml'
   workflow_dispatch:
 
@@ -36,6 +37,19 @@ jobs:
           grep -q 'LIVE_TRADING_ENABLED.*false' "$source"
           if grep -niE '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|cancel_order|withdraw|api[_-]?key|authorization|subprocess|httpx|requests' "$source"; then
             echo 'Execution, authenticated, process, or network surface detected' >&2
+            exit 1
+          fi
+      - name: Validate isolated installer
+        run: |
+          installer=ops/chobyar-trader/v6/install-paper-exploration.sh
+          bash -n "$installer"
+          grep -q 'PrivateNetwork=true' "$installer"
+          grep -q 'TRADER_PID_UNCHANGED' "$installer"
+          grep -q 'SHADOW_PID_UNCHANGED' "$installer"
+          grep -q 'mutation_started' "$installer"
+          grep -q "unittest discover -v -s.*-p 'test_paper_exploration.py'" "$installer"
+          if grep -nE 'EnvironmentFile=|systemctl (restart|stop|disable).*chobyar-(trader|profit-protection-shadow)\.service|sed -i.*\.env|rm -f.*\.env' "$installer"; then
+            echo 'Installer can expose secrets or mutate a protected service' >&2
             exit 1
           fi
       - name: Keep CAD outside Trader scope
