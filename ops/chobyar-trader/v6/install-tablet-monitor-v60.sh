@@ -78,7 +78,9 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-tag = '<script src="/monitor/paper_exploration_monitor.js" defer></script>'
+legacy = '<script src="/monitor/paper_exploration_monitor.js" defer></script>'
+tag = '<iframe src="/monitor/paper-exploration/" title="Paper Exploration" width="100%" height="720" frameborder="0"></iframe>'
+text = text.replace(f"  {legacy}\n", "").replace(legacy, "")
 if tag not in text:
     if "</body>" not in text:
         raise SystemExit("active index_v481.html has no closing body tag")
@@ -98,7 +100,8 @@ for service in "${PROTECTED_SERVICES[@]}"; do
 done
 report="$(curl -fsS --max-time 4 http://127.0.0.1:8787/public-report)"
 python3 -c 'import json,sys; d=json.load(sys.stdin); x=d["paper_exploration"]; assert d["report_version"] == 8; assert x["execution_authority"] is False; assert set(x["lanes"]) == {"wide","balanced","selective"}; assert all((not v["position_open"]) or v["equity"] is not None for v in x["lanes"].values())' <<<"$report" || die "v60 public report contract failed"
-curl -fsS --max-time 4 http://127.0.0.1:8787/monitor/paper_exploration_monitor.js >/dev/null || die "monitor asset unavailable"
+curl -fsS --max-time 4 http://127.0.0.1:8787/monitor/paper-exploration/ | grep -q 'معاملات آزمایشی سریع' || die "server-rendered monitor unavailable"
+curl -fsS --max-time 4 http://127.0.0.1:8787/monitor/ | grep -q '/monitor/paper-exploration/' || die "active monitor lacks exploration frame"
 
 committed=true
 printf 'DEPLOYED_SHA=%s\nMONITOR_STATUS=PASS\nSTATUS_VERSION=8\nTRADER_PID_UNCHANGED=%s\nSHADOW_PID_UNCHANGED=%s\nEXPLORATION_PID_UNCHANGED=%s\n' \
