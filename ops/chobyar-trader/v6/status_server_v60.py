@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import html
 import subprocess
 import time
 from pathlib import Path
@@ -115,9 +116,44 @@ def public_report_payload() -> dict:
     return report
 
 
+def exploration_html() -> bytes:
+    data = public_exploration_projection()
+    cards = []
+    labels = {"wide": "گسترده", "balanced": "متعادل", "selective": "انتخابی"}
+    for name in ("wide", "balanced", "selective"):
+        lane = data.get("lanes", {}).get(name, {})
+        value = lane.get("return_pct")
+        return_text = "—" if value is None else f"{float(value):.3f}%"
+        equity = lane.get("equity")
+        equity_text = "—" if equity is None else f"{float(equity):.4f} USDT"
+        cards.append(f'''<article><header><strong>{labels[name]}</strong><b>{"باز" if lane.get("position_open") else "بسته"}</b></header>
+<h2 class="{'pos' if value is not None and value >= 0 else 'neg'}">{html.escape(return_text)}</h2>
+<dl><div><dt>معامله کامل</dt><dd>{lane.get("completed_trades", "—")}</dd></div>
+<div><dt>برد / باخت</dt><dd>{lane.get("wins", "—")} / {lane.get("losses", "—")}</dd></div>
+<div><dt>ارزش کل مجازی</dt><dd>{html.escape(equity_text)}</dd></div>
+<div><dt>وجه نقد</dt><dd>{float(lane.get("cash", 0)):.4f} USDT</dd></div></dl></article>''')
+    health = "فعال و تازه" if data.get("service_active") and not data.get("stale") else "هشدار: سرویس یا داده کهنه"
+    document = f'''<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5"><style>
+*{{box-sizing:border-box}}body{{margin:0;padding:16px;background:#101b3c;color:#eef4ff;font-family:system-ui,sans-serif}}.top{{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}}.badge{{color:#63f0bb}}.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}}article{{padding:14px;border:1px solid #ffffff25;border-radius:14px;background:#ffffff0b}}header,dl div{{display:flex;justify-content:space-between;gap:10px}}h1{{font-size:20px;margin:0}}h2{{font-size:27px}}.pos{{color:#61efb4}}.neg{{color:#ff8194}}dl{{margin:0}}dl div{{padding:7px 0;border-top:1px solid #ffffff16}}dt{{opacity:.72}}dd{{margin:0;font-weight:700}}footer{{text-align:center;opacity:.72;margin-top:14px}}@media(max-width:700px){{.grid{{grid-template-columns:1fr}}}}
+</style></head><body><div class="top"><div><h1>معاملات آزمایشی سریع</h1><small>کاملاً مجازی و جدا از تریدر اصلی</small></div><div class="badge">{html.escape(health)} · {data.get("total_completed_trades", 0)} معامله کامل</div></div><section class="grid">{"".join(cards)}</section><footer>SHADOW ONLY · بدون اختیار اجرای واقعی یا ارتقای خودکار</footer></body></html>'''
+    return document.encode("utf-8")
+
+
 class Handler(_original_handler):
     def do_GET(self) -> None:
-        if urlparse(self.path).path == "/monitor/paper_exploration_monitor.js":
+        path = urlparse(self.path).path
+        if path == "/monitor/paper-exploration/":
+            payload = exploration_html()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if path == "/monitor/paper_exploration_monitor.js":
             try:
                 payload = ASSET_FILE.read_bytes()
             except OSError:
