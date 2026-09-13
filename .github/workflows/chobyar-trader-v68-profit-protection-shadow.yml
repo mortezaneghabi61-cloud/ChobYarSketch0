@@ -52,6 +52,11 @@ jobs:
           grep -q 'exact 40-character commit SHA required' "$installer"
           grep -q 'TRADER_PID_UNCHANGED' "$installer"
           grep -q 'rollback; cleanup' "$installer"
+          grep -q "unittest discover -v -s.*-p 'test_profit_protection_shadow.py'" "$installer"
+          if grep -nE 'unittest -v .*test_profit_protection_shadow\.py' "$installer"; then
+            echo 'Absolute-path unittest invocation detected' >&2
+            exit 1
+          fi
           if grep -nE 'systemctl (restart|stop|disable).*chobyar-trader\.service|sed -i.*\.env|rm -f.*\.env' "$installer"; then
             echo 'Installer may mutate the active trader or environment' >&2
             exit 1
