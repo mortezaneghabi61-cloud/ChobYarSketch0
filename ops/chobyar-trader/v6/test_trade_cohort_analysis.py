@@ -12,6 +12,12 @@ def cycle(ts: str, action: str, tape: int, score: float = 2.5):
                        {"agent": "tape_order_flow", "vote": tape}, {"agent": "global_trend", "vote": 1}]}
 
 
+def priced_cycle(ts: str, price: float):
+    row = cycle(ts, "HOLD", 1)
+    row["local_mid"] = price
+    return row
+
+
 class TradeCohortAnalysisTests(unittest.TestCase):
     def test_pairs_events_with_immediately_following_executed_cycles(self):
         rows = [
@@ -30,6 +36,43 @@ class TradeCohortAnalysisTests(unittest.TestCase):
         self.assertEqual(report["wins"]["trades"], 1)
         self.assertEqual(report["wins"]["vote_positive_counts"]["global_trend"], 1)
         self.assertFalse(report["execution_authority"])
+        self.assertFalse(report["counterfactual_pnl_claim"])
+
+    def test_fixed_protection_rules_report_observed_triggers_only(self):
+        entry_cycle = cycle("2026-09-03T00:00:01Z", "BUY", 1)
+        entry_cycle["local_mid"] = 100
+        rows = [
+            {"ts": "2026-09-03T00:00:00Z", "event": "paper_buy", "price": 100},
+            entry_cycle,
+            priced_cycle("2026-09-03T00:01:00Z", 100.6),
+            priced_cycle("2026-09-03T00:02:00Z", 100.2),
+            priced_cycle("2026-09-03T00:03:00Z", 99.9),
+            {"ts": "2026-09-03T00:04:00Z", "event": "paper_sell", "price": 99.8, "pnl": -0.01},
+            cycle("2026-09-03T00:04:01Z", "SELL", -1, -2.0),
+        ]
+        trades, stats = extract_trades(rows)
+        observed = trades[0].protection_observations
+        self.assertTrue(observed["trail_0_3pct_after_0_5pct"]["triggered"])
+        self.assertAlmostEqual(observed["trail_0_3pct_after_0_5pct"]["observed_trigger_return_pct"], 0.002)
+        self.assertTrue(observed["breakeven_after_0_5pct"]["triggered"])
+        self.assertAlmostEqual(observed["breakeven_after_0_5pct"]["observed_trigger_return_pct"], -0.001)
+        report = summarize(trades, stats)
+        self.assertEqual(report["all"]["protection_trigger_counts"]["breakeven_after_0_5pct"], 1)
+
+    def test_protection_never_arms_without_observed_half_percent_gain(self):
+        entry_cycle = cycle("2026-09-03T00:00:01Z", "BUY", 1)
+        entry_cycle["local_mid"] = 100
+        rows = [
+            {"ts": "2026-09-03T00:00:00Z", "event": "paper_buy", "price": 100},
+            entry_cycle,
+            priced_cycle("2026-09-03T00:01:00Z", 100.4),
+            {"ts": "2026-09-03T00:02:00Z", "event": "paper_sell", "price": 99.8, "pnl": -0.01},
+            cycle("2026-09-03T00:02:01Z", "SELL", -1, -2.0),
+        ]
+        trades, _ = extract_trades(rows)
+        for observation in trades[0].protection_observations.values():
+            self.assertFalse(observation["armed"])
+            self.assertFalse(observation["triggered"])
 
     def test_mid_position_sell_is_excluded_and_reported(self):
         rows = [
