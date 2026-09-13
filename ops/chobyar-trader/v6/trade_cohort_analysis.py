@@ -11,6 +11,8 @@ from typing import Any, Iterable
 
 MAX_CYCLE_LAG_SECONDS = 120.0
 AGENTS = ("momentum", "order_book", "tape_order_flow", "global_trend")
+PROTECTION_ARM_PCT = 0.005
+TRAILING_DISTANCE_PCT = 0.003
 
 
 def _finite(value: Any) -> float | None:
@@ -58,7 +60,35 @@ class Trade:
     exit_votes: dict[str, int | None]
     max_favorable_excursion_pct: float | None
     max_adverse_excursion_pct: float | None
+    protection_observations: dict[str, dict[str, float | bool | None]]
     current_tape_gate_would_block: bool
+
+
+def _protection_observation(
+    path_changes: list[float], *, trailing_distance_pct: float | None
+) -> dict[str, float | bool | None]:
+    """Describe a fixed protection rule without claiming executable PnL."""
+    peak: float | None = None
+    armed = False
+    for change in path_changes:
+        peak = change if peak is None else max(peak, change)
+        armed = armed or peak >= PROTECTION_ARM_PCT
+        if not armed:
+            continue
+        floor = 0.0 if trailing_distance_pct is None else peak - trailing_distance_pct
+        if change <= floor:
+            return {
+                "armed": True,
+                "triggered": True,
+                "observed_trigger_return_pct": change,
+                "peak_return_pct": peak,
+            }
+    return {
+        "armed": armed,
+        "triggered": False,
+        "observed_trigger_return_pct": None,
+        "peak_return_pct": peak,
+    }
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -127,6 +157,15 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
                     mid = _finite(path_row.get("local_mid"))
                     if mid is not None and mid > 0:
                         path_changes.append(mid / entry_price - 1.0)
+            protection_path = [*path_changes, exit_price / entry_price - 1.0]
+            protection_observations = {
+                "breakeven_after_0_5pct": _protection_observation(
+                    protection_path, trailing_distance_pct=None
+                ),
+                "trail_0_3pct_after_0_5pct": _protection_observation(
+                    protection_path, trailing_distance_pct=TRAILING_DISTANCE_PCT
+                ),
+            }
             sources = entry_cycle.get("global_sources")
             trades.append(Trade(
                 entry_ts, exit_ts, pnl, entry_price, exit_price, exit_ts - entry_ts, str(row.get("reason") or "unknown"),
@@ -134,7 +173,7 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
                 _finite(entry_cycle.get("global_change_24h")), len(sources) if isinstance(sources, list) else 0,
                 votes, _finite(exit_cycle.get("score")), _votes(exit_cycle),
                 max(path_changes) if path_changes else None, min(path_changes) if path_changes else None,
-                votes["tape_order_flow"] == -1,
+                protection_observations, votes["tape_order_flow"] == -1,
             ))
     if open_entry is not None:
         stats["unmatched_buys"] += 1
@@ -154,6 +193,10 @@ def summarize(trades: list[Trade], extraction: dict[str, int]) -> dict[str, Any]
             "tape_conflict_count": sum(row.current_tape_gate_would_block for row in rows),
             "vote_positive_counts": {agent: sum(row.votes.get(agent) == 1 for row in rows) for agent in AGENTS},
             "exit_vote_negative_counts": {agent: sum(row.exit_votes.get(agent) == -1 for row in rows) for agent in AGENTS},
+            "protection_trigger_counts": {
+                name: sum(bool(row.protection_observations[name]["triggered"]) for row in rows)
+                for name in ("breakeven_after_0_5pct", "trail_0_3pct_after_0_5pct")
+            },
             "exit_reason_counts": {reason: sum(row.exit_reason == reason for row in rows) for reason in sorted({row.exit_reason for row in rows})},
         }
     wins = [row for row in trades if row.pnl > 0]
@@ -163,6 +206,7 @@ def summarize(trades: list[Trade], extraction: dict[str, int]) -> dict[str, Any]
         "mode": "offline_observation_only",
         "execution_authority": False,
         "automatic_promotion": False,
+        "counterfactual_pnl_claim": False,
         "sample_warning": "descriptive_only_not_strategy_evidence" if len(wins) < 5 or len(losses) < 5 else None,
         "extraction": extraction,
         "all": cohort(trades), "wins": cohort(wins), "losses": cohort(losses),
