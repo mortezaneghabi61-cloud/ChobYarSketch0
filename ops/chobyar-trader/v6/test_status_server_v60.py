@@ -91,6 +91,20 @@ class StatusV60Tests(unittest.TestCase):
         self.assertEqual(result["report_version"], 8)
         self.assertEqual(result["paper_exploration"], {"ok": True})
 
+    def test_server_rendered_monitor_contains_three_lanes_without_script(self):
+        data = {"ok": True, "service_active": True, "stale": False, "total_completed_trades": 3, "lanes": {
+            "wide": {"return_pct": -1, "equity": 9.9, "cash": 7.4, "completed_trades": 1, "wins": 0, "losses": 1, "position_open": True},
+            "balanced": {"return_pct": 1, "equity": 10.1, "cash": 10.1, "completed_trades": 1, "wins": 1, "losses": 0, "position_open": False},
+            "selective": {"return_pct": None, "equity": None, "cash": 7.5, "completed_trades": 1, "wins": 0, "losses": 1, "position_open": True},
+        }}
+        with patch.object(self.module, "public_exploration_projection", return_value=data):
+            page = self.module.exploration_html().decode()
+        self.assertIn("معاملات آزمایشی سریع", page)
+        self.assertIn("گسترده", page)
+        self.assertIn("متعادل", page)
+        self.assertIn("انتخابی", page)
+        self.assertNotIn("<script", page)
+
 
 if __name__ == "__main__":
     unittest.main()
