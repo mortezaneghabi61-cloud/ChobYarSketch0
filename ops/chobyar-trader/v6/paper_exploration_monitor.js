@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const names = {wide: "گسترده", balanced: "متعادل", selective: "انتخابی"};
-  const fmt = (n, digits = 3) => Number.isFinite(Number(n)) ? Number(n).toFixed(digits) : "—";
+  const fmt = (n, digits = 3) => n !== null && n !== undefined && Number.isFinite(Number(n)) ? Number(n).toFixed(digits) : "—";
   const escapeHtml = (v) => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
 
   function ensureRoot() {
@@ -26,7 +26,8 @@
     const lanes = ["wide", "balanced", "selective"].map(name => {
       const lane = data.lanes?.[name] || {};
       const ret = Number(lane.return_pct);
-      return `<article class="pem-card"><div class="pem-title"><strong>${escapeHtml(names[name])}</strong><span class="${lane.position_open ? "pem-open" : "pem-flat"}">${lane.position_open ? "باز" : "بسته"}</span></div><div class="pem-return ${ret >= 0 ? "pem-pos" : "pem-neg"}">${fmt(ret)}%</div><dl><div><dt>معامله کامل</dt><dd>${escapeHtml(lane.completed_trades ?? "—")}</dd></div><div><dt>برد / باخت</dt><dd>${escapeHtml(lane.wins ?? "—")} / ${escapeHtml(lane.losses ?? "—")}</dd></div><div><dt>موجودی مجازی</dt><dd>${fmt(lane.cash, 4)} USDT</dd></div><div><dt>حد ورود</dt><dd>${fmt(lane.threshold, 2)}</dd></div></dl></article>`;
+      const retClass = Number.isFinite(ret) ? (ret >= 0 ? "pem-pos" : "pem-neg") : "";
+      return `<article class="pem-card"><div class="pem-title"><strong>${escapeHtml(names[name])}</strong><span class="${lane.position_open ? "pem-open" : "pem-flat"}">${lane.position_open ? "باز" : "بسته"}</span></div><div class="pem-return ${retClass}">${fmt(lane.return_pct)}%</div><dl><div><dt>معامله کامل</dt><dd>${escapeHtml(lane.completed_trades ?? "—")}</dd></div><div><dt>برد / باخت</dt><dd>${escapeHtml(lane.wins ?? "—")} / ${escapeHtml(lane.losses ?? "—")}</dd></div><div><dt>ارزش کل مجازی</dt><dd>${fmt(lane.equity, 4)} USDT</dd></div><div><dt>وجه نقد</dt><dd>${fmt(lane.cash, 4)} USDT</dd></div><div><dt>حد ورود</dt><dd>${fmt(lane.threshold, 2)}</dd></div></dl></article>`;
     }).join("");
     box.innerHTML = `<div class="pem-summary"><span class="${health ? "pem-ok" : "pem-warn"}">${health ? "فعال و تازه" : "هشدار: سرویس یا داده کهنه"}</span><strong>${escapeHtml(data.total_completed_trades)} معاملهٔ کامل آزمایشی</strong><span>عمر داده: ${fmt(data.age_seconds, 0)} ثانیه</span></div><div class="pem-grid">${lanes}</div><p class="pem-foot">این آمار با معاملات اصلی بالای صفحه جمع نمی‌شود؛ اختیار اجرای واقعی و ارتقای خودکار ندارد.</p>`;
   }

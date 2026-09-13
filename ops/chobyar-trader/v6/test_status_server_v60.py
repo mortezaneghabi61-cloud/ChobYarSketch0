@@ -48,7 +48,7 @@ class StatusV60Tests(unittest.TestCase):
                 json.dumps({"event":"exploration_buy","lane":"balanced"}),
             ]))
             self.module.STATE_FILE, self.module.LOG_FILE = state, log
-            with patch.object(self.module.time, "time", return_value=1050), patch.object(self.module, "_service_active", return_value=True):
+            with patch.object(self.module.time, "time", return_value=1050), patch.object(self.module, "_service_active", return_value=True), patch.object(self.module, "_latest_mark_price", return_value=100.0):
                 result = self.module.public_exploration_projection()
             self.assertTrue(result["ok"])
             self.assertFalse(result["stale"])
@@ -56,6 +56,24 @@ class StatusV60Tests(unittest.TestCase):
             self.assertEqual(result["lanes"]["wide"]["wins"], 1)
             self.assertEqual(result["lanes"]["wide"]["losses"], 1)
             self.assertTrue(result["lanes"]["balanced"]["position_open"])
+            self.assertAlmostEqual(result["lanes"]["balanced"]["equity"], 11.1)
+            self.assertAlmostEqual(result["lanes"]["balanced"]["return_pct"], 11.0)
+
+    def test_open_position_without_mark_price_does_not_report_cash_as_return(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "state.json"
+            log = Path(tmp) / "events.jsonl"
+            state.write_text(json.dumps({"last_ts": 1000, "lanes": {
+                "wide": {"threshold": -.75, "cash": 7.5, "quantity": .025},
+                "balanced": {"threshold": 0, "cash": 10, "quantity": 0},
+                "selective": {"threshold": .25, "cash": 10, "quantity": 0},
+            }}))
+            log.write_text("")
+            self.module.STATE_FILE, self.module.LOG_FILE = state, log
+            with patch.object(self.module, "_latest_mark_price", return_value=None):
+                result = self.module.public_exploration_projection()
+        self.assertIsNone(result["lanes"]["wide"]["equity"])
+        self.assertIsNone(result["lanes"]["wide"]["return_pct"])
 
     def test_missing_or_malformed_state_fails_closed_without_leaking(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -70,7 +88,7 @@ class StatusV60Tests(unittest.TestCase):
         with patch.object(self.module, "public_exploration_projection", return_value={"ok": True}):
             result = self.module.public_report_payload()
         self.assertTrue(result["existing"])
-        self.assertEqual(result["report_version"], 7)
+        self.assertEqual(result["report_version"], 8)
         self.assertEqual(result["paper_exploration"], {"ok": True})
 
 

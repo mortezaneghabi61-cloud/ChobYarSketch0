@@ -17,7 +17,9 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run as root"
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || die "exact 40-character commit SHA required"
 [[ -f "$SRC_DIR/status_server_v53.py" && -f "$INDEX_FILE" && -f "$UNIT_FILE" ]] || die "active v53 monitor baseline is incomplete"
-grep -Fqx 'ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v53.py' "$UNIT_FILE" || die "unexpected status ExecStart; refusing blind replacement"
+if ! grep -Eq '^ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v(53|60)\.py$' "$UNIT_FILE"; then
+  die "unexpected status ExecStart; refusing blind replacement"
+fi
 
 declare -A protected_pids
 for service in "${PROTECTED_SERVICES[@]}"; do
@@ -84,7 +86,7 @@ if tag not in text:
     path.write_text(text, encoding="utf-8")
 PY
 chmod 644 "$INDEX_FILE"
-sed -i 's#^ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v53.py$#ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v60.py#' "$UNIT_FILE"
+sed -i -E 's#^ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v(53|60)\.py$#ExecStart=/usr/bin/python3 /opt/chobyar-trader/app/status_server_v60.py#' "$UNIT_FILE"
 chmod 644 "$UNIT_FILE"
 
 systemctl daemon-reload
@@ -95,9 +97,9 @@ for service in "${PROTECTED_SERVICES[@]}"; do
   [[ "$(systemctl show -p MainPID --value "$service")" == "${protected_pids[$service]}" ]] || die "$service PID changed"
 done
 report="$(curl -fsS --max-time 4 http://127.0.0.1:8787/public-report)"
-python3 -c 'import json,sys; d=json.load(sys.stdin); x=d["paper_exploration"]; assert d["report_version"] == 7; assert x["execution_authority"] is False; assert set(x["lanes"]) == {"wide","balanced","selective"}' <<<"$report" || die "v60 public report contract failed"
+python3 -c 'import json,sys; d=json.load(sys.stdin); x=d["paper_exploration"]; assert d["report_version"] == 8; assert x["execution_authority"] is False; assert set(x["lanes"]) == {"wide","balanced","selective"}; assert all((not v["position_open"]) or v["equity"] is not None for v in x["lanes"].values())' <<<"$report" || die "v60 public report contract failed"
 curl -fsS --max-time 4 http://127.0.0.1:8787/monitor/paper_exploration_monitor.js >/dev/null || die "monitor asset unavailable"
 
 committed=true
-printf 'DEPLOYED_SHA=%s\nMONITOR_STATUS=PASS\nSTATUS_VERSION=7\nTRADER_PID_UNCHANGED=%s\nSHADOW_PID_UNCHANGED=%s\nEXPLORATION_PID_UNCHANGED=%s\n' \
+printf 'DEPLOYED_SHA=%s\nMONITOR_STATUS=PASS\nSTATUS_VERSION=8\nTRADER_PID_UNCHANGED=%s\nSHADOW_PID_UNCHANGED=%s\nEXPLORATION_PID_UNCHANGED=%s\n' \
   "$EXPECTED_SHA" "${protected_pids[chobyar-trader.service]}" "${protected_pids[chobyar-profit-protection-shadow.service]}" "${protected_pids[chobyar-paper-exploration.service]}"
