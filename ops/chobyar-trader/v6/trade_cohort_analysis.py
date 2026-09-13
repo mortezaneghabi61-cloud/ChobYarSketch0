@@ -45,6 +45,8 @@ class Trade:
     entry_ts: float
     exit_ts: float
     pnl: float
+    entry_price: float
+    exit_price: float
     hold_seconds: float
     exit_reason: str
     entry_score: float | None
@@ -52,6 +54,10 @@ class Trade:
     global_change_24h: float | None
     global_source_count: int
     votes: dict[str, int | None]
+    exit_score: float | None
+    exit_votes: dict[str, int | None]
+    max_favorable_excursion_pct: float | None
+    max_adverse_excursion_pct: float | None
     current_tape_gate_would_block: bool
 
 
@@ -108,17 +114,27 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
                 stats["cycle_misses"] += 1
                 continue
             entry_ts, exit_ts = _timestamp(buy["ts"]), _timestamp(row["ts"])
-            pnl = _finite(row.get("pnl"))
-            if entry_ts is None or exit_ts is None or pnl is None or exit_ts <= entry_ts:
+            pnl, entry_price, exit_price = _finite(row.get("pnl")), _finite(buy.get("price")), _finite(row.get("price"))
+            if (entry_ts is None or exit_ts is None or pnl is None or entry_price is None or
+                    exit_price is None or entry_price <= 0 or exit_price <= 0 or exit_ts <= entry_ts):
                 stats["unmatched_sells"] += 1
                 continue
             votes = _votes(entry_cycle)
+            path_changes = []
+            for path_row, path_ts in zip(ordered, times):
+                if (path_ts is not None and entry_ts <= path_ts <= exit_ts and
+                        path_row.get("event") == "cycle"):
+                    mid = _finite(path_row.get("local_mid"))
+                    if mid is not None and mid > 0:
+                        path_changes.append(mid / entry_price - 1.0)
             sources = entry_cycle.get("global_sources")
             trades.append(Trade(
-                entry_ts, exit_ts, pnl, exit_ts - entry_ts, str(row.get("reason") or "unknown"),
+                entry_ts, exit_ts, pnl, entry_price, exit_price, exit_ts - entry_ts, str(row.get("reason") or "unknown"),
                 _finite(entry_cycle.get("score")), _finite(entry_cycle.get("spread_pct")),
                 _finite(entry_cycle.get("global_change_24h")), len(sources) if isinstance(sources, list) else 0,
-                votes, votes["tape_order_flow"] == -1,
+                votes, _finite(exit_cycle.get("score")), _votes(exit_cycle),
+                max(path_changes) if path_changes else None, min(path_changes) if path_changes else None,
+                votes["tape_order_flow"] == -1,
             ))
     if open_entry is not None:
         stats["unmatched_buys"] += 1
@@ -132,8 +148,12 @@ def summarize(trades: list[Trade], extraction: dict[str, int]) -> dict[str, Any]
             "total_pnl": sum(row.pnl for row in rows),
             "median_hold_seconds": statistics.median(row.hold_seconds for row in rows) if rows else None,
             "mean_entry_score": statistics.fmean(row.entry_score for row in rows if row.entry_score is not None) if any(row.entry_score is not None for row in rows) else None,
+            "mean_exit_score": statistics.fmean(row.exit_score for row in rows if row.exit_score is not None) if any(row.exit_score is not None for row in rows) else None,
+            "median_max_favorable_excursion_pct": statistics.median(row.max_favorable_excursion_pct for row in rows if row.max_favorable_excursion_pct is not None) if any(row.max_favorable_excursion_pct is not None for row in rows) else None,
+            "median_max_adverse_excursion_pct": statistics.median(row.max_adverse_excursion_pct for row in rows if row.max_adverse_excursion_pct is not None) if any(row.max_adverse_excursion_pct is not None for row in rows) else None,
             "tape_conflict_count": sum(row.current_tape_gate_would_block for row in rows),
             "vote_positive_counts": {agent: sum(row.votes.get(agent) == 1 for row in rows) for agent in AGENTS},
+            "exit_vote_negative_counts": {agent: sum(row.exit_votes.get(agent) == -1 for row in rows) for agent in AGENTS},
             "exit_reason_counts": {reason: sum(row.exit_reason == reason for row in rows) for reason in sorted({row.exit_reason for row in rows})},
         }
     wins = [row for row in trades if row.pnl > 0]
