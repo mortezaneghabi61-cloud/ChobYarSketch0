@@ -24,6 +24,10 @@ class InstallerContractTests(unittest.TestCase):
     def test_cannot_replace_unknown_status_baseline(self):
         self.assertIn('unexpected status ExecStart; refusing blind replacement', self.text)
 
+    def test_installer_updates_the_index_served_by_v481(self):
+        self.assertIn('INDEX_FILE="$MONITOR_DIR/index_v481.html"', self.text)
+        self.assertNotIn('INDEX_FILE="$MONITOR_DIR/index.html"', self.text)
+
 
 if __name__ == "__main__":
     unittest.main()
