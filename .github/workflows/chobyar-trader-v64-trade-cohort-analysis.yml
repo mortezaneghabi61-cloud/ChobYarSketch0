@@ -1,0 +1,43 @@
+name: ChobYar Trader V6.4 Trade Cohort Analysis
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v6/trade_cohort_analysis.py'
+      - 'ops/chobyar-trader/v6/test_trade_cohort_analysis.py'
+      - '.github/workflows/chobyar-trader-v64-trade-cohort-analysis.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/chobyar-trader/v6/trade_cohort_analysis.py'
+      - 'ops/chobyar-trader/v6/test_trade_cohort_analysis.py'
+      - '.github/workflows/chobyar-trader-v64-trade-cohort-analysis.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  trade-cohort-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Deterministic offline contracts
+        run: |
+          set -Eeuo pipefail
+          source_dir='ops/chobyar-trader/v6'
+          python3 -m py_compile "$source_dir/trade_cohort_analysis.py"
+          PYTHONPATH="$source_dir" python3 -m unittest -v "$source_dir/test_trade_cohort_analysis.py"
+      - name: Enforce observation-only surface
+        run: |
+          set -Eeuo pipefail
+          file='ops/chobyar-trader/v6/trade_cohort_analysis.py'
+          if grep -niE 'httpx|requests|urllib|socket|subprocess|systemctl|submit_order|create_order|place_order|LIVE_TRADING_ENABLED=true' "$file"; then
+            echo 'Network, process, live, or execution surface detected' >&2
+            exit 1
+          fi
+          grep -q '"execution_authority": False' "$file"
+          grep -q '"automatic_promotion": False' "$file"
