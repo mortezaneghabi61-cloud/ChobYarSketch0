@@ -78,7 +78,7 @@ final class ReferenceImageProjectAdapter {
         if(cad==null)throw new IllegalArgumentException("CAD workspace is missing");
         Decoded decoded=validate(raw,true);
         try{
-            Class<?> imageClass=Class.forName("ir.chobyar.sketch.SpatialCadCanvasView$ReferenceImage");
+            Class<?> imageClass=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$ReferenceImage");
             Constructor<?> ctor=imageClass.getDeclaredConstructor(Bitmap.class,String.class,Geometry3D.Plane3D.class);
             ctor.setAccessible(true);
             Object image=ctor.newInstance(decoded.bitmap,decoded.name,decoded.plane);
