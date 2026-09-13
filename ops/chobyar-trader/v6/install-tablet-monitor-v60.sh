@@ -8,7 +8,7 @@ SRC_DIR="$APP_DIR/app"
 MONITOR_DIR="$APP_DIR/monitor"
 SERVER_FILE="$SRC_DIR/status_server_v60.py"
 ASSET_FILE="$MONITOR_DIR/paper_exploration_monitor.js"
-INDEX_FILE="$MONITOR_DIR/index.html"
+INDEX_FILE="$MONITOR_DIR/index_v481.html"
 UNIT_FILE="/etc/systemd/system/chobyar-status.service"
 STATUS_SERVICE="chobyar-status.service"
 PROTECTED_SERVICES=(chobyar-trader.service chobyar-profit-protection-shadow.service chobyar-paper-exploration.service)
@@ -81,7 +81,7 @@ text = path.read_text(encoding="utf-8")
 tag = '<script src="/monitor/paper_exploration_monitor.js" defer></script>'
 if tag not in text:
     if "</body>" not in text:
-        raise SystemExit("index.html has no closing body tag")
+        raise SystemExit("active index_v481.html has no closing body tag")
     text = text.replace("</body>", f"  {tag}\n</body>", 1)
     path.write_text(text, encoding="utf-8")
 PY
