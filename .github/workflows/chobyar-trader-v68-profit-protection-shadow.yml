@@ -5,12 +5,14 @@ on:
     paths:
       - 'ops/chobyar-trader/v6/profit_protection_shadow.py'
       - 'ops/chobyar-trader/v6/test_profit_protection_shadow.py'
+      - 'ops/chobyar-trader/v6/install-profit-protection-shadow.sh'
       - '.github/workflows/chobyar-trader-v68-profit-protection-shadow.yml'
   push:
     branches: [main]
     paths:
       - 'ops/chobyar-trader/v6/profit_protection_shadow.py'
       - 'ops/chobyar-trader/v6/test_profit_protection_shadow.py'
+      - 'ops/chobyar-trader/v6/install-profit-protection-shadow.sh'
       - '.github/workflows/chobyar-trader-v68-profit-protection-shadow.yml'
 
 permissions:
@@ -42,3 +44,15 @@ jobs:
           grep -q 'client.get("/v1/depth"' "$file"
           grep -q 'execution_authority: bool = False' "$file"
           grep -q 'automatic_promotion: bool = False' "$file"
+      - name: Verify isolated installer contract
+        run: |
+          set -Eeuo pipefail
+          installer='ops/chobyar-trader/v6/install-profit-protection-shadow.sh'
+          bash -n "$installer"
+          grep -q 'exact 40-character commit SHA required' "$installer"
+          grep -q 'TRADER_PID_UNCHANGED' "$installer"
+          grep -q 'rollback; cleanup' "$installer"
+          if grep -nE 'systemctl (restart|stop|disable).*chobyar-trader\.service|sed -i.*\.env|rm -f.*\.env' "$installer"; then
+            echo 'Installer may mutate the active trader or environment' >&2
+            exit 1
+          fi
