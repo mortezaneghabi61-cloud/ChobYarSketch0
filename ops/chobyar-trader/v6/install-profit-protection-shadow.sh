@@ -62,7 +62,7 @@ src="$work/repo/ops/chobyar-trader/v6"
 [[ -f "$src/profit_protection_shadow.py" && -f "$src/test_profit_protection_shadow.py" ]] || die "commit lacks V6.8 shadow files"
 
 TRADING_MODE=paper LIVE_TRADING_ENABLED=false PYTHONPATH="$src" \
-  "$VENV/bin/python" -m unittest -v "$src/test_profit_protection_shadow.py"
+  "$VENV/bin/python" -m unittest discover -v -s "$src" -p 'test_profit_protection_shadow.py'
 TRADING_MODE=paper LIVE_TRADING_ENABLED=false \
   "$VENV/bin/python" -m py_compile "$src/profit_protection_shadow.py"
 if grep -niE '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|cancel_order|withdraw|api[_-]?key|authorization|LIVE_TRADING_ENABLED=true|subprocess' \
