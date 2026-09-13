@@ -1,0 +1,48 @@
+name: ChobYar Trader V6.11 Paper Exploration
+
+on:
+  pull_request:
+    paths:
+      - 'ops/chobyar-trader/v6/paper_exploration.py'
+      - 'ops/chobyar-trader/v6/test_paper_exploration.py'
+      - '.github/workflows/chobyar-trader-v611-paper-exploration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-exploration-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact tested revision
+        if: github.event_name == 'pull_request'
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Run deterministic exploration tests
+        env:
+          TRADING_MODE: paper
+          LIVE_TRADING_ENABLED: 'false'
+          PYTHONPATH: ops/chobyar-trader/v6
+        run: python3 -m unittest -v ops/chobyar-trader/v6/test_paper_exploration.py
+      - name: Enforce observation-only boundary
+        run: |
+          source=ops/chobyar-trader/v6/paper_exploration.py
+          grep -q 'execution_authority.*False' "$source"
+          grep -q 'automatic_promotion.*False' "$source"
+          grep -q 'paper_exploration_only' "$source"
+          grep -q 'LIVE_TRADING_ENABLED.*false' "$source"
+          if grep -niE '\.(post|put|patch|delete)\(|submit_order|create_order|place_order|cancel_order|withdraw|api[_-]?key|authorization|subprocess|httpx|requests' "$source"; then
+            echo 'Execution, authenticated, process, or network surface detected' >&2
+            exit 1
+          fi
+      - name: Keep CAD outside Trader scope
+        if: github.event_name == 'pull_request'
+        run: |
+          files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)"
+          if printf '%s\n' "$files" | grep -E '^(app/|docs/)'; then
+            echo 'CAD files entered Trader-only PR' >&2
+            exit 1
+          fi
