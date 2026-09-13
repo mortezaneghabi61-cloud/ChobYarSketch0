@@ -15,6 +15,7 @@ _original_handler = base.Handler
 APP_DIR = Path("/opt/chobyar-trader")
 STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 LOG_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
+AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 ASSET_FILE = APP_DIR / "monitor" / "paper_exploration_monitor.js"
 
 
@@ -44,6 +45,20 @@ def _read_events() -> list[dict]:
     return rows
 
 
+def _latest_mark_price() -> float | None:
+    if not AUDIT_FILE.is_file():
+        return None
+    for line in reversed(AUDIT_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-600:]):
+        try:
+            row = json.loads(line)
+            price = float(row.get("local_mid"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if row.get("event") == "cycle" and price > 0:
+            return price
+    return None
+
+
 def public_exploration_projection() -> dict:
     now = time.time()
     projection = {
@@ -60,6 +75,7 @@ def public_exploration_projection() -> dict:
     try:
         state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
         rows = _read_events()
+        mark_price = _latest_mark_price()
         last_ts = float(state["last_ts"])
         projection["age_seconds"] = max(0.0, now - last_ts)
         projection["stale"] = projection["age_seconds"] > 120
@@ -69,14 +85,19 @@ def public_exploration_projection() -> dict:
             wins = sum(1 for r in sells if float(r.get("pnl", 0)) > 0)
             losses = sum(1 for r in sells if float(r.get("pnl", 0)) <= 0)
             cash = float(lane["cash"])
+            quantity = float(lane.get("quantity", 0))
+            position_open = quantity > 0
+            equity = cash if not position_open else (cash + quantity * mark_price if mark_price is not None else None)
             projection["lanes"][name] = {
                 "threshold": float(lane["threshold"]),
                 "cash": cash,
-                "return_pct": (cash / 10.0 - 1.0) * 100.0,
+                "equity": equity,
+                "mark_price": mark_price if position_open else None,
+                "return_pct": (equity / 10.0 - 1.0) * 100.0 if equity is not None else None,
                 "completed_trades": len(sells),
                 "wins": wins,
                 "losses": losses,
-                "position_open": float(lane.get("quantity", 0)) > 0,
+                "position_open": position_open,
             }
         projection["total_completed_trades"] = sum(
             lane["completed_trades"] for lane in projection["lanes"].values()
@@ -90,7 +111,7 @@ def public_exploration_projection() -> dict:
 def public_report_payload() -> dict:
     report = _original_report()
     report["paper_exploration"] = public_exploration_projection()
-    report["report_version"] = 7
+    report["report_version"] = 8
     return report
 
 
