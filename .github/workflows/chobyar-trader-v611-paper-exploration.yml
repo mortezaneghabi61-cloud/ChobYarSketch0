@@ -41,6 +41,7 @@ jobs:
       - name: Keep CAD outside Trader scope
         if: github.event_name == 'pull_request'
         run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
           files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)"
           if printf '%s\n' "$files" | grep -E '^(app/|docs/)'; then
             echo 'CAD files entered Trader-only PR' >&2
