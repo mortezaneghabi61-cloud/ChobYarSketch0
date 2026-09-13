@@ -54,6 +54,11 @@ class TradeCohortAnalysisTests(unittest.TestCase):
         observed = trades[0].protection_observations
         self.assertTrue(observed["trail_0_3pct_after_0_5pct"]["triggered"])
         self.assertAlmostEqual(observed["trail_0_3pct_after_0_5pct"]["observed_trigger_return_pct"], 0.002)
+        self.assertAlmostEqual(observed["trail_0_3pct_after_0_5pct"]["trigger_floor_pct"], 0.003)
+        self.assertAlmostEqual(observed["trail_0_3pct_after_0_5pct"]["overshoot_below_floor_pct"], 0.001)
+        self.assertEqual(observed["trail_0_3pct_after_0_5pct"]["gap_before_observed_trigger_seconds"], 60)
+        self.assertEqual(observed["trail_0_3pct_after_0_5pct"]["max_sample_gap_seconds"], 60)
+        self.assertEqual(observed["trail_0_3pct_after_0_5pct"]["samples"], 5)
         self.assertTrue(observed["breakeven_after_0_5pct"]["triggered"])
         self.assertAlmostEqual(observed["breakeven_after_0_5pct"]["observed_trigger_return_pct"], -0.001)
         report = summarize(trades, stats)
@@ -73,6 +78,8 @@ class TradeCohortAnalysisTests(unittest.TestCase):
         for observation in trades[0].protection_observations.values():
             self.assertFalse(observation["armed"])
             self.assertFalse(observation["triggered"])
+            self.assertIsNone(observation["trigger_floor_pct"])
+            self.assertEqual(observation["samples"], 3)
 
     def test_mid_position_sell_is_excluded_and_reported(self):
         rows = [

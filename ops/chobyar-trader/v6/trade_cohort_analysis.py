@@ -60,17 +60,19 @@ class Trade:
     exit_votes: dict[str, int | None]
     max_favorable_excursion_pct: float | None
     max_adverse_excursion_pct: float | None
-    protection_observations: dict[str, dict[str, float | bool | None]]
+    protection_observations: dict[str, dict[str, float | bool | int | None]]
     current_tape_gate_would_block: bool
 
 
 def _protection_observation(
-    path_changes: list[float], *, trailing_distance_pct: float | None
-) -> dict[str, float | bool | None]:
+    path_points: list[tuple[float, float]], *, trailing_distance_pct: float | None
+) -> dict[str, float | bool | int | None]:
     """Describe a fixed protection rule without claiming executable PnL."""
     peak: float | None = None
     armed = False
-    for change in path_changes:
+    max_gap = max((later[0] - earlier[0] for earlier, later in zip(path_points, path_points[1:])), default=None)
+    previous_ts: float | None = None
+    for point_ts, change in path_points:
         peak = change if peak is None else max(peak, change)
         armed = armed or peak >= PROTECTION_ARM_PCT
         if not armed:
@@ -81,13 +83,24 @@ def _protection_observation(
                 "armed": True,
                 "triggered": True,
                 "observed_trigger_return_pct": change,
+                "trigger_floor_pct": floor,
+                "overshoot_below_floor_pct": floor - change,
                 "peak_return_pct": peak,
+                "samples": len(path_points),
+                "max_sample_gap_seconds": max_gap,
+                "gap_before_observed_trigger_seconds": point_ts - previous_ts if previous_ts is not None else None,
             }
+        previous_ts = point_ts
     return {
         "armed": armed,
         "triggered": False,
         "observed_trigger_return_pct": None,
+        "trigger_floor_pct": None,
+        "overshoot_below_floor_pct": None,
         "peak_return_pct": peak,
+        "samples": len(path_points),
+        "max_sample_gap_seconds": max_gap,
+        "gap_before_observed_trigger_seconds": None,
     }
 
 
@@ -151,13 +164,16 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
                 continue
             votes = _votes(entry_cycle)
             path_changes = []
+            path_points = []
             for path_row, path_ts in zip(ordered, times):
                 if (path_ts is not None and entry_ts <= path_ts <= exit_ts and
                         path_row.get("event") == "cycle"):
                     mid = _finite(path_row.get("local_mid"))
                     if mid is not None and mid > 0:
-                        path_changes.append(mid / entry_price - 1.0)
-            protection_path = [*path_changes, exit_price / entry_price - 1.0]
+                        change = mid / entry_price - 1.0
+                        path_changes.append(change)
+                        path_points.append((path_ts, change))
+            protection_path = [*path_points, (exit_ts, exit_price / entry_price - 1.0)]
             protection_observations = {
                 "breakeven_after_0_5pct": _protection_observation(
                     protection_path, trailing_distance_pct=None
