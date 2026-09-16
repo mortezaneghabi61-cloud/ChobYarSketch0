@@ -180,6 +180,63 @@ print("SUPERVISOR_RISK_PATHS=PASS")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "SUPERVISOR_RISK_PATHS=PASS")
 
+    def test_daily_loss_baseline_rolls_once_per_utc_day_before_supervision(self):
+        script = """
+import sys
+import types
+from datetime import datetime, timezone
+httpx = types.ModuleType("httpx")
+httpx.Client = lambda *args, **kwargs: object()
+httpx.Response = object
+sys.modules["httpx"] = httpx
+import trader
+
+broker = trader.Broker()
+broker.state.cash_usdt = 5.0
+broker.state.btc_qty = 0.05
+broker.state.entry_price = 80.0
+broker.state.day_key = "2000-01-01"
+broker.state.day_start_equity = 999.0
+market = trader.Market(
+    best_bid=99.9,
+    best_ask=100.1,
+    mid=100.0,
+    spread_pct=0.002,
+    imbalance=0.0,
+    prices=[100.0] * 20,
+    buy_ratio=0.5,
+    global_price=100.0,
+    global_change=0.0,
+    global_sources=["kucoin"],
+    global_dispersion_pct=0.0,
+)
+seen = []
+trader.snapshot = lambda: market
+trader.agent_votes = lambda _market: []
+trader.supervise = lambda _market, b, _votes: (seen.append((b.state.day_key, b.state.day_start_equity)) or ("WAIT", 0.0, "test"))
+trader.run_once(broker)
+today = datetime.now(timezone.utc).date().isoformat()
+assert seen == [(today, 10.0)], seen
+assert broker.state.day_key == today
+assert broker.state.day_start_equity == 10.0
+broker.state.cash_usdt = 4.0
+trader.run_once(broker)
+assert broker.state.day_start_equity == 10.0
+print("DAILY_RISK_ROLLOVER=PASS")
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, "-B", "-c", script],
+                cwd=SOURCE_DIR,
+                env=safe_environment(Path(tmp)),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "DAILY_RISK_ROLLOVER=PASS")
+
     def test_private_atomic_state_and_secret_free_audit(self):
         secret = "test-secret-value-12345"
         with tempfile.TemporaryDirectory() as tmp:
