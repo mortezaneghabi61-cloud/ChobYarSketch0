@@ -206,6 +206,22 @@ class Broker:
     def equity(self, px: float) -> float:
         return self.state.cash_usdt + self.state.btc_qty * max(px, 0)
 
+    def roll_day_if_needed(self, px: float) -> bool:
+        today = datetime.now(timezone.utc).date().isoformat()
+        if self.state.day_key == today:
+            return False
+        previous_day_key = self.state.day_key
+        self.state.day_key = today
+        self.state.day_start_equity = self.equity(px)
+        self.save(px)
+        AUDIT.write(
+            "paper_day_rollover",
+            previous_day_key=previous_day_key,
+            day_key=today,
+            day_start_equity=self.state.day_start_equity,
+        )
+        return True
+
     def save(self, px: float) -> None:
         equity = self.equity(px)
         self.state.peak_equity = max(self.state.peak_equity, equity)
@@ -260,7 +276,7 @@ def supervise(m: Market, broker: Broker, votes: list[dict[str, Any]]) -> tuple[s
 
 
 def run_once(broker: Broker) -> None:
-    market = snapshot(); votes = agent_votes(market); action, score, reason = supervise(market, broker, votes)
+    market = snapshot(); broker.roll_day_if_needed(market.mid); votes = agent_votes(market); action, score, reason = supervise(market, broker, votes)
     executed = broker.buy(market.best_ask) if action == "BUY" else broker.sell(market.best_bid, reason) if action == "SELL" else False
     broker.cycles += 1; broker.save(market.mid)
     perf_vote = vote("performance_audit", 0, .4, f"closed={broker.state.closed_trades};dd={broker.state.max_drawdown_pct:.3%}")
