@@ -1,0 +1,50 @@
+name: ChobYar Trader V6.18 Windows Laptop Monitor
+
+on:
+  pull_request:
+    paths:
+      - "ops/chobyar-trader/v6/windows/**"
+      - ".github/workflows/chobyar-trader-v618-windows-monitor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-monitor:
+    runs-on: windows-latest
+    steps:
+      - name: Check out exact tested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact revision
+        shell: pwsh
+        run: |
+          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
+          $actual = git rev-parse HEAD
+          if ($actual -ne $expected) {
+            throw "Checked out $actual instead of $expected"
+          }
+
+      - name: Parse PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "ops/chobyar-trader/v6/windows/setup-chobyar-monitor.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+
+      - name: Run safety tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s ops/chobyar-trader/v6/windows -p "test_*.py" -v
