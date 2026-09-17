@@ -34,6 +34,9 @@ read-only on the VPS before any future deployment is considered.
   it to WAIT.
 - SELL, stop-loss, take-profit, daily-loss, and spread decisions remain owned
   by the proven paper supervisor and bypass the V5 entry gate.
+- The daily-loss baseline rolls at the first valid market cycle of each new UTC
+  day, before the supervisor evaluates risk, and persists the mark-to-market
+  equity atomically before any Paper action can be considered.
 - Public global sources use GET-only, credential-free market data.
 
 Run the deterministic contract locally:

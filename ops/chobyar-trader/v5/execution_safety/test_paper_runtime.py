@@ -180,6 +180,146 @@ print("SUPERVISOR_RISK_PATHS=PASS")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "SUPERVISOR_RISK_PATHS=PASS")
 
+    def test_daily_risk_rollover_rebases_to_live_equity_and_persists(self):
+        script = """
+import json
+import os
+import sys
+import types
+from pathlib import Path
+from types import SimpleNamespace
+httpx = types.ModuleType("httpx")
+httpx.Client = lambda *args, **kwargs: object()
+httpx.Response = object
+sys.modules["httpx"] = httpx
+import trader
+
+trader.utc_day_key = lambda: "2026-09-16"
+events = []
+trader.AUDIT = SimpleNamespace(write=lambda event, **fields: events.append((event, fields)))
+broker = trader.Broker.__new__(trader.Broker)
+broker.state = trader.State(
+    cash_usdt=5.0,
+    btc_qty=0.05,
+    entry_price=100.0,
+    entry_fee=0.0,
+    starting_equity=10.0,
+    day_start_equity=10.0,
+    day_key="2026-09-15",
+    realized_pnl=0.0,
+    fees_paid=0.0,
+    orders=0,
+    closed_trades=0,
+    wins=0,
+    losses=0,
+    gross_profit=0.0,
+    gross_loss=0.0,
+    peak_equity=10.0,
+    max_drawdown_pct=0.0,
+)
+assert broker.roll_day_if_needed(110.0) is True
+assert broker.state.day_key == "2026-09-16"
+assert abs(broker.state.day_start_equity - 10.5) < 1e-12
+persisted = json.loads(trader.STATE_FILE.read_text(encoding="utf-8"))
+assert persisted["day_key"] == "2026-09-16"
+assert abs(persisted["day_start_equity"] - 10.5) < 1e-12
+assert events and events[0][0] == "paper_day_rollover"
+assert broker.roll_day_if_needed(120.0) is False
+assert abs(broker.state.day_start_equity - 10.5) < 1e-12
+print("DAILY_RISK_ROLLOVER=PASS")
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, "-B", "-c", script],
+                cwd=SOURCE_DIR,
+                env=safe_environment(Path(tmp)),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "DAILY_RISK_ROLLOVER=PASS")
+
+    def test_run_once_rolls_day_before_supervisor(self):
+        script = """
+import sys
+import types
+from types import SimpleNamespace
+httpx = types.ModuleType("httpx")
+httpx.Client = lambda *args, **kwargs: object()
+httpx.Response = object
+sys.modules["httpx"] = httpx
+import trader
+
+events = []
+market = trader.Market(
+    best_bid=99.9,
+    best_ask=100.1,
+    mid=100.0,
+    spread_pct=0.002,
+    imbalance=0.0,
+    prices=[100.0] * 20,
+    buy_ratio=0.5,
+    global_price=100.0,
+    global_change=0.0,
+    global_sources=["kucoin"],
+    global_dispersion_pct=0.0,
+)
+trader.snapshot = lambda: market
+trader.agent_votes = lambda _market: events.append(("votes",)) or []
+def supervise(_market, broker, _votes):
+    events.append(("supervise", broker.state.day_key, broker.state.day_start_equity))
+    return "WAIT", 0.0, "bounded consensus"
+trader.supervise = supervise
+trader.AUDIT = SimpleNamespace(write=lambda *args, **kwargs: None)
+
+class FakeBroker:
+    def __init__(self):
+        self.state = SimpleNamespace(
+            day_key="2026-09-15",
+            day_start_equity=10.0,
+            closed_trades=0,
+            max_drawdown_pct=0.0,
+            realized_pnl=0.0,
+            entry_price=None,
+            btc_qty=0.0,
+        )
+        self.cycles = 0
+    def roll_day_if_needed(self, px):
+        events.append(("roll", px))
+        self.state.day_key = "2026-09-16"
+        self.state.day_start_equity = 9.5
+        return True
+    def buy(self, _px):
+        raise AssertionError("unexpected BUY")
+    def sell(self, _px, _reason):
+        raise AssertionError("unexpected SELL")
+    def save(self, px):
+        events.append(("save", px))
+    def equity(self, _px):
+        return 9.5
+
+broker = FakeBroker()
+trader.run_once(broker)
+assert events[0] == ("roll", 100.0), events
+supervisor_event = next(item for item in events if item[0] == "supervise")
+assert supervisor_event == ("supervise", "2026-09-16", 9.5), events
+print("ROLLOVER_BEFORE_SUPERVISOR=PASS")
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, "-B", "-c", script],
+                cwd=SOURCE_DIR,
+                env=safe_environment(Path(tmp)),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "ROLLOVER_BEFORE_SUPERVISOR=PASS")
+
     def test_private_atomic_state_and_secret_free_audit(self):
         secret = "test-secret-value-12345"
         with tempfile.TemporaryDirectory() as tmp:
