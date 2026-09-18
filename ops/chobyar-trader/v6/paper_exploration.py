@@ -48,7 +48,11 @@ class Lane:
 
 
 def initial_state() -> dict[str, Any]:
-    return {"last_ts": None, "lanes": {name: asdict(Lane(value)) for name, value in LANE_THRESHOLDS.items()}}
+    return {
+        "last_ts": None,
+        "last_score": None,
+        "lanes": {name: asdict(Lane(value)) for name, value in LANE_THRESHOLDS.items()},
+    }
 
 
 def validate_cycle(row: dict[str, Any]) -> tuple[float, float, float] | None:
@@ -77,13 +81,18 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
     last_ts = _finite(state.get("last_ts"))
     if last_ts is not None and epoch <= last_ts:
         return []
+    last_score = _finite(state.get("last_score"))
+    has_score_history = last_score is not None or last_ts is None
     state["last_ts"] = epoch
     spread = _finite(row.get("spread_pct")) or 0.0
     ask, bid = mid * (1 + spread / 2), mid * (1 - spread / 2)
     events: list[dict[str, Any]] = []
     for name, raw in state["lanes"].items():
         lane = Lane(**raw)
-        if lane.quantity == 0 and score >= lane.threshold:
+        crossed_threshold = score >= lane.threshold and (
+            (last_score is None and has_score_history) or (last_score is not None and last_score < lane.threshold)
+        )
+        if lane.quantity == 0 and crossed_threshold:
             notional = lane.cash * POSITION_FRACTION
             fee = notional * FEE_RATE
             lane.quantity = notional / ask
@@ -113,6 +122,7 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
                 events.append({"event": "exploration_sell", "lane": name, "price": bid, "score": score,
                                "fee": fee, "pnl": pnl, "reason": reason})
         state["lanes"][name] = asdict(lane)
+    state["last_score"] = score
     return events
 
 
@@ -122,6 +132,7 @@ def load_state(path: Path = STATE_FILE) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or set(data.get("lanes", {})) != set(LANE_THRESHOLDS):
         raise ValueError("invalid exploration state")
+    data.setdefault("last_score", None)
     return data
 
 

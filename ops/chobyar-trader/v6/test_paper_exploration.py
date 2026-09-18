@@ -39,6 +39,43 @@ class PaperExplorationTests(unittest.TestCase):
         process_cycle(state, cycle(1, 0.3))
         self.assertTrue(all(e["reason"] == "max_hold" for e in process_cycle(state, cycle(1801, 0.2))))
 
+    def test_reentry_requires_a_fresh_threshold_crossing_after_max_hold(self):
+        state = initial_state()
+        process_cycle(state, cycle(1, 0.3))
+        exits = process_cycle(state, cycle(1801, 0.3))
+        self.assertEqual(
+            [(event["event"], event["reason"]) for event in exits],
+            [("exploration_sell", "max_hold")] * 3,
+        )
+        self.assertEqual(process_cycle(state, cycle(1802, 0.3)), [])
+        self.assertEqual(process_cycle(state, cycle(1803, -1.0)), [])
+        reentries = process_cycle(state, cycle(1804, 0.3))
+        self.assertEqual(
+            [(event["event"], event["lane"]) for event in reentries],
+            [
+                ("exploration_buy", "wide"),
+                ("exploration_buy", "balanced"),
+                ("exploration_buy", "selective"),
+            ],
+        )
+
+    def test_legacy_state_without_last_score_waits_for_fresh_history(self):
+        state = initial_state()
+        state.pop("last_score")
+        state["last_ts"] = 100
+
+        self.assertEqual(process_cycle(state, cycle(101, 0.3)), [])
+        self.assertEqual(process_cycle(state, cycle(102, -1.0)), [])
+        reentries = process_cycle(state, cycle(103, 0.3))
+        self.assertEqual(
+            [(event["event"], event["lane"]) for event in reentries],
+            [
+                ("exploration_buy", "wide"),
+                ("exploration_buy", "balanced"),
+                ("exploration_buy", "selective"),
+            ],
+        )
+
     def test_duplicate_or_invalid_cycles_do_not_trade(self):
         state = initial_state()
         process_cycle(state, cycle(2, 0.3))
