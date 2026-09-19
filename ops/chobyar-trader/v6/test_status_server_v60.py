@@ -43,7 +43,7 @@ class StatusV60Tests(unittest.TestCase):
                 "selective": {"threshold": .25, "cash": 10, "quantity": 0},
             }}))
             log.write_text("\n".join([
-                json.dumps({"event":"exploration_sell","lane":"wide","pnl":-.1,"strategy_version":"v621-loss-brakes"}),
+                json.dumps({"event":"exploration_sell","lane":"wide","pnl":-.1,"strategy_version":"v622-quality-gates"}),
                 json.dumps({"event":"exploration_sell","lane":"wide","pnl":.2}),
                 json.dumps({"event":"exploration_buy","lane":"balanced"}),
             ]))
@@ -99,7 +99,7 @@ class StatusV60Tests(unittest.TestCase):
         self.assertEqual(result["paper_exploration"], {"ok": True})
 
     def test_server_rendered_monitor_contains_three_lanes_without_script(self):
-        data = {"ok": True, "service_active": True, "stale": False, "strategy_version": "v621-loss-brakes", "total_completed_trades": 3, "current_strategy_completed_trades": 1, "lanes": {
+        data = {"ok": True, "service_active": True, "stale": False, "strategy_version": "v622-quality-gates", "total_completed_trades": 3, "current_strategy_completed_trades": 1, "lanes": {
             "wide": {"return_pct": -1, "equity": 9.9, "cash": 7.4, "completed_trades": 1, "wins": 0, "losses": 1, "current_wins": 0, "current_losses": 1, "cooldown_remaining_seconds": 10, "position_open": True},
             "balanced": {"return_pct": 1, "equity": 10.1, "cash": 10.1, "completed_trades": 1, "wins": 1, "losses": 0, "current_wins": 0, "current_losses": 0, "cooldown_remaining_seconds": 0, "position_open": False},
             "selective": {"return_pct": None, "equity": None, "cash": 7.5, "completed_trades": 1, "wins": 0, "losses": 1, "current_wins": 0, "current_losses": 0, "cooldown_remaining_seconds": 0, "position_open": True},
@@ -110,7 +110,7 @@ class StatusV60Tests(unittest.TestCase):
         self.assertIn("گسترده", page)
         self.assertIn("متعادل", page)
         self.assertIn("انتخابی", page)
-        self.assertIn("v621-loss-brakes", page)
+        self.assertIn("v622-quality-gates", page)
         self.assertIn("ترمز ضرر", page)
         self.assertIn("نسخه جدید", page)
         self.assertNotIn("<script", page)
