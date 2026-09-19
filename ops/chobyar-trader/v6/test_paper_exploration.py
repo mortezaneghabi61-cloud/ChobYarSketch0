@@ -11,14 +11,23 @@ from paper_exploration import (
     EXPLORATION_STRATEGY_VERSION,
     LOSS_COOLDOWN_SECONDS,
     LOSS_STREAK_COOLDOWN_SECONDS,
+    MAX_ENTRY_SPREAD_PCT,
     append_events,
     initial_state,
     process_cycle,
 )
 
 
-def cycle(ts, score, mid=100.0, spread=0.0):
-    return {"event": "cycle", "ts_epoch": ts, "score": score, "local_mid": mid, "spread_pct": spread}
+def cycle(ts, score, mid=100.0, spread=0.0008, orderbook=0.2, tape=0.6):
+    return {
+        "event": "cycle",
+        "ts_epoch": ts,
+        "score": score,
+        "local_mid": mid,
+        "spread_pct": spread,
+        "orderbook_imbalance": orderbook,
+        "tape_buy_ratio": tape,
+    }
 
 
 class PaperExplorationTests(unittest.TestCase):
@@ -32,6 +41,18 @@ class PaperExplorationTests(unittest.TestCase):
         state = initial_state()
         events = process_cycle(state, cycle(1, -0.7))
         self.assertEqual([(e["event"], e["lane"]) for e in events], [("exploration_buy", "wide")])
+        self.assertTrue(events[0]["entry_quality_ok"])
+
+    def test_entry_requires_local_quality_confirmation(self):
+        state = initial_state()
+        self.assertEqual(process_cycle(state, cycle(1, 0.3, orderbook=-0.1)), [])
+        self.assertEqual(process_cycle(state, cycle(2, -1.0)), [])
+        self.assertEqual(process_cycle(state, cycle(3, 0.3, tape=0.54)), [])
+        self.assertEqual(process_cycle(state, cycle(4, -1.0)), [])
+        self.assertEqual(process_cycle(state, cycle(5, 0.3, spread=MAX_ENTRY_SPREAD_PCT + 0.0001)), [])
+        self.assertEqual(process_cycle(state, cycle(6, -1.0)), [])
+        entries = process_cycle(state, cycle(7, 0.3))
+        self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
 
     def test_stop_loss_closes_and_includes_both_fees(self):
         state = initial_state()
@@ -103,6 +124,22 @@ class PaperExplorationTests(unittest.TestCase):
         self.assertEqual(record["strategy_version"], EXPLORATION_STRATEGY_VERSION)
         self.assertFalse(record["execution_authority"])
         self.assertFalse(record["automatic_promotion"])
+
+    def test_trade_events_include_cycle_and_entry_quality_context(self):
+        state = initial_state()
+        entries = process_cycle(state, cycle(10, 0.3, spread=0.0007, orderbook=0.4, tape=0.7))
+        self.assertTrue(all(event["cycle_ts"] == 10 for event in entries))
+        self.assertTrue(all(event["spread_pct"] == 0.0007 for event in entries))
+        self.assertTrue(all(event["orderbook_imbalance"] == 0.4 for event in entries))
+        self.assertTrue(all(event["tape_buy_ratio"] == 0.7 for event in entries))
+
+        exits = process_cycle(state, cycle(11, -0.5, mid=99.5))
+        self.assertTrue(all(event["cycle_ts"] == 11 for event in exits))
+        self.assertTrue(all(event["entry_ts"] == 10 for event in exits))
+        self.assertTrue(all(event["entry_score"] == 0.3 for event in exits))
+        self.assertTrue(all(event["entry_spread_pct"] == 0.0007 for event in exits))
+        self.assertTrue(all(event["entry_orderbook_imbalance"] == 0.4 for event in exits))
+        self.assertTrue(all(event["entry_tape_buy_ratio"] == 0.7 for event in exits))
 
     def test_legacy_state_without_last_score_waits_for_fresh_history(self):
         state = initial_state()
