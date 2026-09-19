@@ -51,8 +51,10 @@ class WindowsLaptopMonitorTests(unittest.TestCase):
         shortcut_creation = SCRIPT.index("$shell.CreateShortcut")
         self.assertLess(safety_end, shortcut_creation)
 
-    def test_edge_app_is_monitor_only(self):
+    def test_chrome_app_is_monitor_only(self):
         self.assertIn('--app=', SCRIPT)
+        self.assertIn('Google\\Chrome\\Application\\chrome.exe', SCRIPT)
+        self.assertNotIn('Microsoft Edge', SCRIPT)
         self.assertIn('$monitorUrl = "$root/monitor/"', SCRIPT)
         self.assertIn('execution_controls = $false', SCRIPT)
 
