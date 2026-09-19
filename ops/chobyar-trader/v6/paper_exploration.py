@@ -13,7 +13,7 @@ APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 OUTPUT_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
-EXPLORATION_STRATEGY_VERSION = "v621-loss-brakes"
+EXPLORATION_STRATEGY_VERSION = "v622-quality-gates"
 INTERVAL_SECONDS = 5.0
 START_BALANCE = 10.0
 POSITION_FRACTION = 0.25
@@ -26,6 +26,9 @@ LOSS_COOLDOWN_SECONDS = 1800.0
 STOP_LOSS_COOLDOWN_SECONDS = 3600.0
 LOSS_STREAK_LIMIT = 2
 LOSS_STREAK_COOLDOWN_SECONDS = 7200.0
+MAX_ENTRY_SPREAD_PCT = 0.0012
+MIN_ENTRY_ORDERBOOK_IMBALANCE = 0.0
+MIN_ENTRY_TAPE_BUY_RATIO = 0.55
 LANE_THRESHOLDS = {"wide": -0.75, "balanced": 0.0, "selective": 0.25}
 
 if os.getenv("TRADING_MODE", "").strip().lower() != "paper":
@@ -49,6 +52,10 @@ class Lane:
     quantity: float = 0.0
     entry_price: float | None = None
     entry_ts: float | None = None
+    entry_score: float | None = None
+    entry_spread_pct: float | None = None
+    entry_orderbook_imbalance: float | None = None
+    entry_tape_buy_ratio: float | None = None
     trades: int = 0
     cooldown_until: float | None = None
     loss_streak: int = 0
@@ -90,6 +97,24 @@ def cooldown_for_exit(reason: str, pnl: float, next_loss_streak: int) -> float:
     return cooldown
 
 
+def entry_quality(row: dict[str, Any], spread: float) -> dict[str, float | bool | None]:
+    orderbook_imbalance = _finite(row.get("orderbook_imbalance"))
+    tape_buy_ratio = _finite(row.get("tape_buy_ratio"))
+    accepted = (
+        spread <= MAX_ENTRY_SPREAD_PCT
+        and orderbook_imbalance is not None
+        and orderbook_imbalance >= MIN_ENTRY_ORDERBOOK_IMBALANCE
+        and tape_buy_ratio is not None
+        and tape_buy_ratio >= MIN_ENTRY_TAPE_BUY_RATIO
+    )
+    return {
+        "entry_quality_ok": accepted,
+        "spread_pct": spread,
+        "orderbook_imbalance": orderbook_imbalance,
+        "tape_buy_ratio": tape_buy_ratio,
+    }
+
+
 def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, Any]]:
     values = validate_cycle(row)
     if values is None:
@@ -102,6 +127,7 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
     has_score_history = last_score is not None or last_ts is None
     state["last_ts"] = epoch
     spread = _finite(row.get("spread_pct")) or 0.0
+    quality = entry_quality(row, spread)
     ask, bid = mid * (1 + spread / 2), mid * (1 - spread / 2)
     events: list[dict[str, Any]] = []
     for name, raw in state["lanes"].items():
@@ -111,13 +137,17 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
         crossed_threshold = score >= lane.threshold and (
             (last_score is None and has_score_history) or (last_score is not None and last_score < lane.threshold)
         )
-        if lane.quantity == 0 and crossed_threshold and not in_cooldown:
+        if lane.quantity == 0 and crossed_threshold and not in_cooldown and quality["entry_quality_ok"]:
             notional = lane.cash * POSITION_FRACTION
             fee = notional * FEE_RATE
             lane.quantity = notional / ask
             lane.cash -= notional + fee
-            lane.entry_price, lane.entry_ts = ask, epoch
-            events.append({"event": "exploration_buy", "lane": name, "price": ask, "score": score, "fee": fee})
+            lane.entry_price, lane.entry_ts, lane.entry_score = ask, epoch, score
+            lane.entry_spread_pct = spread
+            lane.entry_orderbook_imbalance = quality["orderbook_imbalance"]
+            lane.entry_tape_buy_ratio = quality["tape_buy_ratio"]
+            events.append({"event": "exploration_buy", "lane": name, "price": ask, "score": score, "fee": fee,
+                           "cycle_ts": epoch, **quality})
         elif lane.quantity > 0 and lane.entry_price is not None and lane.entry_ts is not None:
             change = bid / lane.entry_price - 1
             reason = None
@@ -134,9 +164,15 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
                 fee = proceeds * FEE_RATE
                 cost = lane.quantity * lane.entry_price
                 pnl = proceeds - fee - cost - cost * FEE_RATE
+                entry_ts = lane.entry_ts
+                entry_score = lane.entry_score
+                entry_spread_pct = lane.entry_spread_pct
+                entry_orderbook_imbalance = lane.entry_orderbook_imbalance
+                entry_tape_buy_ratio = lane.entry_tape_buy_ratio
                 lane.cash += proceeds - fee
                 lane.quantity = 0.0
-                lane.entry_price = lane.entry_ts = None
+                lane.entry_price = lane.entry_ts = lane.entry_score = None
+                lane.entry_spread_pct = lane.entry_orderbook_imbalance = lane.entry_tape_buy_ratio = None
                 lane.trades += 1
                 lane.loss_streak = lane.loss_streak + 1 if pnl <= 0 else 0
                 cooldown_seconds = cooldown_for_exit(reason, pnl, lane.loss_streak)
@@ -144,6 +180,10 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
                 lane.last_exit_reason = reason
                 events.append({"event": "exploration_sell", "lane": name, "price": bid, "score": score,
                                "fee": fee, "pnl": pnl, "reason": reason,
+                               "cycle_ts": epoch, "entry_ts": entry_ts, "entry_score": entry_score,
+                               "entry_spread_pct": entry_spread_pct,
+                               "entry_orderbook_imbalance": entry_orderbook_imbalance,
+                               "entry_tape_buy_ratio": entry_tape_buy_ratio,
                                "cooldown_until": lane.cooldown_until, "loss_streak": lane.loss_streak})
         state["lanes"][name] = asdict(lane)
     state["last_score"] = score
