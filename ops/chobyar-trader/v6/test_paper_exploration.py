@@ -1,10 +1,20 @@
+import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("TRADING_MODE", "paper")
 os.environ.setdefault("LIVE_TRADING_ENABLED", "false")
 
-from paper_exploration import initial_state, process_cycle
+from paper_exploration import (
+    EXPLORATION_STRATEGY_VERSION,
+    LOSS_COOLDOWN_SECONDS,
+    LOSS_STREAK_COOLDOWN_SECONDS,
+    append_events,
+    initial_state,
+    process_cycle,
+)
 
 
 def cycle(ts, score, mid=100.0, spread=0.0):
@@ -49,7 +59,9 @@ class PaperExplorationTests(unittest.TestCase):
         )
         self.assertEqual(process_cycle(state, cycle(1802, 0.3)), [])
         self.assertEqual(process_cycle(state, cycle(1803, -1.0)), [])
-        reentries = process_cycle(state, cycle(1804, 0.3))
+        self.assertEqual(process_cycle(state, cycle(1804, 0.3)), [])
+        self.assertEqual(process_cycle(state, cycle(1801 + LOSS_COOLDOWN_SECONDS, -1.0)), [])
+        reentries = process_cycle(state, cycle(1802 + LOSS_COOLDOWN_SECONDS, 0.3))
         self.assertEqual(
             [(event["event"], event["lane"]) for event in reentries],
             [
@@ -58,6 +70,39 @@ class PaperExplorationTests(unittest.TestCase):
                 ("exploration_buy", "selective"),
             ],
         )
+
+    def test_loss_exit_starts_cooldown_before_next_entry(self):
+        state = initial_state()
+        process_cycle(state, cycle(1, 0.3))
+        exits = process_cycle(state, cycle(2, -0.5, mid=99.5))
+
+        self.assertEqual([event["reason"] for event in exits], ["stop_loss", "stop_loss", "stop_loss"])
+        self.assertTrue(all(event["cooldown_until"] > 2 for event in exits))
+        self.assertEqual(process_cycle(state, cycle(3, -1.0)), [])
+        self.assertEqual(process_cycle(state, cycle(4, 0.3)), [])
+
+    def test_repeated_losses_extend_the_cooldown(self):
+        state = initial_state()
+        process_cycle(state, cycle(1, 0.3))
+        process_cycle(state, cycle(2, -0.5, mid=99.5))
+        process_cycle(state, cycle(3603, -1.0))
+        process_cycle(state, cycle(3604, 0.3))
+        exits = process_cycle(state, cycle(3605, -0.5, mid=99.0))
+
+        self.assertEqual([event["loss_streak"] for event in exits], [2, 2, 2])
+        self.assertTrue(all(event["cooldown_until"] == 3605 + LOSS_STREAK_COOLDOWN_SECONDS for event in exits))
+        self.assertEqual(process_cycle(state, cycle(3606, -1.0)), [])
+        self.assertEqual(process_cycle(state, cycle(3607, 0.3)), [])
+
+    def test_appended_events_include_strategy_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "events.jsonl"
+            append_events(path, [{"event": "exploration_buy", "lane": "wide"}])
+
+            record = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(record["strategy_version"], EXPLORATION_STRATEGY_VERSION)
+        self.assertFalse(record["execution_authority"])
+        self.assertFalse(record["automatic_promotion"])
 
     def test_legacy_state_without_last_score_waits_for_fresh_history(self):
         state = initial_state()

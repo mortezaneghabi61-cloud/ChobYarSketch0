@@ -38,12 +38,12 @@ class StatusV60Tests(unittest.TestCase):
             state = Path(tmp) / "state.json"
             log = Path(tmp) / "events.jsonl"
             state.write_text(json.dumps({"last_ts": 1000, "lanes": {
-                "wide": {"threshold": -.75, "cash": 9.8, "quantity": 0},
+                "wide": {"threshold": -.75, "cash": 9.8, "quantity": 0, "cooldown_until": 1100, "loss_streak": 1, "last_exit_reason": "stop_loss"},
                 "balanced": {"threshold": 0, "cash": 10.1, "quantity": .01},
                 "selective": {"threshold": .25, "cash": 10, "quantity": 0},
             }}))
             log.write_text("\n".join([
-                json.dumps({"event":"exploration_sell","lane":"wide","pnl":-.1}),
+                json.dumps({"event":"exploration_sell","lane":"wide","pnl":-.1,"strategy_version":"v621-loss-brakes"}),
                 json.dumps({"event":"exploration_sell","lane":"wide","pnl":.2}),
                 json.dumps({"event":"exploration_buy","lane":"balanced"}),
             ]))
@@ -53,8 +53,14 @@ class StatusV60Tests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertFalse(result["stale"])
             self.assertEqual(result["total_completed_trades"], 2)
+            self.assertEqual(result["current_strategy_completed_trades"], 1)
             self.assertEqual(result["lanes"]["wide"]["wins"], 1)
             self.assertEqual(result["lanes"]["wide"]["losses"], 1)
+            self.assertEqual(result["lanes"]["wide"]["current_wins"], 0)
+            self.assertEqual(result["lanes"]["wide"]["current_losses"], 1)
+            self.assertEqual(result["lanes"]["wide"]["cooldown_remaining_seconds"], 50)
+            self.assertEqual(result["lanes"]["wide"]["loss_streak"], 1)
+            self.assertEqual(result["lanes"]["wide"]["last_exit_reason"], "stop_loss")
             self.assertTrue(result["lanes"]["balanced"]["position_open"])
             self.assertAlmostEqual(result["lanes"]["balanced"]["equity"], 11.1)
             self.assertAlmostEqual(result["lanes"]["balanced"]["return_pct"], 11.0)
@@ -70,7 +76,7 @@ class StatusV60Tests(unittest.TestCase):
             }}))
             log.write_text("")
             self.module.STATE_FILE, self.module.LOG_FILE = state, log
-            with patch.object(self.module, "_latest_mark_price", return_value=None):
+            with patch.object(self.module, "_latest_mark_price", return_value=None), patch.object(self.module, "_service_active", return_value=True):
                 result = self.module.public_exploration_projection()
         self.assertIsNone(result["lanes"]["wide"]["equity"])
         self.assertIsNone(result["lanes"]["wide"]["return_pct"])
@@ -79,7 +85,8 @@ class StatusV60Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.module.STATE_FILE = Path(tmp) / "missing"
             self.module.LOG_FILE = Path(tmp) / "missing-log"
-            result = self.module.public_exploration_projection()
+            with patch.object(self.module, "_service_active", return_value=False):
+                result = self.module.public_exploration_projection()
         self.assertFalse(result["ok"])
         self.assertFalse(result["execution_authority"])
         self.assertNotIn("error", result)
@@ -92,10 +99,10 @@ class StatusV60Tests(unittest.TestCase):
         self.assertEqual(result["paper_exploration"], {"ok": True})
 
     def test_server_rendered_monitor_contains_three_lanes_without_script(self):
-        data = {"ok": True, "service_active": True, "stale": False, "total_completed_trades": 3, "lanes": {
-            "wide": {"return_pct": -1, "equity": 9.9, "cash": 7.4, "completed_trades": 1, "wins": 0, "losses": 1, "position_open": True},
-            "balanced": {"return_pct": 1, "equity": 10.1, "cash": 10.1, "completed_trades": 1, "wins": 1, "losses": 0, "position_open": False},
-            "selective": {"return_pct": None, "equity": None, "cash": 7.5, "completed_trades": 1, "wins": 0, "losses": 1, "position_open": True},
+        data = {"ok": True, "service_active": True, "stale": False, "strategy_version": "v621-loss-brakes", "total_completed_trades": 3, "current_strategy_completed_trades": 1, "lanes": {
+            "wide": {"return_pct": -1, "equity": 9.9, "cash": 7.4, "completed_trades": 1, "wins": 0, "losses": 1, "current_wins": 0, "current_losses": 1, "cooldown_remaining_seconds": 10, "position_open": True},
+            "balanced": {"return_pct": 1, "equity": 10.1, "cash": 10.1, "completed_trades": 1, "wins": 1, "losses": 0, "current_wins": 0, "current_losses": 0, "cooldown_remaining_seconds": 0, "position_open": False},
+            "selective": {"return_pct": None, "equity": None, "cash": 7.5, "completed_trades": 1, "wins": 0, "losses": 1, "current_wins": 0, "current_losses": 0, "cooldown_remaining_seconds": 0, "position_open": True},
         }}
         with patch.object(self.module, "public_exploration_projection", return_value=data):
             page = self.module.exploration_html().decode()
@@ -103,6 +110,9 @@ class StatusV60Tests(unittest.TestCase):
         self.assertIn("گسترده", page)
         self.assertIn("متعادل", page)
         self.assertIn("انتخابی", page)
+        self.assertIn("v621-loss-brakes", page)
+        self.assertIn("ترمز ضرر", page)
+        self.assertIn("نسخه جدید", page)
         self.assertNotIn("<script", page)
 
 

@@ -13,6 +13,7 @@ APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 OUTPUT_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
+EXPLORATION_STRATEGY_VERSION = "v621-loss-brakes"
 INTERVAL_SECONDS = 5.0
 START_BALANCE = 10.0
 POSITION_FRACTION = 0.25
@@ -21,6 +22,10 @@ STOP_LOSS_PCT = 0.004
 TAKE_PROFIT_PCT = 0.006
 MAX_HOLD_SECONDS = 1800.0
 EXIT_SCORE = -1.5
+LOSS_COOLDOWN_SECONDS = 1800.0
+STOP_LOSS_COOLDOWN_SECONDS = 3600.0
+LOSS_STREAK_LIMIT = 2
+LOSS_STREAK_COOLDOWN_SECONDS = 7200.0
 LANE_THRESHOLDS = {"wide": -0.75, "balanced": 0.0, "selective": 0.25}
 
 if os.getenv("TRADING_MODE", "").strip().lower() != "paper":
@@ -45,6 +50,9 @@ class Lane:
     entry_price: float | None = None
     entry_ts: float | None = None
     trades: int = 0
+    cooldown_until: float | None = None
+    loss_streak: int = 0
+    last_exit_reason: str | None = None
 
 
 def initial_state() -> dict[str, Any]:
@@ -73,6 +81,15 @@ def validate_cycle(row: dict[str, Any]) -> tuple[float, float, float] | None:
     return score, mid, epoch
 
 
+def cooldown_for_exit(reason: str, pnl: float, next_loss_streak: int) -> float:
+    if pnl > 0:
+        return 0.0
+    cooldown = STOP_LOSS_COOLDOWN_SECONDS if reason == "stop_loss" else LOSS_COOLDOWN_SECONDS
+    if next_loss_streak >= LOSS_STREAK_LIMIT:
+        cooldown = max(cooldown, LOSS_STREAK_COOLDOWN_SECONDS)
+    return cooldown
+
+
 def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, Any]]:
     values = validate_cycle(row)
     if values is None:
@@ -89,10 +106,12 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
     events: list[dict[str, Any]] = []
     for name, raw in state["lanes"].items():
         lane = Lane(**raw)
+        cooldown_until = _finite(lane.cooldown_until)
+        in_cooldown = cooldown_until is not None and epoch < cooldown_until
         crossed_threshold = score >= lane.threshold and (
             (last_score is None and has_score_history) or (last_score is not None and last_score < lane.threshold)
         )
-        if lane.quantity == 0 and crossed_threshold:
+        if lane.quantity == 0 and crossed_threshold and not in_cooldown:
             notional = lane.cash * POSITION_FRACTION
             fee = notional * FEE_RATE
             lane.quantity = notional / ask
@@ -119,8 +138,13 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
                 lane.quantity = 0.0
                 lane.entry_price = lane.entry_ts = None
                 lane.trades += 1
+                lane.loss_streak = lane.loss_streak + 1 if pnl <= 0 else 0
+                cooldown_seconds = cooldown_for_exit(reason, pnl, lane.loss_streak)
+                lane.cooldown_until = epoch + cooldown_seconds if cooldown_seconds else None
+                lane.last_exit_reason = reason
                 events.append({"event": "exploration_sell", "lane": name, "price": bid, "score": score,
-                               "fee": fee, "pnl": pnl, "reason": reason})
+                               "fee": fee, "pnl": pnl, "reason": reason,
+                               "cooldown_until": lane.cooldown_until, "loss_streak": lane.loss_streak})
         state["lanes"][name] = asdict(lane)
     state["last_score"] = score
     return events
@@ -152,6 +176,7 @@ def append_events(path: Path, events: list[dict[str, Any]]) -> None:
     with os.fdopen(fd, "a", encoding="utf-8") as stream:
         for event in events:
             record = {"ts": datetime.now(timezone.utc).isoformat(), "mode": "paper_exploration_only",
+                      "strategy_version": EXPLORATION_STRATEGY_VERSION,
                       "execution_authority": False, "automatic_promotion": False, **event}
             stream.write(json.dumps(record, separators=(",", ":")) + "\n")
 
