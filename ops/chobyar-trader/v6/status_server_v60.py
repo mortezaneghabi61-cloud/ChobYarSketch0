@@ -18,7 +18,7 @@ STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 LOG_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 ASSET_FILE = APP_DIR / "monitor" / "paper_exploration_monitor.js"
-CURRENT_EXPLORATION_STRATEGY_VERSION = "v622-quality-gates"
+CURRENT_EXPLORATION_STRATEGY_VERSION = "v623-anti-chase-gates"
 
 
 def _service_active(name: str) -> bool:

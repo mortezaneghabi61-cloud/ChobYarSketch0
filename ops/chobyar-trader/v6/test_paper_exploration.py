@@ -54,6 +54,15 @@ class PaperExplorationTests(unittest.TestCase):
         entries = process_cycle(state, cycle(7, 0.3))
         self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
 
+    def test_entry_blocks_overheated_orderbook_or_tape_chase_conditions(self):
+        state = initial_state()
+        self.assertEqual(process_cycle(state, cycle(1, 0.3, orderbook=0.21)), [])
+        self.assertEqual(process_cycle(state, cycle(2, -1.0)), [])
+        self.assertEqual(process_cycle(state, cycle(3, 0.3, tape=0.86)), [])
+        self.assertEqual(process_cycle(state, cycle(4, -1.0)), [])
+        entries = process_cycle(state, cycle(5, 0.3, orderbook=0.20, tape=0.85))
+        self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
+
     def test_stop_loss_closes_and_includes_both_fees(self):
         state = initial_state()
         process_cycle(state, cycle(1, 0.3))
@@ -83,6 +92,25 @@ class PaperExplorationTests(unittest.TestCase):
         self.assertEqual(process_cycle(state, cycle(1804, 0.3)), [])
         self.assertEqual(process_cycle(state, cycle(1801 + LOSS_COOLDOWN_SECONDS, -1.0)), [])
         reentries = process_cycle(state, cycle(1802 + LOSS_COOLDOWN_SECONDS, 0.3))
+        self.assertEqual(
+            [(event["event"], event["lane"]) for event in reentries],
+            [
+                ("exploration_buy", "wide"),
+                ("exploration_buy", "balanced"),
+                ("exploration_buy", "selective"),
+            ],
+        )
+
+    def test_profitable_exit_without_cooldown_still_requires_fresh_threshold_crossing(self):
+        state = initial_state()
+        process_cycle(state, cycle(1, 0.3))
+        exits = process_cycle(state, cycle(2, 0.3, mid=100.7))
+        self.assertEqual([event["reason"] for event in exits], ["take_profit", "take_profit", "take_profit"])
+        self.assertTrue(all(event["cooldown_until"] is None for event in exits))
+
+        self.assertEqual(process_cycle(state, cycle(3, 0.3, mid=100.8)), [])
+        self.assertEqual(process_cycle(state, cycle(4, -1.0, mid=100.8)), [])
+        reentries = process_cycle(state, cycle(5, 0.3, mid=100.8))
         self.assertEqual(
             [(event["event"], event["lane"]) for event in reentries],
             [
