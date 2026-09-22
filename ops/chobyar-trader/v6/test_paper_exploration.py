@@ -54,6 +54,21 @@ class PaperExplorationTests(unittest.TestCase):
         entries = process_cycle(state, cycle(7, 0.3))
         self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
 
+    def test_entry_rejects_missing_or_nonfinite_spread(self):
+        state = initial_state()
+        missing_spread = cycle(1, 0.3)
+        missing_spread.pop("spread_pct")
+        self.assertEqual(process_cycle(state, missing_spread), [])
+
+        nonfinite_spread = cycle(2, 0.3)
+        nonfinite_spread["spread_pct"] = float("nan")
+        self.assertEqual(process_cycle(state, nonfinite_spread), [])
+
+        rearm = cycle(3, -1.0)
+        self.assertEqual(process_cycle(state, rearm), [])
+        entries = process_cycle(state, cycle(4, 0.3))
+        self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
+
     def test_stop_loss_closes_and_includes_both_fees(self):
         state = initial_state()
         process_cycle(state, cycle(1, 0.3))
