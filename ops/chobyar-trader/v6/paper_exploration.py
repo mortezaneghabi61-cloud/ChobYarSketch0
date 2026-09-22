@@ -13,7 +13,7 @@ APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 OUTPUT_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
-EXPLORATION_STRATEGY_VERSION = "v623-anti-chase-gates"
+EXPLORATION_STRATEGY_VERSION = "v624-final-paper-candidate"
 INTERVAL_SECONDS = 5.0
 START_BALANCE = 10.0
 POSITION_FRACTION = 0.25
@@ -22,6 +22,7 @@ STOP_LOSS_PCT = 0.004
 TAKE_PROFIT_PCT = 0.006
 MAX_HOLD_SECONDS = 1800.0
 EXIT_SCORE = -1.5
+MIN_ENTRY_SCORE = 0.0
 LOSS_COOLDOWN_SECONDS = 1800.0
 STOP_LOSS_COOLDOWN_SECONDS = 3600.0
 LOSS_STREAK_LIMIT = 2
@@ -141,7 +142,8 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
         crossed_threshold = score >= lane.threshold and (
             (last_score is None and has_score_history) or (last_score is not None and last_score < lane.threshold)
         )
-        if lane.quantity == 0 and crossed_threshold and not in_cooldown and quality["entry_quality_ok"]:
+        if (lane.quantity == 0 and crossed_threshold and score >= MIN_ENTRY_SCORE
+                and not in_cooldown and quality["entry_quality_ok"]):
             notional = lane.cash * POSITION_FRACTION
             fee = notional * FEE_RATE
             lane.quantity = notional / ask

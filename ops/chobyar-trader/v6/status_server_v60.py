@@ -18,7 +18,11 @@ STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 LOG_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 ASSET_FILE = APP_DIR / "monitor" / "paper_exploration_monitor.js"
-CURRENT_EXPLORATION_STRATEGY_VERSION = "v623-anti-chase-gates"
+CURRENT_EXPLORATION_STRATEGY_VERSION = "v624-final-paper-candidate"
+READINESS_MIN_TRADES = 30
+READINESS_MIN_WIN_RATE = 0.55
+READINESS_MIN_TOTAL_PNL = 0.0
+READINESS_MAX_LOSS_STREAK = 1
 
 
 def _service_active(name: str) -> bool:
@@ -70,6 +74,54 @@ def _cooldown_remaining(now: float, value) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, cooldown_until - now)
+
+
+def _profit_factor(wins: list[dict], losses: list[dict]) -> float | None:
+    gross_profit = sum(float(row.get("pnl", 0)) for row in wins)
+    gross_loss = -sum(float(row.get("pnl", 0)) for row in losses)
+    if gross_loss <= 0:
+        return None if gross_profit <= 0 else float("inf")
+    return gross_profit / gross_loss
+
+
+def live_readiness_projection(rows: list[dict], stale: bool, service_active: bool) -> dict:
+    current_sells = [
+        row for row in rows
+        if row.get("event") == "exploration_sell"
+        and row.get("strategy_version") == CURRENT_EXPLORATION_STRATEGY_VERSION
+    ]
+    wins = [row for row in current_sells if float(row.get("pnl", 0)) > 0]
+    losses = [row for row in current_sells if float(row.get("pnl", 0)) <= 0]
+    trades = len(current_sells)
+    total_pnl = sum(float(row.get("pnl", 0)) for row in current_sells)
+    win_rate = len(wins) / trades if trades else 0.0
+    latest_loss_streak = 0
+    for row in reversed(current_sells):
+        if float(row.get("pnl", 0)) > 0:
+            break
+        latest_loss_streak += 1
+    checks = {
+        "paper_service_active": service_active,
+        "fresh_monitor_data": not stale,
+        "minimum_sample": trades >= READINESS_MIN_TRADES,
+        "positive_total_pnl": total_pnl > READINESS_MIN_TOTAL_PNL,
+        "win_rate_floor": win_rate >= READINESS_MIN_WIN_RATE,
+        "loss_streak_limit": latest_loss_streak <= READINESS_MAX_LOSS_STREAK,
+    }
+    return {
+        "ready": all(checks.values()),
+        "mode": "paper_evidence_only",
+        "automatic_promotion": False,
+        "required_trades": READINESS_MIN_TRADES,
+        "trades": trades,
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": win_rate,
+        "total_pnl": total_pnl,
+        "profit_factor": _profit_factor(wins, losses),
+        "latest_loss_streak": latest_loss_streak,
+        "checks": checks,
+    }
 
 
 def public_exploration_projection() -> dict:
@@ -131,6 +183,9 @@ def public_exploration_projection() -> dict:
         )
         projection["current_strategy_completed_trades"] = sum(
             lane["current_completed_trades"] for lane in projection["lanes"].values()
+        )
+        projection["live_readiness"] = live_readiness_projection(
+            rows, projection["stale"], projection["service_active"]
         )
         projection["ok"] = True
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):

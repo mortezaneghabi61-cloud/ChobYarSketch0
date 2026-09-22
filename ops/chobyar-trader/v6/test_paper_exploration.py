@@ -37,11 +37,14 @@ class PaperExplorationTests(unittest.TestCase):
         self.assertEqual([e["lane"] for e in events], ["wide", "balanced", "selective"])
         self.assertTrue(all(e["event"] == "exploration_buy" for e in events))
 
-    def test_wide_lane_explores_score_seen_in_wait_output(self):
+    def test_wide_lane_explores_nonnegative_score_seen_in_wait_output(self):
         state = initial_state()
-        events = process_cycle(state, cycle(1, -0.7))
-        self.assertEqual([(e["event"], e["lane"]) for e in events], [("exploration_buy", "wide")])
-        self.assertTrue(events[0]["entry_quality_ok"])
+        events = process_cycle(state, cycle(1, 0.0))
+        self.assertEqual(
+            [(e["event"], e["lane"]) for e in events],
+            [("exploration_buy", "wide"), ("exploration_buy", "balanced")],
+        )
+        self.assertTrue(all(event["entry_quality_ok"] for event in events))
 
     def test_entry_requires_local_quality_confirmation(self):
         state = initial_state()
@@ -62,6 +65,13 @@ class PaperExplorationTests(unittest.TestCase):
         self.assertEqual(process_cycle(state, cycle(4, -1.0)), [])
         entries = process_cycle(state, cycle(5, 0.3, orderbook=0.20, tape=0.85))
         self.assertEqual([event["lane"] for event in entries], ["wide", "balanced", "selective"])
+
+    def test_entry_blocks_negative_score_even_when_wide_lane_threshold_crosses(self):
+        state = initial_state()
+        self.assertEqual(process_cycle(state, cycle(1, -0.1, orderbook=0.10, tape=0.70)), [])
+        self.assertEqual(process_cycle(state, cycle(2, -1.0)), [])
+        entries = process_cycle(state, cycle(3, 0.0, orderbook=0.10, tape=0.70))
+        self.assertEqual([event["lane"] for event in entries], ["wide", "balanced"])
 
     def test_stop_loss_closes_and_includes_both_fees(self):
         state = initial_state()
