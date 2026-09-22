@@ -13,7 +13,7 @@ APP_DIR = Path(os.getenv("CHOBYAR_APP_DIR", "/opt/chobyar-trader"))
 AUDIT_FILE = APP_DIR / "logs" / "audit.jsonl"
 STATE_FILE = APP_DIR / "state" / "paper_exploration_state.json"
 OUTPUT_FILE = APP_DIR / "logs" / "paper_exploration.jsonl"
-EXPLORATION_STRATEGY_VERSION = "v622-quality-gates"
+EXPLORATION_STRATEGY_VERSION = "v624-final-paper-candidate"
 INTERVAL_SECONDS = 5.0
 START_BALANCE = 10.0
 POSITION_FRACTION = 0.25
@@ -22,13 +22,16 @@ STOP_LOSS_PCT = 0.004
 TAKE_PROFIT_PCT = 0.006
 MAX_HOLD_SECONDS = 1800.0
 EXIT_SCORE = -1.5
+MIN_ENTRY_SCORE = 0.0
 LOSS_COOLDOWN_SECONDS = 1800.0
 STOP_LOSS_COOLDOWN_SECONDS = 3600.0
 LOSS_STREAK_LIMIT = 2
 LOSS_STREAK_COOLDOWN_SECONDS = 7200.0
 MAX_ENTRY_SPREAD_PCT = 0.0012
 MIN_ENTRY_ORDERBOOK_IMBALANCE = 0.0
+MAX_ENTRY_ORDERBOOK_IMBALANCE = 0.20
 MIN_ENTRY_TAPE_BUY_RATIO = 0.55
+MAX_ENTRY_TAPE_BUY_RATIO = 0.85
 LANE_THRESHOLDS = {"wide": -0.75, "balanced": 0.0, "selective": 0.25}
 
 if os.getenv("TRADING_MODE", "").strip().lower() != "paper":
@@ -104,8 +107,10 @@ def entry_quality(row: dict[str, Any], spread: float) -> dict[str, float | bool 
         spread <= MAX_ENTRY_SPREAD_PCT
         and orderbook_imbalance is not None
         and orderbook_imbalance >= MIN_ENTRY_ORDERBOOK_IMBALANCE
+        and orderbook_imbalance <= MAX_ENTRY_ORDERBOOK_IMBALANCE
         and tape_buy_ratio is not None
         and tape_buy_ratio >= MIN_ENTRY_TAPE_BUY_RATIO
+        and tape_buy_ratio <= MAX_ENTRY_TAPE_BUY_RATIO
     )
     return {
         "entry_quality_ok": accepted,
@@ -137,7 +142,8 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
         crossed_threshold = score >= lane.threshold and (
             (last_score is None and has_score_history) or (last_score is not None and last_score < lane.threshold)
         )
-        if lane.quantity == 0 and crossed_threshold and not in_cooldown and quality["entry_quality_ok"]:
+        if (lane.quantity == 0 and crossed_threshold and score >= MIN_ENTRY_SCORE
+                and not in_cooldown and quality["entry_quality_ok"]):
             notional = lane.cash * POSITION_FRACTION
             fee = notional * FEE_RATE
             lane.quantity = notional / ask
