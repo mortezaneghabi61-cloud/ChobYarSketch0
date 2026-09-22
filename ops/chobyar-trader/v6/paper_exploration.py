@@ -70,7 +70,7 @@ def initial_state() -> dict[str, Any]:
     }
 
 
-def validate_cycle(row: dict[str, Any]) -> tuple[float, float, float] | None:
+def validate_cycle(row: dict[str, Any]) -> tuple[float, float, float, float] | None:
     if row.get("event") != "cycle":
         return None
     score, mid, epoch = _finite(row.get("score")), _finite(row.get("local_mid")), _finite(row.get("ts_epoch"))
@@ -82,10 +82,10 @@ def validate_cycle(row: dict[str, Any]) -> tuple[float, float, float] | None:
             return None
     if score is None or mid is None or mid <= 0:
         return None
-    spread = _finite(row.get("spread_pct")) or 0.0
-    if spread < 0 or spread > 0.02:
+    spread = _finite(row.get("spread_pct"))
+    if spread is None or spread < 0 or spread > 0.02:
         return None
-    return score, mid, epoch
+    return score, mid, epoch, spread
 
 
 def cooldown_for_exit(reason: str, pnl: float, next_loss_streak: int) -> float:
@@ -119,14 +119,13 @@ def process_cycle(state: dict[str, Any], row: dict[str, Any]) -> list[dict[str, 
     values = validate_cycle(row)
     if values is None:
         return []
-    score, mid, epoch = values
+    score, mid, epoch, spread = values
     last_ts = _finite(state.get("last_ts"))
     if last_ts is not None and epoch <= last_ts:
         return []
     last_score = _finite(state.get("last_score"))
     has_score_history = last_score is not None or last_ts is None
     state["last_ts"] = epoch
-    spread = _finite(row.get("spread_pct")) or 0.0
     quality = entry_quality(row, spread)
     ask, bid = mid * (1 + spread / 2), mid * (1 - spread / 2)
     events: list[dict[str, Any]] = []
