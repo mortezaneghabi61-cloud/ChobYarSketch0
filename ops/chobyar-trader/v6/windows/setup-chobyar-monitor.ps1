@@ -57,22 +57,22 @@ if ($report.paper_exploration.execution_authority -ne $false) {
 
 $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
 $programFiles = [Environment]::GetFolderPath("ProgramFiles")
-$edgeCandidates = @(
-    (Join-Path $programFilesX86 "Microsoft\Edge\Application\msedge.exe"),
-    (Join-Path $programFiles "Microsoft\Edge\Application\msedge.exe")
+$chromeCandidates = @(
+    (Join-Path $programFilesX86 "Google\Chrome\Application\chrome.exe"),
+    (Join-Path $programFiles "Google\Chrome\Application\chrome.exe")
 )
-$edge = $edgeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $edge) {
-    Stop-Setup "Microsoft Edge was not found."
+$chrome = $chromeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $chrome) {
+    Stop-Setup "Google Chrome was not found."
 }
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktop ($ShortcutName + ".lnk")
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $edge
+$shortcut.TargetPath = $chrome
 $shortcut.Arguments = "--app=`"$monitorUrl`" --start-maximized"
-$shortcut.WorkingDirectory = Split-Path $edge
+$shortcut.WorkingDirectory = Split-Path $chrome
 $shortcut.Description = "Read-only ChobYar paper-trading monitor"
 $shortcut.Save()
 
@@ -88,5 +88,5 @@ $result = [ordered]@{
 $result | ConvertTo-Json -Compress
 
 if ($Launch) {
-    Start-Process -FilePath $edge -ArgumentList "--app=`"$monitorUrl`" --start-maximized"
+    Start-Process -FilePath $chrome -ArgumentList "--app=`"$monitorUrl`" --start-maximized"
 }
