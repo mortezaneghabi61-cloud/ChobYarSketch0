@@ -6,7 +6,7 @@ import time
 from dataclasses import replace
 from typing import Any
 
-from specialist_council import CouncilContext, clamp, finite, run_council
+from specialist_council import CouncilContext, clamp, finite, invalid_local_fields, run_council
 
 MIN_CALIBRATION_SAMPLES = 30
 DIRECTIONAL_AGENTS = (
@@ -59,12 +59,10 @@ def data_integrity(ctx: CouncilContext, now_ts: float | None = None) -> dict[str
     timestamps = [float(row[0]) for row in ctx.candles if len(row) >= 1]
     gaps = [timestamps[i] - timestamps[i - 1] for i in range(1, len(timestamps))]
     large_gaps = sum(gap > 2.1 * 3600 for gap in gaps)
-    last_age = max(0.0, now_ts - timestamps[-1]) if timestamps else float("inf")
-    candles_ok = len(timestamps) >= 80 and large_gaps == 0 and last_age <= 3.5 * 3600
-    local_ok = all(
-        value is not None and math.isfinite(float(value))
-        for value in (ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio)
-    )
+    last_age = now_ts - timestamps[-1] if timestamps else float("inf")
+    candles_ok = (len(timestamps) >= 80 and all(math.isfinite(ts) for ts in timestamps)
+                  and all(gap > 0 for gap in gaps) and large_gaps == 0 and 0 <= last_age <= 3.5 * 3600)
+    local_ok = not invalid_local_fields(ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio)
     global_ok = int(ctx.global_source_count) >= 2
     breadth_count = sum(1 for key in ("BTC-USDT", "ETH-USDT", "SOL-USDT") if finite(ctx.breadth_24h.get(key)) is not None)
     breadth_score = breadth_count / 3.0
@@ -134,14 +132,17 @@ def regime_transition_risk(ctx: CouncilContext) -> dict[str, Any]:
 
 
 def execution_stress(ctx: CouncilContext, regime: dict[str, Any]) -> dict[str, Any]:
-    spread = max(0.0, float(ctx.spread_pct))
+    spread = finite(ctx.spread_pct)
+    invalid_spread = spread is None or spread < 0
     dispersion = finite(ctx.global_dispersion_pct)
     atr = finite(regime.get("atr14_pct")) or 0.0
-    spread_component = clamp(spread / 0.004, 0.0, 1.0)
+    spread_component = 1.0 if invalid_spread else clamp(spread / 0.004, 0.0, 1.0)
     dispersion_component = 0.5 if dispersion is None else clamp(abs(dispersion) / 0.01, 0.0, 1.0)
     volatility_component = clamp(atr / 0.018, 0.0, 1.0)
     score = 0.50 * spread_component + 0.25 * dispersion_component + 0.25 * volatility_component
     flags: list[str] = []
+    if invalid_spread:
+        flags.append("invalid_spread")
     if spread_component >= 0.75:
         flags.append("spread_stress")
     if dispersion_component >= 0.75:
@@ -234,6 +235,8 @@ def enhance_council(ctx: CouncilContext, council: dict[str, Any], scorecard: dic
     fragility = decision_fragility(ctx, candidate_action)
 
     holds: list[str] = []
+    if candidate_action in {"BUY", "SELL"} and candidate_action != original_consensus.get("action"):
+        holds.append("raw_action_guard")
     if not integrity["healthy"]:
         holds.append("data_integrity")
     if transition["score"] >= 0.70:

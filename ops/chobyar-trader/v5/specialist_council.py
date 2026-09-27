@@ -23,11 +23,29 @@ class CouncilContext:
 
 
 def finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if math.isfinite(number) else None
+
+
+def invalid_local_fields(local_mid: Any, spread_pct: Any, book_imbalance: Any, tape_buy_ratio: Any) -> list[str]:
+    """Validate market domains before scoring; clamping must not repair bad data."""
+    fields = (
+        ("local_mid", local_mid, 0.0, None),
+        ("spread_pct", spread_pct, 0.0, None),
+        ("book_imbalance", book_imbalance, -1.0, 1.0),
+        ("tape_buy_ratio", tape_buy_ratio, 0.0, 1.0),
+    )
+    invalid = []
+    for name, value, low, high in fields:
+        number = finite(value)
+        if number is None or number < low or (high is not None and number > high) or (name == "local_mid" and number == 0):
+            invalid.append(name)
+    return invalid
 
 
 def clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
@@ -136,7 +154,10 @@ def regime_structure(ctx: CouncilContext, regime: dict[str, Any]) -> dict[str, A
 
 
 def microstructure_liquidity(ctx: CouncilContext) -> dict[str, Any]:
-    spread = max(0.0, float(ctx.spread_pct))
+    invalid = invalid_local_fields(ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio)
+    if invalid:
+        return specialist("microstructure_liquidity", 0, 0.0, "invalid local market fields: " + ",".join(invalid), available=False, features={"invalid_fields": invalid})
+    spread = float(ctx.spread_pct)
     book = clamp(float(ctx.book_imbalance) / 0.25)
     tape = clamp((float(ctx.tape_buy_ratio) - 0.5) / 0.15)
     raw = 0.55 * book + 0.45 * tape
@@ -227,9 +248,12 @@ def cross_market_breadth(ctx: CouncilContext) -> dict[str, Any]:
 def adversarial_risk(ctx: CouncilContext, regime: dict[str, Any], micro: dict[str, Any]) -> dict[str, Any]:
     flags: list[str] = []
     severe: list[str] = []
-    if ctx.spread_pct > 0.004:
+    if invalid_local_fields(ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio):
+        severe.append("local_market_data_invalid")
+    spread = finite(ctx.spread_pct)
+    if spread is not None and spread > 0.004:
         flags.append("wide_spread")
-    if ctx.spread_pct > 0.006:
+    if spread is not None and spread > 0.006:
         severe.append("spread_hard_limit")
     if ctx.global_source_count < 2:
         flags.append("weak_global_source_diversity")

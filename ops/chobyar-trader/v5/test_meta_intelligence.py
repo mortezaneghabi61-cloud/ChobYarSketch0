@@ -9,7 +9,7 @@ from meta_intelligence import (
     epistemic_uncertainty,
     execution_stress,
 )
-from specialist_council import CouncilContext
+from specialist_council import CouncilContext, run_council
 
 
 def candles(count: int = 100, start: float = 1_700_000_000.0) -> list[list[float]]:
@@ -77,6 +77,47 @@ def strong_scorecard():
 
 
 class MetaIntelligenceTests(unittest.TestCase):
+    def test_meta_never_promotes_wait_or_reverses_direction(self):
+        ctx = context()
+        for action in ("WAIT", "SELL", None):
+            with self.subTest(action=action):
+                raw = council()
+                raw["shadow_consensus"]["action"] = action
+                out = enhance_council(ctx, raw, strong_scorecard(), now_ts=ctx.candles[-1][0] + 60)
+                self.assertEqual(out["shadow_consensus"]["action"], "WAIT")
+                self.assertIn("raw_action_guard", out["shadow_consensus"]["meta_hold_reasons"])
+
+        # Real council inputs: selectively shrinking the opposing vote increases
+        # the aggregate score through the BUY threshold despite a raw WAIT.
+        ctx = context(book_imbalance=-0.25, tape_buy_ratio=0.35, oi_change_pct=0.0021,
+                      breadth_24h={"BTC-USDT": 0.04, "ETH-USDT": 0.04, "SOL-USDT": 0.04})
+        raw = run_council(ctx)
+        self.assertEqual(raw["shadow_consensus"]["action"], "WAIT")
+        card = strong_scorecard()
+        del card["specialists"]["microstructure_liquidity"]
+        out = enhance_council(ctx, raw, card, now_ts=ctx.candles[-1][0] + 60)
+        self.assertGreaterEqual(out["shadow_consensus"]["score"], 1.25)
+        self.assertIn("raw_action_guard", out["shadow_consensus"]["meta_hold_reasons"])
+        self.assertEqual(out["shadow_consensus"]["action"], "WAIT")
+
+    def test_clean_agreement_is_preserved(self):
+        ctx = context()
+        out = enhance_council(ctx, council(), strong_scorecard(), now_ts=ctx.candles[-1][0] + 60)
+        self.assertEqual(out["shadow_consensus"]["action"], "BUY")
+
+    def test_integrity_rejects_future_and_reversed_candle_times(self):
+        ctx = context()
+        self.assertFalse(data_integrity(ctx, now_ts=ctx.candles[-1][0] - 1)["healthy"])
+        for offset in (0, 1):
+            ctx.candles[-2][0] = ctx.candles[-1][0] + offset
+            self.assertFalse(data_integrity(ctx, now_ts=ctx.candles[-1][0] + 60)["healthy"])
+
+    def test_integrity_checks_local_domains_without_raising(self):
+        for overrides in ({"spread_pct": -0.001}, {"book_imbalance": 2}, {"tape_buy_ratio": 1.1}, {"local_mid": 0}, {"spread_pct": "bad"}):
+            with self.subTest(overrides=overrides):
+                ctx = context(**overrides)
+                self.assertFalse(data_integrity(ctx, now_ts=ctx.candles[-1][0] + 60)["healthy"])
+
     def test_confidence_is_never_inflated_without_evidence(self):
         raw = council()["specialists"]
         calibrated = calibrate_specialists(raw, {})

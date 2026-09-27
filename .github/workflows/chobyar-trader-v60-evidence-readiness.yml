@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify exact head and reviewed evidence engine epoch
+      - name: Verify exact head and V6.25 candidate evidence engine epoch
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -35,10 +35,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           cd ops/chobyar-trader/v5
           sha256sum -c <<'EOF'
-          afce972e853eacab8a03a913258cdd8d79757937ebfd4d880aca6000566a08a4  shadow_runner.py
+          ebe0043320ca843848299f93d6479364bd78936e1575ea31a7d996e7c25b3345  shadow_runner.py
           3cea7c210810399604500245724c55d2ea2d0718bbb8232b9fbe2a60e8c972df  shadow_runner_v52.py
-          21dbea476e7239b89eb2920acfb257449fd9b11fa95289b3231ab39240d16e50  specialist_council.py
-          f39eba16dc8b7e529773a58d4b913dd80fa88b8483764edf104ce2b57abdd44b  meta_intelligence.py
+          3b7d0e75ae2115928640e6a486f01319d1fbd4e7df6145882b9863158de39cbe  specialist_council.py
+          9cfb294946ba1474af5a877e48af702c54fee66e6e38f3b90b27e8a73b0aca88  meta_intelligence.py
           d560c01f4cc5c177903855e01490ac28dab714e718b051d4710cfd5b3c0a2c46  public_source_fallbacks.py
           a193840a9515e8367792bc2baedd92b3d610a0d30e091c529c5ed74096c928ba  council_evidence.py
           EOF
