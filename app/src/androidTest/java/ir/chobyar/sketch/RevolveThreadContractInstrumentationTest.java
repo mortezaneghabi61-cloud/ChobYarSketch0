@@ -70,7 +70,7 @@ public final class RevolveThreadContractInstrumentationTest {
     }
 
     private static Object newRevolveFeature(float angleDeg,float heightMm) throws Exception {
-        Class<?> type=Class.forName("ir.chobyar.sketch.AdvancedParametricSolidCadCanvasView$RevolveFeature");
+        Class<?> type=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$RevolveFeature");
         Constructor<?> ctor=type.getDeclaredConstructor(int.class,Object.class,Geometry3D.Plane3D.class,
                 Object.class,boolean.class,float.class,float.class);
         ctor.setAccessible(true);

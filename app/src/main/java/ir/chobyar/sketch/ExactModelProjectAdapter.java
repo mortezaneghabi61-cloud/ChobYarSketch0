@@ -269,7 +269,7 @@ final class ExactModelProjectAdapter {
 
     private static void restoreDirectEdits(Shapr3DGuideCadCanvasView cad,JSONArray rows,Map<String,Object> bodiesByKey)throws Exception{
         if(rows.length()==0)return;
-        Class<?> kindClass=Class.forName("ir.chobyar.sketch.OcctStableCadCanvasView$Kind");Class<?> editClass=Class.forName("ir.chobyar.sketch.OcctStableCadCanvasView$StableEdit");
+        Class<?> kindClass=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$Kind");Class<?> editClass=Class.forName("ir.chobyar.sketch.K33MirroredCadCanvasView$StableEdit");
         Constructor<?> ctor=editClass.getDeclaredConstructor(int.class,kindClass,double.class,Geometry3D.Vec3.class,OcctTopologyRef.Ref.class);ctor.setAccessible(true);
         Method record=OcctStableCadCanvasView.class.getDeclaredMethod("recordStable",Object.class,editClass);record.setAccessible(true);int max=0;
         for(int i=0;i<rows.length();i++){
