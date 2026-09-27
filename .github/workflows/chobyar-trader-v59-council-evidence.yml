@@ -43,14 +43,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Verify exact deployed observation baseline
+      - name: Verify V6.25 candidate observation engine
         run: |
           set -Eeuo pipefail
           cd ops/chobyar-trader/v5
           printf '%s  %s\n' \
-            afce972e853eacab8a03a913258cdd8d79757937ebfd4d880aca6000566a08a4 shadow_runner.py \
-            21dbea476e7239b89eb2920acfb257449fd9b11fa95289b3231ab39240d16e50 specialist_council.py \
-            f39eba16dc8b7e529773a58d4b913dd80fa88b8483764edf104ce2b57abdd44b meta_intelligence.py \
+            ebe0043320ca843848299f93d6479364bd78936e1575ea31a7d996e7c25b3345 shadow_runner.py \
+            3b7d0e75ae2115928640e6a486f01319d1fbd4e7df6145882b9863158de39cbe specialist_council.py \
+            9cfb294946ba1474af5a877e48af702c54fee66e6e38f3b90b27e8a73b0aca88 meta_intelligence.py \
             d560c01f4cc5c177903855e01490ac28dab714e718b051d4710cfd5b3c0a2c46 public_source_fallbacks.py \
             | sha256sum -c -
 

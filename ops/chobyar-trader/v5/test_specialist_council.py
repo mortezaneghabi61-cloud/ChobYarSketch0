@@ -49,6 +49,30 @@ def context(kind: str = "up", **kwargs) -> CouncilContext:
 
 
 class SpecialistCouncilTests(unittest.TestCase):
+    def test_invalid_local_data_abstains_and_vetoes(self) -> None:
+        invalid = {
+            "local_mid": [None, 0, -1, True, float("inf")],
+            "spread_pct": [None, -0.001, float("nan"), float("inf"), True],
+            "book_imbalance": [None, -1.01, 1.01, float("nan"), "bad"],
+            "tape_buy_ratio": [None, -0.01, 1.01, float("nan"), False],
+        }
+        for field, values in invalid.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    report = run_council(context(**{field: value}))
+                    micro = report["specialists"][1]
+                    self.assertFalse(micro["available"])
+                    self.assertEqual(micro["vote"], 0)
+                    self.assertEqual(micro["confidence"], 0)
+                    self.assertTrue(report["shadow_consensus"]["risk_veto"])
+                    self.assertEqual(report["shadow_consensus"]["action"], "WAIT")
+
+    def test_valid_local_boundaries_remain_available(self) -> None:
+        for book in (-1.0, 0.0, 1.0):
+            for tape in (0.0, 0.5, 1.0):
+                report = run_council(context(spread_pct=0.0, book_imbalance=book, tape_buy_ratio=tape))
+                self.assertTrue(report["specialists"][1]["available"])
+
     def test_trend_council_is_shadow_only(self) -> None:
         report = run_council(context("up"))
         self.assertEqual(report["mode"], "shadow_observation_only")

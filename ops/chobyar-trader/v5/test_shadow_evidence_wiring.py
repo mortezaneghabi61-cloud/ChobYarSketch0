@@ -35,6 +35,15 @@ def context() -> CouncilContext:
 
 
 class ShadowEvidenceWiringTests(unittest.TestCase):
+    def test_context_builder_rejects_invalid_local_domains(self) -> None:
+        ctx = context()
+        for field, value in (("spread_pct", -0.001), ("orderbook_imbalance", 1.1), ("tape_buy_ratio", -0.01), ("local_mid", True)):
+            with self.subTest(field=field):
+                cycle = source_cycle(ctx)
+                cycle[field] = value
+                with self.assertRaises(RuntimeError):
+                    wrapper.base.build_context(cycle, ctx.candles, ctx.breadth_24h, ctx.funding_rate, ctx.funding_z, ctx.oi_change_pct)
+
     def test_exact_selected_cycle_and_context_are_recorded_before_return(self) -> None:
         app_dir = Path("/tmp/chobyar-test")
         ctx = context()

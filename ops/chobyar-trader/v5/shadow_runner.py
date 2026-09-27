@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from specialist_council import CouncilContext, run_council
+from specialist_council import CouncilContext, invalid_local_fields, run_council
 
 DEFAULT_APP_DIR = Path("/opt/chobyar-trader")
 SYMBOL = "BTCUSDT"
@@ -179,6 +179,9 @@ def previous_oi_change(state_path: Path, current_oi: float | None, now: float) -
 
 
 def build_context(cycle: dict[str, Any], candles: list[list[float]], breadth: dict[str, float], funding: float | None, funding_z: float | None, oi_change: float | None) -> CouncilContext:
+    invalid = invalid_local_fields(cycle.get("local_mid"), cycle.get("spread_pct"), cycle.get("orderbook_imbalance"), cycle.get("tape_buy_ratio"))
+    if invalid:
+        raise RuntimeError("latest trader cycle has invalid local market fields: " + ",".join(invalid))
     local_mid = positive(cycle.get("local_mid"))
     spread = finite(cycle.get("spread_pct"))
     imbalance = finite(cycle.get("orderbook_imbalance"))
@@ -189,7 +192,7 @@ def build_context(cycle: dict[str, Any], candles: list[list[float]], breadth: di
     return CouncilContext(
         candles=candles,
         local_mid=local_mid,
-        spread_pct=max(0.0, spread),
+        spread_pct=spread,
         book_imbalance=imbalance,
         tape_buy_ratio=buy_ratio,
         global_change_24h=finite(cycle.get("global_change_24h")),
