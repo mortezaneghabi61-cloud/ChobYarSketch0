@@ -35,10 +35,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           cd ops/chobyar-trader/v5
           sha256sum -c <<'EOF'
-          afce972e853eacab8a03a913258cdd8d79757937ebfd4d880aca6000566a08a4  shadow_runner.py
+          1abb606909d2d79d6ed7ea9c5a8d70be1ff9060ed14caa89c3075ce558ce5a94  shadow_runner.py
           3cea7c210810399604500245724c55d2ea2d0718bbb8232b9fbe2a60e8c972df  shadow_runner_v52.py
-          21dbea476e7239b89eb2920acfb257449fd9b11fa95289b3231ab39240d16e50  specialist_council.py
-          f39eba16dc8b7e529773a58d4b913dd80fa88b8483764edf104ce2b57abdd44b  meta_intelligence.py
+          a59a47a4535ce4f6953b18419aec555ac68b8319f8ab9bc667bf627ad7b95af2  specialist_council.py
+          cc28af2327ff4fc6f43408a1c7b67c672bef243357def30da4f87793daa5d9eb  meta_intelligence.py
           d560c01f4cc5c177903855e01490ac28dab714e718b051d4710cfd5b3c0a2c46  public_source_fallbacks.py
           a193840a9515e8367792bc2baedd92b3d610a0d30e091c529c5ed74096c928ba  council_evidence.py
           EOF
