@@ -77,6 +77,42 @@ def strong_scorecard():
 
 
 class MetaIntelligenceTests(unittest.TestCase):
+    def test_meta_cannot_promote_wait_after_asymmetric_calibration(self):
+        ctx = context()
+        raw = council(votes=(1, 1, -1, 0), confidences=(1, 1, 0.9, 0))
+        raw["shadow_consensus"].update(action="WAIT", score=1.1)
+        card = strong_scorecard()
+        del card["specialists"]["derivatives_positioning"]
+        out = enhance_council(ctx, raw, card, now_ts=ctx.candles[-1][0] + 60)
+        self.assertEqual(out["shadow_consensus"]["pre_meta_action"], "BUY")
+        self.assertEqual(out["shadow_consensus"]["action"], "WAIT")
+        self.assertIn("raw_consensus_not_confirmed", out["shadow_consensus"]["meta_hold_reasons"])
+
+    def test_meta_cannot_reverse_original_direction(self):
+        ctx = context()
+        raw = council(votes=(-1, -1, -1, -1))
+        out = enhance_council(ctx, raw, strong_scorecard(), now_ts=ctx.candles[-1][0] + 60)
+        self.assertEqual(out["shadow_consensus"]["action"], "WAIT")
+
+    def test_future_candles_are_unhealthy_and_hold_consensus(self):
+        ctx = context()
+        now = ctx.candles[-1][0] - 60
+        self.assertFalse(data_integrity(ctx, now_ts=now)["healthy"])
+        out = enhance_council(ctx, council(), strong_scorecard(), now_ts=now)
+        self.assertEqual(out["shadow_consensus"]["action"], "WAIT")
+        self.assertIn("data_integrity", out["shadow_consensus"]["meta_hold_reasons"])
+
+    def test_invalid_local_ranges_are_unhealthy(self):
+        for values in ({"local_mid": 0}, {"spread_pct": -0.001}, {"book_imbalance": 2}, {"tape_buy_ratio": -0.1}):
+            with self.subTest(values=values):
+                ctx = context(**values)
+                self.assertFalse(data_integrity(ctx, now_ts=ctx.candles[-1][0] + 60)["healthy"])
+
+    def test_valid_aligned_consensus_is_preserved(self):
+        ctx = context()
+        out = enhance_council(ctx, council(), strong_scorecard(), now_ts=ctx.candles[-1][0] + 60)
+        self.assertEqual(out["shadow_consensus"]["action"], "BUY")
+
     def test_confidence_is_never_inflated_without_evidence(self):
         raw = council()["specialists"]
         calibrated = calibrate_specialists(raw, {})

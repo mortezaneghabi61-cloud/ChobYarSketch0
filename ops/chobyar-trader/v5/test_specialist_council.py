@@ -49,6 +49,35 @@ def context(kind: str = "up", **kwargs) -> CouncilContext:
 
 
 class SpecialistCouncilTests(unittest.TestCase):
+    def test_invalid_local_inputs_never_produce_votes(self) -> None:
+        cases = {
+            "local_mid": (None, 0, -1, math.nan, math.inf, True),
+            "spread_pct": (None, -0.001, math.nan, math.inf, True),
+            "book_imbalance": (None, -1.01, 1.01, math.nan, math.inf, True),
+            "tape_buy_ratio": (None, -0.01, 1.01, math.nan, math.inf, True),
+        }
+        for field, values in cases.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    with self.assertRaises(ValueError):
+                        run_council(context(**{field: value}))
+
+    def test_invalid_candle_volume_is_rejected(self) -> None:
+        for value in (-1, math.nan, math.inf, True):
+            with self.subTest(volume=value):
+                rows = candles("up")
+                rows[-1][5] = value
+                with self.assertRaises(ValueError):
+                    run_council(context(candles=rows))
+
+    def test_local_boundary_values_remain_valid_and_finite(self) -> None:
+        import json
+        for book in (-1.0, 1.0):
+            for tape in (0.0, 1.0):
+                report = run_council(context(spread_pct=0.0, book_imbalance=book, tape_buy_ratio=tape))
+                json.dumps(report, allow_nan=False)
+                self.assertFalse(report["execution_authority"])
+
     def test_trend_council_is_shadow_only(self) -> None:
         report = run_council(context("up"))
         self.assertEqual(report["mode"], "shadow_observation_only")

@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from specialist_council import CouncilContext, run_council
+from specialist_council import CouncilContext, local_market_fields_valid, run_council
 
 DEFAULT_APP_DIR = Path("/opt/chobyar-trader")
 SYMBOL = "BTCUSDT"
@@ -36,6 +36,8 @@ def parse_ts(value: Any) -> float | None:
 
 
 def finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -77,8 +79,8 @@ def read_last_cycle(path: Path) -> dict[str, Any]:
         raise RuntimeError("no trader cycle available")
     row = rows[-1]
     ts = parse_ts(row.get("ts"))
-    if ts is None or time.time() - ts > MAX_LOCAL_CYCLE_AGE_SECONDS:
-        raise RuntimeError("latest trader cycle is stale")
+    if ts is None or not 0 <= time.time() - ts <= MAX_LOCAL_CYCLE_AGE_SECONDS:
+        raise RuntimeError("latest trader cycle timestamp is invalid or stale")
     return row
 
 
@@ -186,10 +188,10 @@ def build_context(cycle: dict[str, Any], candles: list[list[float]], breadth: di
     if local_mid is None or spread is None or imbalance is None or buy_ratio is None:
         raise RuntimeError("latest trader cycle lacks required local market fields")
     sources = cycle.get("global_sources") or []
-    return CouncilContext(
+    ctx = CouncilContext(
         candles=candles,
         local_mid=local_mid,
-        spread_pct=max(0.0, spread),
+        spread_pct=spread,
         book_imbalance=imbalance,
         tape_buy_ratio=buy_ratio,
         global_change_24h=finite(cycle.get("global_change_24h")),
@@ -200,6 +202,9 @@ def build_context(cycle: dict[str, Any], candles: list[list[float]], breadth: di
         oi_change_pct=oi_change,
         breadth_24h=breadth,
     )
+    if not local_market_fields_valid(ctx):
+        raise ValueError("latest trader cycle has invalid local market fields")
+    return ctx
 
 
 def run(app_dir: Path) -> dict[str, Any]:

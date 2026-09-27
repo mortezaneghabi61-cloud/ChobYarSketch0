@@ -6,7 +6,7 @@ import time
 from dataclasses import replace
 from typing import Any
 
-from specialist_council import CouncilContext, clamp, finite, run_council
+from specialist_council import CouncilContext, clamp, finite, local_market_fields_valid, run_council
 
 MIN_CALIBRATION_SAMPLES = 30
 DIRECTIONAL_AGENTS = (
@@ -59,12 +59,15 @@ def data_integrity(ctx: CouncilContext, now_ts: float | None = None) -> dict[str
     timestamps = [float(row[0]) for row in ctx.candles if len(row) >= 1]
     gaps = [timestamps[i] - timestamps[i - 1] for i in range(1, len(timestamps))]
     large_gaps = sum(gap > 2.1 * 3600 for gap in gaps)
-    last_age = max(0.0, now_ts - timestamps[-1]) if timestamps else float("inf")
-    candles_ok = len(timestamps) >= 80 and large_gaps == 0 and last_age <= 3.5 * 3600
-    local_ok = all(
-        value is not None and math.isfinite(float(value))
-        for value in (ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio)
+    last_age = now_ts - timestamps[-1] if timestamps else float("inf")
+    candles_ok = (
+        len(timestamps) >= 80
+        and all(math.isfinite(ts) for ts in timestamps)
+        and all(gap > 0 for gap in gaps)
+        and large_gaps == 0
+        and 0 <= last_age <= 3.5 * 3600
     )
+    local_ok = local_market_fields_valid(ctx)
     global_ok = int(ctx.global_source_count) >= 2
     breadth_count = sum(1 for key in ("BTC-USDT", "ETH-USDT", "SOL-USDT") if finite(ctx.breadth_24h.get(key)) is not None)
     breadth_score = breadth_count / 3.0
@@ -234,6 +237,11 @@ def enhance_council(ctx: CouncilContext, council: dict[str, Any], scorecard: dic
     fragility = decision_fragility(ctx, candidate_action)
 
     holds: list[str] = []
+    # Calibration can shrink opposing votes unevenly. It must never turn a
+    # raw abstention into a direction, or reverse the council's direction.
+    raw_action = original_consensus.get("action")
+    if candidate_action in {"BUY", "SELL"} and candidate_action != raw_action:
+        holds.append("raw_consensus_not_confirmed")
     if not integrity["healthy"]:
         holds.append("data_integrity")
     if transition["score"] >= 0.70:

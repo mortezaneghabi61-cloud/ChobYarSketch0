@@ -23,11 +23,20 @@ class CouncilContext:
 
 
 def finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def local_market_fields_valid(ctx: CouncilContext) -> bool:
+    fields = (ctx.local_mid, ctx.spread_pct, ctx.book_imbalance, ctx.tape_buy_ratio)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) or finite(value) is None for value in fields):
+        return False
+    return ctx.local_mid > 0 and ctx.spread_pct >= 0 and -1 <= ctx.book_imbalance <= 1 and 0 <= ctx.tape_buy_ratio <= 1
 
 
 def clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
@@ -49,8 +58,10 @@ def _validate_candles(candles: list[list[float]]) -> None:
     for row in candles:
         if len(row) < 6:
             raise ValueError("malformed candle")
-        ts, opened, high, low, close, _volume = (float(x) for x in row[:6])
-        if ts <= previous or min(opened, high, low, close) <= 0 or not all(math.isfinite(x) for x in (ts, opened, high, low, close)):
+        if any(finite(value) is None for value in row[:6]):
+            raise ValueError("invalid candle")
+        ts, opened, high, low, close, volume = (float(x) for x in row[:6])
+        if ts <= previous or min(opened, high, low, close) <= 0 or volume < 0:
             raise ValueError("invalid candle")
         if high < max(opened, close) or low > min(opened, close):
             raise ValueError("invalid OHLC")
@@ -264,6 +275,8 @@ def adversarial_risk(ctx: CouncilContext, regime: dict[str, Any], micro: dict[st
 
 
 def run_council(ctx: CouncilContext) -> dict[str, Any]:
+    if not local_market_fields_valid(ctx):
+        raise ValueError("invalid local market fields")
     regime = _regime_features(ctx.candles)
     r = regime_structure(ctx, regime)
     m = microstructure_liquidity(ctx)

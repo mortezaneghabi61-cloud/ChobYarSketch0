@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import unittest
+import json
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import types
@@ -35,6 +38,23 @@ def context() -> CouncilContext:
 
 
 class ShadowEvidenceWiringTests(unittest.TestCase):
+    def test_context_builder_does_not_hide_negative_spread(self) -> None:
+        ctx = context()
+        cycle = source_cycle(ctx)
+        cycle["spread_pct"] = -0.001
+        with self.assertRaises(ValueError):
+            wrapper.base.build_context(cycle, ctx.candles, ctx.breadth_24h, ctx.funding_rate, ctx.funding_z, ctx.oi_change_pct)
+
+    def test_future_local_cycle_is_rejected(self) -> None:
+        now = 1_800_000_000.0
+        cycle = {"event": "cycle", "ts": datetime.fromtimestamp(now + 60, timezone.utc).isoformat()}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "audit.jsonl"
+            path.write_text(json.dumps(cycle) + "\n", encoding="utf-8")
+            with mock.patch.object(wrapper.base.time, "time", return_value=now):
+                with self.assertRaises(RuntimeError):
+                    wrapper.base.read_last_cycle(path)
+
     def test_exact_selected_cycle_and_context_are_recorded_before_return(self) -> None:
         app_dir = Path("/tmp/chobyar-test")
         ctx = context()
