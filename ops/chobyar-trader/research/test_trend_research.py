@@ -127,7 +127,7 @@ class ReportTests(unittest.TestCase):
             (app/'state/paper_state.json').write_text('{"closed_trades":0,"realized_pnl":0}')
             (app/'logs/audit.jsonl').write_text('{"event":"paper_sell","pnl":1}\n')
             before={str(p):p.read_bytes() for p in app.rglob('*') if p.is_file()}
-            def fake_fetch(start,end):
+            def fake_fetch(start,end,**kwargs):
                 return [[t,100,100,100,100,1] for t in range(start,end,3600)]
             output=io.StringIO()
             with patch.object(sys,'argv',['tool','--app-dir',str(app),'--output-root',str(Path(tmp)/'research')]),patch.object(m,'fetch_candles',side_effect=fake_fetch),contextlib.redirect_stdout(output):
@@ -146,6 +146,38 @@ class ReportTests(unittest.TestCase):
                 self.assertEqual(m.main(),1)
             self.assertEqual(len(list(Path(tmp).glob('*/failure.json'))),1)
             self.assertEqual(len(list(Path(tmp).glob('*/report.json'))),0)
+
+    def test_diagnostic_requests_only_selected_window_and_preserves_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            protocol={'symbol':'BTCUSDT','resolution_minutes':60,
+                      'start_utc':'1970-01-01T00:00:00+00:00',
+                      'end_exclusive_utc':'1970-01-15T00:00:00+00:00'}
+            (path/'protocol.json').write_text(json.dumps(protocol))
+            before=(path/'protocol.json').read_bytes()
+            calls=[]
+            def request(url):
+                calls.append(url)
+                return payload([row(i) for i in range(168,336) if i!=170])
+            out=io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(m.diagnose_run(path,2,request),1)
+            result=json.loads(out.getvalue())
+            self.assertEqual(len(calls),1)
+            self.assertIn('from=604800&to=1209600',calls[0])
+            self.assertIn('count=1',result['reason'])
+            self.assertIn('1970-01-08T02:00:00',result['reason'])
+            self.assertFalse(result['live_ready'])
+            self.assertEqual(before,(path/'protocol.json').read_bytes())
+            self.assertEqual(len(list(path.iterdir())),1)
+
+    def test_missing_window_is_preserved_and_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            with self.assertRaisesRegex(m.DataError,'chunk 1/1'),patch.object(m.time,'sleep'):
+                m.fetch_candles(0,7200,lambda _:payload([row(0)]),cache_dir=path)
+            saved=json.loads((path/'chunk-01.json').read_text())
+            self.assertEqual(saved['t'],[0])
 
 
 if __name__=='__main__':unittest.main()
