@@ -298,6 +298,43 @@ class Broker:
         self.save(px); AUDIT.write("paper_sell", price=px, qty=qty, fee=fee, pnl=pnl, reason=reason); return True
 
 
+def entry_economics(m: Market) -> dict[str, Any]:
+    """Estimate a new paper entry's payoffs, not its probability of winning.
+
+    Both fees are included. Entry fills at ask; each exit threshold uses mid
+    relative to entry ask, then fills at bid, as in supervise/Broker. The future
+    bid/mid ratio is assumed equal to the observed ratio. Slippage, gaps and
+    exchange order filters are not modeled; these estimates are not fill promises.
+    Returns use the entry's full cash outlay, including its fee, as denominator.
+    """
+    result: dict[str, Any] = {
+        "model": "paper_fee_and_unchanged_relative_spread_v1", "valid": False,
+        "fee_per_side": None, "observed_spread_pct": None,
+        "target_net_return": None, "stop_net_return": None,
+        "break_even_mid_move_from_entry": None,
+        "target_stop_break_even_win_rate": None,
+    }
+    values = (m.best_bid, m.mid, m.best_ask, FEE_PCT)
+    if any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) for x in values):
+        return result
+    if not (0 < m.best_bid <= m.mid <= m.best_ask) or not (0 <= FEE_PCT <= .02):
+        return result
+    exit_bid_to_mid = m.best_bid / m.mid
+    received_per_outlay = exit_bid_to_mid * (1 - FEE_PCT) / (1 + FEE_PCT)
+    if received_per_outlay <= 0 or not math.isfinite(1 / received_per_outlay):
+        return result
+    target = (1 + TAKE_PROFIT_PCT) * received_per_outlay - 1
+    stop = (1 - STOP_LOSS_PCT) * received_per_outlay - 1
+    result.update(
+        valid=True, fee_per_side=FEE_PCT,
+        observed_spread_pct=(m.best_ask - m.best_bid) / m.mid,
+        target_net_return=target, stop_net_return=stop,
+        break_even_mid_move_from_entry=1 / received_per_outlay - 1,
+        target_stop_break_even_win_rate=(-stop / (target - stop)) if target > 0 and stop < 0 else None,
+    )
+    return result
+
+
 def supervise(m: Market, broker: Broker, votes: list[dict[str, Any]]) -> tuple[str, float, str]:
     available = [v for v in votes if v["available"]]
     score = sum(float(v["contribution"]) for v in available)
@@ -316,7 +353,13 @@ def supervise(m: Market, broker: Broker, votes: list[dict[str, Any]]) -> tuple[s
         return "WAIT", score, "daily loss hard limit"
     if broker.state.btc_qty > 0 and broker.state.entry_price:
         if score <= EXIT_THRESHOLD: return "SELL", score, "consensus exit"
-    if broker.state.btc_qty == 0 and score >= ENTRY_THRESHOLD: return "BUY", score, "consensus entry"
+    if broker.state.btc_qty == 0 and score >= ENTRY_THRESHOLD:
+        costs = entry_economics(m)
+        if not costs["valid"]:
+            return "WAIT", score, "entry cost estimate unavailable"
+        if costs["target_net_return"] <= 1e-12:
+            return "WAIT", score, "target does not cover modeled trading costs"
+        return "BUY", score, "consensus entry"
     return "WAIT", score, "bounded consensus"
 
 
@@ -330,6 +373,7 @@ def run_once(broker: Broker) -> None:
     AUDIT.write("cycle", symbol=SYMBOL, local_mid=market.mid, best_bid=market.best_bid, best_ask=market.best_ask,
         spread_pct=market.spread_pct, orderbook_imbalance=market.imbalance, tape_buy_ratio=market.buy_ratio,
         tape_age_seconds=market.tape_age_seconds, tape_recent_rows=len(market.prices), tape_available=tape_current(market),
+        entry_economics=entry_economics(market),
         global_price=market.global_price, global_change_24h=market.global_change, global_sources=market.global_sources,
         global_dispersion_pct=market.global_dispersion_pct, signal=action, score=score, action=action, executed=executed,
         risk_reason=reason, agents=votes + [perf_vote, supervisor], equity=broker.equity(market.mid),
