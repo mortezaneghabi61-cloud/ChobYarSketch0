@@ -19,9 +19,11 @@
   },
   "files": {
     "common.py": "cb4d107d75fbd0f039ca8d8712d6b7598cb6b3f253cf4fd98e8eb9e80ca25fae",
-    "trader.py": "288fc35f7bafa105d94a11b9d83f15b9ae533d1d6acc396562ab3559e7becf1c",
+    "trader.py": "25b7739b65a5d8e72ad59e32c51422dbab846d4fbdd68a15379d5733d2b2c061",
     "trader_entry.py": "6164a0393c4a22289320ef88c1a4ad3eb26d20a66e23cace33a131be2bb5795c",
     "entry_gate_v55.py": "c514a966b2ca1553e8a2eb752b04569d5946324035484a40b73a677449d989ee",
     "global_sources.py": "c610dcdd2bb38eff8842cc2b71b7f5510e88809b6708e964ae955827ec912ecf"
-  }
+  },
+  "exit_guard_patch": "2026-09-28-paper-only",
+  "tape_freshness_patch": "2026-09-28-paper-only"
 }
