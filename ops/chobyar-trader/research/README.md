@@ -37,6 +37,23 @@ first, then downloads remaining windows and restores chronological order before 
 The first historical run did not save its 25 downloaded windows, so those must be downloaded
 again after preflight succeeds; the tool does not claim to resume missing cache files.
 
+If a recent hour remains unavailable at both hourly and minute resolution, an explicitly
+separate historical screen can end before that gap:
+
+```sh
+python3 trend_research.py --historical-end-utc 2026-09-22T13:00:00Z
+```
+
+This keeps all strategy and cost parameters fixed, downloads a complete earlier 180-day
+period plus warm-up, and creates a new report. It does not complete the original blocked
+period. The report records `evaluation_scope=separate_historical_window` and the timestamp
+after which data were not evaluated. It cannot issue `FORWARD_PAPER_TEST_ONLY`; a favorable
+numeric screen is labeled `HISTORICAL_SCREEN_PASSED_NO_PROMOTION`. Repeating this run retains
+that restriction. No later interval is claimed as evaluated, and the shifted final period
+must not be presented as validation on the original untouched holdout. Dates require a time
+zone, a whole UTC hour, and an end earlier than the current completed-hour boundary.
+The historical date, repeated run, and diagnostic run options are mutually exclusive.
+
 For at most 12 missing hours per window, the program first requests a smaller three-hour
 window from the same Wallex BTCUSDT endpoint. If the target hour is still absent, it requests
 `resolution=1`, documented by Wallex, for that exact hour. Aggregation requires all 60 distinct,
