@@ -133,8 +133,14 @@ def tape_current(m: Market) -> bool:
 
 
 def local_snapshot() -> tuple[float, float, float, float, list[float], float, float | None]:
+    # Tape is optional for protective exits. Fetch it before the executable book
+    # so its latency cannot age the quote used by the current decision.
+    try:
+        trades = _json(LOCAL.get("/v1/trades", params={"symbol": SYMBOL})).get("result", {}) or {}
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        AUDIT.write("local_tape_error", error=type(exc).__name__)
+        trades = {}
     depth = _json(LOCAL.get("/v1/depth", params={"symbol": SYMBOL})).get("result", {}) or {}
-    trades = _json(LOCAL.get("/v1/trades", params={"symbol": SYMBOL})).get("result", {}) or {}
     bids, asks = depth.get("bid") or depth.get("bids") or [], depth.get("ask") or depth.get("asks") or []
     if not bids or not asks:
         raise RuntimeError("Wallex order book unavailable")
@@ -374,6 +380,7 @@ def run_once(broker: Broker) -> None:
         spread_pct=market.spread_pct, orderbook_imbalance=market.imbalance, tape_buy_ratio=market.buy_ratio,
         tape_age_seconds=market.tape_age_seconds, tape_recent_rows=len(market.prices), tape_available=tape_current(market),
         entry_economics=entry_economics(market),
+        quote_policy="book_after_optional_tape_v1",
         global_price=market.global_price, global_change_24h=market.global_change, global_sources=market.global_sources,
         global_dispersion_pct=market.global_dispersion_pct, signal=action, score=score, action=action, executed=executed,
         risk_reason=reason, agents=votes + [perf_vote, supervisor], equity=broker.equity(market.mid),
