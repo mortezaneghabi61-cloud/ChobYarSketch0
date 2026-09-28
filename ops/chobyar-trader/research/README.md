@@ -13,6 +13,18 @@ Use Python 3.10+ and the standard library:
 python3 trend_research.py --app-dir /opt/chobyar-trader --output-root /opt/chobyar-trader/research
 ```
 
+To inspect one failed window without repeating the full download or changing existing files:
+
+```sh
+python3 trend_research.py --diagnose-run /path/to/existing/trend-study-run --chunk 26
+```
+
+Diagnostics reuse the frozen start/end timestamps and request only that public-data window.
+They report array sizes and specific missing-hour/invalid-OHLC errors. A window that validates
+now does not establish that the earlier response was valid or authorize a strategy.
+New full runs also preserve each public response in `chunks/`, including a failed validation
+window; older runs created before this improvement did not save partial downloads.
+
 The program freezes and saves its protocol before downloading 180 days plus warm-up.
 It saves normalized candles, their SHA-256, code SHA-256, results, and individual simulated exits
 to a new private output directory. Incomplete hourly coverage, conflicting candles, invalid prices,
