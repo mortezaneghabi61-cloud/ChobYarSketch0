@@ -141,6 +141,7 @@ def market(mid=100.0, spread=0.001):
         global_change=0.0,
         global_sources=["kucoin", "gateio"],
         global_dispersion_pct=0.0,
+        tape_age_seconds=0.0,
     )
 
 def broker(qty, entry, equity=10.0):
