@@ -172,6 +172,51 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaises(m.DataError):m.frozen_window(path)
 
 
+class HistoricalWindowTests(unittest.TestCase):
+    def test_explicit_historical_window_is_separate_and_cannot_promote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            requested='2026-09-22T13:00:00+00:00'
+            calls=[]
+            def fake_fetch(start,end,**kwargs):
+                calls.append((start,end))
+                return [[t,100,100,100,100,1] for t in range(start,end,3600)]
+            future=m.datetime(2026,9,28,tzinfo=m.timezone.utc).timestamp()
+            def run(*args):
+                with patch.object(sys,'argv',['tool','--app-dir',str(path/'missing-app'),'--output-root',str(path/'results'),*args]),patch.object(m.time,'time',return_value=future),patch.object(m,'fetch_candles',side_effect=fake_fetch),patch.object(m,'screen',return_value='FORWARD_PAPER_TEST_ONLY'),contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(m.main(),0)
+            run('--historical-end-utc',requested)
+            first=next((path/'results').iterdir())
+            before={p.name:p.read_bytes() for p in first.iterdir() if p.is_file()}
+            report=json.loads((first/'report.json').read_text())
+            self.assertEqual(report['protocol']['end_exclusive_utc'],requested)
+            self.assertEqual(calls[0][1],1790082000)
+            self.assertEqual(calls[0][1]-calls[0][0],4371*3600)
+            self.assertEqual(report['screen'],'HISTORICAL_SCREEN_PASSED_NO_PROMOTION')
+            self.assertEqual(report['protocol']['evaluation_scope'],'separate_historical_window')
+            self.assertEqual(report['protocol']['not_evaluated_after_utc'],requested)
+            self.assertFalse(report['live_ready'])
+            run('--repeat-run',str(first))
+            repeated=next(p for p in (path/'results').iterdir() if p!=first)
+            self.assertEqual(json.loads((repeated/'report.json').read_text())['screen'],'HISTORICAL_SCREEN_PASSED_NO_PROMOTION')
+            self.assertEqual(calls[0],calls[1])
+            self.assertEqual(before,{p.name:p.read_bytes() for p in first.iterdir() if p.is_file()})
+
+    def test_invalid_historical_end_rejected_before_network_or_files(self):
+        future=m.datetime(2026,9,28,tzinfo=m.timezone.utc).timestamp()
+        for value in ['2026-09-22T13:00:00','2026-09-22T13:01:00Z','2026-09-29T00:00:00Z','not-a-date']:
+            with self.subTest(value=value),tempfile.TemporaryDirectory() as tmp:
+                out=Path(tmp)/'results'
+                with patch.object(sys,'argv',['tool','--output-root',str(out),'--historical-end-utc',value]),patch.object(m.time,'time',return_value=future),patch.object(m,'fetch_candles') as fetch,contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):
+                    m.main()
+                fetch.assert_not_called()
+                self.assertFalse(out.exists())
+
+    def test_repeat_cannot_change_frozen_period_with_historical_flag(self):
+        with patch.object(sys,'argv',['tool','--repeat-run','old','--historical-end-utc','2020-01-01T00:00:00Z']),contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):
+            m.main()
+
+
 class ReportTests(unittest.TestCase):
     def test_small_sample_cannot_pass(self):
         stats={'natural_exits':2,'net_pnl':2,'max_drawdown_pct':0,'profit_factor':10}
