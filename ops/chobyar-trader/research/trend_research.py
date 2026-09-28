@@ -75,14 +75,16 @@ def parse_payload(payload, start, end):
         if not start <= t < end:
             continue
         if min(o,h,low,c) <= 0 or volume < 0 or not low <= min(o,c) <= max(o,c) <= h:
-            raise DataError('invalid OHLC candle')
+            raise DataError('invalid OHLC candle at ' + datetime.fromtimestamp(t,timezone.utc).isoformat())
         row = [t,o,h,low,c,volume]
         if t in result and result[t] != row:
             raise DataError('conflicting duplicate candle')
         result[t] = row
     expected = list(range(start,end,HOUR))
     if sorted(result) != expected:
-        raise DataError('missing hourly candles; no gap filling allowed')
+        missing = [t for t in expected if t not in result]
+        preview = ','.join(datetime.fromtimestamp(t,timezone.utc).isoformat() for t in missing[:5])
+        raise DataError(f'missing hourly candles: count={len(missing)}, first={preview}; no gap filling allowed')
     return [result[t] for t in expected]
 
 
@@ -107,13 +109,20 @@ def get_json(url):
     raise DataError('public data unavailable')
 
 
-def fetch_candles(start, end, request=get_json):
+def fetch_candles(start, end, request=get_json, cache_dir=None):
     rows = []
     windows = math.ceil((end-start)/(7*24*HOUR))
     for index, cursor in enumerate(range(start,end,7*24*HOUR),1):
         until = min(cursor+7*24*HOUR,end)
         query = urllib.parse.urlencode({'symbol':'BTCUSDT','resolution':'60','from':cursor,'to':until})
-        rows.extend(parse_payload(request(ENDPOINT+'?'+query),cursor,until))
+        payload = request(ENDPOINT+'?'+query)
+        if cache_dir is not None:
+            cache_dir.mkdir(parents=True,exist_ok=True)
+            write_json(cache_dir/f'chunk-{index:02d}.json',payload)
+        try:
+            rows.extend(parse_payload(payload,cursor,until))
+        except DataError as exc:
+            raise DataError(f'chunk {index}/{windows}: {exc}') from None
         print(f'DATA {index}/{windows}',flush=True)
         time.sleep(.2)
     return rows
@@ -239,11 +248,46 @@ def write_json(path, data):
     path.write_text(json.dumps(data,indent=2,allow_nan=False)+'\n')
 
 
+def diagnose_run(directory, chunk, request=get_json):
+    """Repeat only a selected public-data window from an existing frozen protocol."""
+    protocol = json.loads((directory/'protocol.json').read_text())
+    start = int(datetime.fromisoformat(protocol['start_utc']).timestamp())
+    end = int(datetime.fromisoformat(protocol['end_exclusive_utc']).timestamp())
+    if protocol.get('symbol') != 'BTCUSDT' or protocol.get('resolution_minutes') != 60:
+        raise DataError('unsupported frozen protocol')
+    windows = math.ceil((end-start)/(7*24*HOUR))
+    if not 1 <= chunk <= windows:
+        raise DataError('invalid chunk number')
+    cursor = start+(chunk-1)*7*24*HOUR
+    until = min(cursor+7*24*HOUR,end)
+    query = urllib.parse.urlencode({'symbol':'BTCUSDT','resolution':'60','from':cursor,'to':until})
+    result = {'chunk':chunk,'total_chunks':windows,'expected_hours':(until-cursor)//HOUR,
+              'start_utc':datetime.fromtimestamp(cursor,timezone.utc).isoformat(),
+              'end_exclusive_utc':datetime.fromtimestamp(until,timezone.utc).isoformat(),
+              'live_ready':False,'automatic_promotion':False}
+    try:
+        payload = request(ENDPOINT+'?'+query)
+        result['schema'] = ({k:len(payload[k]) if isinstance(payload.get(k),list) else 'not_array'
+                             for k in ('t','o','h','l','c','v')} if isinstance(payload,dict) else 'not_object')
+        rows = parse_payload(payload,cursor,until)
+        result.update(status='WINDOW_VALID_NOW',rows=len(rows),
+                      note='This does not prove the original response was valid or approve any strategy.')
+    except Exception as exc:
+        result.update(status='WINDOW_FAILED',error_type=type(exc).__name__,
+                      reason=str(exc) if isinstance(exc,DataError) else 'public request or response failed')
+    print(json.dumps(result,indent=2,allow_nan=False),flush=True)
+    return 0 if result['status']=='WINDOW_VALID_NOW' else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app-dir',type=Path,default=Path('/opt/chobyar-trader'))
     parser.add_argument('--output-root',type=Path,default=Path('/opt/chobyar-trader/research'))
+    parser.add_argument('--diagnose-run',type=Path)
+    parser.add_argument('--chunk',type=int,default=26)
     args = parser.parse_args()
+    if args.diagnose_run is not None:
+        return diagnose_run(args.diagnose_run,args.chunk)
     args.output_root.mkdir(parents=True,exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix='trend-study-',dir=args.output_root))
     end = int(time.time())//HOUR*HOUR
@@ -255,7 +299,7 @@ def main():
     print('PROTOCOL_FROZEN | RESEARCH_ONLY | NO_ORDERS',flush=True)
     print('OUTPUT='+str(out),flush=True)
     try:
-        rows = fetch_candles(start,end)
+        rows = fetch_candles(start,end,cache_dir=out/'chunks')
         encoded = json.dumps(rows,separators=(',',':'),allow_nan=False).encode()
         (out/'candles.json').write_bytes(encoded)
         signals = trend_signals(rows)
@@ -284,8 +328,9 @@ def main():
         print('LIVE_READY=false | AUTOMATIC_PROMOTION=false',flush=True)
         print('REPORT='+str(out/'report.json'),flush=True)
     except Exception as exc:
-        write_json(out/'failure.json',{'status':'DATA_OR_TEST_FAILED','error_type':type(exc).__name__,'live_ready':False})
-        print('RESEARCH_FAILED='+type(exc).__name__+' | NO_STRATEGY_APPROVAL',flush=True)
+        reason = str(exc) if isinstance(exc,DataError) else 'request or computation failed; inspect error_type'
+        write_json(out/'failure.json',{'status':'DATA_OR_TEST_FAILED','error_type':type(exc).__name__,'reason':reason,'live_ready':False})
+        print('RESEARCH_FAILED='+type(exc).__name__+' | '+reason+' | NO_STRATEGY_APPROVAL',flush=True)
         return 1
     return 0
 
