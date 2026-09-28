@@ -48,6 +48,13 @@ class DataError(Exception):
     pass
 
 
+class MissingCandles(DataError):
+    def __init__(self, missing, rows, step):
+        self.missing, self.rows = missing, rows
+        preview = ','.join(datetime.fromtimestamp(t,timezone.utc).isoformat() for t in missing[:5])
+        super().__init__(f'missing candles: interval_seconds={step}, count={len(missing)}, first={preview}; no gap filling allowed')
+
+
 def number(value):
     if isinstance(value, bool):
         raise DataError('boolean is not a price')
@@ -57,7 +64,7 @@ def number(value):
     return result
 
 
-def parse_payload(payload, start, end):
+def parse_payload(payload, start, end, step=HOUR):
     if not isinstance(payload, dict) or payload.get('s') != 'ok':
         raise DataError('public candle response not OK')
     keys = ('t', 'o', 'h', 'l', 'c', 'v')
@@ -69,7 +76,7 @@ def parse_payload(payload, start, end):
     result = {}
     for raw in zip(*(payload[k] for k in keys)):
         t, o, h, low, c, volume = map(number, raw)
-        if t != int(t) or int(t) % HOUR:
+        if t != int(t) or int(t) % step:
             raise DataError('unaligned timestamp')
         t = int(t)
         if not start <= t < end:
@@ -80,11 +87,10 @@ def parse_payload(payload, start, end):
         if t in result and result[t] != row:
             raise DataError('conflicting duplicate candle')
         result[t] = row
-    expected = list(range(start,end,HOUR))
+    expected = list(range(start,end,step))
     if sorted(result) != expected:
         missing = [t for t in expected if t not in result]
-        preview = ','.join(datetime.fromtimestamp(t,timezone.utc).isoformat() for t in missing[:5])
-        raise DataError(f'missing hourly candles: count={len(missing)}, first={preview}; no gap filling allowed')
+        raise MissingCandles(missing,result,step)
     return [result[t] for t in expected]
 
 
@@ -109,10 +115,58 @@ def get_json(url):
     raise DataError('public data unavailable')
 
 
-def fetch_candles(start, end, request=get_json, cache_dir=None):
-    rows = []
+def recover_window(payload, start, end, request, cache_dir=None):
+    try:
+        return parse_payload(payload,start,end)
+    except MissingCandles as exc:
+        missing, merged = exc.missing, dict(exc.rows)
+    if len(missing) > 12:
+        raise DataError('too many missing hours for bounded recovery')
+    for stamp in missing:
+        query = urllib.parse.urlencode({'symbol':'BTCUSDT','resolution':'60',
+                                       'from':stamp-HOUR,'to':stamp+2*HOUR})
+        small = request(ENDPOINT+'?'+query)
+        if cache_dir is not None:
+            write_json(cache_dir/f'recovery-{stamp}-hourly.json',small)
+        recovered = []
+        if not (isinstance(small,dict) and small.get('s') == 'no_data'):
+            try:
+                recovered = parse_payload(small,stamp,stamp+HOUR)
+            except MissingCandles:
+                pass
+        method = 'hourly_small_window'
+        if not recovered:
+            query = urllib.parse.urlencode({'symbol':'BTCUSDT','resolution':'1',
+                                           'from':stamp,'to':stamp+HOUR})
+            fine = request(ENDPOINT+'?'+query)
+            if cache_dir is not None:
+                write_json(cache_dir/f'recovery-{stamp}-minutes.json',fine)
+            minutes = parse_payload(fine,stamp,stamp+HOUR,step=60)
+            recovered = [[stamp,minutes[0][1],max(r[2] for r in minutes),
+                          min(r[3] for r in minutes),minutes[-1][4],math.fsum(r[5] for r in minutes)]]
+            method = 'aggregate_60_complete_wallex_minutes'
+        merged[stamp] = recovered[0]
+        if cache_dir is not None:
+            write_json(cache_dir/f'recovery-{stamp}-provenance.json',
+                       {'timestamp':stamp,'method':method,'row':recovered[0],
+                        'synthetic_prices':False,'exchange':'Wallex','symbol':'BTCUSDT'})
+        print('RECOVERED '+datetime.fromtimestamp(stamp,timezone.utc).isoformat()+' | '+method,flush=True)
+    complete = {'s':'ok',**{k:[merged[t][i] for t in sorted(merged)]
+                           for i,k in enumerate(('t','o','h','l','c','v'))}}
+    return parse_payload(complete,start,end)
+
+
+def fetch_candles(start, end, request=get_json, cache_dir=None, preflight_chunk=None):
+    parts = {}
     windows = math.ceil((end-start)/(7*24*HOUR))
-    for index, cursor in enumerate(range(start,end,7*24*HOUR),1):
+    order = list(range(1,windows+1))
+    if preflight_chunk is not None:
+        if preflight_chunk not in order:
+            raise DataError('invalid preflight chunk')
+        order.remove(preflight_chunk)
+        order.insert(0,preflight_chunk)
+    for progress,index in enumerate(order,1):
+        cursor = start+(index-1)*7*24*HOUR
         until = min(cursor+7*24*HOUR,end)
         query = urllib.parse.urlencode({'symbol':'BTCUSDT','resolution':'60','from':cursor,'to':until})
         payload = request(ENDPOINT+'?'+query)
@@ -120,12 +174,12 @@ def fetch_candles(start, end, request=get_json, cache_dir=None):
             cache_dir.mkdir(parents=True,exist_ok=True)
             write_json(cache_dir/f'chunk-{index:02d}.json',payload)
         try:
-            rows.extend(parse_payload(payload,cursor,until))
+            parts[index] = recover_window(payload,cursor,until,request,cache_dir)
         except DataError as exc:
             raise DataError(f'chunk {index}/{windows}: {exc}') from None
-        print(f'DATA {index}/{windows}',flush=True)
+        print(f'DATA {progress}/{windows} | WINDOW {index}/{windows}',flush=True)
         time.sleep(.2)
-    return rows
+    return [row for index in range(1,windows+1) for row in parts[index]]
 
 
 def trend_signals(rows):
@@ -279,12 +333,25 @@ def diagnose_run(directory, chunk, request=get_json):
     return 0 if result['status']=='WINDOW_VALID_NOW' else 1
 
 
+def frozen_window(directory):
+    frozen = json.loads((directory/'protocol.json').read_text())
+    if any(frozen.get(key) != value for key,value in PROTOCOL.items()):
+        raise DataError('frozen strategy protocol differs; refusing to change the test')
+    start = int(datetime.fromisoformat(frozen['start_utc']).timestamp())
+    end = int(datetime.fromisoformat(frozen['end_exclusive_utc']).timestamp())
+    if start % HOUR or end % HOUR or end-start != (180*24+SLOW+1)*HOUR:
+        raise DataError('invalid frozen time range')
+    return start,end
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app-dir',type=Path,default=Path('/opt/chobyar-trader'))
     parser.add_argument('--output-root',type=Path,default=Path('/opt/chobyar-trader/research'))
     parser.add_argument('--diagnose-run',type=Path)
     parser.add_argument('--chunk',type=int,default=26)
+    parser.add_argument('--repeat-run',type=Path)
+    parser.add_argument('--preflight-chunk',type=int)
     args = parser.parse_args()
     if args.diagnose_run is not None:
         return diagnose_run(args.diagnose_run,args.chunk)
@@ -292,14 +359,19 @@ def main():
     out = Path(tempfile.mkdtemp(prefix='trend-study-',dir=args.output_root))
     end = int(time.time())//HOUR*HOUR
     start = end-(180*24+SLOW+1)*HOUR
+    if args.repeat_run is not None:
+        start,end = frozen_window(args.repeat_run)
     protocol = {**PROTOCOL,'start_utc':datetime.fromtimestamp(start,timezone.utc).isoformat(),
                 'end_exclusive_utc':datetime.fromtimestamp(end,timezone.utc).isoformat(),
-                'code_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+                'code_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                'data_recovery':'Retry missing hour in small window; otherwise aggregate only 60 complete same-market minute candles.'}
+    if args.repeat_run is not None:
+        protocol['repeated_from'] = str(args.repeat_run)
     write_json(out/'protocol.json',protocol)
     print('PROTOCOL_FROZEN | RESEARCH_ONLY | NO_ORDERS',flush=True)
     print('OUTPUT='+str(out),flush=True)
     try:
-        rows = fetch_candles(start,end,cache_dir=out/'chunks')
+        rows = fetch_candles(start,end,cache_dir=out/'chunks',preflight_chunk=args.preflight_chunk)
         encoded = json.dumps(rows,separators=(',',':'),allow_nan=False).encode()
         (out/'candles.json').write_bytes(encoded)
         signals = trend_signals(rows)
