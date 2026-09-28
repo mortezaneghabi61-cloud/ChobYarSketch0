@@ -108,6 +108,70 @@ class TradingTests(unittest.TestCase):
                 self.assertGreater(result['ending_equity'],0)
 
 
+class RecoveryTests(unittest.TestCase):
+    def test_narrow_hour_request_restores_only_missing_row(self):
+        calls=[]
+        def request(url):
+            calls.append(url)
+            return payload([row(0),row(1),row(2)])
+        with tempfile.TemporaryDirectory() as tmp,contextlib.redirect_stdout(io.StringIO()):
+            result=m.recover_window(payload([row(0),row(2)]),0,10800,request,Path(tmp))
+            self.assertEqual(result,[row(0),row(1),row(2)])
+            self.assertEqual(len(calls),1)
+            self.assertIn('resolution=60&from=0&to=10800',calls[0])
+            proof=json.loads((Path(tmp)/'recovery-3600-provenance.json').read_text())
+            self.assertEqual(proof['method'],'hourly_small_window')
+            self.assertFalse(proof['synthetic_prices'])
+
+    def test_exact_60_real_minutes_aggregate_without_invented_prices(self):
+        minutes=[[3600+j*60,100+j,101+j,99+j,100.5+j,1] for j in range(60)]
+        responses=iter([payload([row(0),row(2)]),payload(minutes)])
+        urls=[]
+        def request(url):
+            urls.append(url)
+            return next(responses)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result=m.recover_window(payload([row(0),row(2)]),0,10800,request)
+        self.assertEqual(result[1],[3600,100,160,99,159.5,60])
+        self.assertIn('resolution=1&from=3600&to=7200',urls[1])
+
+    def test_one_missing_minute_still_blocks_recovery(self):
+        minutes=[[3600+j*60,100,100,100,100,1] for j in range(60) if j!=23]
+        responses=iter([{'s':'no_data'},payload(minutes)])
+        with self.assertRaises(m.MissingCandles) as caught:
+            m.recover_window(payload([row(0),row(2)]),0,10800,lambda _:next(responses))
+        self.assertEqual(caught.exception.missing,[3600+23*60])
+
+    def test_invalid_price_is_never_replaced_by_recovery(self):
+        calls=[]
+        with self.assertRaises(m.DataError):
+            m.recover_window(payload([row(0,h=99)]),0,3600,lambda url:calls.append(url))
+        self.assertEqual(calls,[])
+
+    def test_preflight_first_but_final_rows_stay_chronological(self):
+        calls=[]
+        def request(url):
+            query=m.urllib.parse.parse_qs(m.urllib.parse.urlparse(url).query)
+            start,end=int(query['from'][0]),int(query['to'][0]);calls.append(start)
+            return payload([row(t//3600) for t in range(start,end,3600)])
+        with patch.object(m.time,'sleep'),contextlib.redirect_stdout(io.StringIO()):
+            rows=m.fetch_candles(0,170*3600,request,preflight_chunk=2)
+        self.assertEqual(calls,[168*3600,0])
+        self.assertEqual([r[0] for r in rows],list(range(0,170*3600,3600)))
+
+    def test_frozen_period_and_strategy_cannot_silently_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            end=(180*24+m.SLOW+1)*3600
+            data={**m.PROTOCOL,'start_utc':'1970-01-01T00:00:00+00:00',
+                  'end_exclusive_utc':m.datetime.fromtimestamp(end,m.timezone.utc).isoformat()}
+            (path/'protocol.json').write_text(json.dumps(data))
+            self.assertEqual(m.frozen_window(path),(0,end))
+            data['fast_sma']=21
+            (path/'protocol.json').write_text(json.dumps(data))
+            with self.assertRaises(m.DataError):m.frozen_window(path)
+
+
 class ReportTests(unittest.TestCase):
     def test_small_sample_cannot_pass(self):
         stats={'natural_exits':2,'net_pnl':2,'max_drawdown_pct':0,'profit_factor':10}
