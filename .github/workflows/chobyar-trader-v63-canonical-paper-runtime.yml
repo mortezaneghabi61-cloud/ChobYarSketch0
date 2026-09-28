@@ -9,6 +9,7 @@ on:
       - 'ops/chobyar-trader/v5/execution_safety/entry_gate_v55.py'
       - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
       - 'ops/chobyar-trader/v5/execution_safety/test_*.py'
+      - 'ops/chobyar-trader/v5/execution_safety/install_*.py'
       - 'ops/chobyar-trader/v5/execution_safety/paper_runtime_manifest.json'
       - 'ops/chobyar-trader/v5/execution_safety/CANONICAL_PAPER_RUNTIME.md'
       - '.github/workflows/chobyar-trader-v63-canonical-paper-runtime.yml'
@@ -22,6 +23,7 @@ on:
       - 'ops/chobyar-trader/v5/execution_safety/entry_gate_v55.py'
       - 'ops/chobyar-trader/v5/execution_safety/global_sources.py'
       - 'ops/chobyar-trader/v5/execution_safety/test_*.py'
+      - 'ops/chobyar-trader/v5/execution_safety/install_*.py'
       - 'ops/chobyar-trader/v5/execution_safety/paper_runtime_manifest.json'
       - 'ops/chobyar-trader/v5/execution_safety/CANONICAL_PAPER_RUNTIME.md'
       - '.github/workflows/chobyar-trader-v63-canonical-paper-runtime.yml'
@@ -49,10 +51,8 @@ jobs:
           set -Eeuo pipefail
           source_dir='ops/chobyar-trader/v5/execution_safety'
           python3 -m py_compile "$source_dir"/*.py
-          PYTHONPATH="$source_dir" python3 -m unittest -v \
-            "$source_dir/test_global_sources.py" \
-            "$source_dir/test_entry_gate_v55.py" \
-            "$source_dir/test_paper_runtime.py"
+          PYTHONPATH="$source_dir" python3 -B -m unittest discover \
+            -s "$source_dir" -p 'test_*.py' -v
 
       - name: Enforce Paper-only dependency closure
         run: |

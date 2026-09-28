@@ -3,21 +3,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 HERE = Path(__file__).parent
-spec = importlib.util.spec_from_file_location('upgrade',HERE/'install_tape_freshness.py')
+spec = importlib.util.spec_from_file_location('upgrade',HERE/'install_entry_economics.py')
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 class InstallerTests(unittest.TestCase):
     def run_case(self, mode):
         original = b'# previous installed runtime fixture\n'
-        proposed = b'# candidate runtime fixture\n'
-        proposed_sha = m.digest(proposed)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            bundle = root/'bundle'
-            bundle.mkdir()
-            (bundle/'trader.py').write_bytes(proposed)
-            (bundle/'paper_runtime_manifest.json').write_bytes((HERE/'paper_runtime_manifest.json').read_bytes())
             target = root/'app/v5/execution_safety/trader.py'
             target.parent.mkdir(parents=True)
             entry = target.with_name('trader_entry.py')
@@ -46,7 +40,7 @@ class InstallerTests(unittest.TestCase):
                 if str(p)=='/proc/999999/environ':return b'TRADING_MODE=paper\0LIVE_TRADING_ENABLED='+ (b'true' if mode=='live' else b'false')+b'\0'
                 return real_read(p)
             out = io.StringIO()
-            with patch.object(m,'OLD',m.digest(original)), patch.object(m,'NEW',proposed_sha), patch.object(m,'BUNDLE',bundle), patch.object(m,'verify',return_value=19), patch.object(m,'ROOT',root), patch.object(m,'TARGET',target), patch.object(m,'ctl',ctl), patch.object(m,'health',return_value=(mode!='rollback')), patch.object(m.fcntl,'flock'), patch.object(Path,'read_bytes',read), patch.object(m.os,'geteuid',return_value=0), contextlib.redirect_stdout(out):
+            with patch.object(m,'OLD',m.digest(original)), patch.object(m,'verify',return_value=28), patch.object(m,'ROOT',root), patch.object(m,'TARGET',target), patch.object(m,'ctl',ctl), patch.object(m,'health',return_value=(mode!='rollback')), patch.object(m.fcntl,'flock'), patch.object(Path,'read_bytes',read), patch.object(m.os,'geteuid',return_value=0), contextlib.redirect_stdout(out):
                 if mode in ('rollback','unknown','live'):
                     with self.assertRaises(RuntimeError):m.install()
                 else:
@@ -55,10 +49,10 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn('do-not-print',out.getvalue())
             self.assertEqual((state/'paper_state.json').read_text(),'{"cash":9.92}')
             if mode=='success':
-                self.assertEqual(m.digest(target.read_bytes()),proposed_sha)
+                self.assertEqual(m.digest(target.read_bytes()),m.NEW)
                 self.assertIn('UPGRADE_OK',out.getvalue())
                 self.assertIn('ALREADY_INSTALLED',out.getvalue())
-                self.assertEqual(json.loads(manifest.read_bytes())['files']['trader.py'],proposed_sha)
+                self.assertEqual(json.loads(manifest.read_bytes())['files']['trader.py'],m.NEW)
                 backups=list((root/'backups').glob('*/trader.py'))
                 self.assertEqual(len(backups),1)
                 self.assertEqual(backups[0].read_bytes(),original)
