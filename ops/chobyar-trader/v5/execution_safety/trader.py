@@ -40,6 +40,8 @@ MAX_SPREAD_PCT = finite(os.getenv("MAX_SPREAD_PCT", "0.006"), 0.006)
 ENTRY_THRESHOLD = finite(os.getenv("ENTRY_SCORE_THRESHOLD", "2.4"), 2.4)
 EXIT_THRESHOLD = finite(os.getenv("EXIT_SCORE_THRESHOLD", "-2.0"), -2.0)
 MIN_QUORUM = max(5, int(os.getenv("MIN_AGENT_QUORUM", "6")))
+MAX_TAPE_AGE_SECONDS = 300.0
+MAX_TAPE_FUTURE_SKEW_SECONDS = 5.0
 
 EXPECTED_RISK = (0.25, 0.015, 0.03, 0.03)
 if (MAX_POSITION_PCT, STOP_LOSS_PCT, TAKE_PROFIT_PCT, MAX_DAILY_LOSS_PCT) != EXPECTED_RISK:
@@ -64,6 +66,7 @@ class Market:
     global_change: float | None
     global_sources: list[str]
     global_dispersion_pct: float | None
+    tape_age_seconds: float | None = None
 
 
 @dataclass
@@ -95,7 +98,41 @@ def _json(response: httpx.Response) -> dict[str, Any]:
     return data
 
 
-def local_snapshot() -> tuple[float, float, float, float, list[float], float]:
+def parse_recent_tape(trades: dict[str, Any], now: float) -> tuple[list[float], float, float | None]:
+    """Use only recent, timestamped same-market trades; never invent a tape."""
+    try:
+        rows = trades.get("latestTrades")
+        if not isinstance(rows, list) or not rows or not math.isfinite(now):
+            return [], 0.5, None
+        parsed = []
+        for row in rows[:100]:
+            if not isinstance(row, dict) or row.get("symbol") != SYMBOL or not isinstance(row.get("isBuyOrder"), bool):
+                return [], 0.5, None
+            stamp = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+            if stamp.tzinfo is None or stamp.utcoffset() is None or isinstance(row["price"], bool):
+                return [], 0.5, None
+            epoch, px = stamp.timestamp(), float(row["price"])
+            if not math.isfinite(px) or px <= 0 or epoch - now > MAX_TAPE_FUTURE_SKEW_SECONDS:
+                return [], 0.5, None
+            parsed.append((epoch, px, row["isBuyOrder"]))
+        parsed.sort(key=lambda row: row[0], reverse=True)
+        age = now - parsed[0][0]
+        recent = [row for row in parsed if now - row[0] <= MAX_TAPE_AGE_SECONDS]
+        prices = [row[1] for row in recent]
+        ratio = sum(row[2] for row in recent) / len(recent) if recent else 0.5
+        return prices, ratio, age
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        return [], 0.5, None
+
+
+def tape_current(m: Market) -> bool:
+    age = m.tape_age_seconds
+    return (age is not None and math.isfinite(age)
+            and -MAX_TAPE_FUTURE_SKEW_SECONDS <= age <= MAX_TAPE_AGE_SECONDS
+            and len(m.prices) >= 10)
+
+
+def local_snapshot() -> tuple[float, float, float, float, list[float], float, float | None]:
     depth = _json(LOCAL.get("/v1/depth", params={"symbol": SYMBOL})).get("result", {}) or {}
     trades = _json(LOCAL.get("/v1/trades", params={"symbol": SYMBOL})).get("result", {}) or {}
     bids, asks = depth.get("bid") or depth.get("bids") or [], depth.get("ask") or depth.get("asks") or []
@@ -109,16 +146,8 @@ def local_snapshot() -> tuple[float, float, float, float, list[float], float]:
         raise RuntimeError("invalid Wallex market")
     bq, aq = sum(qty(x) for x in bids[:10]), sum(qty(x) for x in asks[:10])
     imbalance = (bq - aq) / (bq + aq) if bq + aq else 0.0
-    rows = trades.get("latestTrades", [])[:100]
-    prices, buys = [], []
-    for row in rows:
-        px = finite(row.get("price"))
-        if px > 0:
-            prices.append(px)
-            buys.append(bool(row.get("isBuyOrder")))
-    if len(prices) < 10:
-        raise RuntimeError("insufficient Wallex tape")
-    return best_bid, best_ask, imbalance, (best_ask - best_bid) / mid, prices, sum(buys) / len(buys)
+    prices, buy_ratio, tape_age = parse_recent_tape(trades, time.time())
+    return best_bid, best_ask, imbalance, (best_ask - best_bid) / mid, prices, buy_ratio, tape_age
 
 
 def global_snapshot() -> tuple[float | None, float | None, list[str], float | None]:
@@ -149,9 +178,9 @@ def global_snapshot() -> tuple[float | None, float | None, list[str], float | No
 
 
 def snapshot() -> Market:
-    bid, ask, imbalance, spread, prices, buy_ratio = local_snapshot()
     gp, gc, sources, dispersion = global_snapshot()
-    return Market(bid, ask, (bid + ask) / 2, spread, imbalance, prices, buy_ratio, gp, gc, sources, dispersion)
+    bid, ask, imbalance, spread, prices, buy_ratio, tape_age = local_snapshot()
+    return Market(bid, ask, (bid + ask) / 2, spread, imbalance, prices, buy_ratio, gp, gc, sources, dispersion, tape_age)
 
 
 def vote(name: str, direction: int, weight: float, reason: str, available: bool = True) -> dict[str, Any]:
@@ -159,20 +188,21 @@ def vote(name: str, direction: int, weight: float, reason: str, available: bool 
 
 
 def agent_votes(m: Market) -> list[dict[str, Any]]:
+    tape_ok = tape_current(m)
     half = len(m.prices) // 2
-    delta = (statistics.fmean(m.prices[:half]) - statistics.fmean(m.prices[half:])) / statistics.fmean(m.prices[half:])
+    delta = ((statistics.fmean(m.prices[:half]) - statistics.fmean(m.prices[half:])) / statistics.fmean(m.prices[half:])) if tape_ok else 0.0
     momentum = 1 if delta > .001 else -1 if delta < -.001 else 0
     book = 1 if m.imbalance > .12 else -1 if m.imbalance < -.12 else 0
-    tape = 1 if m.buy_ratio > .57 else -1 if m.buy_ratio < .43 else 0
+    tape = (1 if m.buy_ratio > .57 else -1 if m.buy_ratio < .43 else 0) if tape_ok else 0
     trend = 0 if m.global_change is None else 1 if m.global_change > .0035 else -1 if m.global_change < -.0035 else 0
     gap = None if not m.global_price else (m.mid - m.global_price) / m.global_price
     gap_vote = 0 if gap is None else -1 if gap > .007 else 1 if gap < -.007 else 0
     global_ok = m.global_price is not None and len(m.global_sources) >= 1 and (m.global_dispersion_pct or 0) <= .02
     return [
         vote("iran_wallex_market", 0, .4, "local public market valid"),
-        vote("momentum", momentum, 1.3, f"momentum={delta:+.4%}"),
+        vote("momentum", momentum, 1.3, f"momentum={delta:+.4%}" if tape_ok else "recent tape unavailable", tape_ok),
         vote("order_book", book, 1.0, f"imbalance={m.imbalance:+.3f}"),
-        vote("tape_order_flow", tape, 1.0, f"buy_ratio={m.buy_ratio:.3f}"),
+        vote("tape_order_flow", tape, 1.0, f"buy_ratio={m.buy_ratio:.3f}" if tape_ok else "recent tape unavailable", tape_ok),
         vote("global_market", 0, .5, f"sources={','.join(m.global_sources) or 'none'}", global_ok),
         vote("global_trend", trend, 1.2, "global trend" if m.global_change is not None else "unavailable", m.global_change is not None),
         vote("iran_global_gap", gap_vote, .7, "gap unavailable" if gap is None else f"gap={gap:+.3%}", gap is not None),
@@ -271,15 +301,20 @@ class Broker:
 def supervise(m: Market, broker: Broker, votes: list[dict[str, Any]]) -> tuple[str, float, str]:
     available = [v for v in votes if v["available"]]
     score = sum(float(v["contribution"]) for v in available)
+    if not all(math.isfinite(x) and x > 0 for x in (m.mid, m.best_bid, m.best_ask)) or not (m.best_bid <= m.mid <= m.best_ask):
+        return "WAIT", score, "invalid executable quote"
+    if broker.state.btc_qty > 0 and broker.state.entry_price:
+        change = (m.mid - broker.state.entry_price) / broker.state.entry_price
+        if change <= -STOP_LOSS_PCT: return "SELL", score, "stop loss"
+        if change >= TAKE_PROFIT_PCT: return "SELL", score, "take profit"
+    if broker.state.btc_qty == 0 and not tape_current(m):
+        return "WAIT", score, "recent trade data unavailable"
     if len(available) < MIN_QUORUM: return "WAIT", score, "agent quorum unavailable"
     if not math.isfinite(m.mid) or m.spread_pct > MAX_SPREAD_PCT: return "WAIT", score, "market risk gate"
     equity = broker.equity(m.mid)
     if broker.state.day_start_equity <= 0 or (broker.state.day_start_equity - equity) / broker.state.day_start_equity >= MAX_DAILY_LOSS_PCT:
         return "WAIT", score, "daily loss hard limit"
     if broker.state.btc_qty > 0 and broker.state.entry_price:
-        change = (m.mid - broker.state.entry_price) / broker.state.entry_price
-        if change <= -STOP_LOSS_PCT: return "SELL", score, "stop loss"
-        if change >= TAKE_PROFIT_PCT: return "SELL", score, "take profit"
         if score <= EXIT_THRESHOLD: return "SELL", score, "consensus exit"
     if broker.state.btc_qty == 0 and score >= ENTRY_THRESHOLD: return "BUY", score, "consensus entry"
     return "WAIT", score, "bounded consensus"
@@ -294,6 +329,7 @@ def run_once(broker: Broker) -> None:
     supervisor = vote("supervisor_consensus", 0, .4, f"score={score:+.2f};action={action}")
     AUDIT.write("cycle", symbol=SYMBOL, local_mid=market.mid, best_bid=market.best_bid, best_ask=market.best_ask,
         spread_pct=market.spread_pct, orderbook_imbalance=market.imbalance, tape_buy_ratio=market.buy_ratio,
+        tape_age_seconds=market.tape_age_seconds, tape_recent_rows=len(market.prices), tape_available=tape_current(market),
         global_price=market.global_price, global_change_24h=market.global_change, global_sources=market.global_sources,
         global_dispersion_pct=market.global_dispersion_pct, signal=action, score=score, action=action, executed=executed,
         risk_reason=reason, agents=votes + [perf_vote, supervisor], equity=broker.equity(market.mid),
