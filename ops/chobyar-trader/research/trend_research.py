@@ -344,32 +344,58 @@ def frozen_window(directory):
     return start,end
 
 
+def historical_end(value):
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z','+00:00'))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError('timezone required')
+        stamp = parsed.timestamp()
+        if stamp % HOUR or stamp >= int(time.time())//HOUR*HOUR:
+            raise ValueError('past completed hour required')
+        return int(stamp)
+    except (ValueError,OverflowError):
+        raise argparse.ArgumentTypeError('use a timezone-qualified past whole hour, for example 2026-09-22T13:00:00Z') from None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app-dir',type=Path,default=Path('/opt/chobyar-trader'))
     parser.add_argument('--output-root',type=Path,default=Path('/opt/chobyar-trader/research'))
-    parser.add_argument('--diagnose-run',type=Path)
+    window = parser.add_mutually_exclusive_group()
+    window.add_argument('--diagnose-run',type=Path)
     parser.add_argument('--chunk',type=int,default=26)
-    parser.add_argument('--repeat-run',type=Path)
+    window.add_argument('--repeat-run',type=Path)
+    window.add_argument('--historical-end-utc',type=historical_end,
+                        help='Separate earlier historical screen; excludes all later data and cannot promote a strategy.')
     parser.add_argument('--preflight-chunk',type=int)
     args = parser.parse_args()
     if args.diagnose_run is not None:
         return diagnose_run(args.diagnose_run,args.chunk)
-    args.output_root.mkdir(parents=True,exist_ok=True)
-    out = Path(tempfile.mkdtemp(prefix='trend-study-',dir=args.output_root))
-    end = int(time.time())//HOUR*HOUR
+    end = args.historical_end_utc if args.historical_end_utc is not None else int(time.time())//HOUR*HOUR
     start = end-(180*24+SLOW+1)*HOUR
+    scope = 'separate_historical_window' if args.historical_end_utc is not None else 'original_window'
     if args.repeat_run is not None:
         start,end = frozen_window(args.repeat_run)
+        scope = json.loads((args.repeat_run/'protocol.json').read_text()).get('evaluation_scope','original_window')
+        if scope not in ('original_window','separate_historical_window'):
+            raise DataError('unknown frozen evaluation scope')
+    args.output_root.mkdir(parents=True,exist_ok=True)
+    out = Path(tempfile.mkdtemp(prefix='trend-study-',dir=args.output_root))
     protocol = {**PROTOCOL,'start_utc':datetime.fromtimestamp(start,timezone.utc).isoformat(),
                 'end_exclusive_utc':datetime.fromtimestamp(end,timezone.utc).isoformat(),
                 'code_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 'data_recovery':'Retry missing hour in small window; otherwise aggregate only 60 complete same-market minute candles.'}
+    protocol['evaluation_scope'] = scope
+    if scope == 'separate_historical_window':
+        protocol['not_evaluated_after_utc'] = protocol['end_exclusive_utc']
+        protocol['window_note'] = 'Separate historical screen. Does not complete the original blocked period or validate excluded later data.'
     if args.repeat_run is not None:
         protocol['repeated_from'] = str(args.repeat_run)
     write_json(out/'protocol.json',protocol)
     print('PROTOCOL_FROZEN | RESEARCH_ONLY | NO_ORDERS',flush=True)
     print('OUTPUT='+str(out),flush=True)
+    if scope == 'separate_historical_window':
+        print('SEPARATE_HISTORICAL_WINDOW | LATER_DATA_NOT_EVALUATED | NO_PROMOTION',flush=True)
     try:
         rows = fetch_candles(start,end,cache_dir=out/'chunks',preflight_chunk=args.preflight_chunk)
         encoded = json.dumps(rows,separators=(',',':'),allow_nan=False).encode()
@@ -387,9 +413,12 @@ def main():
                     results[period][cost][strategy] = stats
                     pf = 'N/A' if stats['profit_factor'] is None else f"{stats['profit_factor']:.3f}"
                     print(f"{period:11} {cost:6} {strategy:5} pnl={stats['net_pnl']:+.6f} return={stats['return_pct']:+.3f}% trades={stats['closed_trades']} PF={pf} DD={stats['max_drawdown_pct']:.3f}%",flush=True)
+        verdict = screen(results)
+        if scope == 'separate_historical_window' and verdict == 'FORWARD_PAPER_TEST_ONLY':
+            verdict = 'HISTORICAL_SCREEN_PASSED_NO_PROMOTION'
         report = {'protocol':protocol,'data_sha256':hashlib.sha256(encoded).hexdigest(),
                   'results':results,'current_bot_history':actual_evidence(args.app_dir),
-                  'screen':screen(results),'live_ready':False,'automatic_promotion':False,
+                  'screen':verdict,'live_ready':False,'automatic_promotion':False,
                   'limitations':['Historical screening only; repeated tuning contaminates held-out evidence.',
                                  'Hourly OHLC cannot establish real fills, minimum order eligibility, or order-book capacity.',
                                  'The current bot cannot be reconstructed from candles alone.',
