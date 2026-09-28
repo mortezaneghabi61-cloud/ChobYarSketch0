@@ -25,6 +25,27 @@ now does not establish that the earlier response was valid or authorize a strate
 New full runs also preserve each public response in `chunks/`, including a failed validation
 window; older runs created before this improvement did not save partial downloads.
 
+To rerun the exact frozen period and strategy, trying the known failing window first:
+
+```sh
+python3 trend_research.py --repeat-run /path/to/existing/trend-study-run --preflight-chunk 26
+```
+
+This creates a separate report directory and preserves the old run. The frozen strategy fields
+and 180-day-plus-warmup duration must match exactly. The program processes the preflight window
+first, then downloads remaining windows and restores chronological order before simulation.
+The first historical run did not save its 25 downloaded windows, so those must be downloaded
+again after preflight succeeds; the tool does not claim to resume missing cache files.
+
+For at most 12 missing hours per window, the program first requests a smaller three-hour
+window from the same Wallex BTCUSDT endpoint. If the target hour is still absent, it requests
+`resolution=1`, documented by Wallex, for that exact hour. Aggregation requires all 60 distinct,
+aligned, valid minute candles: first open, maximum high, minimum low, last close, summed volume.
+Even one missing minute blocks recovery. There is no interpolation, forward fill, skipped
+test interval, or substitution from another exchange. Original responses, recovery responses,
+and per-hour provenance are retained separately. Malformed OHLC data and conflicting duplicates
+are never silently replaced by recovery. This is data retrieval repair, not strategy retuning.
+
 The program freezes and saves its protocol before downloading 180 days plus warm-up.
 It saves normalized candles, their SHA-256, code SHA-256, results, and individual simulated exits
 to a new private output directory. Incomplete hourly coverage, conflicting candles, invalid prices,
