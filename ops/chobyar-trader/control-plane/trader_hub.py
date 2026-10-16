@@ -37,7 +37,12 @@ def validate_public(text: str) -> str:
 
 def git(*args: str, timeout: int = 45, check: bool = True) -> subprocess.CompletedProcess:
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
-    result = subprocess.run(["git", "-C", str(ROOT), *args],
+    cmd = ["git", "-C", str(ROOT)]
+    if args and args[0] == "commit":
+        # Scoped to this single commit, never changes global git identity.
+        cmd += ["-c", "user.name=mortezaneghabi61-cloud",
+                "-c", "user.email=317071544+mortezaneghabi61-cloud@users.noreply.github.com"]
+    result = subprocess.run([*cmd, *args],
         text=True, capture_output=True, timeout=timeout, env=env, encoding="utf-8",
         errors="replace")
     if check and result.returncode:
@@ -54,6 +59,14 @@ def preflight() -> dict:
     return {"branch": branch, "local_head": head, "remote_head": remote_head,
             "sync": ("REMOTE_ABSENT" if not remote_head else "IN_SYNC" if head==remote_head else "DIVERGED"),
             "remote_reachable": remote.returncode == 0}
+
+def sync() -> dict:
+    # Never overwrite a pending agent's local work. Only update with a clean ff-only.
+    if git("status", "--porcelain").stdout.strip():
+        raise RuntimeError("UNSYNCED: local edits present; commit or review them before fast-forward")
+    git("fetch", "--no-tags", "origin", BRANCH, timeout=90)
+    git("merge", "--ff-only", "FETCH_HEAD")
+    return preflight()
 
 def render_event(actor: str, task: str, summary: str, evidence: str, tests: str, next_step: str, stamp: str) -> str:
     if actor not in ACTORS or not re.fullmatch(r"TR-[A-Z0-9-]{3,48}", task):
@@ -95,12 +108,17 @@ def main() -> int:
     sub=parser.add_subparsers(dest="action", required=True)
     sub.add_parser("preflight")
     sub.add_parser("status")
+    sub.add_parser("sync")
     p=sub.add_parser("handoff")
     p.add_argument("--actor", choices=ACTORS, required=True)
     p.add_argument("--task", required=True)
     for k in ("summary","evidence","tests","next"):p.add_argument("--"+k,required=True)
     p.add_argument("--publish", action="store_true")
     a=parser.parse_args()
+    if a.action == "sync":
+        result=sync()
+        print(json.dumps(result,indent=2,ensure_ascii=False))
+        return 0 if result["sync"]=="IN_SYNC" else 1
     if a.action in ("preflight","status"):
         result=preflight()
         if a.action=="status":result["snapshot"]=json.loads((HERE/"STATE.json").read_text(encoding="utf-8"))
