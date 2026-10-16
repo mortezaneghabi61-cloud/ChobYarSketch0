@@ -1,0 +1,13 @@
+# ChobYar-Trader — project-scoped agent instructions (Codex, Work, ChatGPT)
+
+When any request in this subtree refers to "Trader", "تریدر", "ChobYar-Trader", Wallex or trading agents:
+1. FIRST read `control-plane/README.md`, `control-plane/STATE.json`, `control-plane/DECISIONS.md`, `control-plane/TASKS.md` and the latest entries in `control-plane/events/`. These files are the shared handoff for all sessions. Do not rely on a preceding conversation or a local stale summary instead.
+2. Check latest remote hub branch/issue/PR and the **real GitHub main and VPS runtime** before implementing. Always state the verified commit, environment and age of evidence. Do not assume that the VPS v6.26 files equal GitHub v6.24.
+3. Claim one task ID, check other owners' work, reuse previous artifacts and avoid parallel duplicate or conflicting modifications.
+4. Do read-only diagnosis, tests and comparisons first. Write branch-based, reviewable changes only. Never alter unrelated CAD/Android files. ROOT AGENTS.md is CAD-focused; Trader work must be confined to `ops/chobyar-trader` and a dedicated TraderLab.
+5. On EACH finished Trader task, publish a sanitized handoff event (task ID, actor, SHA, files, tests, result, risks, next action) using `control-plane/trader_hub.py handoff` and push via authorized Git; no secret or private data. If publication fails, explicitly mark work UNSYNCED and don't claim others know about it.
+6. For user conversations, tell the user when this source was read and whether the handoff was published. If you cannot access it, say context is unverified and ask for the current link rather than fabricating sync.
+
+NON-NEGOTIABLE: PAPER ONLY; `TRADING_MODE=paper`, `LIVE_TRADING_ENABLED=false`. No live orders, authenticated trading, automatic promotion, financial transfers, API keys/passwords/tokens anywhere in this public repo, geobypass, leverage, martingale, lowering stops/quorum/freshness/risk limits to force trades, or publishing private VPS/user metadata. Do not read or commit `.env`. No silent GitHub merge: exact-head tests and policy gates, squash-only. No VPS rollout without safe approval. Evidence beats agent consensus; no profitability guarantee.
+
+HUB INTEROP: ChatGPT may fetch the public GitHub files with its GitHub connection. Codex reads this AGENTS.md automatically when started inside this directory. Work must follow same instructions. Not all arbitrary ChatGPT chats auto-sync; a ChatGPT Project with pasted instructions is required for project-wide conversational context, plus manual publishing of significant handoffs.

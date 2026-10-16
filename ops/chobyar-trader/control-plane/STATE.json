@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "project": "ChobYar-Trader",
+  "captured_at_utc": "2026-10-16",
+  "source": "Verified 2026-10-16 via authorized VPS and GitHub; not real-time",
+  "authoritative_repo": "mortezaneghabi61-cloud/ChobYarSketch0",
+  "last_checked_main_sha": "13c834516306d2dd49ec6da49d6c205b105b40fe",
+  "last_checked_main_trader_candidate": "V6.24",
+  "last_observed_vps_candidate": "v626-profit-opportunity-recheck",
+  "github_vps_code_match": false,
+  "execution_policy": {
+    "mode": "paper",
+    "live_trading_enabled": false,
+    "production_changes_authorized": false
+  },
+  "last_observed_services": {
+    "trader": "inactive/disabled",
+    "paper_exploration": "inactive/disabled",
+    "profit_protection_shadow": "inactive/disabled",
+    "status": "active"
+  },
+  "legacy_paper_audit": {
+    "cycle_count": 46225,
+    "paper_buys": 17,
+    "paper_sells": 17,
+    "reported_cumulative_realized_pnl": -0.07868495350885434,
+    "legacy_trade_fee_mismatch_usdt": 0.005,
+    "net_pnl_reconstructed_all_17": -0.08033557319503298
+  },
+  "data_research": {
+    "wallex_BTCUSDT_1h_observed_closed_candles_30d": 718,
+    "internal_missing_candles": 1
+  },
+  "next_priority": "TR-HUB-001; then TR-ACC-001; then TR-VERSION-001",
+  "sensitive_data_policy": "NO credentials, no personal trading data, no VPS host details",
+  "limitations": [
+    "snapshot is not a live monitor",
+    "no autonomous cross-chat eavesdropping",
+    "Codex/ChatGPT session has to fetch hub and publish a handoff"
+  ]
+}
