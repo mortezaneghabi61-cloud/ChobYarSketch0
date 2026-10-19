@@ -113,5 +113,50 @@ class TradeCohortAnalysisTests(unittest.TestCase):
         self.assertEqual(stats["unmatched_buys"], 1)
 
 
+    def test_legacy_schema_cycle_without_executed_recovers_trade_and_corrects_fee(self):
+        buy = {"ts": "2026-09-03T12:32:34Z", "event": "paper_buy",
+               "price": 78049.99, "qty": 3.203075362341494e-05, "fee": 0.005}
+        sell = {"ts": "2026-09-03T13:04:34Z", "event": "paper_sell", "price": 78311.18,
+                "qty": 3.203075362341494e-05, "fee": 0.005016732225077799,
+                "pnl": 0.0033493803138213707}
+        old_buy = cycle("2026-09-03T12:32:35Z", "BUY", 0)
+        old_sell = cycle("2026-09-03T13:04:35Z", "SELL", 0)
+        for row in (old_buy, old_sell):
+            row.pop("executed")
+            row["signal"] = row["action"]
+        trades, stats = extract_trades([buy, old_buy, sell, old_sell])
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(stats["legacy_cycle_matches"], 2)
+        self.assertEqual(stats["pnl_mismatches"], 1)
+        self.assertAlmostEqual(trades[0].pnl, -0.0016506196861786293)
+        self.assertAlmostEqual(trades[0].reported_pnl, 0.0033493803138213707)
+        self.assertEqual(trades[0].pnl_quality, "legacy_reported_pnl_mismatch")
+        report = summarize(trades, stats)
+        self.assertEqual(report["losses"]["trades"], 1)
+        self.assertAlmostEqual(report["all"]["total_pnl"], trades[0].pnl)
+
+    def test_explicit_not_executed_cycle_stays_rejected(self):
+        rejected = cycle("2026-09-03T12:32:35Z", "BUY", 1)
+        rejected["executed"] = False
+        trades, stats = extract_trades([
+            {"ts": "2026-09-03T12:32:34Z", "event": "paper_buy", "price": 100},
+            rejected,
+        ])
+        self.assertEqual(trades, [])
+        self.assertEqual(stats["cycle_misses"], 1)
+
+    def test_partial_or_tampered_trade_fees_fail_closed(self):
+        rows = [
+            {"ts": "2026-09-03T12:00:00Z", "event": "paper_buy",
+             "price": 100, "qty": 1, "fee": .2},
+            cycle("2026-09-03T12:00:01Z", "BUY", 1),
+            {"ts": "2026-09-03T12:01:00Z", "event": "paper_sell",
+             "price": 101, "qty": 1, "pnl": .8},
+            cycle("2026-09-03T12:01:01Z", "SELL", -1),
+        ]
+        with self.assertRaisesRegex(ValueError, "incomplete trade fee"):
+            extract_trades(rows)
+
+
 if __name__ == "__main__":
     unittest.main()
