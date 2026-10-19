@@ -62,6 +62,9 @@ class Trade:
     max_adverse_excursion_pct: float | None
     protection_observations: dict[str, dict[str, float | bool | int | None]]
     current_tape_gate_would_block: bool
+    reported_pnl: float | None = None
+    pnl_quality: str = "reported_unverified"
+    pnl_discrepancy: float | None = None
 
 
 def _protection_observation(
@@ -104,6 +107,36 @@ def _protection_observation(
     }
 
 
+def _reconciled_pnl(buy: dict[str, Any], sell: dict[str, Any], reported: float) -> tuple[float, str, float | None]:
+    """Prefer independently fee-reconstructed net when execution data is complete.
+
+    Legacy fixtures without execution fees remain explicitly unverified, while
+    partial or corrupt execution records fail closed instead of silently passing.
+    """
+    fields = ((buy, "price"), (buy, "qty"), (buy, "fee"),
+              (sell, "price"), (sell, "qty"), (sell, "fee"))
+    present = [field in row for row, field in fields]
+    if not any(present):
+        return reported, "reported_unverified", None
+    if not all(present):
+        # Historical minimalist tests have entry/exit prices but no fee or qty;
+        # they cannot be financially verified and must retain the old label.
+        if not (("fee" in buy or "fee" in sell or "qty" in buy or "qty" in sell)):
+            return reported, "reported_unverified", None
+        raise ValueError("FAIL_CLOSED: incomplete trade fee or quantity data")
+    values = [_finite(row.get(field)) for row, field in fields]
+    if any(value is None for value in values):
+        raise ValueError("FAIL_CLOSED: non-finite execution fields")
+    entry_price, entry_qty, entry_fee, exit_price, exit_qty, exit_fee = values
+    if (entry_price <= 0 or exit_price <= 0 or entry_qty <= 0 or
+            exit_qty <= 0 or entry_fee < 0 or exit_fee < 0 or entry_qty != exit_qty):
+        raise ValueError("FAIL_CLOSED: invalid paper trade execution quantity/fees")
+    independently_reconstructed = entry_qty * (exit_price - entry_price) - entry_fee - exit_fee
+    delta = reported - independently_reconstructed
+    quality = "verified" if abs(delta) <= 1e-7 else "legacy_reported_pnl_mismatch"
+    return independently_reconstructed, quality, delta
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as stream:
@@ -133,7 +166,15 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
             assert event_ts is not None and later_ts is not None
             if later_ts - event_ts > MAX_CYCLE_LAG_SECONDS:
                 break
-            if later.get("event") == "cycle" and later.get("action") == action and later.get("executed") is True:
+            if later.get("event") != "cycle" or later.get("action") != action:
+                continue
+            if later.get("executed") is True:
+                return later
+            # Legacy v3 audit schema had no "executed" field, but a matching
+            # paper_buy/paper_sell event immediately precedes this exact cycle.
+            # Explicit executed=False must NEVER be accepted as a trade.
+            if "executed" not in later and later.get("signal") == action:
+                stats["legacy_cycle_matches"] = stats.get("legacy_cycle_matches", 0) + 1
                 return later
         return None
 
@@ -162,6 +203,9 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
                     exit_price is None or entry_price <= 0 or exit_price <= 0 or exit_ts <= entry_ts):
                 stats["unmatched_sells"] += 1
                 continue
+            reconstructed, quality, delta = _reconciled_pnl(buy, row, pnl)
+            if quality == "legacy_reported_pnl_mismatch":
+                stats["pnl_mismatches"] = stats.get("pnl_mismatches", 0) + 1
             votes = _votes(entry_cycle)
             path_changes = []
             path_points = []
@@ -184,12 +228,13 @@ def extract_trades(rows: Iterable[dict[str, Any]]) -> tuple[list[Trade], dict[st
             }
             sources = entry_cycle.get("global_sources")
             trades.append(Trade(
-                entry_ts, exit_ts, pnl, entry_price, exit_price, exit_ts - entry_ts, str(row.get("reason") or "unknown"),
+                entry_ts, exit_ts, reconstructed, entry_price, exit_price, exit_ts - entry_ts, str(row.get("reason") or "unknown"),
                 _finite(entry_cycle.get("score")), _finite(entry_cycle.get("spread_pct")),
                 _finite(entry_cycle.get("global_change_24h")), len(sources) if isinstance(sources, list) else 0,
                 votes, _finite(exit_cycle.get("score")), _votes(exit_cycle),
                 max(path_changes) if path_changes else None, min(path_changes) if path_changes else None,
                 protection_observations, votes["tape_order_flow"] == -1,
+                reported_pnl=pnl, pnl_quality=quality, pnl_discrepancy=delta,
             ))
     if open_entry is not None:
         stats["unmatched_buys"] += 1
