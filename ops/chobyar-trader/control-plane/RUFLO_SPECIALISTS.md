@@ -21,6 +21,6 @@ User standing direction: use the available Ruflo multi-agent framework for meani
 
 ## Current verified integration status
 - `ruflo` and `right_hand` MCP servers registered and enabled in Windows Codex.
-- Ruflo v3.56.10 stdio handshake passed, 55 advertised tools. Right-hand's `github_discover` MCP and public GitHub search executed successfully.
+- Ruflo v3.56.10 stdio handshake passed, then reduced to 9 advertised coordination/memory tools to reduce Codex context. Paid direct agent_execute is deliberately not exposed. Right-hand's `github_discover` MCP and public GitHub search executed successfully.
 - **No proof of successful Ruflo independent model-run agent for Trader yet.** LLM provider/quota may need setup. Do not claim multi-agent analysis happened until MCP tool/cost/evidence verifies it.
 - GitHub branch `coordination/trader-hub-20261016` carries coordination instructions until reviewed/merged. Never silently edit main.
